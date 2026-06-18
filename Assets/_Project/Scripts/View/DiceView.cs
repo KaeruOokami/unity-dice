@@ -22,6 +22,7 @@ namespace DiceGame.View
         float dissolveProgress;
         int currentTopFace = 1;
         Vector3 gridWorldPosition;
+        Board dissolveBoard;
 
         public bool IsAnimating => isAnimating;
         public float DissolveProgress => dissolveProgress;
@@ -109,6 +110,7 @@ namespace DiceGame.View
 
             isAnimating = false;
             dissolveProgress = 0f;
+            dissolveBoard = null;
             currentTopFace = state.Orientation.Top;
             EnsureMesh();
             if (dissolvePivot == null || rotationRoot == null || positionRoot == null) {
@@ -146,7 +148,17 @@ namespace DiceGame.View
             }
 
             currentTopFace = topFace;
+            dissolveBoard = board;
             dissolveCoroutine = StartCoroutine(DissolveCoroutine(board, onComplete));
+        }
+
+        public void RetreatDissolve(float amount) {
+            if (dissolveBoard == null) {
+                return;
+            }
+
+            dissolveProgress = Mathf.Max(0f, dissolveProgress - amount);
+            ApplySurfaceVisual(dissolveBoard, dissolveProgress);
         }
 
         IEnumerator RollCoroutine(Direction direction, DiceState fromState, DiceState toState, Board board, Action onComplete) {
@@ -207,10 +219,8 @@ namespace DiceGame.View
 
             positionRoot.SetParent(transform);
 
-            var elapsed = 0f;
-            while (elapsed < dissolveDuration) {
-                elapsed += Time.deltaTime;
-                dissolveProgress = Mathf.Clamp01(elapsed / dissolveDuration);
+            while (dissolveProgress < 1f) {
+                dissolveProgress = Mathf.Min(1f, dissolveProgress + Time.deltaTime / dissolveDuration);
                 ApplySurfaceVisual(board, dissolveProgress);
                 yield return null;
             }
@@ -219,6 +229,7 @@ namespace DiceGame.View
             ApplySurfaceVisual(board, dissolveProgress);
             isAnimating = false;
             dissolveCoroutine = null;
+            dissolveBoard = null;
             onComplete?.Invoke();
         }
 

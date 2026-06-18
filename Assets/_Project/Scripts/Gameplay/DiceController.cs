@@ -108,5 +108,13 @@ namespace DiceGame.Gameplay
                 Destroy(gameObject);
             });
         }
+
+        public void RetreatDissolve(float amount) {
+            if (!isDissolving || diceView == null) {
+                return;
+            }
+
+            diceView.RetreatDissolve(amount);
+        }
     }
 }

@@ -10,6 +10,7 @@ namespace DiceGame.Gameplay
         [SerializeField] Board board;
         [SerializeField] DiceRegistry registry;
         [SerializeField] CharacterController character;
+        [SerializeField] float chainRollbackAmount = 0.15f;
 
         readonly HashSet<DiceController> subscribedDice = new();
 
@@ -83,20 +84,37 @@ namespace DiceGame.Gameplay
             }
 
             var clusters = DiceMatchFinder.FindMatchingClusters(registry.AllDice);
-            if (clusters.Count == 0) {
+            foreach (var cluster in clusters) {
+                ProcessCluster(cluster);
+            }
+        }
+
+        void ProcessCluster(List<DiceController> cluster) {
+            var newMembers = new List<DiceController>();
+            var dissolvingMembers = new List<DiceController>();
+
+            foreach (var dice in cluster) {
+                if (dice == null) {
+                    continue;
+                }
+
+                if (dice.IsDissolving) {
+                    dissolvingMembers.Add(dice);
+                } else {
+                    newMembers.Add(dice);
+                }
+            }
+
+            if (newMembers.Count == 0) {
                 return;
             }
 
-            var dissolving = new HashSet<DiceController>();
-            foreach (var cluster in clusters) {
-                foreach (var dice in cluster) {
-                    if (dice == null || dice.IsDissolving || dissolving.Contains(dice)) {
-                        continue;
-                    }
+            foreach (var dice in dissolvingMembers) {
+                dice.RetreatDissolve(chainRollbackAmount);
+            }
 
-                    dissolving.Add(dice);
-                    dice.BeginDissolve(null);
-                }
+            foreach (var dice in newMembers) {
+                dice.BeginDissolve(null);
             }
         }
     }

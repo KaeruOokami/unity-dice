@@ -45,7 +45,7 @@ namespace DiceGame.Gameplay
             var lookup = new Dictionary<Vector2Int, DiceController>();
 
             foreach (var dice in allDice) {
-                if (dice == null || dice.IsDissolving || consumed.Contains(dice)) {
+                if (dice == null || consumed.Contains(dice)) {
                     continue;
                 }
 
