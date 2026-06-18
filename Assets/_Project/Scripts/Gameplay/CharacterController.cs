@@ -28,10 +28,13 @@ namespace DiceGame.Gameplay
 
         DiceRegistry registry;
         DiceController currentDice;
+        Transform characterMount;
         Transform characterTransform;
         CapsuleCollider characterPushCollider;
-        Vector2 facePosition;
-        Vector2 floorWorldPosition;
+        bool isTrackingDiceRoll;
+        Vector3 rollStartCharacterPosition;
+        Vector3 rollStartDiceCenter;
+        float rollFixedWorldY;
         float currentSpeed;
         float pushContactTime;
         DiceController pushTargetDice;
@@ -62,7 +65,7 @@ namespace DiceGame.Gameplay
 
         public bool IsOnFloor => currentDice == null;
         public bool IsBusy => currentDice != null && currentDice.IsRolling;
-        public Vector2 FacePosition => facePosition;
+        public Vector2 FacePosition => GetOffsetFromDiceCenter(currentDice, characterTransform != null ? characterTransform.position : Vector3.zero);
         public DiceController CurrentDice => currentDice;
 
         public void Configure(Board targetBoard, DiceRegistry targetRegistry, DiceController startDice) {
@@ -88,10 +91,15 @@ namespace DiceGame.Gameplay
 
             EnsureCharacterInstance();
             EnsureCharacterPushCollider();
-            facePosition = Vector2.zero;
             currentSpeed = 0f;
             isInitialized = true;
-            UpdateCharacterWorldPosition();
+
+            if (currentDice != null) {
+                var center = currentDice.View.DiceTransform.position;
+                ApplyWorldPosition(new Vector3(center.x, 0f, center.z));
+            } else {
+                SnapYToSurface();
+            }
         }
 
         public void OnStandingDiceDissolved(DiceController dissolvedDice) {
@@ -103,6 +111,7 @@ namespace DiceGame.Gameplay
         }
 
         void OnDisable() {
+            EndRollTracking();
             UnsubscribeCurrentDice();
             EndPushFollow();
         }
@@ -115,6 +124,10 @@ namespace DiceGame.Gameplay
             if (isPushFollowing) {
                 currentSpeed = 0f;
                 return;
+            }
+
+            if (currentDice != null && isTrackingDiceRoll && !currentDice.IsRolling) {
+                EndRollTracking();
             }
 
             var input = GetInputDirection();
@@ -135,13 +148,17 @@ namespace DiceGame.Gameplay
             }
 
             if (isPushFollowing) {
-                SyncPositionToPushingDice();
+                 SyncPositionToPushingDice();
                 if (pushFollowDice == null || !pushFollowDice.IsRolling) {
                     EndPushFollow();
                 }
             }
 
-            UpdateCharacterWorldPosition();
+            if (currentDice != null && currentDice.IsRolling) {
+                SyncPositionDuringRoll();
+            } else if (currentDice != null) {
+                SnapYToSurface();
+            }
         }
 
         void UpdateDiceMovement(Vector2 input) {
@@ -157,23 +174,32 @@ namespace DiceGame.Gameplay
                 return;
             }
 
+            var diceTransform = currentDice.View.DiceTransform;
+            if (diceTransform == null) {
+                return;
+            }
+
             var edgeLimit = GetEdgeLimit();
             var move = input * (currentSpeed * Time.deltaTime);
-            var nextPosition = facePosition + move;
+            var position = characterTransform.position;
+            var nextWorld = position + new Vector3(move.x, 0f, move.y);
+            var diceCenter = diceTransform.position;
+            var nextOffset = new Vector2(nextWorld.x - diceCenter.x, nextWorld.z - diceCenter.z);
 
-            if (TryTransferToAdjacentDiceAtEdge(nextPosition, edgeLimit, move)) {
+            if (TryTransferToAdjacentDiceAtEdge(nextOffset, edgeLimit, move)) {
                 return;
             }
 
-            if (TryRollAtEdge(nextPosition, edgeLimit, move)) {
+            if (TryRollAtEdge(nextOffset, edgeLimit, move)) {
                 return;
             }
 
-            if (TryTransferToFloorAtEdge(nextPosition, edgeLimit, move)) {
+            if (TryTransferToFloorAtEdge(nextOffset, edgeLimit, move)) {
                 return;
             }
 
-            facePosition = ClampToFace(nextPosition, edgeLimit);
+            nextOffset = ClampToFace(nextOffset, edgeLimit);
+            ApplyWorldPosition(new Vector3(diceCenter.x + nextOffset.x, 0f, diceCenter.z + nextOffset.y));
         }
 
         void UpdateFloorMovement(Vector2 input) {
@@ -191,34 +217,30 @@ namespace DiceGame.Gameplay
             }
 
             var move = input * (currentSpeed * Time.deltaTime);
-            var nextPosition = ApplyDiceMovementBlock(floorWorldPosition, move);
+            var currentXZ = GetWorldXZ();
+            var nextXZ = ApplyDiceMovementBlock(currentXZ, move);
 
-            if (TryStepOntoDiceFromFloor(nextPosition, move)) {
+            if (TryStepOntoDiceFromFloor(nextXZ, move)) {
                 if (debugPushContact) {
                     LogPushDebug(
                         "StepOntoDice",
-                        $"乗り移りで押しを中断 floor={FormatVector2(floorWorldPosition)} move={FormatVector2(move)}");
+                        $"乗り移りで押しを中断 pos={FormatVector2(GetWorldXZ())} move={FormatVector2(move)}");
                 }
 
                 ResetPushState();
                 return;
             }
 
-            floorWorldPosition = ClampFloorPosition(nextPosition);
+            ApplyWorldPosition(new Vector3(nextXZ.x, 0f, nextXZ.y));
             UpdatePushContact(input);
         }
 
         void UpdateDuringRoll(Vector2 input) {
-            if (input.sqrMagnitude > 0f) {
-                input.Normalize();
-                currentSpeed = Mathf.MoveTowards(currentSpeed, maxMoveSpeed, moveAcceleration * Time.deltaTime);
-                var move = input * (currentSpeed * Time.deltaTime);
-                facePosition = ClampToFace(facePosition + move, GetEdgeLimit());
-                return;
+            if (!isTrackingDiceRoll) {
+                BeginRollTracking();
             }
 
             currentSpeed = 0f;
-            facePosition = Vector2.MoveTowards(facePosition, Vector2.zero, rollCenterPullSpeed * Time.deltaTime);
         }
 
         void OnDiceStateChanged(DiceState state) {
@@ -230,6 +252,7 @@ namespace DiceGame.Gameplay
         }
 
         void SetCurrentDice(DiceController dice) {
+            EndRollTracking();
             UnsubscribeCurrentDice();
             currentDice = dice;
             if (currentDice != null) {
@@ -244,29 +267,26 @@ namespace DiceGame.Gameplay
         }
 
         void MoveToFloorAtCurrentWorldPosition() {
-            if (characterTransform == null) {
-                SetCurrentDice(null);
-                return;
-            }
-
-            var position = characterTransform.position;
+            EndRollTracking();
             SetCurrentDice(null);
-            floorWorldPosition = new Vector2(position.x, position.z);
+            SnapYToSurface();
         }
 
         void EnsureCharacterInstance() {
+            characterMount = transform;
+
             if (characterTransform != null) {
                 return;
             }
 
             if (characterObject != null) {
-                var instance = Instantiate(characterObject, transform);
+                var instance = Instantiate(characterObject, characterMount);
                 instance.name = "CharacterVisual";
                 characterTransform = instance.transform;
                 return;
             }
 
-            characterTransform = transform;
+            characterTransform = characterMount;
         }
 
         void EnsureCharacterPushCollider() {
@@ -288,6 +308,119 @@ namespace DiceGame.Gameplay
                 0f);
         }
 
+        Vector2 GetWorldXZ() {
+            if (characterTransform == null) {
+                return Vector2.zero;
+            }
+
+            var position = characterTransform.position;
+            return new Vector2(position.x, position.z);
+        }
+
+        float GetSurfaceWorldY() {
+            if (IsOnFloor) {
+                return board.FloorSurfaceWorldY;
+            }
+
+            return currentDice.GetTopSurfaceWorldY();
+        }
+
+        void ApplyWorldPosition(Vector3 worldPos) {
+            if (characterTransform == null || board == null) {
+                return;
+            }
+
+            worldPos.y = GetSurfaceWorldY() + characterHeightOffset;
+            characterTransform.position = worldPos;
+            characterTransform.rotation = Quaternion.identity;
+        }
+
+        void SnapYToSurface() {
+            if (characterTransform == null || isTrackingDiceRoll) {
+                return;
+            }
+
+            var position = characterTransform.position;
+            position.y = GetSurfaceWorldY() + characterHeightOffset;
+            characterTransform.position = position;
+            characterTransform.rotation = Quaternion.identity;
+        }
+
+        Vector3 ClampToWalkBounds(Vector3 worldPos) {
+            if (IsOnFloor) {
+                var minX = 0f;
+                var minZ = 0f;
+                var maxX = (board.Width - 1) * board.CellSize;
+                var maxZ = (board.Height - 1) * board.CellSize;
+                worldPos.x = Mathf.Clamp(worldPos.x, minX, maxX);
+                worldPos.z = Mathf.Clamp(worldPos.z, minZ, maxZ);
+                return worldPos;
+            }
+
+            if (currentDice?.View.DiceTransform == null) {
+                return worldPos;
+            }
+
+            var center = currentDice.View.DiceTransform.position;
+            var limit = GetEdgeLimit();
+            worldPos.x = Mathf.Clamp(worldPos.x, center.x - limit, center.x + limit);
+            worldPos.z = Mathf.Clamp(worldPos.z, center.z - limit, center.z + limit);
+            return worldPos;
+        }
+
+        static Vector2 GetOffsetFromDiceCenter(DiceController dice, Vector3 worldPos) {
+            if (dice?.View.DiceTransform == null) {
+                return Vector2.zero;
+            }
+
+            var center = dice.View.DiceTransform.position;
+            return new Vector2(worldPos.x - center.x, worldPos.z - center.z);
+        }
+
+        void BeginRollTracking() {
+            if (characterTransform == null || currentDice?.View.DiceTransform == null) {
+                return;
+            }
+
+            rollStartCharacterPosition = characterTransform.position;
+            rollStartDiceCenter = currentDice.View.DiceTransform.position;
+            rollFixedWorldY = rollStartCharacterPosition.y;
+            isTrackingDiceRoll = true;
+        }
+
+        void BeginRollTracking(Vector3 characterAnchor, Vector3 diceCenterAnchor) {
+            rollStartCharacterPosition = characterAnchor;
+            rollStartDiceCenter = diceCenterAnchor;
+            rollFixedWorldY = characterAnchor.y;
+            isTrackingDiceRoll = true;
+        }
+
+        void EndRollTracking() {
+            if (!isTrackingDiceRoll) {
+                return;
+            }
+
+            SyncPositionDuringRoll();
+            isTrackingDiceRoll = false;
+            SnapYToSurface();
+            if (characterTransform != null) {
+                characterTransform.rotation = Quaternion.identity;
+            }
+        }
+
+        void SyncPositionDuringRoll() {
+            if (!isTrackingDiceRoll || characterTransform == null || currentDice?.View.DiceTransform == null) {
+                return;
+            }
+
+            var diceCenter = currentDice.View.DiceTransform.position;
+            var delta = diceCenter - rollStartDiceCenter;
+            var worldPosition = rollStartCharacterPosition + delta;
+            worldPosition.y = rollFixedWorldY;
+            characterTransform.position = worldPosition;
+            characterTransform.rotation = Quaternion.identity;
+        }
+
         void ResetPushState() {
             pushContactTime = 0f;
             pushTargetDice = null;
@@ -307,7 +440,6 @@ namespace DiceGame.Gameplay
             }
 
             CollectPushCandidates(input, pushCandidates, out var overlapHitCount, out var pushBodyHitCount, out var skippedBusyCount);
-            Debug.Log($"overlapHitCount: {overlapHitCount}, pushBodyHitCount: {pushBodyHitCount}");
             if (pushCandidates.Count == 0) {
                 LogPushDebugNoCandidates(input, overlapHitCount, pushBodyHitCount, skippedBusyCount);
                 ResetPushState();
@@ -387,7 +519,7 @@ namespace DiceGame.Gameplay
         }
 
         void SyncPositionToPushingDice() {
-            if (pushFollowDice == null || board == null) {
+            if (pushFollowDice == null || board == null || characterTransform == null) {
                 return;
             }
 
@@ -396,17 +528,23 @@ namespace DiceGame.Gameplay
                 return;
             }
 
+            EndRollTracking();
+            SetCurrentDice(null);
+
             var diceCenter = diceTransform.position;
             var half = board.CellSize * 0.5f;
             var contactOffset = half + characterPushRadius;
+            var position = characterTransform.position;
 
-            floorWorldPosition = pushFollowDirection switch {
-                Direction.East => new Vector2(diceCenter.x - contactOffset, floorWorldPosition.y),
-                Direction.West => new Vector2(diceCenter.x + contactOffset, floorWorldPosition.y),
-                Direction.North => new Vector2(floorWorldPosition.x, diceCenter.z - contactOffset),
-                Direction.South => new Vector2(floorWorldPosition.x, diceCenter.z + contactOffset),
-                _ => floorWorldPosition
+            position = pushFollowDirection switch {
+                Direction.East => new Vector3(diceCenter.x - contactOffset, position.y, position.z),
+                Direction.West => new Vector3(diceCenter.x + contactOffset, position.y, position.z),
+                Direction.North => new Vector3(position.x, position.y, diceCenter.z - contactOffset),
+                Direction.South => new Vector3(position.x, position.y, diceCenter.z + contactOffset),
+                _ => position
             };
+
+            ApplyWorldPosition(position);
         }
 
         void CollectPushCandidates(
@@ -424,22 +562,25 @@ namespace DiceGame.Gameplay
                 return;
             }
 
-            var characterCenter = new Vector3(
-                floorWorldPosition.x,
-                board.FloorSurfaceWorldY + characterPushBottom + characterPushHeight * 0.5f,
-                floorWorldPosition.y);
-            var halfHeight = characterPushHeight * 0.5f - characterPushRadius;
-            var bottom = characterCenter - Vector3.up * halfHeight;
-            var top = characterCenter + Vector3.up * halfHeight;
+            var bounds = characterPushCollider.bounds;
+            var halfHeight = characterPushCollider.height * 0.5f - characterPushCollider.radius;
+            var bottom = bounds.center - Vector3.up * halfHeight;
+            var top = bounds.center + Vector3.up * halfHeight;
             var hits = Physics.OverlapCapsule(
                 bottom,
                 top,
-                characterPushRadius,
+                characterPushCollider.radius,
                 ~0,
                 QueryTriggerInteraction.Collide);
             overlapHitCount = hits.Length;
 
+            var characterXZ = GetWorldXZ();
+
             foreach (var hit in hits) {
+                if (hit == characterPushCollider) {
+                    continue;
+                }
+
                 var pushBody = hit.GetComponent<DicePushBody>();
                 if (pushBody == null || pushBody.Dice == null || pushBody.Collider == null) {
                     continue;
@@ -452,11 +593,11 @@ namespace DiceGame.Gameplay
                     continue;
                 }
 
-                var bounds = pushBody.Collider.bounds;
-                TryAddPushCandidate(candidates, pushBody.Dice, bounds, input, Direction.East);
-                TryAddPushCandidate(candidates, pushBody.Dice, bounds, input, Direction.West);
-                TryAddPushCandidate(candidates, pushBody.Dice, bounds, input, Direction.North);
-                TryAddPushCandidate(candidates, pushBody.Dice, bounds, input, Direction.South);
+                var pushBounds = pushBody.Collider.bounds;
+                TryAddPushCandidate(candidates, pushBody.Dice, pushBounds, input, characterXZ, Direction.East);
+                TryAddPushCandidate(candidates, pushBody.Dice, pushBounds, input, characterXZ, Direction.West);
+                TryAddPushCandidate(candidates, pushBody.Dice, pushBounds, input, characterXZ, Direction.North);
+                TryAddPushCandidate(candidates, pushBody.Dice, pushBounds, input, characterXZ, Direction.South);
             }
 
             candidates.Sort(ComparePushCandidates);
@@ -484,7 +625,7 @@ namespace DiceGame.Gameplay
 
             LogPushDebug(
                 "NoCandidates",
-                $"input={FormatVector2(input)} floor={FormatVector2(floorWorldPosition)} " +
+                $"input={FormatVector2(input)} pos={FormatVector2(GetWorldXZ())} " +
                 $"overlapHits={overlapHitCount} pushBodies={pushBodyHitCount} skippedBusy={skippedBusyCount}");
         }
 
@@ -508,7 +649,7 @@ namespace DiceGame.Gameplay
 
             LogPushDebug(
                 "Candidates",
-                $"input={FormatVector2(input)} floor={FormatVector2(floorWorldPosition)} " +
+                $"input={FormatVector2(input)} pos={FormatVector2(GetWorldXZ())} " +
                 $"overlapHits={overlapHitCount} pushBodies={pushBodyHitCount} skippedBusy={skippedBusyCount} list={summary}");
         }
 
@@ -603,10 +744,11 @@ namespace DiceGame.Gameplay
             DiceController dice,
             Bounds bounds,
             Vector2 input,
+            Vector2 characterPosition,
             Direction direction) {
             if (!TryEvaluatePushCandidate(
                 bounds,
-                floorWorldPosition,
+                characterPosition,
                 input,
                 direction,
                 pushInputAlignment,
@@ -727,7 +869,9 @@ namespace DiceGame.Gameplay
                 resultMove = BlockMoveAgainstDiceBounds(currentPosition, resultMove, bounds, characterPushRadius);
             }
 
-            return currentPosition + resultMove;
+            var next = currentPosition + resultMove;
+            var clamped = ClampToWalkBounds(new Vector3(next.x, 0f, next.y));
+            return new Vector2(clamped.x, clamped.z);
         }
 
         static Vector2 BlockMoveAgainstDiceBounds(Vector2 position, Vector2 move, Bounds bounds, float radius) {
@@ -772,48 +916,12 @@ namespace DiceGame.Gameplay
             return center + radius > min && center - radius < max;
         }
 
-        void UpdateCharacterWorldPosition() {
-            if (characterTransform == null || board == null) {
-                return;
-            }
-
-            var worldY = GetCurrentSurfaceWorldY() + characterHeightOffset;
-
-            if (IsOnFloor) {
-                characterTransform.position = new Vector3(
-                    floorWorldPosition.x,
-                    worldY,
-                    floorWorldPosition.y);
-            } else {
-                var diceTransform = currentDice.View.DiceTransform;
-                if (diceTransform == null) {
-                    return;
-                }
-
-                var dicePosition = diceTransform.position;
-                characterTransform.position = new Vector3(
-                    dicePosition.x + facePosition.x,
-                    worldY,
-                    dicePosition.z + facePosition.y);
-            }
-
-            characterTransform.rotation = Quaternion.identity;
-        }
-
-        float GetCurrentSurfaceWorldY() {
-            if (IsOnFloor) {
-                return board.FloorSurfaceWorldY;
-            }
-
-            return currentDice.GetTopSurfaceWorldY();
-        }
-
         bool CanStepBetween(float fromSurfaceY, float toSurfaceY) {
             return Mathf.Abs(fromSurfaceY - toSurfaceY) <= maxStepHeight;
         }
 
-        bool TryTransferToAdjacentDiceAtEdge(Vector2 nextPosition, float edgeLimit, Vector2 move) {
-            if (!TryGetCrossingDirection(nextPosition, edgeLimit, move, out var direction)) {
+        bool TryTransferToAdjacentDiceAtEdge(Vector2 nextOffset, float edgeLimit, Vector2 move) {
+            if (!TryGetCrossingDirection(nextOffset, edgeLimit, move, out var direction)) {
                 return false;
             }
 
@@ -826,13 +934,15 @@ namespace DiceGame.Gameplay
                 return false;
             }
 
-            facePosition = RemapFacePositionForTransfer(nextPosition, edgeLimit, direction);
+            var remapped = RemapFacePositionForTransfer(nextOffset, edgeLimit, direction);
+            var neighborCenter = neighbor.View.DiceTransform.position;
             SetCurrentDice(neighbor);
+            ApplyWorldPosition(new Vector3(neighborCenter.x + remapped.x, 0f, neighborCenter.z + remapped.y));
             return true;
         }
 
-        bool TryTransferToFloorAtEdge(Vector2 nextPosition, float edgeLimit, Vector2 move) {
-            if (!TryGetCrossingDirection(nextPosition, edgeLimit, move, out var direction)) {
+        bool TryTransferToFloorAtEdge(Vector2 nextOffset, float edgeLimit, Vector2 move) {
+            if (!TryGetCrossingDirection(nextOffset, edgeLimit, move, out var direction)) {
                 return false;
             }
 
@@ -846,14 +956,14 @@ namespace DiceGame.Gameplay
             }
 
             var diceCenter = currentDice.View.DiceTransform.position;
-            var worldPosition = GetWorldPositionAtDiceEdge(diceCenter, nextPosition, edgeLimit, direction);
+            var worldPosition = GetWorldPositionAtDiceEdge(diceCenter, nextOffset, edgeLimit, direction);
             SetCurrentDice(null);
-            floorWorldPosition = new Vector2(worldPosition.x, worldPosition.z);
+            ApplyWorldPosition(worldPosition);
             return true;
         }
 
-        bool TryRollAtEdge(Vector2 nextPosition, float edgeLimit, Vector2 move) {
-            if (!TryGetCrossingDirection(nextPosition, edgeLimit, move, out var direction)) {
+        bool TryRollAtEdge(Vector2 nextOffset, float edgeLimit, Vector2 move) {
+            if (!TryGetCrossingDirection(nextOffset, edgeLimit, move, out var direction)) {
                 return false;
             }
 
@@ -866,16 +976,22 @@ namespace DiceGame.Gameplay
                 return false;
             }
 
-            facePosition = ClampToFace(nextPosition, edgeLimit);
+            var clamped = ClampToFace(nextOffset, edgeLimit);
+            var diceCenter = currentDice.View.DiceTransform.position;
+            ApplyWorldPosition(new Vector3(diceCenter.x + clamped.x, 0f, diceCenter.z + clamped.y));
 
             if (!board.CanDiceRollInto(targetPos)) {
                 return false;
             }
 
+            var characterAnchor = characterTransform.position;
+            var diceCenterAnchor = diceCenter;
+
             if (!currentDice.TryRoll(direction)) {
                 return false;
             }
 
+            BeginRollTracking(characterAnchor, diceCenterAnchor);
             return true;
         }
 
@@ -902,14 +1018,15 @@ namespace DiceGame.Gameplay
         }
 
         bool TryStepOntoDiceFromFloorDirection(Vector2 nextPosition, Direction direction) {
-            var currentGrid = board.WorldToGrid(new Vector3(floorWorldPosition.x, 0f, floorWorldPosition.y));
+            var currentXZ = GetWorldXZ();
+            var currentGrid = board.WorldToGrid(new Vector3(currentXZ.x, 0f, currentXZ.y));
             var diceGrid = currentGrid + direction.ToGridDelta();
 
             if (!registry.TryGetAt(diceGrid, out var targetDice)) {
                 return false;
             }
 
-            var diceCenter = board.GridToWorld(diceGrid);
+            var diceCenter = targetDice.View.DiceTransform.position;
             var edgeLimit = GetEdgeLimit();
             var offset = WorldOffsetFromDiceCenter(diceCenter, nextPosition);
 
@@ -926,12 +1043,13 @@ namespace DiceGame.Gameplay
             }
 
             if (!CanStepBetween(board.FloorSurfaceWorldY, targetDice.GetTopSurfaceWorldY())) {
-                floorWorldPosition = ClampFloorPosition(nextPosition);
+                ApplyWorldPosition(ClampToWalkBounds(new Vector3(nextPosition.x, 0f, nextPosition.y)));
                 return true;
             }
 
-            facePosition = RemapFacePositionForTransfer(offset, edgeLimit, direction.Opposite());
+            var remapped = RemapFacePositionForTransfer(offset, edgeLimit, direction.Opposite());
             SetCurrentDice(targetDice);
+            ApplyWorldPosition(new Vector3(diceCenter.x + remapped.x, 0f, diceCenter.z + remapped.y));
             return true;
         }
 
@@ -941,59 +1059,49 @@ namespace DiceGame.Gameplay
 
         static Vector3 GetWorldPositionAtDiceEdge(
             Vector3 diceCenter,
-            Vector2 nextPosition,
+            Vector2 nextOffset,
             float edgeLimit,
             Direction direction) {
             return direction switch {
                 Direction.East => new Vector3(
-                    diceCenter.x + Mathf.Min(nextPosition.x, edgeLimit),
+                    diceCenter.x + Mathf.Min(nextOffset.x, edgeLimit),
                     0f,
-                    diceCenter.z + nextPosition.y),
+                    diceCenter.z + nextOffset.y),
                 Direction.West => new Vector3(
-                    diceCenter.x + Mathf.Max(nextPosition.x, -edgeLimit),
+                    diceCenter.x + Mathf.Max(nextOffset.x, -edgeLimit),
                     0f,
-                    diceCenter.z + nextPosition.y),
+                    diceCenter.z + nextOffset.y),
                 Direction.North => new Vector3(
-                    diceCenter.x + nextPosition.x,
+                    diceCenter.x + nextOffset.x,
                     0f,
-                    diceCenter.z + Mathf.Min(nextPosition.y, edgeLimit)),
+                    diceCenter.z + Mathf.Min(nextOffset.y, edgeLimit)),
                 Direction.South => new Vector3(
-                    diceCenter.x + nextPosition.x,
+                    diceCenter.x + nextOffset.x,
                     0f,
-                    diceCenter.z + Mathf.Max(nextPosition.y, -edgeLimit)),
-                _ => new Vector3(diceCenter.x + nextPosition.x, 0f, diceCenter.z + nextPosition.y)
+                    diceCenter.z + Mathf.Max(nextOffset.y, -edgeLimit)),
+                _ => new Vector3(diceCenter.x + nextOffset.x, 0f, diceCenter.z + nextOffset.y)
             };
         }
 
-        Vector2 ClampFloorPosition(Vector2 position) {
-            var minX = 0f;
-            var minZ = 0f;
-            var maxX = (board.Width - 1) * board.CellSize;
-            var maxZ = (board.Height - 1) * board.CellSize;
-            return new Vector2(
-                Mathf.Clamp(position.x, minX, maxX),
-                Mathf.Clamp(position.y, minZ, maxZ));
-        }
-
-        static bool TryGetCrossingDirection(Vector2 nextPosition, float edgeLimit, Vector2 move, out Direction direction) {
+        static bool TryGetCrossingDirection(Vector2 nextOffset, float edgeLimit, Vector2 move, out Direction direction) {
             direction = default;
 
-            if (move.x > 0f && nextPosition.x > edgeLimit) {
+            if (move.x > 0f && nextOffset.x > edgeLimit) {
                 direction = Direction.East;
                 return true;
             }
 
-            if (move.x < 0f && nextPosition.x < -edgeLimit) {
+            if (move.x < 0f && nextOffset.x < -edgeLimit) {
                 direction = Direction.West;
                 return true;
             }
 
-            if (move.y > 0f && nextPosition.y > edgeLimit) {
+            if (move.y > 0f && nextOffset.y > edgeLimit) {
                 direction = Direction.North;
                 return true;
             }
 
-            if (move.y < 0f && nextPosition.y < -edgeLimit) {
+            if (move.y < 0f && nextOffset.y < -edgeLimit) {
                 direction = Direction.South;
                 return true;
             }
@@ -1001,28 +1109,28 @@ namespace DiceGame.Gameplay
             return false;
         }
 
-        static Vector2 RemapFacePositionForTransfer(Vector2 nextPosition, float edgeLimit, Direction direction) {
+        static Vector2 RemapFacePositionForTransfer(Vector2 nextOffset, float edgeLimit, Direction direction) {
             return direction switch {
                 Direction.East => new Vector2(
-                    -edgeLimit + (nextPosition.x - edgeLimit),
-                    Mathf.Clamp(nextPosition.y, -edgeLimit, edgeLimit)),
+                    -edgeLimit + (nextOffset.x - edgeLimit),
+                    Mathf.Clamp(nextOffset.y, -edgeLimit, edgeLimit)),
                 Direction.West => new Vector2(
-                    edgeLimit + (nextPosition.x + edgeLimit),
-                    Mathf.Clamp(nextPosition.y, -edgeLimit, edgeLimit)),
+                    edgeLimit + (nextOffset.x + edgeLimit),
+                    Mathf.Clamp(nextOffset.y, -edgeLimit, edgeLimit)),
                 Direction.North => new Vector2(
-                    Mathf.Clamp(nextPosition.x, -edgeLimit, edgeLimit),
-                    -edgeLimit + (nextPosition.y - edgeLimit)),
+                    Mathf.Clamp(nextOffset.x, -edgeLimit, edgeLimit),
+                    -edgeLimit + (nextOffset.y - edgeLimit)),
                 Direction.South => new Vector2(
-                    Mathf.Clamp(nextPosition.x, -edgeLimit, edgeLimit),
-                    edgeLimit + (nextPosition.y + edgeLimit)),
-                _ => nextPosition
+                    Mathf.Clamp(nextOffset.x, -edgeLimit, edgeLimit),
+                    edgeLimit + (nextOffset.y + edgeLimit)),
+                _ => nextOffset
             };
         }
 
-        static Vector2 ClampToFace(Vector2 position, float edgeLimit) {
+        static Vector2 ClampToFace(Vector2 offset, float edgeLimit) {
             return new Vector2(
-                Mathf.Clamp(position.x, -edgeLimit, edgeLimit),
-                Mathf.Clamp(position.y, -edgeLimit, edgeLimit));
+                Mathf.Clamp(offset.x, -edgeLimit, edgeLimit),
+                Mathf.Clamp(offset.y, -edgeLimit, edgeLimit));
         }
 
         float GetEdgeLimit() {
