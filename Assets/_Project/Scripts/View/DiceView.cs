@@ -72,6 +72,10 @@ namespace DiceGame.View
             meshInstance = visual.transform;
             meshInstance.localPosition = Vector3.zero;
             meshInstance.localRotation = Quaternion.identity;
+
+            foreach (var collider in visual.GetComponentsInChildren<Collider>()) {
+                collider.enabled = false;
+            }
         }
 
         GameObject ResolveMeshPrefab() {
@@ -137,6 +141,18 @@ namespace DiceGame.View
             rollCoroutine = StartCoroutine(RollCoroutine(direction, fromState, toState, board, onComplete));
         }
 
+        public void PlaySlide(DiceState fromState, DiceState toState, Board board, Action onComplete) {
+            if (dissolveCoroutine != null) {
+                return;
+            }
+
+            if (rollCoroutine != null) {
+                StopCoroutine(rollCoroutine);
+            }
+
+            rollCoroutine = StartCoroutine(SlideCoroutine(fromState, toState, board, onComplete));
+        }
+
         public void PlayDissolve(Board board, int topFace, Action onComplete) {
             if (rollCoroutine != null) {
                 StopCoroutine(rollCoroutine);
@@ -200,6 +216,43 @@ namespace DiceGame.View
 
             currentTopFace = toState.Orientation.Top;
             gridWorldPosition = board.GridToWorld(toState.GridPos);
+            rotationRoot.rotation = DiceOrientationMapper.ToRotation(toState.Orientation);
+            ApplySurfaceVisual(board, dissolveProgress);
+
+            isAnimating = false;
+            rollCoroutine = null;
+            onComplete?.Invoke();
+        }
+
+        IEnumerator SlideCoroutine(DiceState fromState, DiceState toState, Board board, Action onComplete) {
+            isAnimating = true;
+            EnsureMesh();
+            if (positionRoot == null || rotationRoot == null) {
+                isAnimating = false;
+                onComplete?.Invoke();
+                yield break;
+            }
+
+            positionRoot.SetParent(transform);
+            positionRoot.localRotation = Quaternion.identity;
+            positionRoot.localScale = Vector3.one;
+            currentTopFace = fromState.Orientation.Top;
+            rotationRoot.rotation = DiceOrientationMapper.ToRotation(fromState.Orientation);
+
+            var fromWorld = board.GridToWorld(fromState.GridPos);
+            var toWorld = board.GridToWorld(toState.GridPos);
+            var elapsed = 0f;
+
+            while (elapsed < rollDuration) {
+                elapsed += Time.deltaTime;
+                var t = Mathf.SmoothStep(0f, 1f, elapsed / rollDuration);
+                gridWorldPosition = Vector3.Lerp(fromWorld, toWorld, t);
+                ApplySurfaceVisual(board, dissolveProgress);
+                yield return null;
+            }
+
+            currentTopFace = toState.Orientation.Top;
+            gridWorldPosition = toWorld;
             rotationRoot.rotation = DiceOrientationMapper.ToRotation(toState.Orientation);
             ApplySurfaceVisual(board, dissolveProgress);
 

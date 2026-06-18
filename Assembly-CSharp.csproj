@@ -39,6 +39,7 @@
      <Compile Include="Assets\_Project\Scripts\Core\DiceState.cs" />
      <Compile Include="Assets\_Project\Scripts\Core\DiceOrientation.cs" />
      <Compile Include="Assets\_Project\Scripts\Core\RollResolver.cs" />
+     <Compile Include="Assets\_Project\Scripts\Core\SlideResolver.cs" />
      <Compile Include="Assets\_Project\Scripts\Board\CellType.cs" />
      <Compile Include="Assets\_Project\Scripts\Gameplay\DiceRegistry.cs" />
      <Compile Include="Assets\_Project\Scripts\Core\Direction.cs" />
@@ -50,6 +51,7 @@
      <Compile Include="Assets\_Project\Scripts\Gameplay\CharacterController.cs" />
      <Compile Include="Assets\_Project\Scripts\Core\DiceOrientationMapper.cs" />
      <Compile Include="Assets\TutorialInfo\Scripts\Readme.cs" />
+     <Compile Include="Assets\_Project\Scripts\Gameplay\DicePushBody.cs" />
      <Compile Include="Assets\_Project\Scripts\Gameplay\DiceMatchDissolveSystem.cs" />
      <Compile Include="Assets\_Project\Scripts\View\BoardView.cs" />
      <Compile Include="Assets\_Project\Scripts\Board\Board.cs" />

@@ -1,3 +1,5 @@
+using System.Collections.Generic;
+using System.Text;
 using DiceGame.Core;
 using DiceGame.Grid;
 using DiceGame.View;
@@ -17,14 +19,46 @@ namespace DiceGame.Gameplay
         [SerializeField] float moveAcceleration = 10f;
         [SerializeField] float rollCenterPullSpeed = 2.5f;
         [SerializeField] float maxStepHeight = 1.5f;
+        [SerializeField] float pushHoldDuration = 0.25f;
+        [SerializeField] float pushInputAlignment = 0.7f;
+        [SerializeField] float characterPushRadius = 0.25f;
+        [SerializeField] float characterPushHeight = 0.6f;
+        [SerializeField] float characterPushBottom = 0.05f;
+        [SerializeField] bool debugPushContact;
 
         DiceRegistry registry;
         DiceController currentDice;
         Transform characterTransform;
+        CapsuleCollider characterPushCollider;
         Vector2 facePosition;
         Vector2 floorWorldPosition;
         float currentSpeed;
+        float pushContactTime;
+        DiceController pushTargetDice;
+        Direction pushDirection;
+        bool hasPushDirection;
+        DiceController pushFollowDice;
+        Direction pushFollowDirection;
+        bool isPushFollowing;
         bool isInitialized;
+        readonly List<PushContactCandidate> pushCandidates = new();
+        readonly StringBuilder pushDebugBuilder = new();
+        int debugLastOverlapHitCount = -1;
+        int debugLastPushBodyHitCount = -1;
+        int debugLastSkippedBusyCount = -1;
+        string debugLastCandidateSummary;
+        DiceController debugLastPushTarget;
+        Direction debugLastPushDirection;
+        bool debugLastHadPushDirection;
+        float debugLastLoggedContactTime = -1f;
+        bool debugLastAnyRolling;
+
+        struct PushContactCandidate {
+            public DiceController Dice;
+            public Direction Direction;
+            public float InputAlignment;
+            public float FaceDistance;
+        }
 
         public bool IsOnFloor => currentDice == null;
         public bool IsBusy => currentDice != null && currentDice.IsRolling;
@@ -53,6 +87,7 @@ namespace DiceGame.Gameplay
             }
 
             EnsureCharacterInstance();
+            EnsureCharacterPushCollider();
             facePosition = Vector2.zero;
             currentSpeed = 0f;
             isInitialized = true;
@@ -69,10 +104,16 @@ namespace DiceGame.Gameplay
 
         void OnDisable() {
             UnsubscribeCurrentDice();
+            EndPushFollow();
         }
 
         void Update() {
             if (!isInitialized) {
+                return;
+            }
+
+            if (isPushFollowing) {
+                currentSpeed = 0f;
                 return;
             }
 
@@ -91,6 +132,13 @@ namespace DiceGame.Gameplay
         void LateUpdate() {
             if (!isInitialized) {
                 return;
+            }
+
+            if (isPushFollowing) {
+                SyncPositionToPushingDice();
+                if (pushFollowDice == null || !pushFollowDice.IsRolling) {
+                    EndPushFollow();
+                }
             }
 
             UpdateCharacterWorldPosition();
@@ -131,6 +179,7 @@ namespace DiceGame.Gameplay
         void UpdateFloorMovement(Vector2 input) {
             if (input.sqrMagnitude <= 0f) {
                 currentSpeed = 0f;
+                ResetPushState();
                 return;
             }
 
@@ -142,13 +191,21 @@ namespace DiceGame.Gameplay
             }
 
             var move = input * (currentSpeed * Time.deltaTime);
-            var nextPosition = floorWorldPosition + move;
+            var nextPosition = ApplyDiceMovementBlock(floorWorldPosition, move);
 
             if (TryStepOntoDiceFromFloor(nextPosition, move)) {
+                if (debugPushContact) {
+                    LogPushDebug(
+                        "StepOntoDice",
+                        $"乗り移りで押しを中断 floor={FormatVector2(floorWorldPosition)} move={FormatVector2(move)}");
+                }
+
+                ResetPushState();
                 return;
             }
 
             floorWorldPosition = ClampFloorPosition(nextPosition);
+            UpdatePushContact(input);
         }
 
         void UpdateDuringRoll(Vector2 input) {
@@ -210,6 +267,509 @@ namespace DiceGame.Gameplay
             }
 
             characterTransform = transform;
+        }
+
+        void EnsureCharacterPushCollider() {
+            if (characterPushCollider != null || characterTransform == null) {
+                return;
+            }
+
+            characterPushCollider = characterTransform.GetComponent<CapsuleCollider>();
+            if (characterPushCollider == null) {
+                characterPushCollider = characterTransform.gameObject.AddComponent<CapsuleCollider>();
+            }
+
+            characterPushCollider.isTrigger = true;
+            characterPushCollider.radius = characterPushRadius;
+            characterPushCollider.height = characterPushHeight;
+            characterPushCollider.center = new Vector3(
+                0f,
+                characterPushBottom + characterPushHeight * 0.5f,
+                0f);
+        }
+
+        void ResetPushState() {
+            pushContactTime = 0f;
+            pushTargetDice = null;
+            hasPushDirection = false;
+        }
+
+        void UpdatePushContact(Vector2 input) {
+            var anyRolling = registry == null || registry.AnyRolling();
+            if (debugPushContact && anyRolling != debugLastAnyRolling) {
+                debugLastAnyRolling = anyRolling;
+                LogPushDebug("AnyRolling", anyRolling ? "true（押し無効）" : "false");
+            }
+
+            if (anyRolling) {
+                ResetPushState();
+                return;
+            }
+
+            CollectPushCandidates(input, pushCandidates, out var overlapHitCount, out var pushBodyHitCount, out var skippedBusyCount);
+            Debug.Log($"overlapHitCount: {overlapHitCount}, pushBodyHitCount: {pushBodyHitCount}");
+            if (pushCandidates.Count == 0) {
+                LogPushDebugNoCandidates(input, overlapHitCount, pushBodyHitCount, skippedBusyCount);
+                ResetPushState();
+                return;
+            }
+
+            LogPushDebugCandidates(input, overlapHitCount, pushBodyHitCount, skippedBusyCount);
+
+            var best = pushCandidates[0];
+            var targetChanged = pushTargetDice != best.Dice || !hasPushDirection || pushDirection != best.Direction;
+            if (targetChanged) {
+                LogPushDebugTargetChange(best, pushContactTime);
+                pushTargetDice = best.Dice;
+                pushDirection = best.Direction;
+                hasPushDirection = true;
+                pushContactTime = 0f;
+            }
+
+            pushContactTime += Time.deltaTime;
+            LogPushDebugHoldProgress();
+            if (pushContactTime < pushHoldDuration) {
+                return;
+            }
+
+            LogPushDebug(
+                "HoldComplete",
+                $"hold={pushContactTime:F3}s candidates={FormatCandidates(pushCandidates)}");
+
+            var slideSucceeded = false;
+            foreach (var candidate in pushCandidates) {
+                if (candidate.Dice.TrySlide(candidate.Direction)) {
+                    slideSucceeded = true;
+                    LogPushDebug("TrySlide", $"OK {FormatCandidate(candidate)}");
+                    BeginPushFollow(candidate.Dice, candidate.Direction);
+                    break;
+                }
+
+                LogPushDebug("TrySlide", $"FAIL {FormatCandidate(candidate)}");
+            }
+
+            if (!slideSucceeded) {
+                LogPushDebug("TrySlide", "全候補が失敗");
+            }
+
+            ResetPushState();
+        }
+
+        void BeginPushFollow(DiceController dice, Direction direction) {
+            EndPushFollow();
+            pushFollowDice = dice;
+            pushFollowDirection = direction;
+            isPushFollowing = true;
+            currentSpeed = 0f;
+            pushFollowDice.StateChanged += OnPushFollowDiceStateChanged;
+            SyncPositionToPushingDice();
+        }
+
+        void EndPushFollow() {
+            if (pushFollowDice != null) {
+                pushFollowDice.StateChanged -= OnPushFollowDiceStateChanged;
+            }
+
+            if (isPushFollowing && pushFollowDice != null) {
+                SyncPositionToPushingDice();
+            }
+
+            isPushFollowing = false;
+            pushFollowDice = null;
+        }
+
+        void OnPushFollowDiceStateChanged(DiceState state) {
+            if (!isPushFollowing) {
+                return;
+            }
+
+            EndPushFollow();
+        }
+
+        void SyncPositionToPushingDice() {
+            if (pushFollowDice == null || board == null) {
+                return;
+            }
+
+            var diceTransform = pushFollowDice.View.DiceTransform;
+            if (diceTransform == null) {
+                return;
+            }
+
+            var diceCenter = diceTransform.position;
+            var half = board.CellSize * 0.5f;
+            var contactOffset = half + characterPushRadius;
+
+            floorWorldPosition = pushFollowDirection switch {
+                Direction.East => new Vector2(diceCenter.x - contactOffset, floorWorldPosition.y),
+                Direction.West => new Vector2(diceCenter.x + contactOffset, floorWorldPosition.y),
+                Direction.North => new Vector2(floorWorldPosition.x, diceCenter.z - contactOffset),
+                Direction.South => new Vector2(floorWorldPosition.x, diceCenter.z + contactOffset),
+                _ => floorWorldPosition
+            };
+        }
+
+        void CollectPushCandidates(
+            Vector2 input,
+            List<PushContactCandidate> candidates,
+            out int overlapHitCount,
+            out int pushBodyHitCount,
+            out int skippedBusyCount) {
+            candidates.Clear();
+            overlapHitCount = 0;
+            pushBodyHitCount = 0;
+            skippedBusyCount = 0;
+
+            if (characterPushCollider == null) {
+                return;
+            }
+
+            var characterCenter = new Vector3(
+                floorWorldPosition.x,
+                board.FloorSurfaceWorldY + characterPushBottom + characterPushHeight * 0.5f,
+                floorWorldPosition.y);
+            var halfHeight = characterPushHeight * 0.5f - characterPushRadius;
+            var bottom = characterCenter - Vector3.up * halfHeight;
+            var top = characterCenter + Vector3.up * halfHeight;
+            var hits = Physics.OverlapCapsule(
+                bottom,
+                top,
+                characterPushRadius,
+                ~0,
+                QueryTriggerInteraction.Collide);
+            overlapHitCount = hits.Length;
+
+            foreach (var hit in hits) {
+                var pushBody = hit.GetComponent<DicePushBody>();
+                if (pushBody == null || pushBody.Dice == null || pushBody.Collider == null) {
+                    continue;
+                }
+
+                pushBodyHitCount++;
+
+                if (pushBody.Dice.IsDissolving || pushBody.Dice.IsBusy) {
+                    skippedBusyCount++;
+                    continue;
+                }
+
+                var bounds = pushBody.Collider.bounds;
+                TryAddPushCandidate(candidates, pushBody.Dice, bounds, input, Direction.East);
+                TryAddPushCandidate(candidates, pushBody.Dice, bounds, input, Direction.West);
+                TryAddPushCandidate(candidates, pushBody.Dice, bounds, input, Direction.North);
+                TryAddPushCandidate(candidates, pushBody.Dice, bounds, input, Direction.South);
+            }
+
+            candidates.Sort(ComparePushCandidates);
+        }
+
+        void LogPushDebugNoCandidates(Vector2 input, int overlapHitCount, int pushBodyHitCount, int skippedBusyCount) {
+            if (!debugPushContact || input.sqrMagnitude <= 0f) {
+                return;
+            }
+
+            if (overlapHitCount == debugLastOverlapHitCount
+                && pushBodyHitCount == debugLastPushBodyHitCount
+                && skippedBusyCount == debugLastSkippedBusyCount
+                && debugLastCandidateSummary == string.Empty) {
+                return;
+            }
+
+            debugLastOverlapHitCount = overlapHitCount;
+            debugLastPushBodyHitCount = pushBodyHitCount;
+            debugLastSkippedBusyCount = skippedBusyCount;
+            debugLastCandidateSummary = string.Empty;
+            debugLastPushTarget = null;
+            debugLastHadPushDirection = false;
+            debugLastLoggedContactTime = -1f;
+
+            LogPushDebug(
+                "NoCandidates",
+                $"input={FormatVector2(input)} floor={FormatVector2(floorWorldPosition)} " +
+                $"overlapHits={overlapHitCount} pushBodies={pushBodyHitCount} skippedBusy={skippedBusyCount}");
+        }
+
+        void LogPushDebugCandidates(Vector2 input, int overlapHitCount, int pushBodyHitCount, int skippedBusyCount) {
+            if (!debugPushContact) {
+                return;
+            }
+
+            var summary = FormatCandidates(pushCandidates);
+            if (summary == debugLastCandidateSummary
+                && overlapHitCount == debugLastOverlapHitCount
+                && pushBodyHitCount == debugLastPushBodyHitCount
+                && skippedBusyCount == debugLastSkippedBusyCount) {
+                return;
+            }
+
+            debugLastCandidateSummary = summary;
+            debugLastOverlapHitCount = overlapHitCount;
+            debugLastPushBodyHitCount = pushBodyHitCount;
+            debugLastSkippedBusyCount = skippedBusyCount;
+
+            LogPushDebug(
+                "Candidates",
+                $"input={FormatVector2(input)} floor={FormatVector2(floorWorldPosition)} " +
+                $"overlapHits={overlapHitCount} pushBodies={pushBodyHitCount} skippedBusy={skippedBusyCount} list={summary}");
+        }
+
+        void LogPushDebugTargetChange(PushContactCandidate best, float previousContactTime) {
+            if (!debugPushContact) {
+                return;
+            }
+
+            var previousTarget = debugLastHadPushDirection
+                ? FormatDiceRef(debugLastPushTarget, debugLastPushDirection)
+                : "(none)";
+            var nextTarget = FormatCandidate(best);
+            var reason = !hasPushDirection
+                ? "初回接触"
+                : pushDirection != best.Direction
+                    ? "方向変更"
+                    : "ダイス切替";
+
+            LogPushDebug(
+                "TargetChange",
+                $"{reason} {previousTarget} -> {nextTarget} timerReset from {previousContactTime:F3}s");
+
+            debugLastPushTarget = best.Dice;
+            debugLastPushDirection = best.Direction;
+            debugLastHadPushDirection = true;
+            debugLastLoggedContactTime = -1f;
+        }
+
+        void LogPushDebugHoldProgress() {
+            if (!debugPushContact || !hasPushDirection) {
+                return;
+            }
+
+            var tenth = Mathf.FloorToInt(pushContactTime * 10f);
+            var previousTenth = debugLastLoggedContactTime < 0f
+                ? -1
+                : Mathf.FloorToInt(debugLastLoggedContactTime * 10f);
+            if (tenth == previousTenth) {
+                return;
+            }
+
+            debugLastLoggedContactTime = pushContactTime;
+            LogPushDebug(
+                "Hold",
+                $"{FormatDiceRef(pushTargetDice, pushDirection)} {pushContactTime:F2}/{pushHoldDuration:F2}s");
+        }
+
+        void LogPushDebug(string category, string message) {
+            Debug.Log($"[PushDebug:{category}] {message}");
+        }
+
+        static string FormatVector2(Vector2 value) {
+            return $"({value.x:F3}, {value.y:F3})";
+        }
+
+        string FormatCandidates(List<PushContactCandidate> candidates) {
+            if (candidates.Count == 0) {
+                return "(none)";
+            }
+
+            pushDebugBuilder.Clear();
+            for (var i = 0; i < candidates.Count; i++) {
+                if (i > 0) {
+                    pushDebugBuilder.Append(" | ");
+                }
+
+                pushDebugBuilder.Append('#');
+                pushDebugBuilder.Append(i);
+                pushDebugBuilder.Append(' ');
+                pushDebugBuilder.Append(FormatCandidate(candidates[i]));
+            }
+
+            return pushDebugBuilder.ToString();
+        }
+
+        static string FormatCandidate(PushContactCandidate candidate) {
+            var grid = candidate.Dice.CurrentState.GridPos;
+            return $"Grid({grid.x},{grid.y}) {candidate.Direction} align={candidate.InputAlignment:F3} face={candidate.FaceDistance:F3}";
+        }
+
+        static string FormatDiceRef(DiceController dice, Direction direction) {
+            if (dice == null) {
+                return "(none)";
+            }
+
+            var grid = dice.CurrentState.GridPos;
+            return $"Grid({grid.x},{grid.y}) {direction}";
+        }
+
+        void TryAddPushCandidate(
+            List<PushContactCandidate> candidates,
+            DiceController dice,
+            Bounds bounds,
+            Vector2 input,
+            Direction direction) {
+            if (!TryEvaluatePushCandidate(
+                bounds,
+                floorWorldPosition,
+                input,
+                direction,
+                pushInputAlignment,
+                out var inputAlignment,
+                out var faceDistance)) {
+                return;
+            }
+
+            candidates.Add(new PushContactCandidate {
+                Dice = dice,
+                Direction = direction,
+                InputAlignment = inputAlignment,
+                FaceDistance = faceDistance
+            });
+        }
+
+        static int ComparePushCandidates(PushContactCandidate a, PushContactCandidate b) {
+            var alignmentCompare = b.InputAlignment.CompareTo(a.InputAlignment);
+            if (alignmentCompare != 0) {
+                return alignmentCompare;
+            }
+
+            return a.FaceDistance.CompareTo(b.FaceDistance);
+        }
+
+        static bool TryEvaluatePushCandidate(
+            Bounds bounds,
+            Vector2 characterPosition,
+            Vector2 input,
+            Direction direction,
+            float minInputAlignment,
+            out float inputAlignment,
+            out float faceDistance) {
+            inputAlignment = Vector2.Dot(input, GetDirectionInputVector(direction));
+            if (inputAlignment < minInputAlignment) {
+                faceDistance = 0f;
+                return false;
+            }
+
+            var charX = characterPosition.x;
+            var charZ = characterPosition.y;
+
+            switch (direction) {
+                case Direction.East:
+                    if (charX > bounds.center.x + EdgeEpsilon) {
+                        faceDistance = 0f;
+                        return false;
+                    }
+
+                    faceDistance = Mathf.Abs(charX - bounds.min.x);
+                    break;
+                case Direction.West:
+                    if (charX < bounds.center.x - EdgeEpsilon) {
+                        faceDistance = 0f;
+                        return false;
+                    }
+
+                    faceDistance = Mathf.Abs(charX - bounds.max.x);
+                    break;
+                case Direction.North:
+                    if (charZ > bounds.center.z + EdgeEpsilon) {
+                        faceDistance = 0f;
+                        return false;
+                    }
+
+                    faceDistance = Mathf.Abs(charZ - bounds.min.z);
+                    break;
+                case Direction.South:
+                    if (charZ < bounds.center.z - EdgeEpsilon) {
+                        faceDistance = 0f;
+                        return false;
+                    }
+
+                    faceDistance = Mathf.Abs(charZ - bounds.max.z);
+                    break;
+                default:
+                    faceDistance = 0f;
+                    return false;
+            }
+
+            return true;
+        }
+
+        static Vector2 GetDirectionInputVector(Direction direction) {
+            return direction switch {
+                Direction.East => Vector2.right,
+                Direction.West => Vector2.left,
+                Direction.North => Vector2.up,
+                Direction.South => Vector2.down,
+                _ => Vector2.zero
+            };
+        }
+
+        Vector2 ApplyDiceMovementBlock(Vector2 currentPosition, Vector2 move) {
+            if (registry == null || move.sqrMagnitude <= 0f) {
+                return currentPosition + move;
+            }
+
+            var resultMove = move;
+            var characterBottom = board.FloorSurfaceWorldY + characterPushBottom;
+            var characterTop = characterBottom + characterPushHeight;
+
+            foreach (var dice in registry.AllDice) {
+                if (dice == null || dice.IsDissolving) {
+                    continue;
+                }
+
+                var pushBody = dice.GetComponentInChildren<DicePushBody>();
+                if (pushBody == null || pushBody.Collider == null) {
+                    continue;
+                }
+
+                var bounds = pushBody.Collider.bounds;
+                if (characterTop < bounds.min.y || characterBottom > bounds.max.y) {
+                    continue;
+                }
+
+                resultMove = BlockMoveAgainstDiceBounds(currentPosition, resultMove, bounds, characterPushRadius);
+            }
+
+            return currentPosition + resultMove;
+        }
+
+        static Vector2 BlockMoveAgainstDiceBounds(Vector2 position, Vector2 move, Bounds bounds, float radius) {
+            var result = move;
+
+            if (OverlapsAxis(position.y, radius, bounds.min.z, bounds.max.z)) {
+                if (result.x > 0f && position.x < bounds.center.x) {
+                    var limitX = bounds.min.x - radius;
+                    if (position.x + result.x > limitX) {
+                        result.x = Mathf.Max(0f, limitX - position.x);
+                    }
+                }
+
+                if (result.x < 0f && position.x > bounds.center.x) {
+                    var limitX = bounds.max.x + radius;
+                    if (position.x + result.x < limitX) {
+                        result.x = Mathf.Min(0f, limitX - position.x);
+                    }
+                }
+            }
+
+            if (OverlapsAxis(position.x, radius, bounds.min.x, bounds.max.x)) {
+                if (result.y > 0f && position.y < bounds.center.z) {
+                    var limitZ = bounds.min.z - radius;
+                    if (position.y + result.y > limitZ) {
+                        result.y = Mathf.Max(0f, limitZ - position.y);
+                    }
+                }
+
+                if (result.y < 0f && position.y > bounds.center.z) {
+                    var limitZ = bounds.max.z + radius;
+                    if (position.y + result.y < limitZ) {
+                        result.y = Mathf.Min(0f, limitZ - position.y);
+                    }
+                }
+            }
+
+            return result;
+        }
+
+        static bool OverlapsAxis(float center, float radius, float min, float max) {
+            return center + radius > min && center - radius < max;
         }
 
         void UpdateCharacterWorldPosition() {

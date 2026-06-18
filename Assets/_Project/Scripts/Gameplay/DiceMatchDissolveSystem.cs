@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using DiceGame.Core;
 using DiceGame.Grid;
@@ -13,13 +14,13 @@ namespace DiceGame.Gameplay
         [SerializeField] float chainRollbackAmount = 0.15f;
 
         readonly HashSet<DiceController> subscribedDice = new();
+        readonly Dictionary<DiceController, Action<DiceState>> diceStateHandlers = new();
 
         public void Configure(Board targetBoard, DiceRegistry targetRegistry, CharacterController targetCharacter) {
             board = targetBoard;
             registry = targetRegistry;
             character = targetCharacter;
             SubscribeAllDice();
-            EvaluateMatches();
         }
 
         void OnDisable() {
@@ -42,7 +43,9 @@ namespace DiceGame.Gameplay
             }
 
             subscribedDice.Add(dice);
-            dice.StateChanged += OnDiceStateChanged;
+            Action<DiceState> handler = _ => OnDiceStateChanged(dice);
+            diceStateHandlers[dice] = handler;
+            dice.StateChanged += handler;
             dice.Dissolved += OnDiceDissolved;
         }
 
@@ -52,39 +55,47 @@ namespace DiceGame.Gameplay
                     continue;
                 }
 
-                dice.StateChanged -= OnDiceStateChanged;
+                if (diceStateHandlers.TryGetValue(dice, out var handler)) {
+                    dice.StateChanged -= handler;
+                }
+
                 dice.Dissolved -= OnDiceDissolved;
             }
 
             subscribedDice.Clear();
+            diceStateHandlers.Clear();
         }
 
-        void OnDiceStateChanged(DiceState state) {
+        void OnDiceStateChanged(DiceController triggerDice) {
             if (registry != null) {
                 foreach (var dice in registry.AllDice) {
                     SubscribeDice(dice);
                 }
             }
 
-            EvaluateMatches();
+            EvaluateMatches(triggerDice);
         }
 
         void OnDiceDissolved(DiceController dice) {
             if (dice != null) {
                 subscribedDice.Remove(dice);
+                diceStateHandlers.Remove(dice);
             }
 
             character?.OnStandingDiceDissolved(dice);
-            EvaluateMatches();
         }
 
-        void EvaluateMatches() {
-            if (board == null || registry == null || registry.AnyRolling()) {
+        void EvaluateMatches(DiceController triggerDice) {
+            if (triggerDice == null || board == null || registry == null || registry.AnyRolling()) {
                 return;
             }
 
             var clusters = DiceMatchFinder.FindMatchingClusters(registry.AllDice);
             foreach (var cluster in clusters) {
+                if (!cluster.Contains(triggerDice)) {
+                    continue;
+                }
+
                 ProcessCluster(cluster);
             }
         }

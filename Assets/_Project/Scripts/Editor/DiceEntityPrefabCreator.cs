@@ -32,7 +32,17 @@ namespace DiceGame.Editor
             dissolvePivot.transform.SetParent(rotationRoot.transform, false);
 
             var diceView = root.AddComponent<DiceView>();
-            root.AddComponent<DiceController>();
+            var diceController = root.AddComponent<DiceController>();
+
+            var pushCollider = new GameObject("PushCollider");
+            pushCollider.transform.SetParent(positionRoot.transform, false);
+            var pushColliderBox = pushCollider.AddComponent<BoxCollider>();
+            pushColliderBox.isTrigger = true;
+            var pushBody = pushCollider.AddComponent<DicePushBody>();
+
+            var serializedPush = new SerializedObject(pushBody);
+            serializedPush.FindProperty("dice").objectReferenceValue = diceController;
+            serializedPush.ApplyModifiedPropertiesWithoutUndo();
 
             var serializedView = new SerializedObject(diceView);
             serializedView.FindProperty("diceMeshPrefab").objectReferenceValue = diceVisualPrefab;
@@ -111,9 +121,10 @@ namespace DiceGame.Editor
                 var existingRoot = PrefabUtility.LoadPrefabContents(CharacterPrefabPath);
                 if (existingRoot.GetComponent<DiceGame.Gameplay.CharacterController>() == null) {
                     existingRoot.AddComponent<DiceGame.Gameplay.CharacterController>();
-                    PrefabUtility.SaveAsPrefabAsset(existingRoot, CharacterPrefabPath);
                 }
 
+                EnsureCharacterPushCollider(existingRoot);
+                PrefabUtility.SaveAsPrefabAsset(existingRoot, CharacterPrefabPath);
                 PrefabUtility.UnloadPrefabContents(existingRoot);
                 return AssetDatabase.LoadAssetAtPath<GameObject>(CharacterPrefabPath);
             }
@@ -121,12 +132,29 @@ namespace DiceGame.Editor
             var character = GameObject.CreatePrimitive(PrimitiveType.Capsule);
             character.name = "Character";
             character.transform.localScale = new Vector3(0.35f, 0.35f, 0.35f);
-            Object.DestroyImmediate(character.GetComponent<Collider>());
+            var primitiveCollider = character.GetComponent<Collider>();
+            if (primitiveCollider != null) {
+                Object.DestroyImmediate(primitiveCollider);
+            }
+
             character.AddComponent<DiceGame.Gameplay.CharacterController>();
+            EnsureCharacterPushCollider(character);
 
             var prefab = PrefabUtility.SaveAsPrefabAsset(character, CharacterPrefabPath);
             Object.DestroyImmediate(character);
             return prefab;
+        }
+
+        static void EnsureCharacterPushCollider(GameObject character) {
+            var capsule = character.GetComponent<CapsuleCollider>();
+            if (capsule == null) {
+                capsule = character.AddComponent<CapsuleCollider>();
+            }
+
+            capsule.isTrigger = true;
+            capsule.radius = 0.25f;
+            capsule.height = 0.6f;
+            capsule.center = new Vector3(0f, 0.35f, 0f);
         }
 
         static void EnsurePrefabFolder() {

@@ -12,6 +12,7 @@ GameObject:
   - component: {fileID: 6222595276994435762}
   - component: {fileID: 5018329796749373259}
   - component: {fileID: 8000000002}
+  - component: {fileID: 8000000003}
   m_Layer: 0
   m_Name: Character
   m_TagString: Untagged
@@ -104,3 +105,22 @@ MonoBehaviour:
   moveAcceleration: 200
   rollCenterPullSpeed: 0
   maxStepHeight: 0.5
+  pushHoldDuration: 0.25
+  pushInputAlignment: 0.7
+  characterPushRadius: 0.25
+  characterPushHeight: 0.6
+  characterPushBottom: 0.05
+--- !u!136 &8000000003
+CapsuleCollider:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 5551003257859862670}
+  m_Material: {fileID: 0}
+  m_IsTrigger: 1
+  m_Enabled: 1
+  m_Radius: 0.25
+  m_Height: 0.6
+  m_Direction: 1
+  m_Center: {x: 0, y: 0.35, z: 0}

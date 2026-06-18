@@ -61,7 +61,13 @@ namespace DiceGame.Gameplay
             registry?.Register(this);
 
             diceView.SnapTo(currentState, board);
+            ConfigurePushBody();
             StateChanged?.Invoke(currentState);
+        }
+
+        void ConfigurePushBody() {
+            var pushBody = GetComponentInChildren<DicePushBody>();
+            pushBody?.Configure(board);
         }
 
         public float GetTopSurfaceWorldY() {
@@ -86,6 +92,29 @@ namespace DiceGame.Gameplay
             registry?.MoveDice(this, fromState.GridPos, nextState.GridPos);
 
             diceView.PlayRoll(direction, fromState, nextState, board, () => {
+                isRolling = false;
+                StateChanged?.Invoke(currentState);
+            });
+
+            return true;
+        }
+
+        public bool TrySlide(Direction direction) {
+            if (IsBusy || isDissolving || board == null || diceView == null) {
+                return false;
+            }
+
+            if (!SlideResolver.TrySlide(currentState, direction, board, out var nextState)) {
+                return false;
+            }
+
+            isRolling = true;
+            var fromState = currentState;
+            currentState = nextState;
+            board.MoveDice(fromState.GridPos, nextState.GridPos);
+            registry?.MoveDice(this, fromState.GridPos, nextState.GridPos);
+
+            diceView.PlaySlide(fromState, nextState, board, () => {
                 isRolling = false;
                 StateChanged?.Invoke(currentState);
             });

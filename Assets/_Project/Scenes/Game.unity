@@ -519,11 +519,11 @@ MonoBehaviour:
     type: 3}
   characterPrefab: {fileID: 5551003257859862670, guid: b2c3d4e5f6a7890123456789abcdef01,
     type: 3}
-  diceCount: 15
+  diceCount: 30
   randomSeed: 0
   cameraSetup:
     enabled: 1
-    distanceScale: 1
+    distanceScale: 1.4
     offsetFactors: {x: 0.4, y: 0.75, z: -0.6}
     lookAtBoardCenter: 1
     lookAtOffset: {x: 0, y: 0, z: 0}
