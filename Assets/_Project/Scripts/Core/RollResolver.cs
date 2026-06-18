@@ -9,7 +9,7 @@ namespace DiceGame.Core
             nextState = default;
             var targetPos = state.GridPos + direction.ToGridDelta();
 
-            if (!board.CanEnter(targetPos)) {
+            if (!board.CanDiceRollInto(targetPos)) {
                 return false;
             }
 

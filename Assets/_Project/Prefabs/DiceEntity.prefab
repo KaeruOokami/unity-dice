@@ -11,7 +11,6 @@ GameObject:
   - component: {fileID: 8906475852595570203}
   - component: {fileID: 4408843425297811068}
   - component: {fileID: 5892246955885051454}
-  - component: {fileID: 8000000001}
   m_Layer: 0
   m_Name: DiceEntity
   m_TagString: Untagged
@@ -48,7 +47,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   diceMeshPrefab: {fileID: 6801955793903224657, guid: 8e6dd1dffeba6e543959e0363637cef1,
     type: 3}
-  rollDuration: 0.3
+  rollDuration: 0.2
 --- !u!114 &5892246955885051454
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -68,25 +67,3 @@ MonoBehaviour:
     Top: 1
     North: 2
     East: 3
---- !u!114 &8000000001
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 2097092927246924327}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: c9d0e1f2345678901234abcdef012345, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: 
-  board: {fileID: 0}
-  diceController: {fileID: 5892246955885051454}
-  diceView: {fileID: 4408843425297811068}
-  characterObject: {fileID: 5551003257859862669, guid: 26514357a56f39d49b7637fa4a837161,
-    type: 3}
-  characterHeightOffset: 0.15
-  faceStepRatio: 0.85
-  maxMoveSpeed: 6
-  moveAcceleration: 20
-  recenterSpeed: 5

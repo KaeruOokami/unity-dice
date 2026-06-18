@@ -20,20 +20,15 @@ namespace DiceGame.Editor
                 return;
             }
 
-            var characterPrefab = CreateOrLoadCharacterPrefab();
+            CreateOrLoadCharacterPrefab();
 
             var root = new GameObject("DiceEntity");
             var diceView = root.AddComponent<DiceView>();
             root.AddComponent<DiceController>();
-            var characterController = root.AddComponent<DiceGame.Gameplay.CharacterController>();
 
             var serializedView = new SerializedObject(diceView);
             serializedView.FindProperty("diceMeshPrefab").objectReferenceValue = diceVisualPrefab;
             serializedView.ApplyModifiedPropertiesWithoutUndo();
-
-            var serializedCharacter = new SerializedObject(characterController);
-            serializedCharacter.FindProperty("characterObject").objectReferenceValue = characterPrefab;
-            serializedCharacter.ApplyModifiedPropertiesWithoutUndo();
 
             EnsurePrefabFolder();
             var prefab = PrefabUtility.SaveAsPrefabAsset(root, DiceEntityPrefabPath);
@@ -48,8 +43,14 @@ namespace DiceGame.Editor
             CreateDiceEntityPrefab();
 
             var diceEntityPrefab = AssetDatabase.LoadAssetAtPath<GameObject>(DiceEntityPrefabPath);
+            var characterPrefab = AssetDatabase.LoadAssetAtPath<GameObject>(CharacterPrefabPath);
             if (diceEntityPrefab == null) {
                 Debug.LogError("Failed to load DiceEntity prefab.");
+                return;
+            }
+
+            if (characterPrefab == null) {
+                Debug.LogError("Failed to load Character prefab.");
                 return;
             }
 
@@ -81,31 +82,36 @@ namespace DiceGame.Editor
             var serializedBootstrap = new SerializedObject(bootstrap);
             serializedBootstrap.FindProperty("board").objectReferenceValue = board;
             serializedBootstrap.FindProperty("diceEntityPrefab").objectReferenceValue = diceEntityPrefab;
+            serializedBootstrap.FindProperty("characterPrefab").objectReferenceValue = characterPrefab;
+            serializedBootstrap.FindProperty("diceCount").intValue = 3;
             serializedBootstrap.ApplyModifiedPropertiesWithoutUndo();
 
-            var camera = Camera.main;
-            if (camera != null) {
-                var center = board.GridToWorld(new Vector2Int(board.Width / 2, board.Height / 2));
-                var distance = board.CellSize * Mathf.Max(board.Width, board.Height);
-                camera.transform.position = center + new Vector3(-distance * 0.6f, distance * 0.75f, -distance * 0.6f);
-                camera.transform.LookAt(center);
-            }
+            bootstrap.ApplyCameraSetup();
 
             EditorSceneManagerMarkDirty();
             Debug.Log("Game scene setup complete. Save the scene and press Play.");
         }
 
         static GameObject CreateOrLoadCharacterPrefab() {
+            EnsurePrefabFolder();
+
             var existing = AssetDatabase.LoadAssetAtPath<GameObject>(CharacterPrefabPath);
             if (existing != null) {
-                return existing;
+                var existingRoot = PrefabUtility.LoadPrefabContents(CharacterPrefabPath);
+                if (existingRoot.GetComponent<DiceGame.Gameplay.CharacterController>() == null) {
+                    existingRoot.AddComponent<DiceGame.Gameplay.CharacterController>();
+                    PrefabUtility.SaveAsPrefabAsset(existingRoot, CharacterPrefabPath);
+                }
+
+                PrefabUtility.UnloadPrefabContents(existingRoot);
+                return AssetDatabase.LoadAssetAtPath<GameObject>(CharacterPrefabPath);
             }
 
-            EnsurePrefabFolder();
             var character = GameObject.CreatePrimitive(PrimitiveType.Capsule);
             character.name = "Character";
             character.transform.localScale = new Vector3(0.35f, 0.35f, 0.35f);
             Object.DestroyImmediate(character.GetComponent<Collider>());
+            character.AddComponent<DiceGame.Gameplay.CharacterController>();
 
             var prefab = PrefabUtility.SaveAsPrefabAsset(character, CharacterPrefabPath);
             Object.DestroyImmediate(character);

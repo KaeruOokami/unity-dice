@@ -8,8 +8,6 @@ namespace DiceGame.Gameplay
     public class CharacterController : MonoBehaviour
     {
         [SerializeField] Board board;
-        [SerializeField] DiceController diceController;
-        [SerializeField] DiceView diceView;
         [SerializeField] GameObject characterObject;
         [SerializeField] float characterHeightOffset = 0.15f;
         [SerializeField] float faceStepRatio = 0.85f;
@@ -17,56 +15,37 @@ namespace DiceGame.Gameplay
         [SerializeField] float moveAcceleration = 10f;
         [SerializeField] float rollCenterPullSpeed = 2.5f;
 
+        DiceRegistry registry;
+        DiceController currentDice;
         Transform characterTransform;
         Vector2 facePosition;
         float currentSpeed;
         bool isInitialized;
 
-        public bool IsBusy => diceController != null && diceController.IsBusy;
+        public bool IsBusy => currentDice != null && currentDice.IsBusy;
         public Vector2 FacePosition => facePosition;
+        public DiceController CurrentDice => currentDice;
 
-        void Awake() {
-            if (diceController == null) {
-                diceController = GetComponent<DiceController>();
-            }
-
-            if (diceView == null) {
-                diceView = GetComponent<DiceView>();
-            }
-        }
-
-        void OnEnable() {
-            if (diceController != null) {
-                diceController.StateChanged += OnDiceStateChanged;
-            }
-        }
-
-        void OnDisable() {
-            if (diceController != null) {
-                diceController.StateChanged -= OnDiceStateChanged;
-            }
-        }
-
-        public void Configure(Board targetBoard, DiceController controller, DiceView view) {
+        public void Configure(Board targetBoard, DiceRegistry targetRegistry, DiceController startDice) {
             board = targetBoard;
-            diceController = controller;
-            diceView = view;
+            registry = targetRegistry;
+            SetCurrentDice(startDice);
             Initialize();
         }
 
         public void Initialize() {
-            if (board == null || diceController == null || diceView == null) {
-                Debug.LogError("CharacterController: Board, DiceController, or DiceView is not assigned.");
+            if (board == null || registry == null || currentDice == null) {
+                Debug.LogError("CharacterController: Board, DiceRegistry, or start Dice is not assigned.");
                 return;
             }
 
-            if (characterObject == null) {
-                Debug.LogError("CharacterController: characterObject is not assigned.");
+            if (currentDice.View == null) {
+                Debug.LogError("CharacterController: Current dice has no DiceView.");
                 return;
             }
 
-            diceView.EnsureDiceInstance();
-            if (diceView.DiceTransform == null) {
+            currentDice.View.EnsureDiceInstance();
+            if (currentDice.View.DiceTransform == null) {
                 Debug.LogError("CharacterController: Dice visual is not available.");
                 return;
             }
@@ -78,13 +57,17 @@ namespace DiceGame.Gameplay
             UpdateCharacterWorldPosition();
         }
 
+        void OnDisable() {
+            UnsubscribeCurrentDice();
+        }
+
         void Update() {
             if (!isInitialized) {
                 return;
             }
 
             var input = GetInputDirection();
-            var isRolling = diceController != null && diceController.IsBusy;
+            var isRolling = currentDice != null && currentDice.IsBusy;
 
             if (isRolling) {
                 UpdateDuringRoll(input);
@@ -118,6 +101,10 @@ namespace DiceGame.Gameplay
             var move = input * (currentSpeed * Time.deltaTime);
             var nextPosition = facePosition + move;
 
+            if (TryTransferAtEdge(nextPosition, edgeLimit, move)) {
+                return;
+            }
+
             if (TryRollAtEdge(nextPosition, edgeLimit, move)) {
                 return;
             }
@@ -146,23 +133,46 @@ namespace DiceGame.Gameplay
             currentSpeed = 0f;
         }
 
+        void SetCurrentDice(DiceController dice) {
+            UnsubscribeCurrentDice();
+            currentDice = dice;
+            if (currentDice != null) {
+                currentDice.StateChanged += OnDiceStateChanged;
+            }
+        }
+
+        void UnsubscribeCurrentDice() {
+            if (currentDice != null) {
+                currentDice.StateChanged -= OnDiceStateChanged;
+            }
+        }
+
         void EnsureCharacterInstance() {
             if (characterTransform != null) {
-                characterTransform.SetParent(transform, false);
                 return;
             }
 
-            var instance = Instantiate(characterObject, transform);
-            instance.name = "Character";
-            characterTransform = instance.transform;
+            if (characterObject != null) {
+                var instance = Instantiate(characterObject, transform);
+                instance.name = "CharacterVisual";
+                characterTransform = instance.transform;
+                return;
+            }
+
+            characterTransform = transform;
         }
 
         void UpdateCharacterWorldPosition() {
-            if (characterTransform == null || board == null || diceView.DiceTransform == null) {
+            if (characterTransform == null || board == null || currentDice == null) {
                 return;
             }
 
-            var dicePosition = diceView.DiceTransform.position;
+            var diceTransform = currentDice.View.DiceTransform;
+            if (diceTransform == null) {
+                return;
+            }
+
+            var dicePosition = diceTransform.position;
             var half = board.CellSize * 0.5f;
             var worldY = dicePosition.y + half + characterHeightOffset;
 
@@ -173,30 +183,86 @@ namespace DiceGame.Gameplay
             characterTransform.rotation = Quaternion.identity;
         }
 
-        bool TryRollAtEdge(Vector2 nextPosition, float edgeLimit, Vector2 move) {
-            Direction? direction = null;
-
-            if (move.x > 0f && nextPosition.x > edgeLimit) {
-                direction = Direction.East;
-            } else if (move.x < 0f && nextPosition.x < -edgeLimit) {
-                direction = Direction.West;
-            } else if (move.y > 0f && nextPosition.y > edgeLimit) {
-                direction = Direction.North;
-            } else if (move.y < 0f && nextPosition.y < -edgeLimit) {
-                direction = Direction.South;
+        bool TryTransferAtEdge(Vector2 nextPosition, float edgeLimit, Vector2 move) {
+            if (!TryGetCrossingDirection(nextPosition, edgeLimit, move, out var direction)) {
+                return false;
             }
 
-            if (!direction.HasValue) {
+            var neighbor = registry.GetNeighbor(currentDice, direction);
+            if (neighbor == null) {
+                return false;
+            }
+
+            facePosition = RemapFacePositionForTransfer(nextPosition, edgeLimit, direction);
+            SetCurrentDice(neighbor);
+            return true;
+        }
+
+        bool TryRollAtEdge(Vector2 nextPosition, float edgeLimit, Vector2 move) {
+            if (!TryGetCrossingDirection(nextPosition, edgeLimit, move, out var direction)) {
+                return false;
+            }
+
+            var targetPos = currentDice.CurrentState.GridPos + direction.ToGridDelta();
+            if (registry.TryGetAt(targetPos, out _)) {
                 return false;
             }
 
             facePosition = ClampToFace(nextPosition, edgeLimit);
 
-            if (!diceController.TryRoll(direction.Value)) {
+            if (!board.CanDiceRollInto(targetPos)) {
+                return false;
+            }
+
+            if (!currentDice.TryRoll(direction)) {
                 return false;
             }
 
             return true;
+        }
+
+        static bool TryGetCrossingDirection(Vector2 nextPosition, float edgeLimit, Vector2 move, out Direction direction) {
+            direction = default;
+
+            if (move.x > 0f && nextPosition.x > edgeLimit) {
+                direction = Direction.East;
+                return true;
+            }
+
+            if (move.x < 0f && nextPosition.x < -edgeLimit) {
+                direction = Direction.West;
+                return true;
+            }
+
+            if (move.y > 0f && nextPosition.y > edgeLimit) {
+                direction = Direction.North;
+                return true;
+            }
+
+            if (move.y < 0f && nextPosition.y < -edgeLimit) {
+                direction = Direction.South;
+                return true;
+            }
+
+            return false;
+        }
+
+        static Vector2 RemapFacePositionForTransfer(Vector2 nextPosition, float edgeLimit, Direction direction) {
+            return direction switch {
+                Direction.East => new Vector2(
+                    -edgeLimit + (nextPosition.x - edgeLimit),
+                    Mathf.Clamp(nextPosition.y, -edgeLimit, edgeLimit)),
+                Direction.West => new Vector2(
+                    edgeLimit + (nextPosition.x + edgeLimit),
+                    Mathf.Clamp(nextPosition.y, -edgeLimit, edgeLimit)),
+                Direction.North => new Vector2(
+                    Mathf.Clamp(nextPosition.x, -edgeLimit, edgeLimit),
+                    -edgeLimit + (nextPosition.y - edgeLimit)),
+                Direction.South => new Vector2(
+                    Mathf.Clamp(nextPosition.x, -edgeLimit, edgeLimit),
+                    edgeLimit + (nextPosition.y + edgeLimit)),
+                _ => nextPosition
+            };
         }
 
         static Vector2 ClampToFace(Vector2 position, float edgeLimit) {

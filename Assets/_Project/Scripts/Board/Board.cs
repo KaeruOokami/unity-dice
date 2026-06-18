@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using UnityEngine;
 
 namespace DiceGame.Grid
@@ -9,12 +10,11 @@ namespace DiceGame.Grid
         [SerializeField] float cellSize = 1.4f;
 
         CellType[,] cells;
-        Vector2Int? dicePosition;
+        readonly HashSet<Vector2Int> diceCells = new();
 
         public int Width => width;
         public int Height => height;
         public float CellSize => cellSize;
-        public Vector2Int? DicePosition => dicePosition;
 
         void Awake() {
             InitializeCells();
@@ -28,6 +28,7 @@ namespace DiceGame.Grid
 
         public void InitializeCells() {
             cells = new CellType[width, height];
+            diceCells.Clear();
             for (var x = 0; x < width; x++) {
                 for (var z = 0; z < height; z++) {
                     cells[x, z] = CellType.Floor;
@@ -43,25 +44,30 @@ namespace DiceGame.Grid
             return IsInside(gridPos) ? cells[gridPos.x, gridPos.y] : CellType.Wall;
         }
 
-        public bool CanEnter(Vector2Int gridPos) {
+        public bool HasDiceAt(Vector2Int gridPos) {
+            return diceCells.Contains(gridPos);
+        }
+
+        public bool CanDiceRollInto(Vector2Int gridPos) {
             if (!IsInside(gridPos) || GetCell(gridPos) != CellType.Floor) {
                 return false;
             }
 
-            if (dicePosition.HasValue && dicePosition.Value == gridPos) {
-                return false;
-            }
+            return !HasDiceAt(gridPos);
+        }
 
-            return true;
+        public void RegisterDice(Vector2Int gridPos) {
+            diceCells.Add(gridPos);
+        }
+
+        public void MoveDice(Vector2Int from, Vector2Int to) {
+            diceCells.Remove(from);
+            diceCells.Add(to);
         }
 
         public Vector3 GridToWorld(Vector2Int gridPos) {
             var halfHeight = cellSize * 0.5f;
             return new Vector3(gridPos.x * cellSize, halfHeight, gridPos.y * cellSize);
-        }
-
-        public void SetDicePosition(Vector2Int? gridPos) {
-            dicePosition = gridPos;
         }
     }
 }

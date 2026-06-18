@@ -450,8 +450,8 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 7f8091a2b3c4d5e6f708192a3b4c5d6e, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  width: 5
-  height: 5
+  width: 15
+  height: 15
   cellSize: 1.4
 --- !u!114 &1900000004
 MonoBehaviour:
@@ -516,11 +516,10 @@ MonoBehaviour:
   board: {fileID: 1900000003}
   diceEntityPrefab: {fileID: 2097092927246924327, guid: 76711374a81ea554db52b4125687fd0e,
     type: 3}
-  diceStartPos: {x: 2, y: 2}
-  diceStartOrientation:
-    Top: 1
-    North: 2
-    East: 3
+  characterPrefab: {fileID: 5551003257859862670, guid: b2c3d4e5f6a7890123456789abcdef01,
+    type: 3}
+  diceCount: 3
+  randomSeed: 0
 --- !u!114 &1900000014
 MonoBehaviour:
   m_ObjectHideFlags: 0

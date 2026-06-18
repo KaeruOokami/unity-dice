@@ -1,25 +1,25 @@
-using DiceGame.Gameplay;
 using UnityEngine;
 
 namespace DiceGame.View
 {
     public class DiceDebugOverlay : MonoBehaviour
     {
-        DiceController diceController;
+        DiceGame.Gameplay.CharacterController characterController;
 
         void Update() {
-            if (diceController == null) {
-                diceController = FindObjectOfType<DiceController>();
+            if (characterController == null) {
+                characterController = FindObjectOfType<DiceGame.Gameplay.CharacterController>();
             }
         }
 
         void OnGUI() {
-            if (diceController == null) {
+            if (characterController == null || characterController.CurrentDice == null) {
                 return;
             }
 
-            var state = diceController.CurrentState;
-            GUI.Label(new Rect(12f, 12f, 320f, 24f), $"Top: {state.Orientation.Top}  Grid: ({state.GridPos.x}, {state.GridPos.y})");
+            var state = characterController.CurrentDice.CurrentState;
+            GUI.Label(new Rect(12f, 12f, 400f, 24f),
+                $"Top: {state.Orientation.Top}  Grid: ({state.GridPos.x}, {state.GridPos.y})  Face: {characterController.FacePosition}");
         }
     }
 }
