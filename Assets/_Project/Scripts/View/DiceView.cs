@@ -9,23 +9,55 @@ namespace DiceGame.View
     public class DiceView : MonoBehaviour
     {
         [SerializeField] UnityEngine.Object diceMeshPrefab;
+        [SerializeField] Transform positionRoot;
+        [SerializeField] Transform rotationRoot;
+        [SerializeField] Transform dissolvePivot;
         [SerializeField] float rollDuration = 0.3f;
+        [SerializeField] float dissolveDuration = 0.8f;
 
-        Transform diceInstance;
+        Transform meshInstance;
         Coroutine rollCoroutine;
+        Coroutine dissolveCoroutine;
         bool isAnimating;
+        float dissolveProgress;
+        int currentTopFace = 1;
+        Vector3 gridWorldPosition;
 
         public bool IsAnimating => isAnimating;
+        public float DissolveProgress => dissolveProgress;
 
-        public Transform DiceTransform {
-            get {
-                EnsureDiceInstance();
-                return diceInstance;
+        public Transform DiceTransform => positionRoot;
+
+        void Awake() {
+            ResolveHierarchy();
+        }
+
+        void ResolveHierarchy() {
+            if (positionRoot == null) {
+                positionRoot = transform.Find("PositionRoot");
+            }
+
+            if (rotationRoot == null && positionRoot != null) {
+                rotationRoot = positionRoot.Find("RotationRoot");
+            }
+
+            if (dissolvePivot == null && rotationRoot != null) {
+                dissolvePivot = rotationRoot.Find("DissolvePivot");
             }
         }
 
         public void EnsureDiceInstance() {
-            if (diceInstance != null) {
+            EnsureMesh();
+        }
+
+        void EnsureMesh() {
+            if (meshInstance != null) {
+                return;
+            }
+
+            ResolveHierarchy();
+            if (dissolvePivot == null) {
+                Debug.LogError("DiceView: DissolvePivot is not assigned. Run Dice > Create DiceEntity Prefab.");
                 return;
             }
 
@@ -34,9 +66,11 @@ namespace DiceGame.View
                 return;
             }
 
-            var visual = UnityEngine.Object.Instantiate(prefab, transform);
-            visual.name = "DiceVisual";
-            diceInstance = visual.transform;
+            var visual = UnityEngine.Object.Instantiate(prefab, dissolvePivot);
+            visual.name = "DiceMesh";
+            meshInstance = visual.transform;
+            meshInstance.localPosition = Vector3.zero;
+            meshInstance.localRotation = Quaternion.identity;
         }
 
         GameObject ResolveMeshPrefab() {
@@ -53,24 +87,47 @@ namespace DiceGame.View
             }
         }
 
+        public float GetTopSurfaceWorldY(Board board) {
+            if (board == null || positionRoot == null || rotationRoot == null) {
+                return 0f;
+            }
+
+            ComputeVerticalExtents(board, currentTopFace, 1f - dissolveProgress, out _, out var maxY);
+            return positionRoot.position.y + maxY;
+        }
+
         public void SnapTo(DiceState state, Board board) {
             if (rollCoroutine != null) {
                 StopCoroutine(rollCoroutine);
                 rollCoroutine = null;
             }
 
+            if (dissolveCoroutine != null) {
+                StopCoroutine(dissolveCoroutine);
+                dissolveCoroutine = null;
+            }
+
             isAnimating = false;
-            EnsureDiceInstance();
-            if (diceInstance == null) {
+            dissolveProgress = 0f;
+            currentTopFace = state.Orientation.Top;
+            EnsureMesh();
+            if (dissolvePivot == null || rotationRoot == null || positionRoot == null) {
                 return;
             }
 
-            diceInstance.SetParent(transform);
-            diceInstance.position = board.GridToWorld(state.GridPos);
-            diceInstance.rotation = DiceOrientationMapper.ToRotation(state.Orientation);
+            positionRoot.SetParent(transform);
+            positionRoot.localRotation = Quaternion.identity;
+            positionRoot.localScale = Vector3.one;
+            gridWorldPosition = board.GridToWorld(state.GridPos);
+            rotationRoot.rotation = DiceOrientationMapper.ToRotation(state.Orientation);
+            ApplySurfaceVisual(board, 0f);
         }
 
         public void PlayRoll(Direction direction, DiceState fromState, DiceState toState, Board board, Action onComplete) {
+            if (dissolveCoroutine != null) {
+                return;
+            }
+
             if (rollCoroutine != null) {
                 StopCoroutine(rollCoroutine);
             }
@@ -78,10 +135,24 @@ namespace DiceGame.View
             rollCoroutine = StartCoroutine(RollCoroutine(direction, fromState, toState, board, onComplete));
         }
 
+        public void PlayDissolve(Board board, int topFace, Action onComplete) {
+            if (rollCoroutine != null) {
+                StopCoroutine(rollCoroutine);
+                rollCoroutine = null;
+            }
+
+            if (dissolveCoroutine != null) {
+                StopCoroutine(dissolveCoroutine);
+            }
+
+            currentTopFace = topFace;
+            dissolveCoroutine = StartCoroutine(DissolveCoroutine(board, onComplete));
+        }
+
         IEnumerator RollCoroutine(Direction direction, DiceState fromState, DiceState toState, Board board, Action onComplete) {
             isAnimating = true;
-            EnsureDiceInstance();
-            if (diceInstance == null) {
+            EnsureMesh();
+            if (positionRoot == null || rotationRoot == null) {
                 isAnimating = false;
                 onComplete?.Invoke();
                 yield break;
@@ -92,15 +163,13 @@ namespace DiceGame.View
             var half = board.CellSize * 0.5f;
             var setup = DiceRollTransform.GetRollSetup(direction, half);
             var diceCenter = board.GridToWorld(fromState.GridPos);
-            var targetRotation = DiceRollTransform.GetRollRotation(direction) *
-                                 DiceOrientationMapper.ToRotation(fromState.Orientation);
 
             var pivotObject = new GameObject("RollPivot");
             var pivot = pivotObject.transform;
             pivot.position = diceCenter + setup.PivotOffset;
             pivot.rotation = Quaternion.identity;
 
-            diceInstance.SetParent(pivot, true);
+            positionRoot.SetParent(pivot, true);
 
             var elapsed = 0f;
             while (elapsed < rollDuration) {
@@ -112,15 +181,86 @@ namespace DiceGame.View
 
             pivot.rotation = Quaternion.AngleAxis(setup.Angle, setup.Axis);
 
-            diceInstance.SetParent(transform);
+            positionRoot.SetParent(transform, true);
+            positionRoot.localRotation = Quaternion.identity;
+            positionRoot.localScale = Vector3.one;
             Destroy(pivotObject);
 
-            diceInstance.position = board.GridToWorld(toState.GridPos);
-            diceInstance.rotation = targetRotation;
+            currentTopFace = toState.Orientation.Top;
+            gridWorldPosition = board.GridToWorld(toState.GridPos);
+            rotationRoot.rotation = DiceOrientationMapper.ToRotation(toState.Orientation);
+            ApplySurfaceVisual(board, dissolveProgress);
 
             isAnimating = false;
             rollCoroutine = null;
             onComplete?.Invoke();
+        }
+
+        IEnumerator DissolveCoroutine(Board board, Action onComplete) {
+            isAnimating = true;
+            EnsureMesh();
+            if (dissolvePivot == null || positionRoot == null) {
+                isAnimating = false;
+                onComplete?.Invoke();
+                yield break;
+            }
+
+            positionRoot.SetParent(transform);
+
+            var elapsed = 0f;
+            while (elapsed < dissolveDuration) {
+                elapsed += Time.deltaTime;
+                dissolveProgress = Mathf.Clamp01(elapsed / dissolveDuration);
+                ApplySurfaceVisual(board, dissolveProgress);
+                yield return null;
+            }
+
+            dissolveProgress = 1f;
+            ApplySurfaceVisual(board, dissolveProgress);
+            isAnimating = false;
+            dissolveCoroutine = null;
+            onComplete?.Invoke();
+        }
+
+        void ApplySurfaceVisual(Board board, float progress) {
+            if (dissolvePivot == null || positionRoot == null || rotationRoot == null || board == null) {
+                return;
+            }
+
+            var squash = 1f - progress;
+            dissolvePivot.localScale = GetDissolveLocalScale(currentTopFace, squash);
+            ComputeVerticalExtents(board, currentTopFace, squash, out var minY, out _);
+            positionRoot.position = new Vector3(
+                gridWorldPosition.x,
+                board.FloorSurfaceWorldY - minY,
+                gridWorldPosition.z);
+        }
+
+        static Vector3 GetDissolveLocalScale(int topFace, float squash) {
+            var axis = DiceOrientationMapper.FaceMeshNormal(topFace);
+            return new Vector3(
+                Mathf.Abs(axis.x) > 0.5f ? squash : 1f,
+                Mathf.Abs(axis.y) > 0.5f ? squash : 1f,
+                Mathf.Abs(axis.z) > 0.5f ? squash : 1f);
+        }
+
+        void ComputeVerticalExtents(Board board, int topFace, float squash, out float minY, out float maxY) {
+            var halfSize = board.CellSize * 0.5f;
+            var scale = GetDissolveLocalScale(topFace, squash);
+            var rotation = rotationRoot.rotation;
+            minY = float.PositiveInfinity;
+            maxY = float.NegativeInfinity;
+
+            for (var sx = -1; sx <= 1; sx += 2) {
+                for (var sy = -1; sy <= 1; sy += 2) {
+                    for (var sz = -1; sz <= 1; sz += 2) {
+                        var local = Vector3.Scale(new Vector3(sx, sy, sz) * halfSize, scale);
+                        var worldY = (rotation * local).y;
+                        minY = Mathf.Min(minY, worldY);
+                        maxY = Mathf.Max(maxY, worldY);
+                    }
+                }
+            }
         }
     }
 }

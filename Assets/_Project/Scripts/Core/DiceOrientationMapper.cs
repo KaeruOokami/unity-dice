@@ -80,13 +80,13 @@ namespace DiceGame.Core
 
         public static Vector3 FaceMeshNormal(int face) {
             return face switch {
-                1 => Vector3.up,
-                2 => Vector3.forward,
-                3 => Vector3.right,
-                4 => Vector3.left,
-                5 => Vector3.back,
-                6 => Vector3.down,
-                _ => Vector3.up
+                1 => Vector3.forward,
+                2 => Vector3.up,
+                3 => Vector3.left,
+                4 => Vector3.right,
+                5 => Vector3.down,
+                6 => Vector3.back,
+                _ => Vector3.forward
             };
         }
     }

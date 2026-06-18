@@ -7,13 +7,26 @@ namespace DiceGame.Gameplay
     public class DiceRegistry : MonoBehaviour
     {
         readonly Dictionary<Vector2Int, DiceController> byGrid = new();
+        readonly List<DiceController> allDice = new();
+
+        public IReadOnlyList<DiceController> AllDice => allDice;
 
         public void Register(DiceController dice) {
+            if (dice == null || allDice.Contains(dice)) {
+                return;
+            }
+
+            allDice.Add(dice);
+            byGrid[dice.CurrentState.GridPos] = dice;
+        }
+
+        public void Unregister(DiceController dice) {
             if (dice == null) {
                 return;
             }
 
-            byGrid[dice.CurrentState.GridPos] = dice;
+            allDice.Remove(dice);
+            byGrid.Remove(dice.CurrentState.GridPos);
         }
 
         public void MoveDice(DiceController dice, Vector2Int from, Vector2Int to) {
@@ -33,6 +46,16 @@ namespace DiceGame.Gameplay
             var neighborPos = dice.CurrentState.GridPos + direction.ToGridDelta();
             TryGetAt(neighborPos, out var neighbor);
             return neighbor;
+        }
+
+        public bool AnyRolling() {
+            foreach (var dice in allDice) {
+                if (dice != null && dice.IsRolling) {
+                    return true;
+                }
+            }
+
+            return false;
         }
     }
 }

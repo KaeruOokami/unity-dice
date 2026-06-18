@@ -40,18 +40,20 @@
      <Compile Include="Assets\_Project\Scripts\Core\DiceOrientation.cs" />
      <Compile Include="Assets\_Project\Scripts\Core\RollResolver.cs" />
      <Compile Include="Assets\_Project\Scripts\Board\CellType.cs" />
+     <Compile Include="Assets\_Project\Scripts\Gameplay\DiceRegistry.cs" />
      <Compile Include="Assets\_Project\Scripts\Core\Direction.cs" />
      <Compile Include="Assets\_Project\Scripts\View\DiceView.cs" />
      <Compile Include="Assets\_Project\Scripts\View\DiceDebugOverlay.cs" />
      <Compile Include="Assets\_Project\Scripts\Gameplay\DiceController.cs" />
      <Compile Include="Assets\_Project\Scripts\Board\IBoard.cs" />
+     <Compile Include="Assets\_Project\Scripts\Gameplay\DiceMatchFinder.cs" />
+     <Compile Include="Assets\_Project\Scripts\Gameplay\CharacterController.cs" />
+     <Compile Include="Assets\_Project\Scripts\Core\DiceOrientationMapper.cs" />
      <Compile Include="Assets\TutorialInfo\Scripts\Readme.cs" />
+     <Compile Include="Assets\_Project\Scripts\Gameplay\DiceMatchDissolveSystem.cs" />
      <Compile Include="Assets\_Project\Scripts\View\BoardView.cs" />
      <Compile Include="Assets\_Project\Scripts\Board\Board.cs" />
      <Compile Include="Assets\_Project\Scripts\Gameplay\GameBootstrap.cs" />
-     <Compile Include="Assets\_Project\Scripts\Core\DiceOrientationMapper.cs" />
-     <Compile Include="Assets\_Project\Scripts\Gameplay\CharacterController.cs" />
-     <Compile Include="Assets\_Project\Scripts\Gameplay\DiceRegistry.cs" />
      <None Include="Assets\Packages\Dice_6\Documentation\Readmy.txt" />
     <Reference Include="UnityEngine">
         <HintPath>D:\Program Files\Unity\Hub\Editor\2021.3.10f1\Editor\Data\Managed\UnityEngine\UnityEngine.dll</HintPath>

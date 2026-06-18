@@ -23,11 +23,22 @@ namespace DiceGame.Editor
             CreateOrLoadCharacterPrefab();
 
             var root = new GameObject("DiceEntity");
+            var positionRoot = new GameObject("PositionRoot");
+            var rotationRoot = new GameObject("RotationRoot");
+            var dissolvePivot = new GameObject("DissolvePivot");
+
+            positionRoot.transform.SetParent(root.transform, false);
+            rotationRoot.transform.SetParent(positionRoot.transform, false);
+            dissolvePivot.transform.SetParent(rotationRoot.transform, false);
+
             var diceView = root.AddComponent<DiceView>();
             root.AddComponent<DiceController>();
 
             var serializedView = new SerializedObject(diceView);
             serializedView.FindProperty("diceMeshPrefab").objectReferenceValue = diceVisualPrefab;
+            serializedView.FindProperty("positionRoot").objectReferenceValue = positionRoot.transform;
+            serializedView.FindProperty("rotationRoot").objectReferenceValue = rotationRoot.transform;
+            serializedView.FindProperty("dissolvePivot").objectReferenceValue = dissolvePivot.transform;
             serializedView.ApplyModifiedPropertiesWithoutUndo();
 
             EnsurePrefabFolder();

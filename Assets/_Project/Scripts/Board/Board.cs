@@ -9,12 +9,15 @@ namespace DiceGame.Grid
         [SerializeField] int height = 5;
         [SerializeField] float cellSize = 1.4f;
 
+        [SerializeField] float floorSurfaceWorldY;
+
         CellType[,] cells;
         readonly HashSet<Vector2Int> diceCells = new();
 
         public int Width => width;
         public int Height => height;
         public float CellSize => cellSize;
+        public float FloorSurfaceWorldY => floorSurfaceWorldY;
 
         void Awake() {
             InitializeCells();
@@ -63,6 +66,16 @@ namespace DiceGame.Grid
         public void MoveDice(Vector2Int from, Vector2Int to) {
             diceCells.Remove(from);
             diceCells.Add(to);
+        }
+
+        public void UnregisterDice(Vector2Int gridPos) {
+            diceCells.Remove(gridPos);
+        }
+
+        public Vector2Int WorldToGrid(Vector3 worldPosition) {
+            return new Vector2Int(
+                Mathf.RoundToInt(worldPosition.x / cellSize),
+                Mathf.RoundToInt(worldPosition.z / cellSize));
         }
 
         public Vector3 GridToWorld(Vector2Int gridPos) {

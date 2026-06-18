@@ -103,3 +103,4 @@ MonoBehaviour:
   maxMoveSpeed: 8
   moveAcceleration: 200
   rollCenterPullSpeed: 0
+  maxStepHeight: 0.5

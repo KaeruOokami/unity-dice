@@ -124,6 +124,13 @@ namespace DiceGame.Gameplay
 
             characterController.Configure(board, registry, firstDice);
 
+            var dissolveSystem = GetComponent<DiceMatchDissolveSystem>();
+            if (dissolveSystem == null) {
+                dissolveSystem = gameObject.AddComponent<DiceMatchDissolveSystem>();
+            }
+
+            dissolveSystem.Configure(board, registry, characterController);
+
             if (cameraSetup.Enabled) {
                 cameraSetup.Apply(board);
             }
