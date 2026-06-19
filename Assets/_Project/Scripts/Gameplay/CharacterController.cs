@@ -21,9 +21,6 @@ namespace DiceGame.Gameplay
         [SerializeField] float maxStepHeight = 1.5f;
         [SerializeField] float pushHoldDuration = 0.25f;
         [SerializeField] float pushInputAlignment = 0.7f;
-        [SerializeField] float characterPushRadius = 0.25f;
-        [SerializeField] float characterPushHeight = 0.6f;
-        [SerializeField] float characterPushBottom = 0.05f;
         [SerializeField] bool debugPushContact;
 
         DiceRegistry registry;
@@ -296,16 +293,31 @@ namespace DiceGame.Gameplay
 
             characterPushCollider = characterTransform.GetComponent<CapsuleCollider>();
             if (characterPushCollider == null) {
+                Debug.LogWarning("CharacterController: CapsuleCollider is not assigned on the character prefab.");
                 characterPushCollider = characterTransform.gameObject.AddComponent<CapsuleCollider>();
+                characterPushCollider.isTrigger = true;
+            }
+        }
+
+        float GetPushHorizontalRadius() {
+            if (characterPushCollider == null) {
+                return 0f;
             }
 
-            characterPushCollider.isTrigger = true;
-            characterPushCollider.radius = characterPushRadius;
-            characterPushCollider.height = characterPushHeight;
-            characterPushCollider.center = new Vector3(
-                0f,
-                characterPushBottom + characterPushHeight * 0.5f,
-                0f);
+            var bounds = characterPushCollider.bounds;
+            return Mathf.Max(bounds.extents.x, bounds.extents.z);
+        }
+
+        void GetPushWorldVerticalRange(out float bottomY, out float topY) {
+            if (characterPushCollider == null) {
+                bottomY = 0f;
+                topY = 0f;
+                return;
+            }
+
+            var bounds = characterPushCollider.bounds;
+            bottomY = bounds.min.y;
+            topY = bounds.max.y;
         }
 
         Vector2 GetWorldXZ() {
@@ -533,7 +545,7 @@ namespace DiceGame.Gameplay
 
             var diceCenter = diceTransform.position;
             var half = board.CellSize * 0.5f;
-            var contactOffset = half + characterPushRadius;
+            var contactOffset = half + GetPushHorizontalRadius();
             var position = characterTransform.position;
 
             position = pushFollowDirection switch {
@@ -848,8 +860,7 @@ namespace DiceGame.Gameplay
             }
 
             var resultMove = move;
-            var characterBottom = board.FloorSurfaceWorldY + characterPushBottom;
-            var characterTop = characterBottom + characterPushHeight;
+            GetPushWorldVerticalRange(out var characterBottom, out var characterTop);
 
             foreach (var dice in registry.AllDice) {
                 if (dice == null || dice.IsDissolving) {
@@ -866,7 +877,7 @@ namespace DiceGame.Gameplay
                     continue;
                 }
 
-                resultMove = BlockMoveAgainstDiceBounds(currentPosition, resultMove, bounds, characterPushRadius);
+                resultMove = BlockMoveAgainstDiceBounds(currentPosition, resultMove, bounds, GetPushHorizontalRadius());
             }
 
             var next = currentPosition + resultMove;

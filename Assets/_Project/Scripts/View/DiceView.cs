@@ -73,9 +73,9 @@ namespace DiceGame.View
             meshInstance.localPosition = Vector3.zero;
             meshInstance.localRotation = Quaternion.identity;
 
-            foreach (var collider in visual.GetComponentsInChildren<Collider>()) {
-                collider.enabled = false;
-            }
+            // foreach (var collider in visual.GetComponentsInChildren<Collider>()) {
+            //     collider.enabled = false;
+            // }
         }
 
         GameObject ResolveMeshPrefab() {
