@@ -328,7 +328,11 @@ namespace DiceGame.Gameplay
                         move,
                         transition.Kind,
                         $"stack={FormatMovementStack(nextCell)}");
-                    nextXZ = ClampToCellBoundary(currentXZ, nextXZ, standingCell, direction, halfExtent);
+                    nextXZ = CancelMoveIntoDirection(currentXZ, nextXZ, direction);
+                    if (!IsOnFloor) {
+                        nextXZ = ClampToCellInterior(nextXZ, standingCell, halfExtent);
+                    }
+
                     return false;
                 default:
                     return false;
@@ -521,39 +525,44 @@ namespace DiceGame.Gameplay
             return true;
         }
 
+        static Vector2 CancelMoveIntoDirection(Vector2 current, Vector2 proposed, Direction direction) {
+            var result = proposed;
+
+            switch (direction) {
+                case Direction.East:
+                    if (proposed.x > current.x) {
+                        result.x = current.x;
+                    }
+
+                    break;
+                case Direction.West:
+                    if (proposed.x < current.x) {
+                        result.x = current.x;
+                    }
+
+                    break;
+                case Direction.North:
+                    if (proposed.y > current.y) {
+                        result.y = current.y;
+                    }
+
+                    break;
+                case Direction.South:
+                    if (proposed.y < current.y) {
+                        result.y = current.y;
+                    }
+
+                    break;
+            }
+
+            return result;
+        }
+
         Vector2 ClampToCellInterior(Vector2 position, Vector2Int cell, float halfExtent) {
             var center = GetCellCenterXZ(cell);
             return new Vector2(
                 Mathf.Clamp(position.x, center.x - halfExtent, center.x + halfExtent),
                 Mathf.Clamp(position.y, center.y - halfExtent, center.y + halfExtent));
-        }
-
-        Vector2 ClampToCellBoundary(
-            Vector2 from,
-            Vector2 to,
-            Vector2Int cell,
-            Direction direction,
-            float halfExtent) {
-            var center = GetCellCenterXZ(cell);
-            var limit = halfExtent - Mathf.Max(GetPushHorizontalRadius(), EdgeEpsilon);
-            var result = to;
-
-            switch (direction) {
-                case Direction.East:
-                    result.x = Mathf.Min(to.x, center.x + limit);
-                    break;
-                case Direction.West:
-                    result.x = Mathf.Max(to.x, center.x - limit);
-                    break;
-                case Direction.North:
-                    result.y = Mathf.Min(to.y, center.y + limit);
-                    break;
-                case Direction.South:
-                    result.y = Mathf.Max(to.y, center.y - limit);
-                    break;
-            }
-
-            return ClampToCellInterior(result, cell, halfExtent);
         }
 
         Vector2 ClampToBoardBounds(Vector2 position) {
