@@ -38,11 +38,11 @@ namespace DiceGame.Gameplay
             return results;
         }
 
-        static Dictionary<Vector2Int, DiceController> BuildLookup(
+        static Dictionary<Vector2Int, List<DiceController>> BuildLookup(
             IReadOnlyList<DiceController> allDice,
             int face,
             HashSet<DiceController> consumed) {
-            var lookup = new Dictionary<Vector2Int, DiceController>();
+            var lookup = new Dictionary<Vector2Int, List<DiceController>>();
 
             foreach (var dice in allDice) {
                 if (dice == null || consumed.Contains(dice)) {
@@ -53,14 +53,20 @@ namespace DiceGame.Gameplay
                     continue;
                 }
 
-                lookup[dice.CurrentState.GridPos] = dice;
+                var gridPos = dice.CurrentState.GridPos;
+                if (!lookup.TryGetValue(gridPos, out var diceAtCell)) {
+                    diceAtCell = new List<DiceController>();
+                    lookup[gridPos] = diceAtCell;
+                }
+
+                diceAtCell.Add(dice);
             }
 
             return lookup;
         }
 
         static List<DiceController> FloodFill(
-            Dictionary<Vector2Int, DiceController> lookup,
+            Dictionary<Vector2Int, List<DiceController>> lookup,
             Vector2Int start,
             HashSet<Vector2Int> visited) {
             var cluster = new List<DiceController>();
@@ -69,12 +75,12 @@ namespace DiceGame.Gameplay
 
             while (queue.Count > 0) {
                 var pos = queue.Dequeue();
-                if (visited.Contains(pos) || !lookup.ContainsKey(pos)) {
+                if (visited.Contains(pos) || !lookup.TryGetValue(pos, out var diceAtCell)) {
                     continue;
                 }
 
                 visited.Add(pos);
-                cluster.Add(lookup[pos]);
+                cluster.AddRange(diceAtCell);
 
                 foreach (var direction in Directions) {
                     queue.Enqueue(pos + direction.ToGridDelta());

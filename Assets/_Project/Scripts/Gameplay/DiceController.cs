@@ -12,6 +12,7 @@ namespace DiceGame.Gameplay
         [SerializeField] DiceView diceView;
         [SerializeField] Vector2Int startGridPos = new(2, 2);
         [SerializeField] DiceOrientation startOrientation = DiceOrientation.Default;
+        [SerializeField] DiceStackTier startTier = DiceStackTier.Bottom;
 
         DiceRegistry registry;
         DiceState currentState;
@@ -38,7 +39,7 @@ namespace DiceGame.Gameplay
 
         void Start() {
             if (!isInitialized && board != null && diceView != null && registry != null) {
-                Initialize(startGridPos, startOrientation);
+                Initialize(startGridPos, startOrientation, startTier);
             }
         }
 
@@ -47,22 +48,24 @@ namespace DiceGame.Gameplay
             DiceView view,
             DiceRegistry targetRegistry,
             Vector2Int gridPos,
-            DiceOrientation orientation) {
+            DiceOrientation orientation,
+            DiceStackTier tier = DiceStackTier.Bottom) {
             board = targetBoard;
             diceView = view;
             registry = targetRegistry;
             startGridPos = gridPos;
             startOrientation = orientation;
-            Initialize(gridPos, orientation);
+            startTier = tier;
+            Initialize(gridPos, orientation, tier);
         }
 
-        public void Initialize(Vector2Int gridPos, DiceOrientation orientation) {
+        public void Initialize(Vector2Int gridPos, DiceOrientation orientation, DiceStackTier tier = DiceStackTier.Bottom) {
             isInitialized = true;
-            currentState = new DiceState(gridPos, orientation);
-            board.RegisterDice(gridPos);
+            currentState = new DiceState(gridPos, orientation, tier);
+            board.RegisterDice(gridPos, tier);
             registry?.Register(this);
 
-            diceView.SnapTo(currentState, board);
+            diceView.SnapTo(currentState, board, registry);
             ConfigurePushBody();
             StateChanged?.Invoke(currentState);
         }
@@ -79,21 +82,22 @@ namespace DiceGame.Gameplay
         }
 
         public bool TryRoll(Direction direction) {
-            if (IsBusy || board == null || diceView == null) {
+            if (IsBusy || board == null || diceView == null || registry == null) {
                 return false;
             }
 
-            if (!RollResolver.TryRoll(currentState, direction, board, out var nextState)) {
+            var hasTopOnSameCell = registry.HasTopAt(currentState.GridPos);
+            if (!RollResolver.TryRoll(currentState, direction, board, hasTopOnSameCell, out var nextState)) {
                 return false;
             }
 
             isRolling = true;
             var fromState = currentState;
             currentState = nextState;
-            board.MoveDice(fromState.GridPos, nextState.GridPos);
-            registry?.MoveDice(this, fromState.GridPos, nextState.GridPos);
+            board.MoveDice(fromState.GridPos, nextState.GridPos, fromState.Tier);
+            registry.MoveDice(this, fromState.GridPos, nextState.GridPos);
 
-            diceView.PlayRoll(direction, fromState, nextState, board, () => {
+            diceView.PlayRoll(direction, fromState, nextState, board, registry, () => {
                 isRolling = false;
                 StateChanged?.Invoke(currentState);
             });
@@ -102,21 +106,60 @@ namespace DiceGame.Gameplay
         }
 
         public bool TrySlide(Direction direction) {
-            if (IsBusy || isDissolving || board == null || diceView == null) {
+            if (IsBusy || isDissolving || board == null || diceView == null || registry == null) {
                 return false;
             }
 
-            if (!SlideResolver.TrySlide(currentState, direction, board, out var nextState)) {
+            if (currentState.Tier == DiceStackTier.Top) {
+                return TrySlideTop(direction);
+            }
+
+            if (!SlideResolver.TrySlideBottom(currentState, direction, board, out var nextState)) {
+                return false;
+            }
+
+            return BeginSlide(nextState);
+        }
+
+        bool TrySlideTop(Direction direction) {
+            if (!SlideResolver.TrySlideTop(currentState, direction, board, out var nextState, out var result)) {
                 return false;
             }
 
             isRolling = true;
             var fromState = currentState;
             currentState = nextState;
-            board.MoveDice(fromState.GridPos, nextState.GridPos);
-            registry?.MoveDice(this, fromState.GridPos, nextState.GridPos);
 
-            diceView.PlaySlide(fromState, nextState, board, () => {
+            if (result == TopSlideResult.Parallel) {
+                board.MoveDice(fromState.GridPos, nextState.GridPos, DiceStackTier.Top);
+                registry.MoveDice(this, fromState.GridPos, nextState.GridPos);
+
+                diceView.PlayStackMove(fromState, nextState, board, registry, () => {
+                    isRolling = false;
+                    StateChanged?.Invoke(currentState);
+                });
+            } else {
+                board.UnregisterDice(fromState.GridPos, DiceStackTier.Top);
+                board.RegisterDice(nextState.GridPos, DiceStackTier.Bottom);
+                registry.MoveDice(this, fromState.GridPos, nextState.GridPos);
+
+                diceView.PlayStackMove(fromState, nextState, board, registry, () => {
+                    isRolling = false;
+                    StateChanged?.Invoke(currentState);
+                });
+            }
+
+            return true;
+        }
+
+        bool BeginSlide(DiceState nextState) {
+            isRolling = true;
+            var fromState = currentState;
+            currentState = nextState;
+            board.MoveDice(fromState.GridPos, nextState.GridPos, fromState.Tier);
+            registry.MoveDice(this, fromState.GridPos, nextState.GridPos);
+
+            diceView.PlaySlide(fromState, nextState, board, registry, () => {
                 isRolling = false;
                 StateChanged?.Invoke(currentState);
             });
@@ -132,7 +175,8 @@ namespace DiceGame.Gameplay
             isDissolving = true;
             diceView.PlayDissolve(board, currentState.Orientation.Top, () => {
                 var gridPos = currentState.GridPos;
-                board.UnregisterDice(gridPos);
+                var tier = currentState.Tier;
+                board.UnregisterDice(gridPos, tier);
                 registry?.Unregister(this);
                 Dissolved?.Invoke(this);
                 onComplete?.Invoke();
@@ -155,7 +199,8 @@ namespace DiceGame.Gameplay
 
             isCarried = true;
             var gridPos = currentState.GridPos;
-            board.UnregisterDice(gridPos);
+            var tier = currentState.Tier;
+            board.UnregisterDice(gridPos, tier);
             registry?.Unregister(this);
 
             var fromWorld = diceView.DiceTransform.position;
@@ -166,23 +211,27 @@ namespace DiceGame.Gameplay
             return true;
         }
 
-        public bool TryPlaceAt(Vector2Int targetGrid, Vector3 fromWorld, Action onComplete) {
-            if (!isCarried || board == null || diceView == null) {
+        public bool TryPlaceAt(Vector2Int targetGrid, DiceStackTier targetTier, Vector3 fromWorld, Action onComplete) {
+            if (!isCarried || board == null || diceView == null || registry == null) {
                 return false;
             }
 
-            if (!board.CanDiceRollInto(targetGrid)) {
+            if (targetTier == DiceStackTier.Top) {
+                if (!board.CanPlaceTopDiceAt(targetGrid)) {
+                    return false;
+                }
+            } else if (!board.CanPlaceBottomDiceAt(targetGrid)) {
                 return false;
             }
 
-            var toState = new DiceState(targetGrid, currentState.Orientation);
-            var toWorld = board.GridToWorld(targetGrid);
+            var toState = new DiceState(targetGrid, currentState.Orientation, targetTier);
+            var toWorld = diceView.GetAnchoredWorldPosition(toState, board, registry);
 
-            diceView.PlayPlace(fromWorld, toWorld, toState, board, () => {
+            diceView.PlayPlace(fromWorld, toWorld, toState, board, registry, () => {
                 currentState = toState;
                 isCarried = false;
-                board.RegisterDice(targetGrid);
-                registry?.Register(this);
+                board.RegisterDice(targetGrid, targetTier);
+                registry.Register(this);
                 ConfigurePushBody();
                 StateChanged?.Invoke(currentState);
                 onComplete?.Invoke();

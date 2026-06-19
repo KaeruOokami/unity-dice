@@ -5,10 +5,19 @@ namespace DiceGame.Core
 {
     public static class RollResolver
     {
-        public static bool TryRoll(DiceState state, Direction direction, IBoard board, out DiceState nextState) {
+        public static bool TryRoll(
+            DiceState state,
+            Direction direction,
+            IBoard board,
+            bool hasTopOnSameCell,
+            out DiceState nextState) {
             nextState = default;
-            var targetPos = state.GridPos + direction.ToGridDelta();
 
+            if (state.Tier != DiceStackTier.Bottom || hasTopOnSameCell) {
+                return false;
+            }
+
+            var targetPos = state.GridPos + direction.ToGridDelta();
             if (!board.CanDiceRollInto(targetPos)) {
                 return false;
             }
@@ -18,7 +27,7 @@ namespace DiceGame.Core
                 return false;
             }
 
-            nextState = new DiceState(targetPos, nextOrientation);
+            nextState = new DiceState(targetPos, nextOrientation, DiceStackTier.Bottom);
             return true;
         }
     }
