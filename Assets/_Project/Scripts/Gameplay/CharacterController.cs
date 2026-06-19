@@ -1043,6 +1043,27 @@ namespace DiceGame.Gameplay
             return dice.CurrentState.Tier == DiceStackTier.Top;
         }
 
+        bool CanLiftDice(DiceController dice) {
+            if (dice == null || dice == currentDice || registry == null) {
+                return false;
+            }
+
+            if (IsOnFloor) {
+                if (dice.CurrentState.Tier == DiceStackTier.Top) {
+                    return true;
+                }
+
+                return dice.CurrentState.Tier == DiceStackTier.Bottom
+                    && !registry.HasTopAt(dice.CurrentState.GridPos);
+            }
+
+            if (standingTier == DiceStackTier.Bottom) {
+                return true;
+            }
+
+            return dice.CurrentState.Tier == DiceStackTier.Top;
+        }
+
         void SnapCharacterToStandingDiceFace() {
             if (currentDice?.View.DiceTransform == null || characterTransform == null) {
                 return;
@@ -1172,6 +1193,11 @@ namespace DiceGame.Gameplay
                 return false;
             }
 
+            var input = GetInputDirection();
+            if (input.sqrMagnitude > 0f) {
+                UpdateLastFacing(input);
+            }
+
             if (!hasLastFacing || !TryFindLiftTarget(out var targetDice)) {
                 return false;
             }
@@ -1236,76 +1262,41 @@ namespace DiceGame.Gameplay
         bool TryFindLiftTarget(out DiceController targetDice) {
             targetDice = null;
 
-            if (characterPushCollider == null || board == null) {
+            if (registry == null || board == null || !hasLastFacing) {
                 return false;
             }
 
-            DiceController requiredDice = null;
-            if (currentDice != null) {
-                requiredDice = registry.GetFacingDiceAt(currentDice, lastFacing);
-                if (requiredDice == null) {
-                    return false;
-                }
-            }
-
-            var bounds = characterPushCollider.bounds;
-            var halfHeight = characterPushCollider.height * 0.5f - characterPushCollider.radius;
-            var bottom = bounds.center - Vector3.up * halfHeight;
-            var top = bounds.center + Vector3.up * halfHeight;
-            var hits = Physics.OverlapCapsule(
-                bottom,
-                top,
-                characterPushCollider.radius,
-                ~0,
-                QueryTriggerInteraction.Collide);
-
-            var characterXZ = GetWorldXZ();
-            var facingInput = GetDirectionInputVector(lastFacing);
-            DiceController bestDice = null;
-            var bestDistance = float.MaxValue;
-
-            foreach (var hit in hits) {
-                if (hit == characterPushCollider) {
-                    continue;
-                }
-
-                var pushBody = hit.GetComponent<DicePushBody>();
-                if (pushBody == null || pushBody.Dice == null || pushBody.Collider == null) {
-                    continue;
-                }
-
-                if (pushBody.Dice.IsDissolving || pushBody.Dice.IsBusy) {
-                    continue;
-                }
-
-                if (requiredDice != null && pushBody.Dice != requiredDice) {
-                    continue;
-                }
-
-                var pushBounds = pushBody.Collider.bounds;
-                if (!TryEvaluatePushCandidate(
-                    pushBounds,
-                    characterXZ,
-                    facingInput,
-                    lastFacing,
-                    0.99f,
-                    out _,
-                    out var faceDistance)) {
-                    continue;
-                }
-
-                if (faceDistance < bestDistance) {
-                    bestDistance = faceDistance;
-                    bestDice = pushBody.Dice;
-                }
-            }
-
-            if (bestDice == null) {
+            var neighborGrid = GetCurrentGrid() + lastFacing.ToGridDelta();
+            if (!board.IsInside(neighborGrid)) {
                 return false;
             }
 
-            targetDice = bestDice;
+            DiceController candidate = ResolveLiftCandidateAt(neighborGrid);
+            if (candidate == null) {
+                return false;
+            }
+
+            if (candidate == currentDice
+                || candidate.IsDissolving
+                || candidate.IsBusy
+                || !CanLiftDice(candidate)) {
+                return false;
+            }
+
+            targetDice = candidate;
             return true;
+        }
+
+        DiceController ResolveLiftCandidateAt(Vector2Int neighborGrid) {
+            if (registry.TryGetTopAt(neighborGrid, out var top)) {
+                return top;
+            }
+
+            if (registry.TryGetBottomAt(neighborGrid, out var bottom)) {
+                return bottom;
+            }
+
+            return null;
         }
     }
 }
