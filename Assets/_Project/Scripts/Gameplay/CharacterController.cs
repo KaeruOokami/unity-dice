@@ -288,14 +288,33 @@ namespace DiceGame.Gameplay
                     ApplyTransitionStanding(transition);
                     return false;
                 case MovementTransitionKind.CanRoll:
-                    return TryHandleRollTransition(
-                        currentXZ,
-                        ref nextXZ,
-                        move,
-                        standingCell,
-                        direction,
-                        fromSurfaceY,
-                        halfExtent);
+                    if (TryGetPrimaryDirection(move, out var moveDir) && moveDir == direction) {
+                        if (TryExecuteRoll(direction, nextXZ, halfExtent)) {
+                            UpdatePushContact(Vector2.zero);
+                            return true;
+                        }
+
+                        if (Mathf.Abs(fromSurfaceY - board.FloorSurfaceWorldY) <= maxStepHeight) {
+                            ApplyTransitionStanding(MovementTransition.Walkable(null, SurfaceLayer.Floor));
+                            return false;
+                        }
+
+                        LogPositionMovementBlock(
+                            "RollFailed",
+                            standingCell,
+                            nextCell,
+                            fromLayer,
+                            fromSurfaceY,
+                            halfExtent,
+                            currentXZ,
+                            nextXZ,
+                            move,
+                            MovementTransitionKind.CanRoll,
+                            "roll and step-to-floor both failed");
+                    }
+
+                    nextXZ = ClampToCellInterior(nextXZ, standingCell, halfExtent);
+                    return false;
                 case MovementTransitionKind.Blocked:
                     LogPositionMovementBlock(
                         "TransitionBlocked",
@@ -314,47 +333,6 @@ namespace DiceGame.Gameplay
                 default:
                     return false;
             }
-        }
-
-        bool TryHandleRollTransition(
-            Vector2 currentXZ,
-            ref Vector2 nextXZ,
-            Vector2 move,
-            Vector2Int standingCell,
-            Direction direction,
-            float fromSurfaceY,
-            float halfExtent) {
-            var canAttemptRoll = TryGetPrimaryDirection(move, out var moveDir)
-                && moveDir == direction
-                && IsAtOrPastCellBoundary(currentXZ, standingCell, direction, halfExtent);
-
-            if (canAttemptRoll) {
-                if (TryExecuteRoll(direction, nextXZ, halfExtent)) {
-                    UpdatePushContact(Vector2.zero);
-                    return true;
-                }
-
-                if (Mathf.Abs(fromSurfaceY - board.FloorSurfaceWorldY) <= maxStepHeight) {
-                    ApplyTransitionStanding(MovementTransition.Walkable(null, SurfaceLayer.Floor));
-                    return false;
-                }
-
-                LogPositionMovementBlock(
-                    "RollFailed",
-                    standingCell,
-                    standingCell + direction.ToGridDelta(),
-                    GetCurrentLayer(),
-                    fromSurfaceY,
-                    halfExtent,
-                    currentXZ,
-                    nextXZ,
-                    move,
-                    MovementTransitionKind.CanRoll,
-                    "roll and step-to-floor both failed");
-            }
-
-            nextXZ = ClampToCellBoundary(currentXZ, nextXZ, standingCell, direction, halfExtent);
-            return false;
         }
 
         Vector2Int XZToGrid(Vector2 xz) {
@@ -541,23 +519,6 @@ namespace DiceGame.Gameplay
 
             BeginRollTracking(characterAnchor, diceCenterAnchor);
             return true;
-        }
-
-        bool IsAtOrPastCellBoundary(
-            Vector2 position,
-            Vector2Int fromCell,
-            Direction direction,
-            float halfExtent) {
-            var center = GetCellCenterXZ(fromCell);
-            var edge = halfExtent - EdgeEpsilon;
-
-            return direction switch {
-                Direction.East => position.x >= center.x + edge,
-                Direction.West => position.x <= center.x - edge,
-                Direction.North => position.y >= center.y + edge,
-                Direction.South => position.y <= center.y - edge,
-                _ => false
-            };
         }
 
         Vector2 ClampToCellInterior(Vector2 position, Vector2Int cell, float halfExtent) {
