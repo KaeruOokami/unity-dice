@@ -834,7 +834,7 @@ namespace DiceGame.Gameplay
             }
 
             if (isPushFollowing && pushFollowDice != null) {
-                SnapCharacterToStandingDiceFace();
+                SnapYToSurface();
             }
 
             isPushFollowing = false;
