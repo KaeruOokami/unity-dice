@@ -137,10 +137,16 @@ namespace DiceGame.Gameplay
             var toTier = result == TopSlideResult.Parallel ? DiceStackTier.Top : DiceStackTier.Bottom;
             registry.MoveDice(this, fromState.GridPos, nextState.GridPos, fromTier, toTier);
 
-            diceView.PlayStackMove(fromState, nextState, board, registry, () => {
+            Action onComplete = () => {
                 isRolling = false;
                 StateChanged?.Invoke(currentState);
-            });
+            };
+
+            if (result == TopSlideResult.FallToBottom) {
+                diceView.PlayStackMoveFallToBottom(fromState, nextState, board, registry, onComplete);
+            } else {
+                diceView.PlayStackMove(fromState, nextState, board, registry, onComplete);
+            }
 
             return true;
         }

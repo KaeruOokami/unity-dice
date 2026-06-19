@@ -203,6 +203,23 @@ namespace DiceGame.View
             rollCoroutine = StartCoroutine(StackMoveCoroutine(fromState, toState, board, registry, onComplete));
         }
 
+        public void PlayStackMoveFallToBottom(
+            DiceState fromState,
+            DiceState toState,
+            Board board,
+            DiceRegistry registry,
+            Action onComplete) {
+            if (dissolveCoroutine != null) {
+                return;
+            }
+
+            if (rollCoroutine != null) {
+                StopCoroutine(rollCoroutine);
+            }
+
+            rollCoroutine = StartCoroutine(StackMoveFallCoroutine(fromState, toState, board, registry, onComplete));
+        }
+
         public void PlayLift(Vector3 fromWorld, Vector3 toWorld, Action onComplete) {
             if (dissolveCoroutine != null) {
                 return;
@@ -372,6 +389,56 @@ namespace DiceGame.View
             DiceRegistry registry,
             Action onComplete) {
             yield return SlideCoroutine(fromState, toState, board, registry, onComplete);
+        }
+
+        IEnumerator StackMoveFallCoroutine(
+            DiceState fromState,
+            DiceState toState,
+            Board board,
+            DiceRegistry registry,
+            Action onComplete) {
+            isAnimating = true;
+            EnsureMesh();
+            if (positionRoot == null || rotationRoot == null) {
+                isAnimating = false;
+                onComplete?.Invoke();
+                yield break;
+            }
+
+            positionRoot.SetParent(transform);
+            positionRoot.localRotation = Quaternion.identity;
+            positionRoot.localScale = Vector3.one;
+            currentTopFace = fromState.Orientation.Top;
+            rotationRoot.rotation = DiceOrientationMapper.ToRotation(fromState.Orientation);
+
+            var fromWorld = GetAnchoredWorldPosition(fromState, board, registry);
+            var toWorld = GetAnchoredWorldPosition(toState, board, registry);
+            var midWorld = new Vector3(toWorld.x, fromWorld.y, toWorld.z);
+            positionRoot.position = fromWorld;
+
+            var elapsed = 0f;
+            while (elapsed < rollDuration) {
+                elapsed += Time.deltaTime;
+                var t = Mathf.SmoothStep(0f, 1f, elapsed / rollDuration);
+                positionRoot.position = Vector3.Lerp(fromWorld, midWorld, t);
+                yield return null;
+            }
+
+            positionRoot.position = midWorld;
+
+            elapsed = 0f;
+            while (elapsed < rollDuration) {
+                elapsed += Time.deltaTime;
+                var t = Mathf.SmoothStep(0f, 1f, elapsed / rollDuration);
+                positionRoot.position = Vector3.Lerp(midWorld, toWorld, t);
+                yield return null;
+            }
+
+            SnapTo(toState, board, registry);
+
+            isAnimating = false;
+            rollCoroutine = null;
+            onComplete?.Invoke();
         }
 
         IEnumerator LiftPlaceCoroutine(
