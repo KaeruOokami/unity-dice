@@ -253,7 +253,7 @@ namespace DiceGame.Gameplay
             SurfaceLayer fromLayer,
             float fromSurfaceY,
             float halfExtent) {
-            var nextCell = XZToGrid(nextXZ);
+            var nextCell = ResolveNextCell(standingCell, currentXZ, nextXZ, move, halfExtent);
 
             if (nextCell == standingCell) {
                 if (!IsOnFloor) {
@@ -341,6 +341,49 @@ namespace DiceGame.Gameplay
 
         Vector2Int XZToGrid(Vector2 xz) {
             return board.WorldToGrid(new Vector3(xz.x, 0f, xz.y));
+        }
+
+        Vector2Int ResolveNextCell(
+            Vector2Int standingCell,
+            Vector2 currentXZ,
+            Vector2 nextXZ,
+            Vector2 move,
+            float halfExtent) {
+            if (TryGetPrimaryDirection(move, out var moveDir)) {
+                if (IsAtOrPastFaceEdge(currentXZ, standingCell, moveDir, halfExtent)) {
+                    return standingCell + moveDir.ToGridDelta();
+                }
+
+                return standingCell;
+            }
+
+            var positionCell = XZToGrid(nextXZ);
+            if (positionCell == standingCell) {
+                return standingCell;
+            }
+
+            if (MovementTransitionEvaluator.IsOrthogonalAdjacent(standingCell, positionCell)) {
+                return positionCell;
+            }
+
+            return standingCell;
+        }
+
+        bool IsAtOrPastFaceEdge(Vector2 xz, Vector2Int cell, Direction direction, float halfExtent) {
+            var center = GetCellCenterXZ(cell);
+
+            switch (direction) {
+                case Direction.East:
+                    return xz.x >= center.x + halfExtent - EdgeEpsilon;
+                case Direction.West:
+                    return xz.x <= center.x - halfExtent + EdgeEpsilon;
+                case Direction.North:
+                    return xz.y >= center.y + halfExtent - EdgeEpsilon;
+                case Direction.South:
+                    return xz.y <= center.y - halfExtent + EdgeEpsilon;
+                default:
+                    return false;
+            }
         }
 
         void LogPositionMovementBlock(
