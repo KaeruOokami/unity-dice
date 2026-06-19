@@ -57,5 +57,15 @@ namespace DiceGame.Gameplay
 
             return false;
         }
+
+        public bool AnyCarried() {
+            foreach (var dice in allDice) {
+                if (dice != null && dice.IsCarried) {
+                    return true;
+                }
+            }
+
+            return false;
+        }
     }
 }

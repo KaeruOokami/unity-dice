@@ -153,6 +153,39 @@ namespace DiceGame.View
             rollCoroutine = StartCoroutine(SlideCoroutine(fromState, toState, board, onComplete));
         }
 
+        public void PlayLift(Vector3 fromWorld, Vector3 toWorld, Action onComplete) {
+            if (dissolveCoroutine != null) {
+                return;
+            }
+
+            if (rollCoroutine != null) {
+                StopCoroutine(rollCoroutine);
+            }
+
+            rollCoroutine = StartCoroutine(LiftPlaceCoroutine(fromWorld, toWorld, false, default, null, onComplete));
+        }
+
+        public void PlayPlace(Vector3 fromWorld, Vector3 toWorld, DiceState toState, Board board, Action onComplete) {
+            if (dissolveCoroutine != null) {
+                return;
+            }
+
+            if (rollCoroutine != null) {
+                StopCoroutine(rollCoroutine);
+            }
+
+            rollCoroutine = StartCoroutine(LiftPlaceCoroutine(fromWorld, toWorld, true, toState, board, onComplete));
+        }
+
+        public void SetCarryWorldPosition(Vector3 worldPosition) {
+            if (positionRoot == null) {
+                return;
+            }
+
+            positionRoot.SetParent(transform, true);
+            positionRoot.position = worldPosition;
+        }
+
         public void PlayDissolve(Board board, int topFace, Action onComplete) {
             if (rollCoroutine != null) {
                 StopCoroutine(rollCoroutine);
@@ -255,6 +288,44 @@ namespace DiceGame.View
             gridWorldPosition = toWorld;
             rotationRoot.rotation = DiceOrientationMapper.ToRotation(toState.Orientation);
             ApplySurfaceVisual(board, dissolveProgress);
+
+            isAnimating = false;
+            rollCoroutine = null;
+            onComplete?.Invoke();
+        }
+
+        IEnumerator LiftPlaceCoroutine(
+            Vector3 fromWorld,
+            Vector3 toWorld,
+            bool snapToGrid,
+            DiceState toState,
+            Board board,
+            Action onComplete) {
+            isAnimating = true;
+            EnsureMesh();
+            if (positionRoot == null) {
+                isAnimating = false;
+                onComplete?.Invoke();
+                yield break;
+            }
+
+            positionRoot.SetParent(transform, true);
+            positionRoot.localRotation = Quaternion.identity;
+            positionRoot.localScale = Vector3.one;
+
+            var elapsed = 0f;
+            while (elapsed < rollDuration) {
+                elapsed += Time.deltaTime;
+                var t = Mathf.SmoothStep(0f, 1f, elapsed / rollDuration);
+                positionRoot.position = Vector3.Lerp(fromWorld, toWorld, t);
+                yield return null;
+            }
+
+            positionRoot.position = toWorld;
+
+            if (snapToGrid && board != null) {
+                SnapTo(toState, board);
+            }
 
             isAnimating = false;
             rollCoroutine = null;

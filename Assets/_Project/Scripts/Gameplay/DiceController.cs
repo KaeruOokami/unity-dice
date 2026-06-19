@@ -17,11 +17,13 @@ namespace DiceGame.Gameplay
         DiceState currentState;
         bool isRolling;
         bool isDissolving;
+        bool isCarried;
         bool isInitialized;
 
-        public bool IsRolling => isRolling || (diceView != null && diceView.IsAnimating && !isDissolving);
+        public bool IsRolling => isRolling || (diceView != null && diceView.IsAnimating && !isDissolving && !isCarried);
         public bool IsDissolving => isDissolving;
-        public bool IsBusy => IsRolling || isDissolving;
+        public bool IsCarried => isCarried;
+        public bool IsBusy => IsRolling || isDissolving || isCarried;
         public DiceState CurrentState => currentState;
         public DiceView View => diceView;
 
@@ -123,7 +125,7 @@ namespace DiceGame.Gameplay
         }
 
         public void BeginDissolve(Action onComplete) {
-            if (isDissolving || board == null || diceView == null) {
+            if (isDissolving || isCarried || board == null || diceView == null) {
                 return;
             }
 
@@ -144,6 +146,49 @@ namespace DiceGame.Gameplay
             }
 
             diceView.RetreatDissolve(amount);
+        }
+
+        public bool TryBeginCarry(Vector3 carryWorldTarget, Action onComplete) {
+            if (IsBusy || board == null || diceView == null || diceView.DiceTransform == null) {
+                return false;
+            }
+
+            isCarried = true;
+            var gridPos = currentState.GridPos;
+            board.UnregisterDice(gridPos);
+            registry?.Unregister(this);
+
+            var fromWorld = diceView.DiceTransform.position;
+            diceView.PlayLift(fromWorld, carryWorldTarget, () => {
+                onComplete?.Invoke();
+            });
+
+            return true;
+        }
+
+        public bool TryPlaceAt(Vector2Int targetGrid, Vector3 fromWorld, Action onComplete) {
+            if (!isCarried || board == null || diceView == null) {
+                return false;
+            }
+
+            if (!board.CanDiceRollInto(targetGrid)) {
+                return false;
+            }
+
+            var toState = new DiceState(targetGrid, currentState.Orientation);
+            var toWorld = board.GridToWorld(targetGrid);
+
+            diceView.PlayPlace(fromWorld, toWorld, toState, board, () => {
+                currentState = toState;
+                isCarried = false;
+                board.RegisterDice(targetGrid);
+                registry?.Register(this);
+                ConfigurePushBody();
+                StateChanged?.Invoke(currentState);
+                onComplete?.Invoke();
+            });
+
+            return true;
         }
     }
 }

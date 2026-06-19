@@ -21,7 +21,16 @@ namespace DiceGame.Gameplay
         [SerializeField] float maxStepHeight = 1.5f;
         [SerializeField] float pushHoldDuration = 0.25f;
         [SerializeField] float pushInputAlignment = 0.7f;
+        [SerializeField] KeyCode liftKey = KeyCode.Q;
+        [SerializeField] float carryVerticalOffset = 1.05f;
         [SerializeField] bool debugPushContact;
+
+        enum LiftPhase {
+            None,
+            Lifting,
+            Carrying,
+            Placing
+        }
 
         DiceRegistry registry;
         DiceController currentDice;
@@ -52,6 +61,10 @@ namespace DiceGame.Gameplay
         bool debugLastHadPushDirection;
         float debugLastLoggedContactTime = -1f;
         bool debugLastAnyRolling;
+        LiftPhase liftPhase;
+        DiceController carriedDice;
+        Direction lastFacing;
+        bool hasLastFacing;
 
         struct PushContactCandidate {
             public DiceController Dice;
@@ -62,6 +75,7 @@ namespace DiceGame.Gameplay
 
         public bool IsOnFloor => currentDice == null;
         public bool IsBusy => currentDice != null && currentDice.IsRolling;
+        public bool IsCarrying => liftPhase != LiftPhase.None;
         public Vector2 FacePosition => GetOffsetFromDiceCenter(currentDice, characterTransform != null ? characterTransform.position : Vector3.zero);
         public DiceController CurrentDice => currentDice;
 
@@ -109,6 +123,7 @@ namespace DiceGame.Gameplay
 
         void OnDisable() {
             EndRollTracking();
+            EndCarryState();
             UnsubscribeCurrentDice();
             EndPushFollow();
         }
@@ -116,6 +131,27 @@ namespace DiceGame.Gameplay
         void Update() {
             if (!isInitialized) {
                 return;
+            }
+
+            var input = GetInputDirection();
+            UpdateLastFacing(input);
+
+            if (liftPhase == LiftPhase.Lifting || liftPhase == LiftPhase.Placing) {
+                currentSpeed = 0f;
+                return;
+            }
+
+            if (liftPhase == LiftPhase.Carrying) {
+                currentSpeed = 0f;
+                if (TryGetDirectionKeyDown(out var placeDirection)) {
+                    TryPlaceCarriedDice(placeDirection);
+                }
+
+                return;
+            }
+
+            if (Input.GetKeyDown(liftKey)) {
+                TryBeginLift();
             }
 
             if (isPushFollowing) {
@@ -127,7 +163,6 @@ namespace DiceGame.Gameplay
                 EndRollTracking();
             }
 
-            var input = GetInputDirection();
             var isRolling = currentDice != null && currentDice.IsRolling;
 
             if (isRolling) {
@@ -149,6 +184,10 @@ namespace DiceGame.Gameplay
                 if (pushFollowDice == null || !pushFollowDice.IsRolling) {
                     EndPushFollow();
                 }
+            }
+
+            if (liftPhase == LiftPhase.Carrying && carriedDice != null) {
+                carriedDice.View.SetCarryWorldPosition(GetCarryWorldPosition());
             }
 
             if (currentDice != null && currentDice.IsRolling) {
@@ -440,7 +479,11 @@ namespace DiceGame.Gameplay
         }
 
         void UpdatePushContact(Vector2 input) {
-            var anyRolling = registry == null || registry.AnyRolling();
+            if (liftPhase != LiftPhase.None) {
+                return;
+            }
+
+            var anyRolling = registry == null || registry.AnyRolling() || registry.AnyCarried();
             if (debugPushContact && anyRolling != debugLastAnyRolling) {
                 debugLastAnyRolling = anyRolling;
                 LogPushDebug("AnyRolling", anyRolling ? "true（押し無効）" : "false");
@@ -1167,6 +1210,207 @@ namespace DiceGame.Gameplay
             }
 
             return input;
+        }
+
+        void UpdateLastFacing(Vector2 input) {
+            if (input.sqrMagnitude <= 0f) {
+                return;
+            }
+
+            if (TryInputToDirection(input, out var direction)) {
+                lastFacing = direction;
+                hasLastFacing = true;
+            }
+        }
+
+        static bool TryInputToDirection(Vector2 input, out Direction direction) {
+            direction = default;
+            if (input.sqrMagnitude <= 0f) {
+                return false;
+            }
+
+            if (Mathf.Abs(input.x) >= Mathf.Abs(input.y)) {
+                direction = input.x > 0f ? Direction.East : Direction.West;
+            } else {
+                direction = input.y > 0f ? Direction.North : Direction.South;
+            }
+
+            return true;
+        }
+
+        static bool TryGetDirectionKeyDown(out Direction direction) {
+            direction = default;
+
+            if (Input.GetKeyDown(KeyCode.D) || Input.GetKeyDown(KeyCode.RightArrow)) {
+                direction = Direction.East;
+                return true;
+            }
+
+            if (Input.GetKeyDown(KeyCode.A) || Input.GetKeyDown(KeyCode.LeftArrow)) {
+                direction = Direction.West;
+                return true;
+            }
+
+            if (Input.GetKeyDown(KeyCode.W) || Input.GetKeyDown(KeyCode.UpArrow)) {
+                direction = Direction.North;
+                return true;
+            }
+
+            if (Input.GetKeyDown(KeyCode.S) || Input.GetKeyDown(KeyCode.DownArrow)) {
+                direction = Direction.South;
+                return true;
+            }
+
+            return false;
+        }
+
+        Vector3 GetCarryWorldPosition() {
+            if (characterTransform == null) {
+                return Vector3.zero;
+            }
+
+            var position = characterTransform.position;
+            return new Vector3(position.x, position.y + carryVerticalOffset, position.z);
+        }
+
+        bool TryBeginLift() {
+            if (liftPhase != LiftPhase.None || isPushFollowing) {
+                return false;
+            }
+
+            if (registry == null || registry.AnyRolling() || registry.AnyCarried()) {
+                return false;
+            }
+
+            if (!hasLastFacing || !TryFindLiftTarget(out var targetDice)) {
+                return false;
+            }
+
+            carriedDice = targetDice;
+            liftPhase = LiftPhase.Lifting;
+            ResetPushState();
+
+            if (!carriedDice.TryBeginCarry(GetCarryWorldPosition(), OnLiftComplete)) {
+                carriedDice = null;
+                liftPhase = LiftPhase.None;
+                return false;
+            }
+
+            return true;
+        }
+
+        void OnLiftComplete() {
+            if (liftPhase == LiftPhase.Lifting) {
+                liftPhase = LiftPhase.Carrying;
+            }
+        }
+
+        bool TryPlaceCarriedDice(Direction direction) {
+            if (liftPhase != LiftPhase.Carrying || carriedDice == null || board == null) {
+                return false;
+            }
+
+            var originGrid = board.WorldToGrid(characterTransform.position);
+            var targetGrid = originGrid + direction.ToGridDelta();
+
+            if (!board.CanDiceRollInto(targetGrid)) {
+                return false;
+            }
+
+            liftPhase = LiftPhase.Placing;
+            var fromWorld = GetCarryWorldPosition();
+
+            if (!carriedDice.TryPlaceAt(targetGrid, fromWorld, OnPlaceComplete)) {
+                liftPhase = LiftPhase.Carrying;
+                return false;
+            }
+
+            return true;
+        }
+
+        void OnPlaceComplete() {
+            carriedDice = null;
+            liftPhase = LiftPhase.None;
+        }
+
+        void EndCarryState() {
+            carriedDice = null;
+            liftPhase = LiftPhase.None;
+        }
+
+        bool TryFindLiftTarget(out DiceController targetDice) {
+            targetDice = null;
+
+            if (characterPushCollider == null || board == null) {
+                return false;
+            }
+
+            DiceController requiredDice = null;
+            if (currentDice != null) {
+                requiredDice = registry.GetNeighbor(currentDice, lastFacing);
+                if (requiredDice == null) {
+                    return false;
+                }
+            }
+
+            var bounds = characterPushCollider.bounds;
+            var halfHeight = characterPushCollider.height * 0.5f - characterPushCollider.radius;
+            var bottom = bounds.center - Vector3.up * halfHeight;
+            var top = bounds.center + Vector3.up * halfHeight;
+            var hits = Physics.OverlapCapsule(
+                bottom,
+                top,
+                characterPushCollider.radius,
+                ~0,
+                QueryTriggerInteraction.Collide);
+
+            var characterXZ = GetWorldXZ();
+            var facingInput = GetDirectionInputVector(lastFacing);
+            DiceController bestDice = null;
+            var bestDistance = float.MaxValue;
+
+            foreach (var hit in hits) {
+                if (hit == characterPushCollider) {
+                    continue;
+                }
+
+                var pushBody = hit.GetComponent<DicePushBody>();
+                if (pushBody == null || pushBody.Dice == null || pushBody.Collider == null) {
+                    continue;
+                }
+
+                if (pushBody.Dice.IsDissolving || pushBody.Dice.IsBusy) {
+                    continue;
+                }
+
+                if (requiredDice != null && pushBody.Dice != requiredDice) {
+                    continue;
+                }
+
+                var pushBounds = pushBody.Collider.bounds;
+                if (!TryEvaluatePushCandidate(
+                    pushBounds,
+                    characterXZ,
+                    facingInput,
+                    lastFacing,
+                    0.99f,
+                    out _,
+                    out var faceDistance)) {
+                    continue;
+                }
+
+                if (faceDistance < bestDistance) {
+                    bestDistance = faceDistance;
+                    bestDice = pushBody.Dice;
+                }
+            }
+
+            if (bestDice == null) {
+                return false;
+            }
+
+            targetDice = bestDice;
+            return true;
         }
     }
 }
