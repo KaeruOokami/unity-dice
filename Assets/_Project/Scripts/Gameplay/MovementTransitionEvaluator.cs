@@ -171,7 +171,7 @@ namespace DiceGame.Gameplay
         }
 
         MovementTransition EvaluateFromFloor(Vector2Int toCell, float fromSurfaceY) {
-            if (board.CanPlaceBottomDiceAt(toCell)) {
+            if (registry.CanPlaceBottomDiceAt(toCell)) {
                 return MovementTransition.Walkable(null, SurfaceLayer.Floor);
             }
 
@@ -199,7 +199,7 @@ namespace DiceGame.Gameplay
             DiceController standingDice,
             DiceStackTier standingTier,
             Direction direction) {
-            if (board.CanPlaceBottomDiceAt(toCell)) {
+            if (registry.CanPlaceBottomDiceAt(toCell)) {
                 if (CanRoll(fromCell, standingDice, standingTier)) {
                     return MovementTransition.Roll();
                 }

@@ -62,8 +62,7 @@ namespace DiceGame.Gameplay
         public void Initialize(Vector2Int gridPos, DiceOrientation orientation, DiceStackTier tier = DiceStackTier.Bottom) {
             isInitialized = true;
             currentState = new DiceState(gridPos, orientation, tier);
-            board.RegisterDice(gridPos, tier);
-            registry?.Register(this);
+            registry?.Place(this, gridPos, tier);
 
             diceView.SnapTo(currentState, board, registry);
             ConfigurePushBody();
@@ -87,15 +86,19 @@ namespace DiceGame.Gameplay
             }
 
             var hasTopOnSameCell = registry.HasTopAt(currentState.GridPos);
-            if (!RollResolver.TryRoll(currentState, direction, board, hasTopOnSameCell, out var nextState)) {
+            if (!RollResolver.TryRoll(currentState, direction, registry, hasTopOnSameCell, out var nextState)) {
                 return false;
             }
 
             isRolling = true;
             var fromState = currentState;
             currentState = nextState;
-            board.MoveDice(fromState.GridPos, nextState.GridPos, fromState.Tier);
-            registry.MoveDice(this, fromState.GridPos, nextState.GridPos);
+            registry.MoveDice(
+                this,
+                fromState.GridPos,
+                nextState.GridPos,
+                fromState.Tier,
+                nextState.Tier);
 
             diceView.PlayRoll(direction, fromState, nextState, board, registry, () => {
                 isRolling = false;
@@ -114,7 +117,7 @@ namespace DiceGame.Gameplay
                 return TrySlideTop(direction);
             }
 
-            if (!SlideResolver.TrySlideBottom(currentState, direction, board, out var nextState)) {
+            if (!SlideResolver.TrySlideBottom(currentState, direction, registry, out var nextState)) {
                 return false;
             }
 
@@ -122,7 +125,7 @@ namespace DiceGame.Gameplay
         }
 
         bool TrySlideTop(Direction direction) {
-            if (!SlideResolver.TrySlideTop(currentState, direction, board, out var nextState, out var result)) {
+            if (!SlideResolver.TrySlideTop(currentState, direction, registry, out var nextState, out var result)) {
                 return false;
             }
 
@@ -130,24 +133,14 @@ namespace DiceGame.Gameplay
             var fromState = currentState;
             currentState = nextState;
 
-            if (result == TopSlideResult.Parallel) {
-                board.MoveDice(fromState.GridPos, nextState.GridPos, DiceStackTier.Top);
-                registry.MoveDice(this, fromState.GridPos, nextState.GridPos);
+            var fromTier = fromState.Tier;
+            var toTier = result == TopSlideResult.Parallel ? DiceStackTier.Top : DiceStackTier.Bottom;
+            registry.MoveDice(this, fromState.GridPos, nextState.GridPos, fromTier, toTier);
 
-                diceView.PlayStackMove(fromState, nextState, board, registry, () => {
-                    isRolling = false;
-                    StateChanged?.Invoke(currentState);
-                });
-            } else {
-                board.UnregisterDice(fromState.GridPos, DiceStackTier.Top);
-                board.RegisterDice(nextState.GridPos, DiceStackTier.Bottom);
-                registry.MoveDice(this, fromState.GridPos, nextState.GridPos);
-
-                diceView.PlayStackMove(fromState, nextState, board, registry, () => {
-                    isRolling = false;
-                    StateChanged?.Invoke(currentState);
-                });
-            }
+            diceView.PlayStackMove(fromState, nextState, board, registry, () => {
+                isRolling = false;
+                StateChanged?.Invoke(currentState);
+            });
 
             return true;
         }
@@ -156,8 +149,12 @@ namespace DiceGame.Gameplay
             isRolling = true;
             var fromState = currentState;
             currentState = nextState;
-            board.MoveDice(fromState.GridPos, nextState.GridPos, fromState.Tier);
-            registry.MoveDice(this, fromState.GridPos, nextState.GridPos);
+            registry.MoveDice(
+                this,
+                fromState.GridPos,
+                nextState.GridPos,
+                fromState.Tier,
+                nextState.Tier);
 
             diceView.PlaySlide(fromState, nextState, board, registry, () => {
                 isRolling = false;
@@ -174,9 +171,6 @@ namespace DiceGame.Gameplay
 
             isDissolving = true;
             diceView.PlayDissolve(board, currentState.Orientation.Top, () => {
-                var gridPos = currentState.GridPos;
-                var tier = currentState.Tier;
-                board.UnregisterDice(gridPos, tier);
                 registry?.Unregister(this);
                 Dissolved?.Invoke(this);
                 onComplete?.Invoke();
@@ -198,9 +192,6 @@ namespace DiceGame.Gameplay
             }
 
             isCarried = true;
-            var gridPos = currentState.GridPos;
-            var tier = currentState.Tier;
-            board.UnregisterDice(gridPos, tier);
             registry?.Unregister(this);
 
             var fromWorld = diceView.DiceTransform.position;
@@ -217,10 +208,10 @@ namespace DiceGame.Gameplay
             }
 
             if (targetTier == DiceStackTier.Top) {
-                if (!board.CanPlaceTopDiceAt(targetGrid)) {
+                if (!registry.CanPlaceTopDiceAt(targetGrid)) {
                     return false;
                 }
-            } else if (!board.CanPlaceBottomDiceAt(targetGrid)) {
+            } else if (!registry.CanPlaceBottomDiceAt(targetGrid)) {
                 return false;
             }
 
@@ -230,8 +221,7 @@ namespace DiceGame.Gameplay
             diceView.PlayPlace(fromWorld, toWorld, toState, board, registry, () => {
                 currentState = toState;
                 isCarried = false;
-                board.RegisterDice(targetGrid, targetTier);
-                registry.Register(this);
+                registry.Place(this, targetGrid, targetTier);
                 ConfigurePushBody();
                 StateChanged?.Invoke(currentState);
                 onComplete?.Invoke();

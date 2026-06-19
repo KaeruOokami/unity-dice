@@ -505,7 +505,7 @@ namespace DiceGame.Gameplay
             }
 
             var targetPos = currentDice.CurrentState.GridPos + direction.ToGridDelta();
-            if (!board.CanPlaceBottomDiceAt(targetPos)) {
+            if (!registry.CanPlaceBottomDiceAt(targetPos)) {
                 return false;
             }
 
@@ -1204,9 +1204,9 @@ namespace DiceGame.Gameplay
             var targetGrid = originGrid + direction.ToGridDelta();
 
             DiceStackTier targetTier;
-            if (board.CanPlaceBottomDiceAt(targetGrid)) {
+            if (registry.CanPlaceBottomDiceAt(targetGrid)) {
                 targetTier = DiceStackTier.Bottom;
-            } else if (board.CanPlaceTopDiceAt(targetGrid)) {
+            } else if (registry.CanPlaceTopDiceAt(targetGrid)) {
                 targetTier = DiceStackTier.Top;
             } else {
                 return false;

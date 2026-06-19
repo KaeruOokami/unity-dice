@@ -5,7 +5,7 @@ using UnityEngine;
 
 namespace DiceGame.Gameplay
 {
-    public class DiceRegistry : MonoBehaviour
+    public class DiceRegistry : MonoBehaviour, IDicePlacement
     {
         struct GridStack {
             public DiceController Bottom;
@@ -15,15 +15,52 @@ namespace DiceGame.Gameplay
         readonly Dictionary<Vector2Int, GridStack> byGrid = new();
         readonly List<DiceController> allDice = new();
 
+        Board board;
+
         public IReadOnlyList<DiceController> AllDice => allDice;
 
-        public void Register(DiceController dice) {
-            if (dice == null || allDice.Contains(dice)) {
+        public void Configure(Board targetBoard) {
+            board = targetBoard;
+        }
+
+        public bool CanPlaceBottomDiceAt(Vector2Int gridPos) {
+            if (board == null || !board.IsInside(gridPos) || board.GetCell(gridPos) != CellType.Floor) {
+                return false;
+            }
+
+            return !HasBottomAt(gridPos);
+        }
+
+        public bool CanPlaceTopDiceAt(Vector2Int gridPos) {
+            if (board == null || !board.IsInside(gridPos) || board.GetCell(gridPos) != CellType.Floor) {
+                return false;
+            }
+
+            return HasBottomAt(gridPos) && !HasTopAt(gridPos);
+        }
+
+        public bool CanDiceRollInto(Vector2Int gridPos) {
+            return CanPlaceBottomDiceAt(gridPos);
+        }
+
+        public void Place(DiceController dice, Vector2Int gridPos, DiceStackTier tier) {
+            if (dice == null) {
                 return;
             }
 
-            allDice.Add(dice);
-            SetDiceAt(dice.CurrentState.GridPos, dice);
+            if (!allDice.Contains(dice)) {
+                allDice.Add(dice);
+            }
+
+            SetDiceAt(gridPos, dice, tier);
+        }
+
+        public void Remove(DiceController dice, Vector2Int gridPos, DiceStackTier tier) {
+            if (dice == null) {
+                return;
+            }
+
+            ClearDiceAt(gridPos, dice, tier);
         }
 
         public void Unregister(DiceController dice) {
@@ -31,13 +68,18 @@ namespace DiceGame.Gameplay
                 return;
             }
 
+            Remove(dice, dice.CurrentState.GridPos, dice.CurrentState.Tier);
             allDice.Remove(dice);
-            ClearDiceAt(dice.CurrentState.GridPos, dice);
         }
 
-        public void MoveDice(DiceController dice, Vector2Int from, Vector2Int to) {
-            ClearDiceAt(from, dice);
-            SetDiceAt(to, dice);
+        public void MoveDice(
+            DiceController dice,
+            Vector2Int from,
+            Vector2Int to,
+            DiceStackTier fromTier,
+            DiceStackTier toTier) {
+            ClearDiceAt(from, dice, fromTier);
+            SetDiceAt(to, dice, toTier);
         }
 
         public bool TryGetBottomAt(Vector2Int gridPos, out DiceController dice) {
@@ -168,12 +210,12 @@ namespace DiceGame.Gameplay
             return false;
         }
 
-        void SetDiceAt(Vector2Int gridPos, DiceController dice) {
+        void SetDiceAt(Vector2Int gridPos, DiceController dice, DiceStackTier tier) {
             if (!byGrid.TryGetValue(gridPos, out var stack)) {
                 stack = default;
             }
 
-            if (dice.CurrentState.Tier == DiceStackTier.Top) {
+            if (tier == DiceStackTier.Top) {
                 stack.Top = dice;
             } else {
                 stack.Bottom = dice;
@@ -182,14 +224,16 @@ namespace DiceGame.Gameplay
             byGrid[gridPos] = stack;
         }
 
-        void ClearDiceAt(Vector2Int gridPos, DiceController dice) {
+        void ClearDiceAt(Vector2Int gridPos, DiceController dice, DiceStackTier tier) {
             if (!byGrid.TryGetValue(gridPos, out var stack)) {
                 return;
             }
 
-            if (dice.CurrentState.Tier == DiceStackTier.Top) {
-                stack.Top = null;
-            } else {
+            if (tier == DiceStackTier.Top) {
+                if (stack.Top == dice) {
+                    stack.Top = null;
+                }
+            } else if (stack.Bottom == dice) {
                 stack.Bottom = null;
             }
 

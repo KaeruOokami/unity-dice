@@ -76,6 +76,8 @@ namespace DiceGame.Gameplay
                 registry = gameObject.AddComponent<DiceRegistry>();
             }
 
+            registry.Configure(board);
+
             var positions = PickRandomDicePositions(diceCount);
             if (positions.Count == 0) {
                 Debug.LogError("GameBootstrap: No valid positions for dice.");

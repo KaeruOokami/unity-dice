@@ -8,7 +8,7 @@ namespace DiceGame.Core
         public static bool TryRoll(
             DiceState state,
             Direction direction,
-            IBoard board,
+            IDicePlacement placement,
             bool hasTopOnSameCell,
             out DiceState nextState) {
             nextState = default;
@@ -18,7 +18,7 @@ namespace DiceGame.Core
             }
 
             var targetPos = state.GridPos + direction.ToGridDelta();
-            if (!board.CanDiceRollInto(targetPos)) {
+            if (!placement.CanDiceRollInto(targetPos)) {
                 return false;
             }
 
