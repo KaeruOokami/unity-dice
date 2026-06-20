@@ -249,6 +249,10 @@ namespace DiceGame.Gameplay
                 return MovementTransition.Blocked();
             }
 
+            if (target.IsDissolving && !standingDice.IsDissolving) {
+                return MovementTransition.Blocked();
+            }
+
             if (standingTier == DiceStackTier.Bottom
                 && target.CurrentState.Tier == DiceStackTier.Bottom
                 && registry.HasTopAt(toCell)) {
