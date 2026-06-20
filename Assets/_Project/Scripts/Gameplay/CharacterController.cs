@@ -1391,7 +1391,7 @@ namespace DiceGame.Gameplay
                 return false;
             }
 
-            var originGrid = board.WorldToGrid(characterTransform.position);
+            var originGrid = GetStandingCell();
             var targetGrid = originGrid + direction.ToGridDelta();
 
             DiceStackTier targetTier;
