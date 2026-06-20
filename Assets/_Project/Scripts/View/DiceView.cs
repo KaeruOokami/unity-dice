@@ -30,6 +30,8 @@ namespace DiceGame.View
         float surfaceBaseWorldY;
         Board dissolveBoard;
         DicePushBody pushBody;
+        DiceController diceController;
+        bool wasDissolveGhost;
         readonly List<Material> dissolveMaterials = new();
         readonly List<Color> dissolveMaterialBaseColors = new();
         bool dissolveMaterialsTransparent;
@@ -89,6 +91,12 @@ namespace DiceGame.View
         void EnsurePushBody() {
             if (pushBody == null) {
                 pushBody = GetComponentInChildren<DicePushBody>(true);
+            }
+        }
+
+        void EnsureDiceController() {
+            if (diceController == null) {
+                diceController = GetComponent<DiceController>();
             }
         }
 
@@ -155,6 +163,7 @@ namespace DiceGame.View
             isAnimating = false;
             dissolveProgress = 0f;
             dissolveBoard = null;
+            wasDissolveGhost = false;
             currentTopFace = state.Orientation.Top;
             EnsureMesh();
             if (dissolvePivot == null || rotationRoot == null || positionRoot == null) {
@@ -324,6 +333,16 @@ namespace DiceGame.View
 
             dissolveProgress = Mathf.Max(0f, dissolveProgress - amount);
             ApplySurfaceVisual(dissolveBoard, dissolveProgress);
+        }
+
+        public void CancelDissolve() {
+            if (dissolveCoroutine != null) {
+                StopCoroutine(dissolveCoroutine);
+                dissolveCoroutine = null;
+            }
+
+            isAnimating = false;
+            dissolveBoard = null;
         }
 
         void UpdateSurfaceBase(DiceState state, Board board, DiceRegistry registry) {
@@ -568,12 +587,23 @@ namespace DiceGame.View
             ApplyDissolveAlpha(progress);
             EnsurePushBody();
             pushBody?.SetCollisionEnabled(!IsDissolveGhost);
+
+            if (IsDissolveGhost && !wasDissolveGhost) {
+                wasDissolveGhost = true;
+                EnsureDiceController();
+                diceController?.OnBecameDissolveGhost();
+            } else if (!IsDissolveGhost && wasDissolveGhost) {
+                wasDissolveGhost = false;
+                EnsureDiceController();
+                diceController?.OnCeasedDissolveGhost();
+            }
         }
 
         void ResetDissolveVisuals() {
             ApplyDissolveAlpha(0f);
             EnsurePushBody();
             pushBody?.SetCollisionEnabled(true);
+            wasDissolveGhost = false;
         }
 
         void ApplyDissolveAlpha(float progress) {

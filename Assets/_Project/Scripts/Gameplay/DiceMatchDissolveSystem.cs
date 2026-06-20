@@ -47,6 +47,7 @@ namespace DiceGame.Gameplay
             diceStateHandlers[dice] = handler;
             dice.StateChanged += handler;
             dice.Dissolved += OnDiceDissolved;
+            dice.BecameDissolveGhost += OnDiceBecameDissolveGhost;
         }
 
         void UnsubscribeAllDice() {
@@ -60,6 +61,7 @@ namespace DiceGame.Gameplay
                 }
 
                 dice.Dissolved -= OnDiceDissolved;
+                dice.BecameDissolveGhost -= OnDiceBecameDissolveGhost;
             }
 
             subscribedDice.Clear();
@@ -80,9 +82,14 @@ namespace DiceGame.Gameplay
             if (dice != null) {
                 subscribedDice.Remove(dice);
                 diceStateHandlers.Remove(dice);
+                dice.BecameDissolveGhost -= OnDiceBecameDissolveGhost;
             }
 
             character?.OnStandingDiceDissolved(dice);
+        }
+
+        void OnDiceBecameDissolveGhost(DiceController dice) {
+            character?.OnStandingDiceBecameGhost(dice);
         }
 
         void EvaluateMatches(DiceController triggerDice) {

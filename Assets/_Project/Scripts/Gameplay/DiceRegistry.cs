@@ -43,6 +43,46 @@ namespace DiceGame.Gameplay
             return CanPlaceBottomDiceAt(gridPos);
         }
 
+        public void RemoveFromGrid(DiceController dice) {
+            if (dice == null) {
+                return;
+            }
+
+            Remove(dice, dice.CurrentState.GridPos, dice.CurrentState.Tier);
+        }
+
+        public void RestoreToGrid(DiceController dice) {
+            if (dice == null || dice.IsDissolveGhost) {
+                return;
+            }
+
+            if (!allDice.Contains(dice)) {
+                allDice.Add(dice);
+            }
+
+            SetDiceAt(dice.CurrentState.GridPos, dice, dice.CurrentState.Tier);
+        }
+
+        public void EvictGhostDiceAt(Vector2Int gridPos) {
+            DiceController topGhost = null;
+            DiceController bottomGhost = null;
+
+            foreach (var dice in allDice) {
+                if (dice == null || !dice.IsDissolveGhost || dice.CurrentState.GridPos != gridPos) {
+                    continue;
+                }
+
+                if (dice.CurrentState.Tier == DiceStackTier.Top) {
+                    topGhost = dice;
+                } else {
+                    bottomGhost = dice;
+                }
+            }
+
+            topGhost?.CompleteDissolveFromCrush();
+            bottomGhost?.CompleteDissolveFromCrush();
+        }
+
         public void Place(DiceController dice, Vector2Int gridPos, DiceStackTier tier) {
             if (dice == null) {
                 return;
@@ -52,6 +92,7 @@ namespace DiceGame.Gameplay
                 allDice.Add(dice);
             }
 
+            EvictGhostDiceAt(gridPos);
             SetDiceAt(gridPos, dice, tier);
         }
 
@@ -78,6 +119,7 @@ namespace DiceGame.Gameplay
             Vector2Int to,
             DiceStackTier fromTier,
             DiceStackTier toTier) {
+            EvictGhostDiceAt(to);
             ClearDiceAt(from, dice, fromTier);
             SetDiceAt(to, dice, toTier);
         }

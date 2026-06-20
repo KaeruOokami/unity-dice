@@ -32,6 +32,7 @@ namespace DiceGame.Gameplay
 
         public event Action<DiceState> StateChanged;
         public event Action<DiceController> Dissolved;
+        public event Action<DiceController> BecameDissolveGhost;
 
         void Awake() {
             if (diceView == null) {
@@ -192,6 +193,35 @@ namespace DiceGame.Gameplay
             }
 
             diceView.RetreatDissolve(amount);
+        }
+
+        public void OnBecameDissolveGhost() {
+            if (!IsDissolveGhost) {
+                return;
+            }
+
+            registry?.RemoveFromGrid(this);
+            BecameDissolveGhost?.Invoke(this);
+        }
+
+        public void OnCeasedDissolveGhost() {
+            if (IsDissolveGhost || !isDissolving) {
+                return;
+            }
+
+            registry?.RestoreToGrid(this);
+        }
+
+        public void CompleteDissolveFromCrush() {
+            if (!isDissolving) {
+                return;
+            }
+
+            diceView?.CancelDissolve();
+            isDissolving = false;
+            registry?.Unregister(this);
+            Dissolved?.Invoke(this);
+            Destroy(gameObject);
         }
 
         public bool TryBeginCarry(Vector3 carryWorldTarget, Action onComplete) {

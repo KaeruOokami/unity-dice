@@ -221,40 +221,37 @@ namespace DiceGame.Gameplay
                 return EvaluateFloorTransition(fromSurfaceY, ignoreStepHeight);
             }
 
-            if (TryResolveWalkTargetAt(toCell, standingDice, out var walkTarget, out var walkLayer)) {
-                if (!ignoreStepHeight
-                    && !CanStepBetween(fromSurfaceY, walkTarget.GetTopSurfaceWorldY())) {
-                    return MovementTransition.Blocked();
+            DiceController target;
+            if (fromLayer == SurfaceLayer.Floor) {
+                if (registry.TryGetTopAt(toCell, out target)) {
+                    if (!ignoreStepHeight
+                        && !CanStepBetween(fromSurfaceY, target.GetTopSurfaceWorldY())) {
+                        return MovementTransition.Blocked();
+                    }
+
+                    return MovementTransition.Walkable(target, SurfaceLayer.Top);
                 }
 
-                return MovementTransition.Walkable(walkTarget, walkLayer);
-            }
+                if (registry.TryGetBottomAt(toCell, out target)) {
+                    if (!ignoreStepHeight
+                        && !CanStepBetween(fromSurfaceY, target.GetTopSurfaceWorldY())) {
+                        return MovementTransition.Blocked();
+                    }
 
-            if (IsCellEffectivelyEmptyForFloor(toCell, standingDice)) {
-                return EvaluateFloorTransition(fromSurfaceY, ignoreStepHeight);
-            }
+                    return MovementTransition.Walkable(target, SurfaceLayer.Bottom);
+                }
 
-            if (fromLayer == SurfaceLayer.Floor) {
                 return MovementTransition.Blocked();
             }
 
-            var target = registry.GetTransferTargetAt(standingDice, direction, standingTier);
-            if (IsGhostMovementObstacle(target, standingDice)) {
-                target = null;
-            }
-
+            target = registry.GetTransferTargetAt(standingDice, direction, standingTier);
             if (target == null) {
-                if (IsCellEffectivelyEmptyForFloor(toCell, standingDice)) {
-                    return EvaluateFloorTransition(fromSurfaceY, ignoreStepHeight);
-                }
-
                 return MovementTransition.Blocked();
             }
 
             if (standingTier == DiceStackTier.Bottom
                 && target.CurrentState.Tier == DiceStackTier.Bottom
-                && registry.TryGetTopAt(toCell, out var topAtTarget)
-                && !IsGhostMovementObstacle(topAtTarget, standingDice)) {
+                && registry.HasTopAt(toCell)) {
                 return MovementTransition.Blocked();
             }
 
@@ -274,52 +271,6 @@ namespace DiceGame.Gameplay
             }
 
             return MovementTransition.Blocked();
-        }
-
-        bool TryResolveWalkTargetAt(
-            Vector2Int cell,
-            DiceController standingDice,
-            out DiceController target,
-            out SurfaceLayer layer) {
-            target = null;
-            layer = SurfaceLayer.Floor;
-
-            if (registry.TryGetTopAt(cell, out var top) && !IsGhostMovementObstacle(top, standingDice)) {
-                target = top;
-                layer = SurfaceLayer.Top;
-                return true;
-            }
-
-            if (registry.TryGetBottomAt(cell, out var bottom) && !IsGhostMovementObstacle(bottom, standingDice)) {
-                target = bottom;
-                layer = SurfaceLayer.Bottom;
-                return true;
-            }
-
-            return false;
-        }
-
-        bool IsCellEffectivelyEmptyForFloor(Vector2Int cell, DiceController standingDice) {
-            registry.TryGetBottomAt(cell, out var bottom);
-            registry.TryGetTopAt(cell, out var top);
-
-            if (bottom == null && top == null) {
-                return false;
-            }
-
-            if (bottom != null && !IsGhostMovementObstacle(bottom, standingDice)) {
-                return false;
-            }
-
-            if (top != null && !IsGhostMovementObstacle(top, standingDice)) {
-                return false;
-            }
-
-            return true;
-        }
-
-        static bool IsGhostMovementObstacle(DiceController dice, DiceController standingDice) {
-            return dice != null && dice.IsDissolveGhost && dice != standingDice;
         }
 
         float GetTargetSurfaceWorldY(MovementTransition transition) {

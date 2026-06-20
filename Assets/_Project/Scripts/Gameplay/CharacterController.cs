@@ -155,6 +155,14 @@ namespace DiceGame.Gameplay
             MoveToFloorAtCurrentWorldPosition();
         }
 
+        public void OnStandingDiceBecameGhost(DiceController ghostDice) {
+            if (!isInitialized || !TryGetStandingDice(out var standingDice) || standingDice != ghostDice) {
+                return;
+            }
+
+            MoveToFloorAtCurrentWorldPosition();
+        }
+
         void OnDisable() {
             EndRollTracking();
             EndCarryState();
@@ -688,7 +696,7 @@ namespace DiceGame.Gameplay
             }
 
             var targetPos = standingGridCell + direction.ToGridDelta();
-            if (!registry.CanPlaceBottomDiceAt(targetPos)) {
+            if (!registry.CanDiceRollInto(targetPos)) {
                 return false;
             }
 
