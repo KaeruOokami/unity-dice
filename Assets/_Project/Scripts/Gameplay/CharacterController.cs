@@ -1209,6 +1209,10 @@ namespace DiceGame.Gameplay
                 return false;
             }
 
+            if (!IsOrthogonallyAdjacentToStanding(dice)) {
+                return false;
+            }
+
             if (IsOnFloor) {
                 return dice.CurrentState.Tier == DiceStackTier.Bottom
                     && !registry.HasTopAt(dice.CurrentState.GridPos);
@@ -1226,6 +1230,10 @@ namespace DiceGame.Gameplay
                 return false;
             }
 
+            if (!IsOrthogonallyAdjacentToStanding(dice)) {
+                return false;
+            }
+
             if (IsOnFloor) {
                 if (dice.CurrentState.Tier == DiceStackTier.Top) {
                     return true;
@@ -1240,6 +1248,12 @@ namespace DiceGame.Gameplay
             }
 
             return dice.CurrentState.Tier == DiceStackTier.Top;
+        }
+
+        bool IsOrthogonallyAdjacentToStanding(DiceController dice) {
+            return MovementTransitionEvaluator.IsOrthogonalAdjacent(
+                GetStandingCell(),
+                dice.CurrentState.GridPos);
         }
 
         static Vector2 WorldOffsetFromDiceCenter(Vector3 diceCenter, Vector2 worldPosition) {

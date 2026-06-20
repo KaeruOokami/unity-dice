@@ -80,7 +80,10 @@ namespace DiceGame.Gameplay
                 }
 
                 visited.Add(pos);
-                cluster.AddRange(diceAtCell);
+                var representative = SelectRepresentativeDiceAtCell(diceAtCell);
+                if (representative != null) {
+                    cluster.Add(representative);
+                }
 
                 foreach (var direction in Directions) {
                     queue.Enqueue(pos + direction.ToGridDelta());
@@ -88,6 +91,22 @@ namespace DiceGame.Gameplay
             }
 
             return cluster;
+        }
+
+        static DiceController SelectRepresentativeDiceAtCell(List<DiceController> diceAtCell) {
+            DiceController selected = null;
+
+            foreach (var dice in diceAtCell) {
+                if (dice == null) {
+                    continue;
+                }
+
+                if (selected == null || dice.CurrentState.Tier == DiceStackTier.Top) {
+                    selected = dice;
+                }
+            }
+
+            return selected;
         }
     }
 }
