@@ -18,6 +18,7 @@ namespace DiceGame.Gameplay
         [SerializeField] float rollCenterPullSpeed = 2.5f;
         [SerializeField] float maxStepHeight = 1.5f;
         [SerializeField] float pushHoldDuration = 0.25f;
+        [SerializeField] float dissolveDescentHoldDuration = 0.35f;
         [SerializeField] float pushInputAlignment = 0.7f;
         [SerializeField] KeyCode liftKey = KeyCode.Q;
         [SerializeField] float carryVerticalOffset = 1.05f;
@@ -50,6 +51,8 @@ namespace DiceGame.Gameplay
         float rollFixedWorldY;
         float currentSpeed;
         float pushContactTime;
+        Direction? dissolveDescentHoldDirection;
+        float dissolveDescentHoldTime;
         DiceController pushTargetDice;
         Direction pushDirection;
         bool hasPushDirection;
@@ -230,6 +233,7 @@ namespace DiceGame.Gameplay
             if (input.sqrMagnitude <= 0f) {
                 currentSpeed = 0f;
                 ResetPushState();
+                ResetDissolveDescentHold();
                 return;
             }
 
@@ -305,6 +309,7 @@ namespace DiceGame.Gameplay
 
             switch (transition.Kind) {
                 case MovementTransitionKind.Walkable:
+                    ResetDissolveDescentHold();
                     ApplyTransitionStanding(transition, nextCell);
                     return false;
                 case MovementTransitionKind.CanRoll:
@@ -336,6 +341,17 @@ namespace DiceGame.Gameplay
                     nextXZ = ClampToCellInterior(nextXZ, standingCell, halfExtent);
                     return false;
                 case MovementTransitionKind.Blocked:
+                    if (TryApplyDissolveDescentHold(
+                        standingCell,
+                        nextCell,
+                        fromLayer,
+                        fromSurfaceY,
+                        move,
+                        direction,
+                        standingDice)) {
+                        return false;
+                    }
+
                     LogPositionMovementBlock(
                         "TransitionBlocked",
                         standingCell,
@@ -355,6 +371,68 @@ namespace DiceGame.Gameplay
                 default:
                     return false;
             }
+        }
+
+        void ResetDissolveDescentHold() {
+            dissolveDescentHoldDirection = null;
+            dissolveDescentHoldTime = 0f;
+        }
+
+        bool TryApplyDissolveDescentHold(
+            Vector2Int standingCell,
+            Vector2Int nextCell,
+            SurfaceLayer fromLayer,
+            float fromSurfaceY,
+            Vector2 move,
+            Direction direction,
+            DiceController standingDice) {
+            if (standingDice == null || !standingDice.IsDissolving) {
+                ResetDissolveDescentHold();
+                return false;
+            }
+
+            if (!TryGetPrimaryDirection(move, out var moveDir) || moveDir != direction) {
+                ResetDissolveDescentHold();
+                return false;
+            }
+
+            if (!movementTransition.IsDescentBlockedOnlyByStepHeight(
+                standingCell,
+                fromLayer,
+                direction,
+                fromSurfaceY,
+                standingDice,
+                standingTier)) {
+                ResetDissolveDescentHold();
+                return false;
+            }
+
+            if (dissolveDescentHoldDirection != direction) {
+                dissolveDescentHoldDirection = direction;
+                dissolveDescentHoldTime = 0f;
+            }
+
+            dissolveDescentHoldTime += Time.deltaTime;
+            if (dissolveDescentHoldTime < dissolveDescentHoldDuration) {
+                return false;
+            }
+
+            var transition = movementTransition.Evaluate(
+                standingCell,
+                fromLayer,
+                direction,
+                fromSurfaceY,
+                standingDice,
+                standingTier,
+                ignoreStepHeight: true);
+            if (transition.Kind != MovementTransitionKind.Walkable) {
+                ResetDissolveDescentHold();
+                return false;
+            }
+
+            ApplyTransitionStanding(transition, nextCell);
+            ResetDissolveDescentHold();
+            return true;
         }
 
         Vector2Int XZToGrid(Vector2 xz) {
@@ -1354,6 +1432,15 @@ namespace DiceGame.Gameplay
             return false;
         }
 
+        void SnapToStandingCellCenter() {
+            if (characterTransform == null || board == null) {
+                return;
+            }
+
+            var center = GetCellCenterXZ(GetStandingCell());
+            ApplyWorldPosition(new Vector3(center.x, 0f, center.y));
+        }
+
         Vector3 GetCarryWorldPosition() {
             if (characterTransform == null) {
                 return Vector3.zero;
@@ -1384,6 +1471,7 @@ namespace DiceGame.Gameplay
             carriedDice = targetDice;
             liftPhase = LiftPhase.Lifting;
             ResetPushState();
+            SnapToStandingCellCenter();
 
             if (!carriedDice.TryBeginCarry(GetCarryWorldPosition(), OnLiftComplete)) {
                 carriedDice = null;
