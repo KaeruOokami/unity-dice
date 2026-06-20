@@ -66,13 +66,10 @@ namespace DiceGame.Gameplay
                 return MovementTransition.Blocked();
             }
 
-            if (fromLayer == SurfaceLayer.Floor) {
-                return EvaluateFromFloor(toCell, fromSurfaceY);
-            }
-
-            return EvaluateFromDice(
+            return EvaluateToCell(
                 fromCell,
                 toCell,
+                fromLayer,
                 fromSurfaceY,
                 standingDice,
                 standingTier,
@@ -126,13 +123,14 @@ namespace DiceGame.Gameplay
                 return true;
             }
 
-            transition = Evaluate(
+            transition = EvaluateToCell(
                 fromCell,
+                toCell,
                 fromLayer,
-                direction,
                 fromSurfaceY,
                 standingDice,
-                standingTier);
+                standingTier,
+                direction);
             return true;
         }
 
@@ -170,37 +168,16 @@ namespace DiceGame.Gameplay
             return false;
         }
 
-        MovementTransition EvaluateFromFloor(Vector2Int toCell, float fromSurfaceY) {
-            if (registry.CanPlaceBottomDiceAt(toCell)) {
-                return MovementTransition.Walkable(null, SurfaceLayer.Floor);
-            }
-
-            DiceController target;
-            SurfaceLayer targetLayer;
-            if (registry.TryGetTopAt(toCell, out target)) {
-                targetLayer = SurfaceLayer.Top;
-            } else if (registry.TryGetBottomAt(toCell, out target)) {
-                targetLayer = SurfaceLayer.Bottom;
-            } else {
-                return MovementTransition.Blocked();
-            }
-
-            if (!CanStepBetween(fromSurfaceY, target.GetTopSurfaceWorldY())) {
-                return MovementTransition.Blocked();
-            }
-
-            return MovementTransition.Walkable(target, targetLayer);
-        }
-
-        MovementTransition EvaluateFromDice(
+        MovementTransition EvaluateToCell(
             Vector2Int fromCell,
             Vector2Int toCell,
+            SurfaceLayer fromLayer,
             float fromSurfaceY,
             DiceController standingDice,
             DiceStackTier standingTier,
             Direction direction) {
             if (registry.CanPlaceBottomDiceAt(toCell)) {
-                if (CanRoll(fromCell, standingDice, standingTier)) {
+                if (fromLayer == SurfaceLayer.Bottom && CanRoll(fromCell, standingDice, standingTier)) {
                     return MovementTransition.Roll();
                 }
 
@@ -211,7 +188,28 @@ namespace DiceGame.Gameplay
                 return MovementTransition.Blocked();
             }
 
-            var target = registry.GetTransferTargetAt(standingDice, direction, standingTier);
+            DiceController target;
+            if (fromLayer == SurfaceLayer.Floor) {
+                if (registry.TryGetTopAt(toCell, out target)) {
+                    if (!CanStepBetween(fromSurfaceY, target.GetTopSurfaceWorldY())) {
+                        return MovementTransition.Blocked();
+                    }
+
+                    return MovementTransition.Walkable(target, SurfaceLayer.Top);
+                }
+
+                if (registry.TryGetBottomAt(toCell, out target)) {
+                    if (!CanStepBetween(fromSurfaceY, target.GetTopSurfaceWorldY())) {
+                        return MovementTransition.Blocked();
+                    }
+
+                    return MovementTransition.Walkable(target, SurfaceLayer.Bottom);
+                }
+
+                return MovementTransition.Blocked();
+            }
+
+            target = registry.GetTransferTargetAt(standingDice, direction, standingTier);
             if (target == null) {
                 return MovementTransition.Blocked();
             }
