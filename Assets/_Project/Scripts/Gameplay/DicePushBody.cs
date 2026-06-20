@@ -32,5 +32,11 @@ namespace DiceGame.Gameplay
             boxCollider.size = new Vector3(size, size, size);
             boxCollider.center = Vector3.zero;
         }
+
+        public void SetCollisionEnabled(bool enabled) {
+            if (boxCollider != null) {
+                boxCollider.enabled = enabled;
+            }
+        }
     }
 }

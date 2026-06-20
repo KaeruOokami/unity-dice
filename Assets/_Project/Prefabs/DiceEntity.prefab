@@ -53,6 +53,8 @@ MonoBehaviour:
   dissolvePivot: {fileID: 8123456789012345678}
   rollDuration: 0.2
   dissolveDuration: 7
+  dissolveGhostThreshold: 0.7
+  dissolveGhostAlpha: 0.4
 --- !u!114 &5892246955885051454
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -72,6 +74,7 @@ MonoBehaviour:
     Top: 1
     North: 2
     East: 3
+  startTier: 0
 --- !u!1 &3123456789012345678
 GameObject:
   m_ObjectHideFlags: 0
@@ -193,13 +196,13 @@ Transform:
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 9123456789012345670}
-  serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
   m_LocalPosition: {x: 0, y: 0, z: 0}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
   m_Father: {fileID: 4123456789012345678}
+  m_RootOrder: 1
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!65 &9123456789012345679
 BoxCollider:

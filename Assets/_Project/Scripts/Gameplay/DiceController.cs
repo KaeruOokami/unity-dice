@@ -23,6 +23,8 @@ namespace DiceGame.Gameplay
 
         public bool IsRolling => isRolling || (diceView != null && diceView.IsAnimating && !isDissolving && !isCarried);
         public bool IsDissolving => isDissolving;
+        public bool IsDissolveGhost =>
+            isDissolving && diceView != null && diceView.IsDissolveGhost;
         public bool IsCarried => isCarried;
         public bool IsBusy => IsRolling || isDissolving || isCarried;
         public DiceState CurrentState => currentState;

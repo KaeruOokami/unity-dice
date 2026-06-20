@@ -1,9 +1,11 @@
 using System;
 using System.Collections;
+using System.Collections.Generic;
 using DiceGame.Core;
 using DiceGame.Gameplay;
 using DiceGame.Grid;
 using UnityEngine;
+using UnityEngine.Rendering;
 
 namespace DiceGame.View
 {
@@ -15,6 +17,8 @@ namespace DiceGame.View
         [SerializeField] Transform dissolvePivot;
         [SerializeField] float rollDuration = 0.3f;
         [SerializeField] float dissolveDuration = 0.8f;
+        [SerializeField] float dissolveGhostThreshold = 0.45f;
+        [SerializeField] float dissolveGhostAlpha = 0.35f;
 
         Transform meshInstance;
         Coroutine rollCoroutine;
@@ -25,9 +29,14 @@ namespace DiceGame.View
         Vector3 gridWorldPosition;
         float surfaceBaseWorldY;
         Board dissolveBoard;
+        DicePushBody pushBody;
+        readonly List<Material> dissolveMaterials = new();
+        readonly List<Color> dissolveMaterialBaseColors = new();
+        bool dissolveMaterialsTransparent;
 
         public bool IsAnimating => isAnimating;
         public float DissolveProgress => dissolveProgress;
+        public bool IsDissolveGhost => dissolveProgress >= dissolveGhostThreshold;
 
         public Transform DiceTransform => positionRoot;
 
@@ -74,6 +83,39 @@ namespace DiceGame.View
             meshInstance = visual.transform;
             meshInstance.localPosition = Vector3.zero;
             meshInstance.localRotation = Quaternion.identity;
+            CacheDissolveMaterials();
+        }
+
+        void EnsurePushBody() {
+            if (pushBody == null) {
+                pushBody = GetComponentInChildren<DicePushBody>(true);
+            }
+        }
+
+        void CacheDissolveMaterials() {
+            dissolveMaterials.Clear();
+            dissolveMaterialBaseColors.Clear();
+            dissolveMaterialsTransparent = false;
+
+            if (meshInstance == null) {
+                return;
+            }
+
+            foreach (var renderer in meshInstance.GetComponentsInChildren<Renderer>(true)) {
+                var sourceMaterials = renderer.sharedMaterials;
+                var instances = new Material[sourceMaterials.Length];
+                for (var i = 0; i < sourceMaterials.Length; i++) {
+                    if (sourceMaterials[i] == null) {
+                        continue;
+                    }
+
+                    instances[i] = new Material(sourceMaterials[i]);
+                    dissolveMaterials.Add(instances[i]);
+                    dissolveMaterialBaseColors.Add(GetMaterialBaseColor(instances[i]));
+                }
+
+                renderer.materials = instances;
+            }
         }
 
         GameObject ResolveMeshPrefab() {
@@ -125,6 +167,7 @@ namespace DiceGame.View
             gridWorldPosition = board.GridToWorld(state.GridPos);
             rotationRoot.rotation = DiceOrientationMapper.ToRotation(state.Orientation);
             UpdateSurfaceBase(state, board, registry);
+            ResetDissolveVisuals();
             ApplySurfaceVisual(board, 0f);
         }
 
@@ -518,6 +561,88 @@ namespace DiceGame.View
                 gridWorldPosition.x,
                 surfaceBaseWorldY - minY,
                 gridWorldPosition.z);
+            ApplyDissolveGhostVisual(progress);
+        }
+
+        void ApplyDissolveGhostVisual(float progress) {
+            ApplyDissolveAlpha(progress);
+            EnsurePushBody();
+            pushBody?.SetCollisionEnabled(!IsDissolveGhost);
+        }
+
+        void ResetDissolveVisuals() {
+            ApplyDissolveAlpha(0f);
+            EnsurePushBody();
+            pushBody?.SetCollisionEnabled(true);
+        }
+
+        void ApplyDissolveAlpha(float progress) {
+            if (dissolveMaterials.Count == 0) {
+                return;
+            }
+
+            var useTransparent = progress >= dissolveGhostThreshold;
+            if (useTransparent != dissolveMaterialsTransparent) {
+                dissolveMaterialsTransparent = useTransparent;
+                for (var i = 0; i < dissolveMaterials.Count; i++) {
+                    SetMaterialSurfaceType(dissolveMaterials[i], useTransparent);
+                }
+            }
+
+            var alpha = useTransparent ? dissolveGhostAlpha : 1f;
+
+            for (var i = 0; i < dissolveMaterials.Count; i++) {
+                var color = dissolveMaterialBaseColors[i];
+                color.a = alpha;
+                SetMaterialBaseColor(dissolveMaterials[i], color);
+            }
+        }
+
+        static Color GetMaterialBaseColor(Material material) {
+            if (material.HasProperty("_BaseColor")) {
+                return material.GetColor("_BaseColor");
+            }
+
+            if (material.HasProperty("_Color")) {
+                return material.GetColor("_Color");
+            }
+
+            return Color.white;
+        }
+
+        static void SetMaterialBaseColor(Material material, Color color) {
+            if (material.HasProperty("_BaseColor")) {
+                material.SetColor("_BaseColor", color);
+            }
+
+            if (material.HasProperty("_Color")) {
+                material.SetColor("_Color", color);
+            }
+        }
+
+        static void SetMaterialSurfaceType(Material material, bool transparent) {
+            if (material.HasProperty("_Surface")) {
+                material.SetFloat("_Surface", transparent ? 1f : 0f);
+            }
+
+            if (transparent) {
+                material.SetOverrideTag("RenderType", "Transparent");
+                material.SetInt("_SrcBlend", (int)BlendMode.SrcAlpha);
+                material.SetInt("_DstBlend", (int)BlendMode.OneMinusSrcAlpha);
+                material.SetInt("_ZWrite", 0);
+                material.renderQueue = (int)RenderQueue.Transparent;
+                material.EnableKeyword("_SURFACE_TYPE_TRANSPARENT");
+                material.DisableKeyword("_SURFACE_TYPE_OPAQUE");
+                return;
+            }
+
+            material.SetOverrideTag("RenderType", "Opaque");
+            material.SetInt("_SrcBlend", (int)BlendMode.One);
+            material.SetInt("_DstBlend", (int)BlendMode.Zero);
+            material.SetInt("_ZWrite", 1);
+            material.renderQueue = -1;
+            material.EnableKeyword("_SURFACE_TYPE_OPAQUE");
+            material.DisableKeyword("_SURFACE_TYPE_TRANSPARENT");
         }
 
         static Vector3 GetDissolveLocalScale(int topFace, float squash) {
