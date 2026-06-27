@@ -1274,7 +1274,8 @@ namespace DiceGame.Gameplay
             }
 
             var ratio = GetJumpHeightDiceRatio();
-            return ratio >= 1f && ratio <= physicsSettings.JumpHeightDiceMultiplier + 0.001f;
+            return ratio >= physicsSettings.JumpHeightDiceMinMultiplier
+                && ratio <= physicsSettings.JumpHeightDiceMultiplier + 0.001f;
         }
 
         void ResetPushState() {

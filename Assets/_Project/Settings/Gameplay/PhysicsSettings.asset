@@ -14,4 +14,5 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   gravity: 25
   jumpHeightFallback: 1
+  jumpHeightDiceMinMultiplier: 1
   jumpHeightDiceMultiplier: 1.2

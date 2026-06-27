@@ -8,10 +8,12 @@ namespace DiceGame.Config
     {
         [SerializeField] float gravity = GravityMotion.DefaultGravity;
         [SerializeField] float jumpHeightFallback = 1f;
-        [SerializeField, Range(1f, 1.2f)] float jumpHeightDiceMultiplier = 1.2f;
+        [SerializeField] float jumpHeightDiceMinMultiplier = 1f;
+        [SerializeField] float jumpHeightDiceMultiplier = 1.2f;
 
         public float Gravity => gravity;
         public float JumpHeightFallback => jumpHeightFallback;
+        public float JumpHeightDiceMinMultiplier => jumpHeightDiceMinMultiplier;
         public float JumpHeightDiceMultiplier => jumpHeightDiceMultiplier;
     }
 }
