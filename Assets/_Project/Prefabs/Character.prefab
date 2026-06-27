@@ -109,6 +109,10 @@ MonoBehaviour:
   pushInputAlignment: 0.7
   liftKey: 113
   carryVerticalOffset: 1.05
+  jumpKey: 32
+  jumpHeight: 1
+  jumpRiseDuration: 0.12
+  jumpFallDuration: 0.18
   debugMovementBlock: 0
   debugPush: 0
 --- !u!136 &8000000003

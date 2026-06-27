@@ -38,6 +38,7 @@ namespace DiceGame.View
         int currentTopFace = 1;
         Vector3 gridWorldPosition;
         float surfaceBaseWorldY;
+        float visualYOffset;
         Board dissolveBoard;
         DicePushBody pushBody;
         DiceController diceController;
@@ -174,6 +175,7 @@ namespace DiceGame.View
             dissolveProgress = 0f;
             dissolveBoard = null;
             wasDissolveGhost = false;
+            visualYOffset = 0f;
             currentTopFace = state.Orientation.Top;
             EnsureMesh();
             if (dissolvePivot == null || rotationRoot == null || positionRoot == null) {
@@ -268,6 +270,24 @@ namespace DiceGame.View
 
             positionRoot.SetParent(transform, true);
             positionRoot.position = worldPosition;
+        }
+
+        public void ApplyVisualYOffset(Board board, float offset) {
+            visualYOffset = offset;
+            if (board != null && !isAnimating && dissolveProgress <= 0f) {
+                ApplySurfaceVisual(board, 0f);
+            }
+        }
+
+        public void ClearVisualYOffset(Board board) {
+            if (visualYOffset <= 0f) {
+                return;
+            }
+
+            visualYOffset = 0f;
+            if (board != null && !isAnimating && dissolveProgress <= 0f) {
+                ApplySurfaceVisual(board, 0f);
+            }
         }
 
         public void PlayDissolve(Board board, int topFace, Action onComplete) {
@@ -489,7 +509,7 @@ namespace DiceGame.View
             ComputeVerticalExtents(board, currentTopFace, squash, out var minY, out _);
             positionRoot.position = new Vector3(
                 gridWorldPosition.x,
-                surfaceBaseWorldY - minY,
+                surfaceBaseWorldY - minY + visualYOffset,
                 gridWorldPosition.z);
             ApplyDissolveGhostVisual(progress);
             SyncStackedTopDuringDissolve();
