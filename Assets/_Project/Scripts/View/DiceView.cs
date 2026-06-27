@@ -30,6 +30,14 @@ namespace DiceGame.View
         [SerializeField] float dissolveGhostThreshold = 0.45f;
         [SerializeField] float dissolveGhostAlpha = 0.35f;
 
+        [Header("Dissolve Emission")]
+        [SerializeField] Color dissolveEmissionColor = new Color(0.4f, 0.8f, 1f, 1f);
+        [SerializeField] float dissolveEmissionIntensity = 2f;
+        [SerializeField] Texture dissolveEmissionMap;
+        [SerializeField] float dissolveEmissionPulseSpeed = 4f;
+        [SerializeField] float dissolveEmissionPulseMin = 0.55f;
+        [SerializeField] float dissolveEmissionPulseMax = 1f;
+
         Transform meshInstance;
         Coroutine rollCoroutine;
         Coroutine dissolveCoroutine;
@@ -45,6 +53,9 @@ namespace DiceGame.View
         bool wasDissolveGhost;
         readonly List<Material> dissolveMaterials = new();
         readonly List<Color> dissolveMaterialBaseColors = new();
+        readonly List<Color> dissolveMaterialBaseEmissionColors = new();
+        readonly List<Texture> dissolveMaterialBaseEmissionMaps = new();
+        readonly List<bool> dissolveMaterialHadEmission = new();
         bool dissolveMaterialsTransparent;
 
         public bool IsAnimating => isAnimating;
@@ -114,6 +125,9 @@ namespace DiceGame.View
         void CacheDissolveMaterials() {
             dissolveMaterials.Clear();
             dissolveMaterialBaseColors.Clear();
+            dissolveMaterialBaseEmissionColors.Clear();
+            dissolveMaterialBaseEmissionMaps.Clear();
+            dissolveMaterialHadEmission.Clear();
             dissolveMaterialsTransparent = false;
 
             if (meshInstance == null) {
@@ -131,6 +145,9 @@ namespace DiceGame.View
                     instances[i] = new Material(sourceMaterials[i]);
                     dissolveMaterials.Add(instances[i]);
                     dissolveMaterialBaseColors.Add(GetMaterialBaseColor(instances[i]));
+                    dissolveMaterialBaseEmissionColors.Add(GetMaterialEmissionColor(instances[i]));
+                    dissolveMaterialBaseEmissionMaps.Add(GetMaterialEmissionMap(instances[i]));
+                    dissolveMaterialHadEmission.Add(instances[i].IsKeywordEnabled("_EMISSION"));
                 }
 
                 renderer.materials = instances;
@@ -526,6 +543,7 @@ namespace DiceGame.View
 
         void ApplyDissolveGhostVisual(float progress) {
             ApplyDissolveAlpha(progress);
+            ApplyDissolveEmission(progress);
             EnsurePushBody();
             pushBody?.SetCollisionEnabled(!IsDissolveGhost);
 
@@ -542,9 +560,39 @@ namespace DiceGame.View
 
         void ResetDissolveVisuals() {
             ApplyDissolveAlpha(0f);
+            ApplyDissolveEmission(0f);
             EnsurePushBody();
             pushBody?.SetCollisionEnabled(true);
             wasDissolveGhost = false;
+        }
+
+        void ApplyDissolveEmission(float progress) {
+            if (dissolveMaterials.Count == 0) {
+                return;
+            }
+
+            if (progress <= 0f) {
+                for (var i = 0; i < dissolveMaterials.Count; i++) {
+                    RestoreMaterialEmission(
+                        dissolveMaterials[i],
+                        dissolveMaterialBaseEmissionColors[i],
+                        dissolveMaterialBaseEmissionMaps[i],
+                        dissolveMaterialHadEmission[i]);
+                }
+
+                return;
+            }
+
+            var pulse = (Mathf.Sin(Time.time * dissolveEmissionPulseSpeed) + 1f) * 0.5f;
+            var pulseMultiplier = Mathf.Lerp(dissolveEmissionPulseMin, dissolveEmissionPulseMax, pulse);
+            var emissionColor = dissolveEmissionColor * (dissolveEmissionIntensity * pulseMultiplier);
+
+            for (var i = 0; i < dissolveMaterials.Count; i++) {
+                var map = dissolveEmissionMap != null
+                    ? dissolveEmissionMap
+                    : dissolveMaterialBaseEmissionMaps[i];
+                SetMaterialEmission(dissolveMaterials[i], emissionColor, map, true);
+            }
         }
 
         void ApplyDissolveAlpha(float progress) {
@@ -589,6 +637,62 @@ namespace DiceGame.View
             if (material.HasProperty("_Color")) {
                 material.SetColor("_Color", color);
             }
+        }
+
+        static Color GetMaterialEmissionColor(Material material) {
+            if (material.HasProperty("_EmissionColor")) {
+                return material.GetColor("_EmissionColor");
+            }
+
+            return Color.black;
+        }
+
+        static Texture GetMaterialEmissionMap(Material material) {
+            if (material.HasProperty("_EmissionMap")) {
+                return material.GetTexture("_EmissionMap");
+            }
+
+            return null;
+        }
+
+        static void SetMaterialEmission(Material material, Color color, Texture map, bool enable) {
+            if (!material.HasProperty("_EmissionColor")) {
+                return;
+            }
+
+            if (!enable) {
+                RestoreMaterialEmission(material, Color.black, null, false);
+                return;
+            }
+
+            material.EnableKeyword("_EMISSION");
+            material.SetColor("_EmissionColor", color);
+            if (material.HasProperty("_EmissionMap") && map != null) {
+                material.SetTexture("_EmissionMap", map);
+            }
+
+            material.globalIlluminationFlags = MaterialGlobalIlluminationFlags.RealtimeEmissive;
+        }
+
+        static void RestoreMaterialEmission(Material material, Color color, Texture map, bool hadEmission) {
+            if (!material.HasProperty("_EmissionColor")) {
+                return;
+            }
+
+            if (!hadEmission) {
+                material.DisableKeyword("_EMISSION");
+                material.SetColor("_EmissionColor", Color.black);
+                material.globalIlluminationFlags = MaterialGlobalIlluminationFlags.EmissiveIsBlack;
+                return;
+            }
+
+            material.EnableKeyword("_EMISSION");
+            material.SetColor("_EmissionColor", color);
+            if (material.HasProperty("_EmissionMap")) {
+                material.SetTexture("_EmissionMap", map);
+            }
+
+            material.globalIlluminationFlags = MaterialGlobalIlluminationFlags.RealtimeEmissive;
         }
 
         static void SetMaterialSurfaceType(Material material, bool transparent) {
