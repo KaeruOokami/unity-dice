@@ -128,15 +128,11 @@ namespace DiceGame.Gameplay
         }
 
         bool TrySlideTop(Direction direction) {
-            if (!SlideResolver.TrySlideTop(currentState, direction, registry, out _, out var result)) {
+            if (!SlideResolver.TrySlideTop(currentState, direction, registry, out var nextState, out _)) {
                 return false;
             }
 
-            if (result == TopSlideResult.FallToBottom) {
-                return TryRollThenDemote(direction);
-            }
-
-            return TryRoll(direction);
+            return BeginGridTransition(currentState, nextState);
         }
 
         public bool TryJumpRoll(Direction direction, float jumpYOffset) {
