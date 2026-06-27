@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using DiceGame.Config;
 using DiceGame.Core;
 using DiceGame.Grid;
 using DiceGame.View;
@@ -51,6 +52,10 @@ namespace DiceGame.Gameplay
         [SerializeField] GameObject characterPrefab;
         [SerializeField] int diceCount = 3;
         [SerializeField] int randomSeed;
+        [SerializeField] PhysicsSettings physicsSettings;
+        [SerializeField] CharacterMovementSettings characterMovementSettings;
+        [SerializeField] DiceAnimationSettings diceAnimationSettings;
+        [SerializeField] DiceDissolveSettings diceDissolveSettings;
         [SerializeField] CameraSetupSettings cameraSetup = new();
 
         DiceRegistry registry;
@@ -68,6 +73,14 @@ namespace DiceGame.Gameplay
 
             if (characterPrefab == null) {
                 Debug.LogError("GameBootstrap: Character prefab is not assigned.");
+                return;
+            }
+
+            if (physicsSettings == null
+                || characterMovementSettings == null
+                || diceAnimationSettings == null
+                || diceDissolveSettings == null) {
+                Debug.LogError("GameBootstrap: Gameplay settings assets are not assigned.");
                 return;
             }
 
@@ -97,6 +110,8 @@ namespace DiceGame.Gameplay
                     continue;
                 }
 
+                diceView.Configure(physicsSettings, diceAnimationSettings, diceDissolveSettings);
+
                 var diceController = diceEntity.GetComponent<DiceController>();
                 if (diceController == null) {
                     Debug.LogError("GameBootstrap: DiceEntity prefab must have DiceController.");
@@ -124,7 +139,12 @@ namespace DiceGame.Gameplay
                 return;
             }
 
-            characterController.Configure(board, registry, firstDice);
+            characterController.Configure(
+                board,
+                registry,
+                firstDice,
+                characterMovementSettings,
+                physicsSettings);
 
             var dissolveSystem = GetComponent<DiceMatchDissolveSystem>();
             if (dissolveSystem == null) {

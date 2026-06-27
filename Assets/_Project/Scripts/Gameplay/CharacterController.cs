@@ -1,4 +1,5 @@
 ﻿using System.Collections.Generic;
+using DiceGame.Config;
 using DiceGame.Core;
 using DiceGame.Grid;
 using DiceGame.View;
@@ -12,22 +13,9 @@ namespace DiceGame.Gameplay
 
         [SerializeField] Board board;
         [SerializeField] GameObject characterObject;
-        [SerializeField] float characterHeightOffset = 0.15f;
-        [SerializeField] float maxMoveSpeed = 2.5f;
-        [SerializeField] float moveAcceleration = 10f;
-        [SerializeField] float rollCenterPullSpeed = 2.5f;
-        [SerializeField] float maxStepHeight = 1.5f;
-        [SerializeField] float pushHoldDuration = 0.25f;
-        [SerializeField] float dissolveDescentHoldDuration = 0.35f;
-        [SerializeField] float pushInputAlignment = 0.7f;
-        [SerializeField] KeyCode liftKey = KeyCode.Q;
-        [SerializeField] float carryVerticalOffset = 1.05f;
-        [SerializeField] KeyCode jumpKey = KeyCode.Space;
-        [SerializeField] float jumpHeight = 1f;
-        [SerializeField] float jumpRiseDuration = 0.12f;
-        [SerializeField] float jumpFallDuration = 0.18f;
-        [SerializeField] bool debugMovementBlock;
-        [SerializeField] bool debugPush;
+
+        CharacterMovementSettings movementSettings;
+        PhysicsSettings physicsSettings;
 
         const float MovementBlockLogInterval = 0.25f;
         const float PushDebugLogInterval = 0.25f;
@@ -47,8 +35,7 @@ namespace DiceGame.Gameplay
 
         enum JumpPhase {
             None,
-            Rising,
-            Falling
+            Airborne
         }
 
         DiceRegistry registry;
@@ -62,7 +49,6 @@ namespace DiceGame.Gameplay
         bool isTrackingDiceRoll;
         Vector3 rollStartCharacterPosition;
         Vector3 rollStartDiceCenter;
-        float rollFixedWorldY;
         float currentSpeed;
         float pushContactTime;
         Direction? dissolveDescentHoldDirection;
@@ -80,9 +66,10 @@ namespace DiceGame.Gameplay
         Direction lastFacing;
         bool hasLastFacing;
         JumpPhase jumpPhase;
+        VerticalMotionState jumpMotion;
         float jumpYOffset;
-        float jumpPhaseTime;
         DiceController jumpVisualDice;
+        bool jumpDiceGridMoved;
 
         struct PushContactCandidate {
             public DiceController Dice;
@@ -99,9 +86,16 @@ namespace DiceGame.Gameplay
             : Vector2.zero;
         public DiceController CurrentDice => currentDice;
 
-        public void Configure(Board targetBoard, DiceRegistry targetRegistry, DiceController startDice) {
+        public void Configure(
+            Board targetBoard,
+            DiceRegistry targetRegistry,
+            DiceController startDice,
+            CharacterMovementSettings movement,
+            PhysicsSettings physics) {
             board = targetBoard;
             registry = targetRegistry;
+            movementSettings = movement;
+            physicsSettings = physics;
             if (startDice != null) {
                 SetStandingOnDice(
                     startDice.CurrentState.GridPos,
@@ -126,6 +120,11 @@ namespace DiceGame.Gameplay
                 return;
             }
 
+            if (movementSettings == null || physicsSettings == null) {
+                Debug.LogError("CharacterController: Movement or physics settings are not assigned.");
+                return;
+            }
+
             if (currentDice != null) {
                 currentDice.View.EnsureDiceInstance();
                 if (currentDice.View.DiceTransform == null) {
@@ -136,7 +135,7 @@ namespace DiceGame.Gameplay
 
             EnsureCharacterInstance();
             EnsureCharacterPushCollider();
-            movementTransition = new MovementTransitionEvaluator(board, registry, maxStepHeight);
+            movementTransition = new MovementTransitionEvaluator(board, registry, movementSettings.MaxStepHeight);
             currentSpeed = 0f;
             isInitialized = true;
 
@@ -211,11 +210,11 @@ namespace DiceGame.Gameplay
                 return;
             }
 
-            if (Input.GetKeyDown(liftKey)) {
+            if (Input.GetKeyDown(movementSettings.LiftKey)) {
                 TryBeginLift();
             }
 
-            if (jumpPhase == JumpPhase.None && Input.GetKeyDown(jumpKey)) {
+            if (jumpPhase == JumpPhase.None && Input.GetKeyDown(movementSettings.JumpKey)) {
                 TryBeginJump();
             }
 
@@ -231,6 +230,9 @@ namespace DiceGame.Gameplay
 
             if (!IsOnFloor && currentDice != null && isTrackingDiceRoll && !currentDice.IsRolling) {
                 EndRollTracking();
+                if (jumpDiceGridMoved && standingTier == DiceStackTier.Top) {
+                    EndJump();
+                }
             }
 
             var isRolling = !IsOnFloor && currentDice != null && currentDice.IsRolling;
@@ -273,8 +275,16 @@ namespace DiceGame.Gameplay
                 return;
             }
 
+            if (jumpPhase != JumpPhase.None && !CanPerformJumpGridMove()) {
+                currentSpeed = 0f;
+                return;
+            }
+
             input.Normalize();
-            currentSpeed = Mathf.MoveTowards(currentSpeed, maxMoveSpeed, moveAcceleration * Time.deltaTime);
+            currentSpeed = Mathf.MoveTowards(
+                currentSpeed,
+                movementSettings.MaxMoveSpeed,
+                movementSettings.MoveAcceleration * Time.deltaTime);
 
             if (currentSpeed <= 0f) {
                 return;
@@ -335,23 +345,51 @@ namespace DiceGame.Gameplay
             }
 
             var standingDice = ResolveStandingDiceForMovement();
+            var isJumping = jumpPhase != JumpPhase.None;
             var transition = movementTransition.Evaluate(
                 standingCell,
                 fromLayer,
                 direction,
                 fromSurfaceY,
                 standingDice,
-                standingTier);
+                standingTier,
+                ignoreStepHeight: isJumping,
+                isJumping: isJumping);
 
             switch (transition.Kind) {
                 case MovementTransitionKind.Walkable:
                     ResetDissolveDescentHold();
+                    if (transition.TargetLayer == SurfaceLayer.Bottom
+                        && standingTier == DiceStackTier.Top
+                        && transition.TargetDice == currentDice
+                        && TryGetPrimaryDirection(move, out var topFallDir)
+                        && topFallDir == direction) {
+                        if (jumpPhase == JumpPhase.None && TryExecuteTopFallRoll(direction, nextXZ, halfExtent)) {
+                            return true;
+                        }
+
+                        if (jumpPhase != JumpPhase.None && TryExecuteJumpTopFallRoll(direction, nextXZ, halfExtent)) {
+                            return true;
+                        }
+                    }
+
+                    if (TryApplyJumpDiceMove(nextCell, transition, direction, nextXZ, halfExtent)) {
+                        return true;
+                    }
+
+                    if (isJumping && !CanPerformJumpGridMove()) {
+                        nextXZ = ClampToCellInterior(nextXZ, standingCell, halfExtent);
+                        return false;
+                    }
+
                     ApplyTransitionStanding(transition, nextCell);
                     return false;
                 case MovementTransitionKind.CanRoll:
-                    if (jumpPhase != JumpPhase.None) {
-                        nextXZ = ClampToCellInterior(nextXZ, standingCell, halfExtent);
-                        return false;
+                    if (jumpPhase != JumpPhase.None && currentDice != null) {
+                        var jumpDiceMove = MovementTransition.Walkable(currentDice, SurfaceLayer.Bottom);
+                        if (TryApplyJumpDiceMove(nextCell, jumpDiceMove, direction, nextXZ, halfExtent)) {
+                            return true;
+                        }
                     }
 
                     if (TryGetPrimaryDirection(move, out var moveDir) && moveDir == direction) {
@@ -360,7 +398,7 @@ namespace DiceGame.Gameplay
                             return true;
                         }
 
-                        if (Mathf.Abs(fromSurfaceY - board.FloorSurfaceWorldY) <= maxStepHeight) {
+                        if (Mathf.Abs(fromSurfaceY - board.FloorSurfaceWorldY) <= movementSettings.MaxStepHeight) {
                             ApplyTransitionStanding(MovementTransition.Walkable(null, SurfaceLayer.Floor), nextCell);
                             return false;
                         }
@@ -454,7 +492,7 @@ namespace DiceGame.Gameplay
             }
 
             dissolveDescentHoldTime += Time.deltaTime;
-            if (dissolveDescentHoldTime < dissolveDescentHoldDuration) {
+            if (dissolveDescentHoldTime < movementSettings.DissolveDescentHoldDuration) {
                 return false;
             }
 
@@ -535,7 +573,7 @@ namespace DiceGame.Gameplay
             Vector2 intendedMove,
             MovementTransitionKind transitionKind,
             string extra) {
-            if (!debugMovementBlock) {
+            if (!movementSettings.DebugMovementBlock) {
                 return;
             }
 
@@ -593,7 +631,7 @@ namespace DiceGame.Gameplay
         }
 
         void LogMovementBlock(string reason, Direction direction, string detail) {
-            if (!debugMovementBlock) {
+            if (!movementSettings.DebugMovementBlock) {
                 return;
             }
 
@@ -651,7 +689,18 @@ namespace DiceGame.Gameplay
             }
 
             if (standingSurfaceLayer == SurfaceLayer.Top) {
-                return registry.TryGetTopAt(standingGridCell, out dice);
+                if (registry.TryGetTopAt(standingGridCell, out dice)) {
+                    return true;
+                }
+
+                if (currentDice != null
+                    && currentDice.CurrentState.Tier == DiceStackTier.Bottom
+                    && currentDice.CurrentState.GridPos == standingGridCell) {
+                    dice = currentDice;
+                    return true;
+                }
+
+                return false;
             }
 
             return registry.TryGetBottomAt(standingGridCell, out dice);
@@ -684,6 +733,117 @@ namespace DiceGame.Gameplay
                     : DiceStackTier.Bottom;
                 SetStandingOnDice(toCell, tier, transition.TargetDice);
             }
+        }
+
+        bool TryApplyJumpDiceMove(
+            Vector2Int toCell,
+            MovementTransition transition,
+            Direction direction,
+            Vector2 nextXZ,
+            float halfExtent) {
+            if (!CanPerformJumpGridMove()
+                || currentDice == null
+                || transition.TargetDice != currentDice
+                || currentDice.IsDissolving) {
+                return false;
+            }
+
+            var diceCenter = currentDice.View.DiceTransform.position;
+            var nextOffset = WorldOffsetFromDiceCenter(diceCenter, nextXZ);
+            var clamped = ClampToFace(nextOffset, halfExtent);
+            ApplyWorldPosition(new Vector3(diceCenter.x + clamped.x, 0f, diceCenter.z + clamped.y));
+
+            var characterAnchor = characterTransform.position;
+            var diceCenterAnchor = diceCenter;
+            var started = false;
+
+            if (standingTier == DiceStackTier.Top
+                && standingSurfaceLayer == SurfaceLayer.Top
+                && transition.TargetLayer == SurfaceLayer.Bottom) {
+                started = currentDice.TryJumpRollThenDemote(direction, jumpYOffset);
+                if (started) {
+                    UpdateStandingAfterJumpDiceMove(toCell, DiceStackTier.Bottom);
+                }
+            } else if (standingTier == DiceStackTier.Bottom
+                && standingSurfaceLayer == SurfaceLayer.Bottom) {
+                var fromState = currentDice.CurrentState;
+                if (fromState.GridPos != standingGridCell || fromState.Tier != DiceStackTier.Bottom) {
+                    return false;
+                }
+
+                if (transition.TargetLayer == SurfaceLayer.Top) {
+                    if (!registry.CanPlaceTopDiceAt(toCell)) {
+                        return false;
+                    }
+
+                    started = currentDice.TryJumpStack(direction, jumpYOffset);
+                    if (started) {
+                        UpdateStandingAfterJumpDiceMove(toCell, DiceStackTier.Top);
+                    }
+                } else if (registry.CanPlaceBottomDiceAt(toCell)) {
+                    started = currentDice.TryJumpRoll(direction, jumpYOffset);
+                    if (started) {
+                        UpdateStandingAfterJumpDiceMove(toCell, DiceStackTier.Bottom);
+                    }
+                }
+            }
+
+            if (!started) {
+                return false;
+            }
+
+            jumpDiceGridMoved = true;
+
+            BeginRollTracking(characterAnchor, diceCenterAnchor);
+            return true;
+        }
+
+        void UpdateStandingAfterJumpDiceMove(Vector2Int toCell, DiceStackTier tier) {
+            standingGridCell = toCell;
+            standingTier = tier;
+            standingSurfaceLayer = tier == DiceStackTier.Top ? SurfaceLayer.Top : SurfaceLayer.Bottom;
+            ResubscribeStandingDice(currentDice);
+        }
+
+        bool TryExecuteJumpTopFallRoll(Direction direction, Vector2 nextXZ, float edgeLimit) {
+            if (jumpPhase == JumpPhase.None || jumpDiceGridMoved) {
+                return false;
+            }
+
+            SyncStandingDiceCache();
+            if (currentDice?.View.DiceTransform == null || currentDice.IsDissolving) {
+                return false;
+            }
+
+            if (standingTier != DiceStackTier.Top
+                || currentDice.CurrentState.Tier != DiceStackTier.Top) {
+                return false;
+            }
+
+            var targetPos = standingGridCell + direction.ToGridDelta();
+            if (!registry.CanPlaceBottomDiceAt(targetPos)) {
+                return false;
+            }
+
+            var diceCenter = currentDice.View.DiceTransform.position;
+            var nextOffset = WorldOffsetFromDiceCenter(diceCenter, nextXZ);
+            var clamped = ClampToFace(nextOffset, edgeLimit);
+            ApplyWorldPosition(new Vector3(diceCenter.x + clamped.x, 0f, diceCenter.z + clamped.y));
+
+            var characterAnchor = characterTransform.position;
+            var diceCenterAnchor = diceCenter;
+
+            if (!currentDice.TryJumpRollThenDemote(direction, jumpYOffset)) {
+                return false;
+            }
+
+            jumpDiceGridMoved = true;
+            standingGridCell = currentDice.CurrentState.GridPos;
+            standingTier = DiceStackTier.Bottom;
+            standingSurfaceLayer = SurfaceLayer.Bottom;
+
+            BeginRollTracking(characterAnchor, diceCenterAnchor);
+            return true;
         }
 
         void SetStandingOnFloor(Vector2Int gridCell) {
@@ -750,6 +910,45 @@ namespace DiceGame.Gameplay
             }
 
             standingGridCell = currentDice.CurrentState.GridPos;
+            BeginRollTracking(characterAnchor, diceCenterAnchor);
+            return true;
+        }
+
+        bool TryExecuteTopFallRoll(Direction direction, Vector2 nextXZ, float edgeLimit) {
+            if (jumpPhase != JumpPhase.None) {
+                return false;
+            }
+
+            SyncStandingDiceCache();
+            if (currentDice?.View.DiceTransform == null || currentDice.IsDissolving) {
+                return false;
+            }
+
+            if (standingTier != DiceStackTier.Top
+                || currentDice.CurrentState.Tier != DiceStackTier.Top) {
+                return false;
+            }
+
+            var targetPos = standingGridCell + direction.ToGridDelta();
+            if (!registry.CanPlaceBottomDiceAt(targetPos)) {
+                return false;
+            }
+
+            var diceCenter = currentDice.View.DiceTransform.position;
+            var nextOffset = WorldOffsetFromDiceCenter(diceCenter, nextXZ);
+            var clamped = ClampToFace(nextOffset, edgeLimit);
+            ApplyWorldPosition(new Vector3(diceCenter.x + clamped.x, 0f, diceCenter.z + clamped.y));
+
+            var characterAnchor = characterTransform.position;
+            var diceCenterAnchor = diceCenter;
+
+            if (!currentDice.TryRollThenDemote(direction)) {
+                return false;
+            }
+
+            standingGridCell = currentDice.CurrentState.GridPos;
+            standingTier = DiceStackTier.Bottom;
+            standingSurfaceLayer = SurfaceLayer.Bottom;
             BeginRollTracking(characterAnchor, diceCenterAnchor);
             return true;
         }
@@ -915,6 +1114,12 @@ namespace DiceGame.Gameplay
             }
 
             if (TryGetStandingDice(out var standingDice)) {
+                if (standingTier == DiceStackTier.Top
+                    && standingDice.CurrentState.Tier == DiceStackTier.Bottom
+                    && !registry.HasTopAt(standingGridCell)) {
+                    return movementTransition.GetStackTopStandingSurfaceY(standingDice);
+                }
+
                 return standingDice.GetTopSurfaceWorldY();
             }
 
@@ -931,7 +1136,7 @@ namespace DiceGame.Gameplay
         }
 
         float GetCharacterWorldY() {
-            var y = GetSurfaceWorldY() + characterHeightOffset;
+            var y = GetSurfaceWorldY() + movementSettings.CharacterHeightOffset;
             if (ShouldApplyJumpYOffsetToCharacter()) {
                 y += jumpYOffset;
             }
@@ -1006,14 +1211,12 @@ namespace DiceGame.Gameplay
 
             rollStartCharacterPosition = characterTransform.position;
             rollStartDiceCenter = currentDice.View.DiceTransform.position;
-            rollFixedWorldY = rollStartCharacterPosition.y;
             isTrackingDiceRoll = true;
         }
 
         void BeginRollTracking(Vector3 characterAnchor, Vector3 diceCenterAnchor) {
             rollStartCharacterPosition = characterAnchor;
             rollStartDiceCenter = diceCenterAnchor;
-            rollFixedWorldY = characterAnchor.y;
             isTrackingDiceRoll = true;
         }
 
@@ -1038,9 +1241,33 @@ namespace DiceGame.Gameplay
             var diceCenter = currentDice.View.DiceTransform.position;
             var delta = diceCenter - rollStartDiceCenter;
             var worldPosition = rollStartCharacterPosition + delta;
-            worldPosition.y = rollFixedWorldY;
+            worldPosition.y = currentDice.GetTopSurfaceWorldY() + movementSettings.CharacterHeightOffset;
+
             characterTransform.position = worldPosition;
             characterTransform.rotation = Quaternion.identity;
+        }
+
+        float GetDiceJumpHeight() {
+            return board != null
+                ? board.CellSize * physicsSettings.JumpHeightDiceMultiplier
+                : physicsSettings.JumpHeightFallback;
+        }
+
+        float GetJumpHeightDiceRatio() {
+            if (board == null || board.CellSize <= 0f) {
+                return 0f;
+            }
+
+            return jumpYOffset / board.CellSize;
+        }
+
+        bool CanPerformJumpGridMove() {
+            if (jumpPhase == JumpPhase.None || jumpDiceGridMoved || board == null) {
+                return false;
+            }
+
+            var ratio = GetJumpHeightDiceRatio();
+            return ratio >= 1f && ratio <= physicsSettings.JumpHeightDiceMultiplier + 0.001f;
         }
 
         void ResetPushState() {
@@ -1080,11 +1307,11 @@ namespace DiceGame.Gameplay
             }
 
             pushContactTime += Time.deltaTime;
-            if (pushContactTime < pushHoldDuration) {
+            if (pushContactTime < movementSettings.PushHoldDuration) {
                 LogPushDebug(
                     "hold-wait",
                     $"stage=hold dice={FormatMovementDice(best.Dice)} dir={best.Direction} " +
-                    $"elapsed={pushContactTime:F2}/{pushHoldDuration:F2}");
+                    $"elapsed={pushContactTime:F2}/{movementSettings.PushHoldDuration:F2}");
                 return;
             }
 
@@ -1284,7 +1511,7 @@ namespace DiceGame.Gameplay
                         characterXZ,
                         input,
                         direction,
-                        pushInputAlignment,
+                        movementSettings.PushInputAlignment,
                         out _,
                         out _,
                         out var directionRejectReason)) {
@@ -1326,7 +1553,7 @@ namespace DiceGame.Gameplay
                 characterPosition,
                 input,
                 direction,
-                pushInputAlignment,
+                movementSettings.PushInputAlignment,
                 out var inputAlignment,
                 out var faceDistance,
                 out _)) {
@@ -1533,7 +1760,7 @@ namespace DiceGame.Gameplay
         }
 
         void LogPushDebug(string key, string message) {
-            if (!debugPush) {
+            if (!movementSettings.DebugPush) {
                 return;
             }
 
@@ -1660,7 +1887,7 @@ namespace DiceGame.Gameplay
             }
 
             var position = characterTransform.position;
-            return new Vector3(position.x, position.y + carryVerticalOffset, position.z);
+            return new Vector3(position.x, position.y + movementSettings.CarryVerticalOffset, position.z);
         }
 
         bool TryBeginLift() {
@@ -1795,9 +2022,10 @@ namespace DiceGame.Gameplay
                 return false;
             }
 
-            jumpPhase = JumpPhase.Rising;
+            jumpMotion = GravityMotion.CreateLaunch(GetDiceJumpHeight(), physicsSettings.Gravity);
+            jumpPhase = JumpPhase.Airborne;
             jumpYOffset = 0f;
-            jumpPhaseTime = 0f;
+            jumpDiceGridMoved = false;
             ResetPushState();
             return true;
         }
@@ -1807,37 +2035,24 @@ namespace DiceGame.Gameplay
                 return;
             }
 
-            jumpPhaseTime += Time.deltaTime;
+            if (jumpDiceGridMoved && currentDice != null && currentDice.IsRolling) {
+                return;
+            }
 
-            switch (jumpPhase) {
-                case JumpPhase.Rising: {
-                    var riseT = jumpRiseDuration > 0f
-                        ? Mathf.Clamp01(jumpPhaseTime / jumpRiseDuration)
-                        : 1f;
-                    jumpYOffset = Mathf.Lerp(0f, jumpHeight, riseT);
-                    if (riseT >= 1f) {
-                        jumpPhase = JumpPhase.Falling;
-                        jumpPhaseTime = 0f;
-                    }
+            jumpMotion = GravityMotion.Step(jumpMotion, physicsSettings.Gravity, Time.deltaTime);
+            jumpYOffset = jumpMotion.Offset;
 
-                    break;
-                }
-                case JumpPhase.Falling: {
-                    var fallT = jumpFallDuration > 0f
-                        ? Mathf.Clamp01(jumpPhaseTime / jumpFallDuration)
-                        : 1f;
-                    jumpYOffset = Mathf.Lerp(jumpHeight, 0f, fallT);
-                    if (fallT >= 1f) {
-                        EndJump();
-                    }
-
-                    break;
-                }
+            if (jumpMotion.IsGrounded) {
+                EndJump();
             }
         }
 
         void ApplyStandingDiceJumpVisual() {
             if (jumpPhase == JumpPhase.None || board == null) {
+                return;
+            }
+
+            if (currentDice != null && currentDice.IsRolling) {
                 return;
             }
 
@@ -1881,8 +2096,9 @@ namespace DiceGame.Gameplay
             }
 
             jumpPhase = JumpPhase.None;
+            jumpMotion = default;
             jumpYOffset = 0f;
-            jumpPhaseTime = 0f;
+            jumpDiceGridMoved = false;
             SnapYToSurface();
         }
     }

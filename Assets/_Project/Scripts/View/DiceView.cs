@@ -1,11 +1,11 @@
 using System;
 using System.Collections;
 using System.Collections.Generic;
+using DiceGame.Config;
 using DiceGame.Core;
 using DiceGame.Gameplay;
 using DiceGame.Grid;
 using UnityEngine;
-using UnityEngine.Serialization;
 using UnityEngine.Rendering;
 
 namespace DiceGame.View
@@ -16,27 +16,10 @@ namespace DiceGame.View
         [SerializeField] Transform positionRoot;
         [SerializeField] Transform rotationRoot;
         [SerializeField] Transform dissolvePivot;
-        [Header("Animation Durations")]
-        [SerializeField] float rollAnimationDuration = 0.3f;
-        [FormerlySerializedAs("rollDuration")]
-        [SerializeField] float slideDuration = 0.3f;
-        [SerializeField] float fallHorizontalDuration = 0.3f;
-        [SerializeField] float fallVerticalDuration = 0.3f;
-        [SerializeField] float liftDuration = 0.3f;
-        [SerializeField] float placeDuration = 0.3f;
 
-        [Header("Dissolve")]
-        [SerializeField] float dissolveDuration = 0.8f;
-        [SerializeField] float dissolveGhostThreshold = 0.45f;
-        [SerializeField] float dissolveGhostAlpha = 0.35f;
-
-        [Header("Dissolve Emission")]
-        [SerializeField] Color dissolveEmissionColor = new Color(0.4f, 0.8f, 1f, 1f);
-        [SerializeField] float dissolveEmissionIntensity = 2f;
-        [SerializeField] Texture dissolveEmissionMap;
-        [SerializeField] float dissolveEmissionPulseSpeed = 4f;
-        [SerializeField] float dissolveEmissionPulseMin = 0.55f;
-        [SerializeField] float dissolveEmissionPulseMax = 1f;
+        PhysicsSettings physicsSettings;
+        DiceAnimationSettings animationSettings;
+        DiceDissolveSettings dissolveSettings;
 
         Transform meshInstance;
         Coroutine rollCoroutine;
@@ -60,9 +43,19 @@ namespace DiceGame.View
 
         public bool IsAnimating => isAnimating;
         public float DissolveProgress => dissolveProgress;
-        public bool IsDissolveGhost => dissolveProgress >= dissolveGhostThreshold;
+        public bool IsDissolveGhost =>
+            dissolveSettings != null && dissolveProgress >= dissolveSettings.DissolveGhostThreshold;
 
         public Transform DiceTransform => positionRoot;
+
+        public void Configure(
+            PhysicsSettings physics,
+            DiceAnimationSettings animation,
+            DiceDissolveSettings dissolve) {
+            physicsSettings = physics;
+            animationSettings = animation;
+            dissolveSettings = dissolve;
+        }
 
         void Awake() {
             ResolveHierarchy();
@@ -255,6 +248,38 @@ namespace DiceGame.View
             rollCoroutine = StartCoroutine(RollCoroutine(direction, fromState, toState, board, registry, onComplete));
         }
 
+        public void PlayJumpRoll(
+            Direction direction,
+            DiceState fromState,
+            DiceState toState,
+            float jumpYOffset,
+            Board board,
+            DiceRegistry registry,
+            Action onComplete,
+            bool fallBeforeSnap = false) {
+            if (!HasGameplaySettings()) {
+                return;
+            }
+
+            if (dissolveCoroutine != null) {
+                return;
+            }
+
+            if (rollCoroutine != null) {
+                StopCoroutine(rollCoroutine);
+            }
+
+            rollCoroutine = StartCoroutine(JumpRollCoroutine(
+                direction,
+                fromState,
+                toState,
+                jumpYOffset,
+                fallBeforeSnap,
+                board,
+                registry,
+                onComplete));
+        }
+
         public void PlayTransition(
             DiceTransition transition,
             Board board,
@@ -380,9 +405,9 @@ namespace DiceGame.View
             positionRoot.SetParent(pivot, true);
 
             var elapsed = 0f;
-            while (elapsed < rollAnimationDuration) {
+            while (elapsed < animationSettings.RollAnimationDuration) {
                 elapsed += Time.deltaTime;
-                var t = Mathf.SmoothStep(0f, 1f, elapsed / rollAnimationDuration);
+                var t = Mathf.SmoothStep(0f, 1f, elapsed / animationSettings.RollAnimationDuration);
                 pivot.rotation = Quaternion.AngleAxis(setup.Angle * t, setup.Axis);
                 yield return null;
             }
@@ -399,6 +424,56 @@ namespace DiceGame.View
             isAnimating = false;
             rollCoroutine = null;
             onComplete?.Invoke();
+        }
+
+        IEnumerator JumpRollCoroutine(
+            Direction direction,
+            DiceState fromState,
+            DiceState toState,
+            float jumpYOffset,
+            bool fallBeforeSnap,
+            Board board,
+            DiceRegistry registry,
+            Action onComplete) {
+            isAnimating = true;
+            EnsureMesh();
+            if (positionRoot == null || rotationRoot == null) {
+                isAnimating = false;
+                onComplete?.Invoke();
+                yield break;
+            }
+
+            currentTopFace = fromState.Orientation.Top;
+            rotationRoot.rotation = DiceOrientationMapper.ToRotation(fromState.Orientation);
+
+            yield return RollPhaseCoroutine(direction, board);
+
+            yield return FinalizeJumpRollPlacement(toState, jumpYOffset, fallBeforeSnap, board, registry);
+
+            onComplete?.Invoke();
+        }
+
+        IEnumerator FinalizeJumpRollPlacement(
+            DiceState toState,
+            float jumpYOffset,
+            bool fallBeforeSnap,
+            Board board,
+            DiceRegistry registry) {
+            currentTopFace = toState.Orientation.Top;
+            rotationRoot.rotation = DiceOrientationMapper.ToRotation(toState.Orientation);
+
+            if (fallBeforeSnap) {
+                var targetWorld = GetAnchoredWorldPosition(toState, board, registry);
+                positionRoot.position = new Vector3(targetWorld.x, positionRoot.position.y, targetWorld.z);
+                yield return AnimateGravityFall(targetWorld);
+            }
+
+            // SnapTo stops rollCoroutine; detach first so the caller can finish and invoke onComplete.
+            rollCoroutine = null;
+            SnapTo(toState, board, registry);
+            if (jumpYOffset > 0f && toState.Tier != DiceStackTier.Top) {
+                ApplyVisualYOffset(board, jumpYOffset);
+            }
         }
 
         IEnumerator TransitionCoroutine(
@@ -429,9 +504,43 @@ namespace DiceGame.View
                 var freeTo = transition.ToWorldOverride.Value;
                 positionRoot.position = freeFrom;
 
-                var freeMoveDuration = transition.SnapToGridOnComplete ? placeDuration : liftDuration;
+                var freeMoveDuration = transition.SnapToGridOnComplete
+                    ? animationSettings.PlaceDuration
+                    : animationSettings.LiftDuration;
                 yield return AnimatePositionLerp(freeFrom, freeTo, freeMoveDuration);
                 positionRoot.position = freeTo;
+            } else if (transition.Path == DiceTransitionPath.RollThenDrop) {
+                if (rotationRoot == null) {
+                    isAnimating = false;
+                    onComplete?.Invoke();
+                    yield break;
+                }
+
+                PrepareRollTransitionStart(transition.From, board, registry, transition.FromWorldOverride);
+                yield return RollPhaseCoroutine(transition.RollDirection, board);
+                yield return FinalizeJumpRollPlacement(transition.To, 0f, fallBeforeSnap: true, board, registry);
+            } else if (transition.Path == DiceTransitionPath.RollThenRise) {
+                if (rotationRoot == null) {
+                    isAnimating = false;
+                    onComplete?.Invoke();
+                    yield break;
+                }
+
+                PrepareRollTransitionStart(transition.From, board, registry, transition.FromWorldOverride);
+                yield return RollPhaseCoroutine(transition.RollDirection, board);
+
+                currentTopFace = transition.To.Orientation.Top;
+                rotationRoot.rotation = DiceOrientationMapper.ToRotation(transition.To.Orientation);
+
+                var stackWorld = GetAnchoredWorldPosition(transition.To, board, registry);
+                var rolled = new Vector3(stackWorld.x, positionRoot.position.y, stackWorld.z);
+                if (Vector3.SqrMagnitude(rolled - positionRoot.position) > 0.0001f) {
+                    yield return AnimatePositionLerp(positionRoot.position, rolled, animationSettings.FallHorizontalDuration);
+                    positionRoot.position = rolled;
+                }
+
+                yield return AnimatePositionLerp(positionRoot.position, stackWorld, animationSettings.LiftDuration);
+                positionRoot.position = stackWorld;
             } else {
                 if (rotationRoot == null) {
                     isAnimating = false;
@@ -448,12 +557,13 @@ namespace DiceGame.View
                 positionRoot.position = fromWorld;
 
                 if (transition.Path == DiceTransitionPath.Direct) {
-                    yield return AnimatePositionLerp(fromWorld, toWorld, slideDuration);
+                    yield return AnimatePositionLerp(fromWorld, toWorld, animationSettings.SlideDuration);
                 } else {
                     var midWorld = new Vector3(toWorld.x, fromWorld.y, toWorld.z);
-                    yield return AnimatePositionLerp(fromWorld, midWorld, fallHorizontalDuration);
+                    yield return AnimatePositionLerp(fromWorld, midWorld, animationSettings.FallHorizontalDuration);
                     positionRoot.position = midWorld;
-                    yield return AnimatePositionLerp(midWorld, toWorld, fallVerticalDuration);
+                    yield return AnimateGravityFall(toWorld);
+                    positionRoot.position = toWorld;
                 }
             }
 
@@ -466,12 +576,83 @@ namespace DiceGame.View
             onComplete?.Invoke();
         }
 
+        IEnumerator RollPhaseCoroutine(Direction direction, Board board) {
+            if (positionRoot == null || board == null) {
+                yield break;
+            }
+
+            var half = board.CellSize * 0.5f;
+            var setup = DiceRollTransform.GetRollSetup(direction, half);
+
+            var pivotObject = new GameObject("RollPivot");
+            var pivot = pivotObject.transform;
+            pivot.position = positionRoot.position + setup.PivotOffset;
+            pivot.rotation = Quaternion.identity;
+
+            positionRoot.SetParent(pivot, true);
+
+            var elapsed = 0f;
+            while (elapsed < animationSettings.RollAnimationDuration) {
+                elapsed += Time.deltaTime;
+                var t = Mathf.SmoothStep(0f, 1f, elapsed / animationSettings.RollAnimationDuration);
+                pivot.rotation = Quaternion.AngleAxis(setup.Angle * t, setup.Axis);
+                yield return null;
+            }
+
+            pivot.rotation = Quaternion.AngleAxis(setup.Angle, setup.Axis);
+
+            positionRoot.SetParent(transform, true);
+            positionRoot.localRotation = Quaternion.identity;
+            positionRoot.localScale = Vector3.one;
+            Destroy(pivotObject);
+        }
+
+        void PrepareRollTransitionStart(DiceState fromState, Board board, DiceRegistry registry, Vector3? fromWorldOverride) {
+            positionRoot.SetParent(transform, true);
+            positionRoot.localRotation = Quaternion.identity;
+            positionRoot.localScale = Vector3.one;
+            currentTopFace = fromState.Orientation.Top;
+            rotationRoot.rotation = DiceOrientationMapper.ToRotation(fromState.Orientation);
+
+            if (fromWorldOverride.HasValue) {
+                positionRoot.position = fromWorldOverride.Value;
+                return;
+            }
+
+            SnapTo(fromState, board, registry);
+        }
+
         void PrepareGridTransition(DiceState fromState) {
             positionRoot.SetParent(transform);
             positionRoot.localRotation = Quaternion.identity;
             positionRoot.localScale = Vector3.one;
             currentTopFace = fromState.Orientation.Top;
             rotationRoot.rotation = DiceOrientationMapper.ToRotation(fromState.Orientation);
+        }
+
+        bool HasGameplaySettings() {
+            if (physicsSettings != null && animationSettings != null && dissolveSettings != null) {
+                return true;
+            }
+
+            Debug.LogError("DiceView: Gameplay settings are not assigned. Configure via GameBootstrap.");
+            return false;
+        }
+
+        IEnumerator AnimateGravityFall(Vector3 targetWorld) {
+            if (positionRoot == null || !HasGameplaySettings()) {
+                yield break;
+            }
+
+            var startOffset = positionRoot.position.y - targetWorld.y;
+            var state = GravityMotion.CreateDrop(startOffset);
+            yield return GravityMotion.AnimateVerticalDropCoroutine(
+                state,
+                physicsSettings.Gravity,
+                targetWorld.y,
+                () => positionRoot.position.x,
+                () => positionRoot.position.z,
+                (x, y, z) => positionRoot.position = new Vector3(x, y, z));
         }
 
         IEnumerator AnimatePositionLerp(Vector3 fromWorld, Vector3 toWorld, float duration) {
@@ -503,7 +684,7 @@ namespace DiceGame.View
             positionRoot.SetParent(transform);
 
             while (dissolveProgress < 1f) {
-                dissolveProgress = Mathf.Min(1f, dissolveProgress + Time.deltaTime / dissolveDuration);
+                dissolveProgress = Mathf.Min(1f, dissolveProgress + Time.deltaTime / dissolveSettings.DissolveDuration);
                 ApplySurfaceVisual(board, dissolveProgress);
                 yield return null;
             }
@@ -583,13 +764,17 @@ namespace DiceGame.View
                 return;
             }
 
-            var pulse = (Mathf.Sin(Time.time * dissolveEmissionPulseSpeed) + 1f) * 0.5f;
-            var pulseMultiplier = Mathf.Lerp(dissolveEmissionPulseMin, dissolveEmissionPulseMax, pulse);
-            var emissionColor = dissolveEmissionColor * (dissolveEmissionIntensity * pulseMultiplier);
+            var pulse = (Mathf.Sin(Time.time * dissolveSettings.DissolveEmissionPulseSpeed) + 1f) * 0.5f;
+            var pulseMultiplier = Mathf.Lerp(
+                dissolveSettings.DissolveEmissionPulseMin,
+                dissolveSettings.DissolveEmissionPulseMax,
+                pulse);
+            var emissionColor = dissolveSettings.DissolveEmissionColor
+                * (dissolveSettings.DissolveEmissionIntensity * pulseMultiplier);
 
             for (var i = 0; i < dissolveMaterials.Count; i++) {
-                var map = dissolveEmissionMap != null
-                    ? dissolveEmissionMap
+                var map = dissolveSettings.DissolveEmissionMap != null
+                    ? dissolveSettings.DissolveEmissionMap
                     : dissolveMaterialBaseEmissionMaps[i];
                 SetMaterialEmission(dissolveMaterials[i], emissionColor, map, true);
             }
@@ -600,7 +785,7 @@ namespace DiceGame.View
                 return;
             }
 
-            var useTransparent = progress >= dissolveGhostThreshold;
+            var useTransparent = progress >= dissolveSettings.DissolveGhostThreshold;
             if (useTransparent != dissolveMaterialsTransparent) {
                 dissolveMaterialsTransparent = useTransparent;
                 for (var i = 0; i < dissolveMaterials.Count; i++) {
@@ -608,7 +793,7 @@ namespace DiceGame.View
                 }
             }
 
-            var alpha = useTransparent ? dissolveGhostAlpha : 1f;
+            var alpha = useTransparent ? dissolveSettings.DissolveGhostAlpha : 1f;
 
             for (var i = 0; i < dissolveMaterials.Count; i++) {
                 var color = dissolveMaterialBaseColors[i];

@@ -30,6 +30,29 @@ namespace DiceGame.Core
             return true;
         }
 
+        public static bool TryStackOntoAdjacentBottom(
+            DiceState state,
+            Vector2Int toCell,
+            IDicePlacement placement,
+            out DiceState nextState) {
+            nextState = default;
+            if (state.Tier != DiceStackTier.Bottom) {
+                return false;
+            }
+
+            var delta = toCell - state.GridPos;
+            if (Mathf.Abs(delta.x) + Mathf.Abs(delta.y) != 1) {
+                return false;
+            }
+
+            if (!placement.CanPlaceTopDiceAt(toCell)) {
+                return false;
+            }
+
+            nextState = new DiceState(toCell, state.Orientation, DiceStackTier.Top);
+            return true;
+        }
+
         public static bool TrySlideTop(
             DiceState state,
             Direction direction,

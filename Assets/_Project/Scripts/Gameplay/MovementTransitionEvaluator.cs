@@ -61,7 +61,8 @@ namespace DiceGame.Gameplay
             float fromSurfaceY,
             DiceController standingDice,
             DiceStackTier standingTier,
-            bool ignoreStepHeight = false) {
+            bool ignoreStepHeight = false,
+            bool isJumping = false) {
             var toCell = fromCell + direction.ToGridDelta();
             if (!board.IsInside(toCell) || board.GetCell(toCell) == CellType.Wall) {
                 return MovementTransition.Blocked();
@@ -75,7 +76,20 @@ namespace DiceGame.Gameplay
                 standingDice,
                 standingTier,
                 direction,
-                ignoreStepHeight);
+                ignoreStepHeight,
+                isJumping);
+        }
+
+        public float GetStackTopStandingSurfaceY(DiceController bottomDice) {
+            if (bottomDice == null) {
+                return board.FloorSurfaceWorldY;
+            }
+
+            if (registry.TryGetTopAt(bottomDice.CurrentState.GridPos, out var top) && top != null) {
+                return top.GetTopSurfaceWorldY();
+            }
+
+            return bottomDice.GetTopSurfaceWorldY() + board.CellSize;
         }
 
         public bool IsDescentBlockedOnlyByStepHeight(
@@ -166,7 +180,8 @@ namespace DiceGame.Gameplay
                 standingDice,
                 standingTier,
                 direction,
-                ignoreStepHeight: false);
+                ignoreStepHeight: false,
+                isJumping: false);
             return true;
         }
 
@@ -212,9 +227,27 @@ namespace DiceGame.Gameplay
             DiceController standingDice,
             DiceStackTier standingTier,
             Direction direction,
-            bool ignoreStepHeight) {
+            bool ignoreStepHeight,
+            bool isJumping) {
             if (registry.CanPlaceBottomDiceAt(toCell)) {
+                if (TryEvaluateTopFallToBottom(
+                    fromLayer,
+                    fromSurfaceY,
+                    standingDice,
+                    standingTier,
+                    direction,
+                    ignoreStepHeight,
+                    out var topFallTransition)) {
+                    return topFallTransition;
+                }
+
                 if (fromLayer == SurfaceLayer.Bottom && CanRoll(fromCell, standingDice, standingTier)) {
+                    if (isJumping
+                        && standingDice != null
+                        && !standingDice.IsDissolving) {
+                        return MovementTransition.Walkable(standingDice, SurfaceLayer.Bottom);
+                    }
+
                     return MovementTransition.Roll();
                 }
 
@@ -233,6 +266,18 @@ namespace DiceGame.Gameplay
                 }
 
                 return MovementTransition.Blocked();
+            }
+
+            if (TryEvaluateJumpTopLanding(
+                toCell,
+                fromLayer,
+                fromSurfaceY,
+                standingDice,
+                standingTier,
+                ignoreStepHeight,
+                isJumping,
+                out var jumpTopTransition)) {
+                return jumpTopTransition;
             }
 
             target = registry.GetTransferTargetAt(standingDice, direction, standingTier);
@@ -268,14 +313,101 @@ namespace DiceGame.Gameplay
             return MovementTransition.Blocked();
         }
 
+        bool TryEvaluateTopFallToBottom(
+            SurfaceLayer fromLayer,
+            float fromSurfaceY,
+            DiceController standingDice,
+            DiceStackTier standingTier,
+            Direction direction,
+            bool ignoreStepHeight,
+            out MovementTransition transition) {
+            transition = default;
+
+            if (fromLayer != SurfaceLayer.Top
+                || standingTier != DiceStackTier.Top
+                || standingDice == null
+                || standingDice.IsDissolving
+                || standingDice.CurrentState.Tier != DiceStackTier.Top) {
+                return false;
+            }
+
+            if (!SlideResolver.TrySlideTop(
+                standingDice.CurrentState,
+                direction,
+                registry,
+                out _,
+                out var result)
+                || result != TopSlideResult.FallToBottom) {
+                return false;
+            }
+
+            transition = MovementTransition.Walkable(standingDice, SurfaceLayer.Bottom);
+            return true;
+        }
+
+        bool TryEvaluateJumpTopLanding(
+            Vector2Int toCell,
+            SurfaceLayer fromLayer,
+            float fromSurfaceY,
+            DiceController standingDice,
+            DiceStackTier standingTier,
+            bool ignoreStepHeight,
+            bool isJumping,
+            out MovementTransition transition) {
+            transition = default;
+
+            if (!isJumping
+                || fromLayer != SurfaceLayer.Bottom
+                || standingTier != DiceStackTier.Bottom
+                || standingDice == null
+                || standingDice.IsDissolving) {
+                return false;
+            }
+
+            if (registry.TryGetTopAt(toCell, out var topDice)
+                && topDice != null
+                && !topDice.IsDissolving
+                && (ignoreStepHeight || CanStepBetween(fromSurfaceY, topDice.GetTopSurfaceWorldY()))) {
+                transition = MovementTransition.Walkable(topDice, SurfaceLayer.Top);
+                return true;
+            }
+
+            if (!registry.TryGetBottomAt(toCell, out var bottomDice)
+                || bottomDice == null
+                || bottomDice.IsDissolving
+                || !registry.CanPlaceTopDiceAt(toCell)) {
+                return false;
+            }
+
+            var topSurfaceY = GetStackTopStandingSurfaceY(bottomDice);
+            if (!ignoreStepHeight && !CanStepBetween(fromSurfaceY, topSurfaceY)) {
+                return false;
+            }
+
+            transition = MovementTransition.Walkable(standingDice, SurfaceLayer.Top);
+            return true;
+        }
+
         float GetTargetSurfaceWorldY(MovementTransition transition) {
             if (transition.TargetLayer == SurfaceLayer.Floor) {
                 return board.FloorSurfaceWorldY;
             }
 
-            return transition.TargetDice != null
-                ? transition.TargetDice.GetTopSurfaceWorldY()
-                : board.FloorSurfaceWorldY;
+            if (transition.TargetDice == null) {
+                return board.FloorSurfaceWorldY;
+            }
+
+            if (transition.TargetLayer == SurfaceLayer.Top
+                && transition.TargetDice.CurrentState.Tier == DiceStackTier.Bottom) {
+                return GetStackTopStandingSurfaceY(transition.TargetDice);
+            }
+
+            if (transition.TargetLayer == SurfaceLayer.Bottom
+                && transition.TargetDice.CurrentState.Tier == DiceStackTier.Top) {
+                return board.FloorSurfaceWorldY;
+            }
+
+            return transition.TargetDice.GetTopSurfaceWorldY();
         }
 
         bool CanRoll(Vector2Int fromCell, DiceController standingDice, DiceStackTier standingTier) {

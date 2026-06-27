@@ -128,11 +128,179 @@ namespace DiceGame.Gameplay
         }
 
         bool TrySlideTop(Direction direction) {
-            if (!SlideResolver.TrySlideTop(currentState, direction, registry, out var nextState, out _)) {
+            if (!SlideResolver.TrySlideTop(currentState, direction, registry, out var nextState, out var result)) {
                 return false;
             }
 
+            if (result == TopSlideResult.FallToBottom) {
+                return TryRollThenDemote(direction);
+            }
+
             return BeginGridTransition(currentState, nextState);
+        }
+
+        public bool TryJumpRoll(Direction direction, float jumpYOffset) {
+            if (isDissolving || isCarried || isRolling || board == null || diceView == null || registry == null) {
+                return false;
+            }
+
+            if (currentState.Tier != DiceStackTier.Bottom) {
+                return false;
+            }
+
+            var hasTopOnSameCell = registry.HasTopAt(currentState.GridPos);
+            if (!RollResolver.TryRoll(currentState, direction, registry, hasTopOnSameCell, out var nextState)) {
+                return false;
+            }
+
+            var fromState = currentState;
+            isRolling = true;
+            currentState = nextState;
+            registry.MoveDice(
+                this,
+                fromState.GridPos,
+                nextState.GridPos,
+                fromState.Tier,
+                nextState.Tier);
+
+            diceView.PlayJumpRoll(direction, fromState, nextState, jumpYOffset, board, registry, () => {
+                isRolling = false;
+                StateChanged?.Invoke(currentState);
+            });
+
+            return true;
+        }
+
+        public bool TryJumpStack(Direction direction, float jumpYOffset) {
+            if (isDissolving || isCarried || isRolling || board == null || diceView == null || registry == null) {
+                return false;
+            }
+
+            if (currentState.Tier != DiceStackTier.Bottom) {
+                return false;
+            }
+
+            var targetPos = currentState.GridPos + direction.ToGridDelta();
+            if (!registry.CanPlaceTopDiceAt(targetPos)) {
+                return false;
+            }
+
+            var rolledOrientation = currentState.Orientation.Roll(direction);
+            if (!rolledOrientation.IsValid()) {
+                return false;
+            }
+
+            var nextState = new DiceState(targetPos, rolledOrientation, DiceStackTier.Top);
+            var fromState = currentState;
+            isRolling = true;
+            currentState = nextState;
+            registry.MoveDice(
+                this,
+                fromState.GridPos,
+                nextState.GridPos,
+                DiceStackTier.Bottom,
+                DiceStackTier.Top);
+
+            diceView.PlayJumpRoll(direction, fromState, nextState, jumpYOffset, board, registry, () => {
+                isRolling = false;
+                StateChanged?.Invoke(currentState);
+            });
+
+            return true;
+        }
+
+        public bool TryJumpRollThenDemote(Direction direction, float jumpYOffset) {
+            if (isDissolving || isCarried || isRolling || board == null || diceView == null || registry == null) {
+                return false;
+            }
+
+            if (currentState.Tier != DiceStackTier.Top) {
+                return false;
+            }
+
+            if (!SlideResolver.TrySlideTop(currentState, direction, registry, out var nextState, out var result)
+                || result != TopSlideResult.FallToBottom) {
+                return false;
+            }
+
+            var rolledOrientation = currentState.Orientation.Roll(direction);
+            if (!rolledOrientation.IsValid()) {
+                return false;
+            }
+
+            nextState = new DiceState(nextState.GridPos, rolledOrientation, DiceStackTier.Bottom);
+
+            var fromState = currentState;
+            isRolling = true;
+            currentState = nextState;
+            registry.MoveDice(
+                this,
+                fromState.GridPos,
+                nextState.GridPos,
+                DiceStackTier.Top,
+                DiceStackTier.Bottom);
+
+            diceView.PlayJumpRoll(
+                direction,
+                fromState,
+                nextState,
+                jumpYOffset,
+                board,
+                registry,
+                () => {
+                    isRolling = false;
+                    StateChanged?.Invoke(currentState);
+                },
+                fallBeforeSnap: true);
+
+            return true;
+        }
+
+        public bool TryRollThenDemote(Direction direction) {
+            if (IsBusy || isDissolving || board == null || diceView == null || registry == null) {
+                return false;
+            }
+
+            if (currentState.Tier != DiceStackTier.Top) {
+                return false;
+            }
+
+            if (!SlideResolver.TrySlideTop(currentState, direction, registry, out var nextState, out var result)
+                || result != TopSlideResult.FallToBottom) {
+                return false;
+            }
+
+            var rolledOrientation = currentState.Orientation.Roll(direction);
+            if (!rolledOrientation.IsValid()) {
+                return false;
+            }
+
+            nextState = new DiceState(nextState.GridPos, rolledOrientation, DiceStackTier.Bottom);
+
+            var fromState = currentState;
+            isRolling = true;
+            currentState = nextState;
+            registry.MoveDice(
+                this,
+                fromState.GridPos,
+                nextState.GridPos,
+                DiceStackTier.Top,
+                DiceStackTier.Bottom);
+
+            diceView.PlayJumpRoll(
+                direction,
+                fromState,
+                nextState,
+                0f,
+                board,
+                registry,
+                () => {
+                    isRolling = false;
+                    StateChanged?.Invoke(currentState);
+                },
+                fallBeforeSnap: true);
+
+            return true;
         }
 
         bool BeginGridTransition(DiceState fromState, DiceState nextState) {

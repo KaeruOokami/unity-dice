@@ -6,6 +6,8 @@ namespace DiceGame.Core
     {
         Direct,
         HorizontalThenDrop,
+        RollThenDrop,
+        RollThenRise,
         FreeMove
     }
 
@@ -14,6 +16,7 @@ namespace DiceGame.Core
         public DiceState From;
         public DiceState To;
         public DiceTransitionPath Path;
+        public Direction RollDirection;
         public Vector3? FromWorldOverride;
         public Vector3? ToWorldOverride;
         public bool SnapToGridOnComplete;
@@ -51,6 +54,28 @@ namespace DiceGame.Core
                 To = to,
                 Path = DiceTransitionPath.HorizontalThenDrop,
                 FromWorldOverride = fromWorld,
+                SnapToGridOnComplete = true
+            };
+        }
+
+        public static DiceTransition RollThenDemote(DiceState from, DiceState to, Direction direction, Vector3? fromWorldOverride = null) {
+            return new DiceTransition {
+                From = from,
+                To = to,
+                Path = DiceTransitionPath.RollThenDrop,
+                RollDirection = direction,
+                FromWorldOverride = fromWorldOverride,
+                SnapToGridOnComplete = true
+            };
+        }
+
+        public static DiceTransition RollThenRise(DiceState from, DiceState to, Direction direction, Vector3? fromWorldOverride = null) {
+            return new DiceTransition {
+                From = from,
+                To = to,
+                Path = DiceTransitionPath.RollThenRise,
+                RollDirection = direction,
+                FromWorldOverride = fromWorldOverride,
                 SnapToGridOnComplete = true
             };
         }
