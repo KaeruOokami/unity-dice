@@ -5,6 +5,7 @@ using DiceGame.Core;
 using DiceGame.Gameplay;
 using DiceGame.Grid;
 using UnityEngine;
+using UnityEngine.Serialization;
 using UnityEngine.Rendering;
 
 namespace DiceGame.View
@@ -15,7 +16,16 @@ namespace DiceGame.View
         [SerializeField] Transform positionRoot;
         [SerializeField] Transform rotationRoot;
         [SerializeField] Transform dissolvePivot;
-        [SerializeField] float rollDuration = 0.3f;
+        [Header("Animation Durations")]
+        [SerializeField] float rollAnimationDuration = 0.3f;
+        [FormerlySerializedAs("rollDuration")]
+        [SerializeField] float slideDuration = 0.3f;
+        [SerializeField] float fallHorizontalDuration = 0.3f;
+        [SerializeField] float fallVerticalDuration = 0.3f;
+        [SerializeField] float liftDuration = 0.3f;
+        [SerializeField] float placeDuration = 0.3f;
+
+        [Header("Dissolve")]
         [SerializeField] float dissolveDuration = 0.8f;
         [SerializeField] float dissolveGhostThreshold = 0.45f;
         [SerializeField] float dissolveGhostAlpha = 0.35f;
@@ -226,21 +236,8 @@ namespace DiceGame.View
             rollCoroutine = StartCoroutine(RollCoroutine(direction, fromState, toState, board, registry, onComplete));
         }
 
-        public void PlaySlide(DiceState fromState, DiceState toState, Board board, DiceRegistry registry, Action onComplete) {
-            if (dissolveCoroutine != null) {
-                return;
-            }
-
-            if (rollCoroutine != null) {
-                StopCoroutine(rollCoroutine);
-            }
-
-            rollCoroutine = StartCoroutine(SlideCoroutine(fromState, toState, board, registry, onComplete));
-        }
-
-        public void PlayStackMove(
-            DiceState fromState,
-            DiceState toState,
+        public void PlayTransition(
+            DiceTransition transition,
             Board board,
             DiceRegistry registry,
             Action onComplete) {
@@ -252,54 +249,16 @@ namespace DiceGame.View
                 StopCoroutine(rollCoroutine);
             }
 
-            rollCoroutine = StartCoroutine(StackMoveCoroutine(fromState, toState, board, registry, onComplete));
+            rollCoroutine = StartCoroutine(TransitionCoroutine(transition, board, registry, onComplete));
         }
 
-        public void PlayStackMoveFallToBottom(
-            DiceState fromState,
-            DiceState toState,
-            Board board,
-            DiceRegistry registry,
-            Action onComplete) {
-            if (dissolveCoroutine != null) {
+        public void SyncStackedSurface(DiceState state, Board board, DiceRegistry registry) {
+            if (isAnimating || dissolveProgress > 0f || board == null || registry == null) {
                 return;
             }
 
-            if (rollCoroutine != null) {
-                StopCoroutine(rollCoroutine);
-            }
-
-            rollCoroutine = StartCoroutine(StackMoveFallCoroutine(fromState, toState, board, registry, onComplete));
-        }
-
-        public void PlayLift(Vector3 fromWorld, Vector3 toWorld, Action onComplete) {
-            if (dissolveCoroutine != null) {
-                return;
-            }
-
-            if (rollCoroutine != null) {
-                StopCoroutine(rollCoroutine);
-            }
-
-            rollCoroutine = StartCoroutine(LiftPlaceCoroutine(fromWorld, toWorld, false, default, null, null, onComplete));
-        }
-
-        public void PlayPlace(
-            Vector3 fromWorld,
-            Vector3 toWorld,
-            DiceState toState,
-            Board board,
-            DiceRegistry registry,
-            Action onComplete) {
-            if (dissolveCoroutine != null) {
-                return;
-            }
-
-            if (rollCoroutine != null) {
-                StopCoroutine(rollCoroutine);
-            }
-
-            rollCoroutine = StartCoroutine(LiftPlaceCoroutine(fromWorld, toWorld, true, toState, board, registry, onComplete));
+            UpdateSurfaceBase(state, board, registry);
+            ApplySurfaceVisual(board, 0f);
         }
 
         public void SetCarryWorldPosition(Vector3 worldPosition) {
@@ -384,9 +343,9 @@ namespace DiceGame.View
             positionRoot.SetParent(pivot, true);
 
             var elapsed = 0f;
-            while (elapsed < rollDuration) {
+            while (elapsed < rollAnimationDuration) {
                 elapsed += Time.deltaTime;
-                var t = Mathf.SmoothStep(0f, 1f, elapsed / rollDuration);
+                var t = Mathf.SmoothStep(0f, 1f, elapsed / rollAnimationDuration);
                 pivot.rotation = Quaternion.AngleAxis(setup.Angle * t, setup.Axis);
                 yield return null;
             }
@@ -405,109 +364,8 @@ namespace DiceGame.View
             onComplete?.Invoke();
         }
 
-        IEnumerator SlideCoroutine(
-            DiceState fromState,
-            DiceState toState,
-            Board board,
-            DiceRegistry registry,
-            Action onComplete) {
-            isAnimating = true;
-            EnsureMesh();
-            if (positionRoot == null || rotationRoot == null) {
-                isAnimating = false;
-                onComplete?.Invoke();
-                yield break;
-            }
-
-            positionRoot.SetParent(transform);
-            positionRoot.localRotation = Quaternion.identity;
-            positionRoot.localScale = Vector3.one;
-            currentTopFace = fromState.Orientation.Top;
-            rotationRoot.rotation = DiceOrientationMapper.ToRotation(fromState.Orientation);
-
-            var fromWorld = GetAnchoredWorldPosition(fromState, board, registry);
-            var toWorld = GetAnchoredWorldPosition(toState, board, registry);
-            positionRoot.position = fromWorld;
-
-            var elapsed = 0f;
-            while (elapsed < rollDuration) {
-                elapsed += Time.deltaTime;
-                var t = Mathf.SmoothStep(0f, 1f, elapsed / rollDuration);
-                positionRoot.position = Vector3.Lerp(fromWorld, toWorld, t);
-                yield return null;
-            }
-
-            SnapTo(toState, board, registry);
-
-            isAnimating = false;
-            rollCoroutine = null;
-            onComplete?.Invoke();
-        }
-
-        IEnumerator StackMoveCoroutine(
-            DiceState fromState,
-            DiceState toState,
-            Board board,
-            DiceRegistry registry,
-            Action onComplete) {
-            yield return SlideCoroutine(fromState, toState, board, registry, onComplete);
-        }
-
-        IEnumerator StackMoveFallCoroutine(
-            DiceState fromState,
-            DiceState toState,
-            Board board,
-            DiceRegistry registry,
-            Action onComplete) {
-            isAnimating = true;
-            EnsureMesh();
-            if (positionRoot == null || rotationRoot == null) {
-                isAnimating = false;
-                onComplete?.Invoke();
-                yield break;
-            }
-
-            positionRoot.SetParent(transform);
-            positionRoot.localRotation = Quaternion.identity;
-            positionRoot.localScale = Vector3.one;
-            currentTopFace = fromState.Orientation.Top;
-            rotationRoot.rotation = DiceOrientationMapper.ToRotation(fromState.Orientation);
-
-            var fromWorld = GetAnchoredWorldPosition(fromState, board, registry);
-            var toWorld = GetAnchoredWorldPosition(toState, board, registry);
-            var midWorld = new Vector3(toWorld.x, fromWorld.y, toWorld.z);
-            positionRoot.position = fromWorld;
-
-            var elapsed = 0f;
-            while (elapsed < rollDuration) {
-                elapsed += Time.deltaTime;
-                var t = Mathf.SmoothStep(0f, 1f, elapsed / rollDuration);
-                positionRoot.position = Vector3.Lerp(fromWorld, midWorld, t);
-                yield return null;
-            }
-
-            positionRoot.position = midWorld;
-
-            elapsed = 0f;
-            while (elapsed < rollDuration) {
-                elapsed += Time.deltaTime;
-                var t = Mathf.SmoothStep(0f, 1f, elapsed / rollDuration);
-                positionRoot.position = Vector3.Lerp(midWorld, toWorld, t);
-                yield return null;
-            }
-
-            SnapTo(toState, board, registry);
-
-            isAnimating = false;
-            rollCoroutine = null;
-            onComplete?.Invoke();
-        }
-
-        IEnumerator LiftPlaceCoroutine(
-            Vector3 fromWorld,
-            Vector3 toWorld,
-            bool snapToGrid,
-            DiceState toState,
+        IEnumerator TransitionCoroutine(
+            DiceTransition transition,
             Board board,
             DiceRegistry registry,
             Action onComplete) {
@@ -519,28 +377,81 @@ namespace DiceGame.View
                 yield break;
             }
 
-            positionRoot.SetParent(transform, true);
-            positionRoot.localRotation = Quaternion.identity;
-            positionRoot.localScale = Vector3.one;
-            positionRoot.position = fromWorld;
+            if (transition.Path == DiceTransitionPath.FreeMove) {
+                if (!transition.FromWorldOverride.HasValue || !transition.ToWorldOverride.HasValue) {
+                    isAnimating = false;
+                    onComplete?.Invoke();
+                    yield break;
+                }
 
-            var elapsed = 0f;
-            while (elapsed < rollDuration) {
-                elapsed += Time.deltaTime;
-                var t = Mathf.SmoothStep(0f, 1f, elapsed / rollDuration);
-                positionRoot.position = Vector3.Lerp(fromWorld, toWorld, t);
-                yield return null;
+                positionRoot.SetParent(transform, true);
+                positionRoot.localRotation = Quaternion.identity;
+                positionRoot.localScale = Vector3.one;
+
+                var freeFrom = transition.FromWorldOverride.Value;
+                var freeTo = transition.ToWorldOverride.Value;
+                positionRoot.position = freeFrom;
+
+                var freeMoveDuration = transition.SnapToGridOnComplete ? placeDuration : liftDuration;
+                yield return AnimatePositionLerp(freeFrom, freeTo, freeMoveDuration);
+                positionRoot.position = freeTo;
+            } else {
+                if (rotationRoot == null) {
+                    isAnimating = false;
+                    onComplete?.Invoke();
+                    yield break;
+                }
+
+                PrepareGridTransition(transition.From);
+
+                var fromWorld = transition.FromWorldOverride
+                    ?? GetAnchoredWorldPosition(transition.From, board, registry);
+                var toWorld = transition.ToWorldOverride
+                    ?? GetAnchoredWorldPosition(transition.To, board, registry);
+                positionRoot.position = fromWorld;
+
+                if (transition.Path == DiceTransitionPath.Direct) {
+                    yield return AnimatePositionLerp(fromWorld, toWorld, slideDuration);
+                } else {
+                    var midWorld = new Vector3(toWorld.x, fromWorld.y, toWorld.z);
+                    yield return AnimatePositionLerp(fromWorld, midWorld, fallHorizontalDuration);
+                    positionRoot.position = midWorld;
+                    yield return AnimatePositionLerp(midWorld, toWorld, fallVerticalDuration);
+                }
             }
 
-            positionRoot.position = toWorld;
-
-            if (snapToGrid && board != null) {
-                SnapTo(toState, board, registry);
+            if (transition.SnapToGridOnComplete && board != null) {
+                SnapTo(transition.To, board, registry);
             }
 
             isAnimating = false;
             rollCoroutine = null;
             onComplete?.Invoke();
+        }
+
+        void PrepareGridTransition(DiceState fromState) {
+            positionRoot.SetParent(transform);
+            positionRoot.localRotation = Quaternion.identity;
+            positionRoot.localScale = Vector3.one;
+            currentTopFace = fromState.Orientation.Top;
+            rotationRoot.rotation = DiceOrientationMapper.ToRotation(fromState.Orientation);
+        }
+
+        IEnumerator AnimatePositionLerp(Vector3 fromWorld, Vector3 toWorld, float duration) {
+            if (duration <= 0f) {
+                positionRoot.position = toWorld;
+                yield break;
+            }
+
+            var elapsed = 0f;
+            while (elapsed < duration) {
+                elapsed += Time.deltaTime;
+                var t = Mathf.SmoothStep(0f, 1f, elapsed / duration);
+                positionRoot.position = Vector3.Lerp(fromWorld, toWorld, t);
+                yield return null;
+            }
+
+            positionRoot.position = toWorld;
         }
 
         IEnumerator DissolveCoroutine(Board board, Action onComplete) {
@@ -581,6 +492,16 @@ namespace DiceGame.View
                 surfaceBaseWorldY - minY,
                 gridWorldPosition.z);
             ApplyDissolveGhostVisual(progress);
+            SyncStackedTopDuringDissolve();
+        }
+
+        void SyncStackedTopDuringDissolve() {
+            if (dissolveProgress <= 0f) {
+                return;
+            }
+
+            EnsureDiceController();
+            diceController?.NotifyStackedTopSync();
         }
 
         void ApplyDissolveGhostVisual(float progress) {

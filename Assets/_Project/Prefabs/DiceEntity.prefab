@@ -51,7 +51,12 @@ MonoBehaviour:
   positionRoot: {fileID: 4123456789012345678}
   rotationRoot: {fileID: 6123456789012345678}
   dissolvePivot: {fileID: 8123456789012345678}
-  rollDuration: 0.2
+  rollAnimationDuration: 0.2
+  slideDuration: 0.2
+  fallHorizontalDuration: 0.2
+  fallVerticalDuration: 0.2
+  liftDuration: 0.2
+  placeDuration: 0.2
   dissolveDuration: 7
   dissolveGhostThreshold: 0.7
   dissolveGhostAlpha: 0.4

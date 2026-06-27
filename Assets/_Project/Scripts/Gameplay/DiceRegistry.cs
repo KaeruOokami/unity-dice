@@ -134,6 +134,14 @@ namespace DiceGame.Gameplay
             return true;
         }
 
+        public void SyncStackedTopAt(Vector2Int gridPos, Board board) {
+            if (board == null || !TryGetTopAt(gridPos, out var top) || top == null) {
+                return;
+            }
+
+            top.View?.SyncStackedSurface(top.CurrentState, board, this);
+        }
+
         public bool TryGetTopAt(Vector2Int gridPos, out DiceController dice) {
             dice = null;
             if (!byGrid.TryGetValue(gridPos, out var stack) || stack.Top == null) {

@@ -59,6 +59,7 @@
      <Compile Include="Assets\_Project\Scripts\Board\Board.cs" />
      <Compile Include="Assets\_Project\Scripts\Gameplay\GameBootstrap.cs" />
      <Compile Include="Assets\_Project\Scripts\Gameplay\DiceStackAdjacency.cs" />
+     <Compile Include="Assets\_Project\Scripts\Core\DiceTransition.cs" />
      <None Include="Assets\Packages\Dice_6\Documentation\Readmy.txt" />
     <Reference Include="UnityEngine">
         <HintPath>D:\Program Files\Unity\Hub\Editor\2021.3.10f1\Editor\Data\Managed\UnityEngine\UnityEngine.dll</HintPath>

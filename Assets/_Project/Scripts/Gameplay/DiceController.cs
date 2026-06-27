@@ -124,39 +124,19 @@ namespace DiceGame.Gameplay
                 return false;
             }
 
-            return BeginSlide(nextState);
+            return BeginGridTransition(fromState: currentState, nextState);
         }
 
         bool TrySlideTop(Direction direction) {
-            if (!SlideResolver.TrySlideTop(currentState, direction, registry, out var nextState, out var result)) {
+            if (!SlideResolver.TrySlideTop(currentState, direction, registry, out var nextState, out _)) {
                 return false;
             }
 
-            isRolling = true;
-            var fromState = currentState;
-            currentState = nextState;
-
-            var fromTier = fromState.Tier;
-            var toTier = result == TopSlideResult.Parallel ? DiceStackTier.Top : DiceStackTier.Bottom;
-            registry.MoveDice(this, fromState.GridPos, nextState.GridPos, fromTier, toTier);
-
-            Action onComplete = () => {
-                isRolling = false;
-                StateChanged?.Invoke(currentState);
-            };
-
-            if (result == TopSlideResult.FallToBottom) {
-                diceView.PlayStackMoveFallToBottom(fromState, nextState, board, registry, onComplete);
-            } else {
-                diceView.PlayStackMove(fromState, nextState, board, registry, onComplete);
-            }
-
-            return true;
+            return BeginGridTransition(currentState, nextState);
         }
 
-        bool BeginSlide(DiceState nextState) {
+        bool BeginGridTransition(DiceState fromState, DiceState nextState) {
             isRolling = true;
-            var fromState = currentState;
             currentState = nextState;
             registry.MoveDice(
                 this,
@@ -165,7 +145,8 @@ namespace DiceGame.Gameplay
                 fromState.Tier,
                 nextState.Tier);
 
-            diceView.PlaySlide(fromState, nextState, board, registry, () => {
+            var transition = DiceTransition.GridMove(fromState, nextState);
+            diceView.PlayTransition(transition, board, registry, () => {
                 isRolling = false;
                 StateChanged?.Invoke(currentState);
             });
@@ -200,8 +181,51 @@ namespace DiceGame.Gameplay
                 return;
             }
 
+            var grid = currentState.GridPos;
             registry?.RemoveFromGrid(this);
+
+            if (registry != null
+                && registry.TryGetTopAt(grid, out var top)
+                && top != null
+                && top != this) {
+                top.CrushDissolvingBottomAndDemote(this);
+            }
+
             BecameDissolveGhost?.Invoke(this);
+        }
+
+        public void CrushDissolvingBottomAndDemote(DiceController ghostBottom) {
+            if (isCarried
+                || isDissolving
+                || board == null
+                || diceView == null
+                || registry == null
+                || currentState.Tier != DiceStackTier.Top) {
+                return;
+            }
+
+            if (ghostBottom == null || !ghostBottom.IsDissolveGhost) {
+                return;
+            }
+
+            var fromWorld = diceView.DiceTransform.position;
+            ghostBottom.CompleteDissolveFromCrush();
+
+            var fromState = currentState;
+            var toState = new DiceState(fromState.GridPos, fromState.Orientation, DiceStackTier.Bottom);
+            currentState = toState;
+            isRolling = true;
+            registry.MoveDice(this, fromState.GridPos, toState.GridPos, DiceStackTier.Top, DiceStackTier.Bottom);
+
+            var transition = DiceTransition.CrushDemote(fromState, toState, fromWorld);
+            diceView.PlayTransition(transition, board, registry, () => {
+                isRolling = false;
+                StateChanged?.Invoke(currentState);
+            });
+        }
+
+        public void NotifyStackedTopSync() {
+            registry?.SyncStackedTopAt(currentState.GridPos, board);
         }
 
         public void OnCeasedDissolveGhost() {
@@ -233,7 +257,8 @@ namespace DiceGame.Gameplay
             registry?.Unregister(this);
 
             var fromWorld = diceView.DiceTransform.position;
-            diceView.PlayLift(fromWorld, carryWorldTarget, () => {
+            var transition = DiceTransition.FreeMove(fromWorld, carryWorldTarget, snapToGridOnComplete: false);
+            diceView.PlayTransition(transition, board, registry, () => {
                 onComplete?.Invoke();
             });
 
@@ -255,8 +280,9 @@ namespace DiceGame.Gameplay
 
             var toState = new DiceState(targetGrid, currentState.Orientation, targetTier);
             var toWorld = diceView.GetAnchoredWorldPosition(toState, board, registry);
+            var transition = DiceTransition.FreeMove(fromWorld, toWorld, snapToGridOnComplete: true, toState);
 
-            diceView.PlayPlace(fromWorld, toWorld, toState, board, registry, () => {
+            diceView.PlayTransition(transition, board, registry, () => {
                 currentState = toState;
                 isCarried = false;
                 registry.Place(this, targetGrid, targetTier);

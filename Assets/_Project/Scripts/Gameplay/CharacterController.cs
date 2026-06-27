@@ -783,6 +783,14 @@ namespace DiceGame.Gameplay
             if (standingSurfaceLayer != SurfaceLayer.Floor) {
                 standingGridCell = state.GridPos;
             }
+
+            if (TryGetStandingDice(out var standingDice)
+                && standingDice == currentDice
+                && state.GridPos == standingGridCell
+                && state.Tier != standingTier) {
+                SetStandingOnDice(state.GridPos, state.Tier, standingDice);
+                SnapYToSurface();
+            }
         }
 
         void ResubscribeStandingDice(DiceController dice) {
