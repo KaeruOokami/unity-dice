@@ -289,7 +289,7 @@ namespace DiceGame.Gameplay
                 return MovementTransition.Blocked();
             }
 
-            if (target.IsDissolving && !standingDice.IsDissolving) {
+            if (target.IsDissolving && !standingDice.IsDissolving && !isJumping) {
                 return MovementTransition.Blocked();
             }
 
@@ -370,7 +370,6 @@ namespace DiceGame.Gameplay
 
             if (registry.TryGetTopAt(toCell, out var topDice)
                 && topDice != null
-                && !topDice.IsDissolving
                 && (ignoreStepHeight || CanStepBetween(fromSurfaceY, topDice.GetTopSurfaceWorldY()))) {
                 transition = MovementTransition.Walkable(topDice, SurfaceLayer.Top);
                 return true;
@@ -378,7 +377,6 @@ namespace DiceGame.Gameplay
 
             if (!registry.TryGetBottomAt(toCell, out var bottomDice)
                 || bottomDice == null
-                || bottomDice.IsDissolving
                 || !registry.CanPlaceTopDiceAt(toCell)) {
                 return false;
             }
