@@ -16,7 +16,7 @@ namespace DiceGame.Gameplay
 
             for (var face = 2; face <= 6; face++) {
                 var lookup = BuildLookup(allDice, face, consumed);
-                var visited = new HashSet<Vector2Int>();
+                var visited = new HashSet<(Vector2Int, DiceStackTier)>();
 
                 foreach (var pair in lookup) {
                     if (visited.Contains(pair.Key)) {
@@ -38,11 +38,11 @@ namespace DiceGame.Gameplay
             return results;
         }
 
-        static Dictionary<Vector2Int, List<DiceController>> BuildLookup(
+        static Dictionary<(Vector2Int, DiceStackTier), DiceController> BuildLookup(
             IReadOnlyList<DiceController> allDice,
             int face,
             HashSet<DiceController> consumed) {
-            var lookup = new Dictionary<Vector2Int, List<DiceController>>();
+            var lookup = new Dictionary<(Vector2Int, DiceStackTier), DiceController>();
 
             foreach (var dice in allDice) {
                 if (dice == null || consumed.Contains(dice)) {
@@ -53,60 +53,52 @@ namespace DiceGame.Gameplay
                     continue;
                 }
 
-                var gridPos = dice.CurrentState.GridPos;
-                if (!lookup.TryGetValue(gridPos, out var diceAtCell)) {
-                    diceAtCell = new List<DiceController>();
-                    lookup[gridPos] = diceAtCell;
-                }
-
-                diceAtCell.Add(dice);
+                var key = (dice.CurrentState.GridPos, dice.CurrentState.Tier);
+                lookup[key] = dice;
             }
 
             return lookup;
         }
 
         static List<DiceController> FloodFill(
-            Dictionary<Vector2Int, List<DiceController>> lookup,
-            Vector2Int start,
-            HashSet<Vector2Int> visited) {
+            Dictionary<(Vector2Int, DiceStackTier), DiceController> lookup,
+            (Vector2Int, DiceStackTier) start,
+            HashSet<(Vector2Int, DiceStackTier)> visited) {
             var cluster = new List<DiceController>();
-            var queue = new Queue<Vector2Int>();
+            var queue = new Queue<(Vector2Int, DiceStackTier)>();
             queue.Enqueue(start);
 
             while (queue.Count > 0) {
-                var pos = queue.Dequeue();
-                if (visited.Contains(pos) || !lookup.TryGetValue(pos, out var diceAtCell)) {
+                var key = queue.Dequeue();
+                if (visited.Contains(key) || !lookup.TryGetValue(key, out var dice)) {
                     continue;
                 }
 
-                visited.Add(pos);
-                var representative = SelectRepresentativeDiceAtCell(diceAtCell);
-                if (representative != null) {
-                    cluster.Add(representative);
-                }
-
-                foreach (var direction in Directions) {
-                    queue.Enqueue(pos + direction.ToGridDelta());
-                }
+                visited.Add(key);
+                cluster.Add(dice);
+                EnqueueAdjacentKeys(lookup, key, queue);
             }
 
             return cluster;
         }
 
-        static DiceController SelectRepresentativeDiceAtCell(List<DiceController> diceAtCell) {
-            DiceController selected = null;
+        static void EnqueueAdjacentKeys(
+            Dictionary<(Vector2Int, DiceStackTier), DiceController> lookup,
+            (Vector2Int cell, DiceStackTier tier) key,
+            Queue<(Vector2Int, DiceStackTier)> queue) {
+            var from = new DiceSlot(key.cell, key.tier);
 
-            foreach (var dice in diceAtCell) {
-                if (dice == null) {
+            foreach (var direction in Directions) {
+                var neighbor = new DiceSlot(key.cell + direction.ToGridDelta(), key.tier);
+                if (!DiceStackAdjacency.IsAdjacentForMatch(from, neighbor)) {
                     continue;
                 }
 
-                if (selected == null || dice.CurrentState.Tier == DiceStackTier.Top) {
-                    selected = dice;
+                var neighborKey = (neighbor.Cell, neighbor.Tier);
+                if (lookup.ContainsKey(neighborKey)) {
+                    queue.Enqueue(neighborKey);
                 }
             }
-
-            return selected;
         }
     }
 }

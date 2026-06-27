@@ -23,12 +23,16 @@ namespace DiceGame.Gameplay
         [SerializeField] KeyCode liftKey = KeyCode.Q;
         [SerializeField] float carryVerticalOffset = 1.05f;
         [SerializeField] bool debugMovementBlock;
+        [SerializeField] bool debugPush;
 
         const float MovementBlockLogInterval = 0.25f;
+        const float PushDebugLogInterval = 0.25f;
 
         MovementTransitionEvaluator movementTransition;
         string debugLastMovementBlockKey;
         float debugLastMovementBlockLogTime = -1f;
+        string debugLastPushKey;
+        float debugLastPushLogTime = -1f;
 
         enum LiftPhase {
             None,
@@ -986,6 +990,7 @@ namespace DiceGame.Gameplay
 
             CollectPushCandidates(input, pushCandidates);
             if (pushCandidates.Count == 0) {
+                LogPushDebugWhenInput(input, "no-candidates", "stage=candidates count=0 (see overlap/canPush/direction logs)");
                 ResetPushState();
                 return;
             }
@@ -997,18 +1002,39 @@ namespace DiceGame.Gameplay
                 pushDirection = best.Direction;
                 hasPushDirection = true;
                 pushContactTime = 0f;
+                LogPushDebug(
+                    "target-selected",
+                    $"stage=target dice={FormatMovementDice(best.Dice)} dir={best.Direction} " +
+                    $"alignment={best.InputAlignment:F2} faceDistance={best.FaceDistance:F3}");
             }
 
             pushContactTime += Time.deltaTime;
             if (pushContactTime < pushHoldDuration) {
+                LogPushDebug(
+                    "hold-wait",
+                    $"stage=hold dice={FormatMovementDice(best.Dice)} dir={best.Direction} " +
+                    $"elapsed={pushContactTime:F2}/{pushHoldDuration:F2}");
                 return;
             }
 
+            var pushed = false;
             foreach (var candidate in pushCandidates) {
                 if (candidate.Dice.TrySlide(candidate.Direction)) {
+                    LogPushDebug(
+                        "slide-ok",
+                        $"stage=slide dice={FormatMovementDice(candidate.Dice)} dir={candidate.Direction}");
                     BeginPushFollow(candidate.Dice, candidate.Direction);
+                    pushed = true;
                     break;
                 }
+
+                LogPushDebug(
+                    $"slide-fail-{FormatMovementDice(candidate.Dice)}-{candidate.Direction}",
+                    $"stage=slide dice={FormatMovementDice(candidate.Dice)} dir={candidate.Direction} TrySlide=false");
+            }
+
+            if (!pushed) {
+                LogPushDebug("slide-all-failed", "stage=slide all candidates failed TrySlide");
             }
 
             ResetPushState();
@@ -1139,6 +1165,7 @@ namespace DiceGame.Gameplay
             candidates.Clear();
 
             if (characterPushCollider == null) {
+                LogPushDebugWhenInput(input, "no-collider", "stage=overlap characterPushCollider=null");
                 return;
             }
 
@@ -1154,6 +1181,7 @@ namespace DiceGame.Gameplay
                 QueryTriggerInteraction.Collide);
 
             var characterXZ = GetWorldXZ();
+            var overlapSummary = new System.Text.StringBuilder();
 
             foreach (var hit in hits) {
                 if (hit == characterPushCollider) {
@@ -1162,16 +1190,41 @@ namespace DiceGame.Gameplay
 
                 var pushBody = hit.GetComponent<DicePushBody>();
                 if (pushBody == null || pushBody.Dice == null || pushBody.Collider == null) {
+                    overlapSummary.Append($" [{hit.name}:noPushBody]");
                     continue;
                 }
 
+                var diceLabel = FormatMovementDice(pushBody.Dice);
                 if (pushBody.Dice.IsDissolving || pushBody.Dice.IsBusy) {
+                    overlapSummary.Append($" [{diceLabel}:busy]");
                     continue;
                 }
 
-                if (!CanPushDice(pushBody.Dice)) {
+                if (!CanPushDice(pushBody.Dice, out var rejectReason)) {
+                    overlapSummary.Append($" [{diceLabel}:canPush={rejectReason}]");
                     continue;
                 }
+
+                overlapSummary.Append($" [{diceLabel}:canPush=ok");
+                foreach (Direction direction in new[] {
+                    Direction.East, Direction.West, Direction.North, Direction.South }) {
+                    if (TryEvaluatePushCandidate(
+                        pushBody.Collider.bounds,
+                        characterXZ,
+                        input,
+                        direction,
+                        pushInputAlignment,
+                        out _,
+                        out _,
+                        out var directionRejectReason)) {
+                        overlapSummary.Append($" {direction}=ok");
+                        continue;
+                    }
+
+                    overlapSummary.Append($" {direction}={directionRejectReason}");
+                }
+
+                overlapSummary.Append(']');
 
                 var pushBounds = pushBody.Collider.bounds;
                 TryAddPushCandidate(candidates, pushBody.Dice, pushBounds, input, characterXZ, Direction.East);
@@ -1181,6 +1234,13 @@ namespace DiceGame.Gameplay
             }
 
             candidates.Sort(ComparePushCandidates);
+
+            LogPushDebugWhenInput(
+                input,
+                "overlap-summary",
+                $"stage=overlap standing={FormatMovementGrid(GetStandingCell())} layer={standingSurfaceLayer} " +
+                $"tier={standingTier} charXZ=({characterXZ.x:F2},{characterXZ.y:F2}) input=({input.x:F2},{input.y:F2}) " +
+                $"hits={hits.Length} dice={overlapSummary} candidates={candidates.Count}");
         }
 
         void TryAddPushCandidate(
@@ -1197,7 +1257,8 @@ namespace DiceGame.Gameplay
                 direction,
                 pushInputAlignment,
                 out var inputAlignment,
-                out var faceDistance)) {
+                out var faceDistance,
+                out _)) {
                 return;
             }
 
@@ -1225,10 +1286,13 @@ namespace DiceGame.Gameplay
             Direction direction,
             float minInputAlignment,
             out float inputAlignment,
-            out float faceDistance) {
+            out float faceDistance,
+            out string rejectReason) {
+            rejectReason = null;
             inputAlignment = Vector2.Dot(input, GetDirectionInputVector(direction));
             if (inputAlignment < minInputAlignment) {
                 faceDistance = 0f;
+                rejectReason = $"input={inputAlignment:F2}<{minInputAlignment:F2}";
                 return false;
             }
 
@@ -1239,6 +1303,7 @@ namespace DiceGame.Gameplay
                 case Direction.East:
                     if (charX > bounds.center.x + EdgeEpsilon) {
                         faceDistance = 0f;
+                        rejectReason = $"charX={charX:F3}>centerX={bounds.center.x:F3}";
                         return false;
                     }
 
@@ -1247,6 +1312,7 @@ namespace DiceGame.Gameplay
                 case Direction.West:
                     if (charX < bounds.center.x - EdgeEpsilon) {
                         faceDistance = 0f;
+                        rejectReason = $"charX={charX:F3}<centerX={bounds.center.x:F3}";
                         return false;
                     }
 
@@ -1255,6 +1321,7 @@ namespace DiceGame.Gameplay
                 case Direction.North:
                     if (charZ > bounds.center.z + EdgeEpsilon) {
                         faceDistance = 0f;
+                        rejectReason = $"charZ={charZ:F3}>centerZ={bounds.center.z:F3}";
                         return false;
                     }
 
@@ -1263,6 +1330,7 @@ namespace DiceGame.Gameplay
                 case Direction.South:
                     if (charZ < bounds.center.z - EdgeEpsilon) {
                         faceDistance = 0f;
+                        rejectReason = $"charZ={charZ:F3}<centerZ={bounds.center.z:F3}";
                         return false;
                     }
 
@@ -1270,6 +1338,7 @@ namespace DiceGame.Gameplay
                     break;
                 default:
                     faceDistance = 0f;
+                    rejectReason = "invalidDirection";
                     return false;
             }
 
@@ -1287,24 +1356,46 @@ namespace DiceGame.Gameplay
         }
 
         bool CanPushDice(DiceController dice) {
+            return CanPushDice(dice, out _);
+        }
+
+        bool CanPushDice(DiceController dice, out string rejectReason) {
+            rejectReason = null;
             if (dice == null || registry == null) {
+                rejectReason = dice == null ? "nullDice" : "nullRegistry";
                 return false;
             }
 
             if (TryGetStandingDice(out var standingDice) && dice == standingDice) {
+                rejectReason = "standingDice";
                 return false;
             }
 
-            if (!IsOrthogonallyAdjacentToStanding(dice)) {
+            if (!IsPushReachableFromStanding(dice)) {
+                rejectReason = "notReachable";
                 return false;
             }
 
             if (IsOnFloor) {
-                return dice.CurrentState.Tier == DiceStackTier.Bottom
-                    && !registry.HasTopAt(dice.CurrentState.GridPos);
+                if (dice.CurrentState.Tier != DiceStackTier.Bottom) {
+                    rejectReason = "floorRequiresBottom";
+                    return false;
+                }
+
+                if (registry.HasTopAt(dice.CurrentState.GridPos)) {
+                    rejectReason = "floorRequiresNoTop";
+                    return false;
+                }
+
+                return true;
             }
 
-            return dice.CurrentState.Tier == DiceStackTier.Top;
+            if (dice.CurrentState.Tier != DiceStackTier.Top) {
+                rejectReason = "onDiceRequiresTop";
+                return false;
+            }
+
+            return true;
         }
 
         bool CanLiftDice(DiceController dice) {
@@ -1316,7 +1407,7 @@ namespace DiceGame.Gameplay
                 return false;
             }
 
-            if (!IsOrthogonallyAdjacentToStanding(dice)) {
+            if (!IsLiftReachableFromStanding(dice)) {
                 return false;
             }
 
@@ -1336,10 +1427,53 @@ namespace DiceGame.Gameplay
             return dice.CurrentState.Tier == DiceStackTier.Top;
         }
 
-        bool IsOrthogonallyAdjacentToStanding(DiceController dice) {
-            return MovementTransitionEvaluator.IsOrthogonalAdjacent(
-                GetStandingCell(),
-                dice.CurrentState.GridPos);
+        DiceSlot GetPlayerDiceSlot() {
+            var tier = IsOnFloor ? DiceStackTier.Bottom : standingTier;
+            return new DiceSlot(GetStandingCell(), tier);
+        }
+
+        bool IsPushReachableFromStanding(DiceController dice) {
+            if (dice == null) {
+                return false;
+            }
+
+            return DiceStackAdjacency.IsAdjacentForPush(
+                GetPlayerDiceSlot(),
+                DiceSlot.FromDice(dice),
+                IsOnFloor);
+        }
+
+        bool IsLiftReachableFromStanding(DiceController dice) {
+            if (dice == null) {
+                return false;
+            }
+
+            return DiceStackAdjacency.IsAdjacentForLift(
+                GetPlayerDiceSlot(),
+                DiceSlot.FromDice(dice));
+        }
+
+        void LogPushDebugWhenInput(Vector2 input, string key, string message) {
+            if (input.sqrMagnitude <= 0.01f) {
+                return;
+            }
+
+            LogPushDebug(key, message);
+        }
+
+        void LogPushDebug(string key, string message) {
+            if (!debugPush) {
+                return;
+            }
+
+            var now = Time.time;
+            if (key == debugLastPushKey && now - debugLastPushLogTime < PushDebugLogInterval) {
+                return;
+            }
+
+            debugLastPushKey = key;
+            debugLastPushLogTime = now;
+            Debug.Log($"[PushDebug] {message}");
         }
 
         static Vector2 WorldOffsetFromDiceCenter(Vector3 diceCenter, Vector2 worldPosition) {
@@ -1563,11 +1697,14 @@ namespace DiceGame.Gameplay
         }
 
         DiceController ResolveLiftCandidateAt(Vector2Int neighborGrid) {
-            if (registry.TryGetTopAt(neighborGrid, out var top)) {
+            registry.TryGetTopAt(neighborGrid, out var top);
+            registry.TryGetBottomAt(neighborGrid, out var bottom);
+
+            if (top != null && IsLiftReachableFromStanding(top)) {
                 return top;
             }
 
-            if (registry.TryGetBottomAt(neighborGrid, out var bottom)) {
+            if (bottom != null && IsLiftReachableFromStanding(bottom)) {
                 return bottom;
             }
 

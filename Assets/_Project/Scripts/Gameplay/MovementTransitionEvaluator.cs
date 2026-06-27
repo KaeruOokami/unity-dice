@@ -223,15 +223,6 @@ namespace DiceGame.Gameplay
 
             DiceController target;
             if (fromLayer == SurfaceLayer.Floor) {
-                if (registry.TryGetTopAt(toCell, out target)) {
-                    if (!ignoreStepHeight
-                        && !CanStepBetween(fromSurfaceY, target.GetTopSurfaceWorldY())) {
-                        return MovementTransition.Blocked();
-                    }
-
-                    return MovementTransition.Walkable(target, SurfaceLayer.Top);
-                }
-
                 if (registry.TryGetBottomAt(toCell, out target)) {
                     if (!ignoreStepHeight
                         && !CanStepBetween(fromSurfaceY, target.GetTopSurfaceWorldY())) {

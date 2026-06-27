@@ -166,8 +166,13 @@ namespace DiceGame.Gameplay
             }
 
             var neighborPos = dice.CurrentState.GridPos + direction.ToGridDelta();
-            TryGetBottomAt(neighborPos, out var neighbor);
-            return neighbor;
+            if (dice.CurrentState.Tier == DiceStackTier.Top) {
+                TryGetTopAt(neighborPos, out var topNeighbor);
+                return topNeighbor;
+            }
+
+            TryGetBottomAt(neighborPos, out var bottomNeighbor);
+            return bottomNeighbor;
         }
 
         public DiceController GetFacingDiceAt(DiceController fromDice, Direction direction) {
@@ -176,15 +181,13 @@ namespace DiceGame.Gameplay
             }
 
             var neighborPos = fromDice.CurrentState.GridPos + direction.ToGridDelta();
-            if (TryGetTopAt(neighborPos, out var topDice)) {
+            if (fromDice.CurrentState.Tier == DiceStackTier.Top) {
+                TryGetTopAt(neighborPos, out var topDice);
                 return topDice;
             }
 
-            if (TryGetBottomAt(neighborPos, out var bottomDice)) {
-                return bottomDice;
-            }
-
-            return null;
+            TryGetBottomAt(neighborPos, out var bottomDice);
+            return bottomDice;
         }
 
         public DiceController GetTransferTargetAt(
@@ -196,27 +199,13 @@ namespace DiceGame.Gameplay
             }
 
             var neighborPos = fromDice.CurrentState.GridPos + direction.ToGridDelta();
-            if (standingTier == DiceStackTier.Bottom) {
-                if (TryGetBottomAt(neighborPos, out var bottomDice)) {
-                    return bottomDice;
-                }
-
-                if (TryGetTopAt(neighborPos, out var topDice)) {
-                    return topDice;
-                }
-
-                return null;
-            }
-
-            if (TryGetTopAt(neighborPos, out var top)) {
+            if (standingTier == DiceStackTier.Top) {
+                TryGetTopAt(neighborPos, out var top);
                 return top;
             }
 
-            if (TryGetBottomAt(neighborPos, out var bottom)) {
-                return bottom;
-            }
-
-            return null;
+            TryGetBottomAt(neighborPos, out var bottom);
+            return bottom;
         }
 
         public DiceController ResolveSupportBottom(DiceController dice) {
