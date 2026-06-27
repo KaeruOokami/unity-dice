@@ -390,12 +390,13 @@ namespace DiceGame.View
 
             yield return RollPhaseCoroutine(direction, board);
 
-            yield return FinalizeJumpRollPlacement(toState, jumpYOffset, fallBeforeSnap, board, registry);
+            yield return FinalizeJumpRollPlacement(fromState, toState, jumpYOffset, fallBeforeSnap, board, registry);
 
             onComplete?.Invoke();
         }
 
         IEnumerator FinalizeJumpRollPlacement(
+            DiceState fromState,
             DiceState toState,
             float jumpYOffset,
             bool fallBeforeSnap,
@@ -413,9 +414,15 @@ namespace DiceGame.View
             // SnapTo stops rollCoroutine; detach first so the caller can finish and invoke onComplete.
             rollCoroutine = null;
             SnapTo(toState, board, registry);
-            if (jumpYOffset > 0f && toState.Tier != DiceStackTier.Top) {
+            if (fromState.Tier == DiceStackTier.Bottom && toState.Tier == DiceStackTier.Top) {
+                ClearVisualYOffset(board);
+            } else if (jumpYOffset > 0f && ShouldApplyJumpVisualYOffsetAfterSnap(fromState, toState)) {
                 ApplyVisualYOffset(board, jumpYOffset);
             }
+        }
+
+        static bool ShouldApplyJumpVisualYOffsetAfterSnap(DiceState fromState, DiceState toState) {
+            return toState.Tier != DiceStackTier.Top || fromState.Tier == DiceStackTier.Top;
         }
 
         IEnumerator TransitionCoroutine(
@@ -460,7 +467,7 @@ namespace DiceGame.View
 
                 PrepareRollTransitionStart(transition.From, board, registry, transition.FromWorldOverride);
                 yield return RollPhaseCoroutine(transition.RollDirection, board);
-                yield return FinalizeJumpRollPlacement(transition.To, 0f, fallBeforeSnap: true, board, registry);
+                yield return FinalizeJumpRollPlacement(transition.From, transition.To, 0f, fallBeforeSnap: true, board, registry);
             } else if (transition.Path == DiceTransitionPath.RollThenRise) {
                 if (rotationRoot == null) {
                     isAnimating = false;

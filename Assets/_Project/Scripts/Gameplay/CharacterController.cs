@@ -38,6 +38,13 @@ namespace DiceGame.Gameplay
             Airborne
         }
 
+        enum JumpDiceMoveKind {
+            None,
+            SameTierParallel,
+            StackOntoTop,
+            DemoteToBottom
+        }
+
         DiceRegistry registry;
         DiceController currentDice;
         SurfaceLayer standingSurfaceLayer;
@@ -70,6 +77,7 @@ namespace DiceGame.Gameplay
         float jumpYOffset;
         DiceController jumpVisualDice;
         bool jumpDiceGridMoved;
+        JumpDiceMoveKind jumpDiceMoveKind;
 
         struct PushContactCandidate {
             public DiceController Dice;
@@ -230,7 +238,7 @@ namespace DiceGame.Gameplay
 
             if (!IsOnFloor && currentDice != null && isTrackingDiceRoll && !currentDice.IsRolling) {
                 EndRollTracking();
-                if (jumpDiceGridMoved && standingTier == DiceStackTier.Top) {
+                if (jumpDiceGridMoved && jumpDiceMoveKind == JumpDiceMoveKind.StackOntoTop) {
                     EndJump();
                 }
             }
@@ -386,7 +394,10 @@ namespace DiceGame.Gameplay
                     return false;
                 case MovementTransitionKind.CanRoll:
                     if (jumpPhase != JumpPhase.None && currentDice != null) {
-                        var jumpDiceMove = MovementTransition.Walkable(currentDice, SurfaceLayer.Bottom);
+                        var jumpTargetLayer = standingTier == DiceStackTier.Top
+                            ? SurfaceLayer.Top
+                            : SurfaceLayer.Bottom;
+                        var jumpDiceMove = MovementTransition.Walkable(currentDice, jumpTargetLayer);
                         if (TryApplyJumpDiceMove(nextCell, jumpDiceMove, direction, nextXZ, halfExtent)) {
                             return true;
                         }
@@ -757,34 +768,31 @@ namespace DiceGame.Gameplay
             var diceCenterAnchor = diceCenter;
             var started = false;
 
-            if (standingTier == DiceStackTier.Top
+            if (IsSameTierJumpParallelRoll(transition)) {
+                started = currentDice.TryJumpRoll(direction, jumpYOffset);
+                if (started) {
+                    jumpDiceMoveKind = JumpDiceMoveKind.SameTierParallel;
+                    UpdateStandingAfterJumpDiceMove(toCell, standingTier);
+                }
+            } else if (standingTier == DiceStackTier.Top
                 && standingSurfaceLayer == SurfaceLayer.Top
                 && transition.TargetLayer == SurfaceLayer.Bottom) {
                 started = currentDice.TryJumpRollThenDemote(direction, jumpYOffset);
                 if (started) {
+                    jumpDiceMoveKind = JumpDiceMoveKind.DemoteToBottom;
                     UpdateStandingAfterJumpDiceMove(toCell, DiceStackTier.Bottom);
                 }
             } else if (standingTier == DiceStackTier.Bottom
-                && standingSurfaceLayer == SurfaceLayer.Bottom) {
-                var fromState = currentDice.CurrentState;
-                if (fromState.GridPos != standingGridCell || fromState.Tier != DiceStackTier.Bottom) {
+                && standingSurfaceLayer == SurfaceLayer.Bottom
+                && transition.TargetLayer == SurfaceLayer.Top) {
+                if (!registry.CanPlaceTopDiceAt(toCell)) {
                     return false;
                 }
 
-                if (transition.TargetLayer == SurfaceLayer.Top) {
-                    if (!registry.CanPlaceTopDiceAt(toCell)) {
-                        return false;
-                    }
-
-                    started = currentDice.TryJumpStack(direction, jumpYOffset);
-                    if (started) {
-                        UpdateStandingAfterJumpDiceMove(toCell, DiceStackTier.Top);
-                    }
-                } else if (registry.CanPlaceBottomDiceAt(toCell)) {
-                    started = currentDice.TryJumpRoll(direction, jumpYOffset);
-                    if (started) {
-                        UpdateStandingAfterJumpDiceMove(toCell, DiceStackTier.Bottom);
-                    }
+                started = currentDice.TryJumpStack(direction, jumpYOffset);
+                if (started) {
+                    jumpDiceMoveKind = JumpDiceMoveKind.StackOntoTop;
+                    UpdateStandingAfterJumpDiceMove(toCell, DiceStackTier.Top);
                 }
             }
 
@@ -796,6 +804,20 @@ namespace DiceGame.Gameplay
 
             BeginRollTracking(characterAnchor, diceCenterAnchor);
             return true;
+        }
+
+        bool IsSameTierJumpParallelRoll(MovementTransition transition) {
+            if (currentDice == null || transition.TargetDice != currentDice) {
+                return false;
+            }
+
+            var tier = currentDice.CurrentState.Tier;
+            if (standingTier != tier) {
+                return false;
+            }
+
+            var expectedLayer = tier == DiceStackTier.Top ? SurfaceLayer.Top : SurfaceLayer.Bottom;
+            return standingSurfaceLayer == expectedLayer && transition.TargetLayer == expectedLayer;
         }
 
         void UpdateStandingAfterJumpDiceMove(Vector2Int toCell, DiceStackTier tier) {
@@ -838,6 +860,7 @@ namespace DiceGame.Gameplay
             }
 
             jumpDiceGridMoved = true;
+            jumpDiceMoveKind = JumpDiceMoveKind.DemoteToBottom;
             standingGridCell = currentDice.CurrentState.GridPos;
             standingTier = DiceStackTier.Bottom;
             standingSurfaceLayer = SurfaceLayer.Bottom;
@@ -2034,6 +2057,7 @@ namespace DiceGame.Gameplay
             jumpPhase = JumpPhase.Airborne;
             jumpYOffset = 0f;
             jumpDiceGridMoved = false;
+            jumpDiceMoveKind = JumpDiceMoveKind.None;
             ResetPushState();
             return true;
         }
@@ -2078,6 +2102,11 @@ namespace DiceGame.Gameplay
                 return;
             }
 
+            if (jumpDiceMoveKind == JumpDiceMoveKind.StackOntoTop) {
+                targetDice.View.ClearVisualYOffset(board);
+                return;
+            }
+
             targetDice.View.ApplyVisualYOffset(board, jumpYOffset);
             if (standingTier == DiceStackTier.Bottom && registry.HasTopAt(standingGridCell)) {
                 registry.SyncStackedTopAt(standingGridCell, board);
@@ -2107,6 +2136,7 @@ namespace DiceGame.Gameplay
             jumpMotion = default;
             jumpYOffset = 0f;
             jumpDiceGridMoved = false;
+            jumpDiceMoveKind = JumpDiceMoveKind.None;
             SnapYToSurface();
         }
     }

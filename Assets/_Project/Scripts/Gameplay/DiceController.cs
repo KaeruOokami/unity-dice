@@ -88,27 +88,7 @@ namespace DiceGame.Gameplay
                 return false;
             }
 
-            var hasTopOnSameCell = registry.HasTopAt(currentState.GridPos);
-            if (!RollResolver.TryRoll(currentState, direction, registry, hasTopOnSameCell, out var nextState)) {
-                return false;
-            }
-
-            isRolling = true;
-            var fromState = currentState;
-            currentState = nextState;
-            registry.MoveDice(
-                this,
-                fromState.GridPos,
-                nextState.GridPos,
-                fromState.Tier,
-                nextState.Tier);
-
-            diceView.PlayJumpRoll(direction, fromState, nextState, 0f, board, registry, () => {
-                isRolling = false;
-                StateChanged?.Invoke(currentState);
-            });
-
-            return true;
+            return TryBeginParallelRoll(direction, 0f);
         }
 
         public bool TrySlide(Direction direction) {
@@ -140,10 +120,10 @@ namespace DiceGame.Gameplay
                 return false;
             }
 
-            if (currentState.Tier != DiceStackTier.Bottom) {
-                return false;
-            }
+            return TryBeginParallelRoll(direction, jumpYOffset);
+        }
 
+        bool TryBeginParallelRoll(Direction direction, float jumpYOffset) {
             var hasTopOnSameCell = registry.HasTopAt(currentState.GridPos);
             if (!RollResolver.TryRoll(currentState, direction, registry, hasTopOnSameCell, out var nextState)) {
                 return false;

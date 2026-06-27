@@ -242,10 +242,11 @@ namespace DiceGame.Gameplay
                 }
 
                 if (TryEvaluateGridRoll(fromCell, toCell, standingDice, standingTier, direction)) {
-                    if (isJumping
-                        && standingDice != null
-                        && !standingDice.IsDissolving) {
-                        return MovementTransition.Walkable(standingDice, SurfaceLayer.Bottom);
+                    if (TryCreateJumpSameTierRollTransition(
+                        isJumping,
+                        standingDice,
+                        out var jumpRollTransition)) {
+                        return jumpRollTransition;
                     }
 
                     return MovementTransition.Roll();
@@ -281,6 +282,13 @@ namespace DiceGame.Gameplay
             }
 
             if (TryEvaluateGridRoll(fromCell, toCell, standingDice, standingTier, direction)) {
+                if (TryCreateJumpSameTierRollTransition(
+                    isJumping,
+                    standingDice,
+                    out var jumpRollTransition)) {
+                    return jumpRollTransition;
+                }
+
                 return MovementTransition.Roll();
             }
 
@@ -410,6 +418,22 @@ namespace DiceGame.Gameplay
             }
 
             return transition.TargetDice.GetTopSurfaceWorldY();
+        }
+
+        static bool TryCreateJumpSameTierRollTransition(
+            bool isJumping,
+            DiceController standingDice,
+            out MovementTransition transition) {
+            transition = default;
+
+            if (!isJumping || standingDice == null || standingDice.IsDissolving) {
+                return false;
+            }
+
+            var tier = standingDice.CurrentState.Tier;
+            var layer = tier == DiceStackTier.Top ? SurfaceLayer.Top : SurfaceLayer.Bottom;
+            transition = MovementTransition.Walkable(standingDice, layer);
+            return true;
         }
 
         bool TryEvaluateGridRoll(
