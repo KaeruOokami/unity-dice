@@ -103,7 +103,7 @@ namespace DiceGame.Gameplay
                 fromState.Tier,
                 nextState.Tier);
 
-            diceView.PlayRoll(direction, fromState, nextState, board, registry, () => {
+            diceView.PlayJumpRoll(direction, fromState, nextState, 0f, board, registry, () => {
                 isRolling = false;
                 StateChanged?.Invoke(currentState);
             });
@@ -128,7 +128,7 @@ namespace DiceGame.Gameplay
         }
 
         bool TrySlideTop(Direction direction) {
-            if (!SlideResolver.TrySlideTop(currentState, direction, registry, out var nextState, out var result)) {
+            if (!SlideResolver.TrySlideTop(currentState, direction, registry, out _, out var result)) {
                 return false;
             }
 
@@ -136,7 +136,7 @@ namespace DiceGame.Gameplay
                 return TryRollThenDemote(direction);
             }
 
-            return BeginGridTransition(currentState, nextState);
+            return TryRoll(direction);
         }
 
         public bool TryJumpRoll(Direction direction, float jumpYOffset) {

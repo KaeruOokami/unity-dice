@@ -393,7 +393,7 @@ namespace DiceGame.Gameplay
                     }
 
                     if (TryGetPrimaryDirection(move, out var moveDir) && moveDir == direction) {
-                        if (TryExecuteRoll(direction, nextXZ, halfExtent)) {
+                        if (TryExecuteGridRoll(direction, nextXZ, halfExtent)) {
                             UpdatePushContact(Vector2.zero);
                             return true;
                         }
@@ -876,7 +876,7 @@ namespace DiceGame.Gameplay
             return new Vector2(world.x, world.z);
         }
 
-        bool TryExecuteRoll(Direction direction, Vector2 nextXZ, float edgeLimit) {
+        bool TryExecuteGridRoll(Direction direction, Vector2 nextXZ, float edgeLimit) {
             if (jumpPhase != JumpPhase.None) {
                 return false;
             }
@@ -886,14 +886,21 @@ namespace DiceGame.Gameplay
                 return false;
             }
 
-            if (standingTier != DiceStackTier.Bottom
-                || currentDice.CurrentState.Tier != DiceStackTier.Bottom
-                || registry.HasTopAt(standingGridCell)) {
+            if (standingTier != currentDice.CurrentState.Tier) {
                 return false;
             }
 
-            var targetPos = standingGridCell + direction.ToGridDelta();
-            if (!registry.CanDiceRollInto(targetPos)) {
+            if (standingTier == DiceStackTier.Bottom && registry.HasTopAt(standingGridCell)) {
+                return false;
+            }
+
+            var hasTopOnSameCell = registry.HasTopAt(standingGridCell);
+            if (!RollResolver.TryRoll(
+                currentDice.CurrentState,
+                direction,
+                registry,
+                hasTopOnSameCell,
+                out _)) {
                 return false;
             }
 

@@ -237,15 +237,7 @@ namespace DiceGame.View
             Board board,
             DiceRegistry registry,
             Action onComplete) {
-            if (dissolveCoroutine != null) {
-                return;
-            }
-
-            if (rollCoroutine != null) {
-                StopCoroutine(rollCoroutine);
-            }
-
-            rollCoroutine = StartCoroutine(RollCoroutine(direction, fromState, toState, board, registry, onComplete));
+            PlayJumpRoll(direction, fromState, toState, 0f, board, registry, onComplete);
         }
 
         public void PlayJumpRoll(
@@ -374,56 +366,6 @@ namespace DiceGame.View
                 && bottom != null) {
                 surfaceBaseWorldY = bottom.GetTopSurfaceWorldY();
             }
-        }
-
-        IEnumerator RollCoroutine(
-            Direction direction,
-            DiceState fromState,
-            DiceState toState,
-            Board board,
-            DiceRegistry registry,
-            Action onComplete) {
-            isAnimating = true;
-            EnsureMesh();
-            if (positionRoot == null || rotationRoot == null) {
-                isAnimating = false;
-                onComplete?.Invoke();
-                yield break;
-            }
-
-            SnapTo(fromState, board, registry);
-
-            var half = board.CellSize * 0.5f;
-            var setup = DiceRollTransform.GetRollSetup(direction, half);
-            var diceCenter = board.GridToWorld(fromState.GridPos);
-
-            var pivotObject = new GameObject("RollPivot");
-            var pivot = pivotObject.transform;
-            pivot.position = diceCenter + setup.PivotOffset;
-            pivot.rotation = Quaternion.identity;
-
-            positionRoot.SetParent(pivot, true);
-
-            var elapsed = 0f;
-            while (elapsed < animationSettings.RollAnimationDuration) {
-                elapsed += Time.deltaTime;
-                var t = Mathf.SmoothStep(0f, 1f, elapsed / animationSettings.RollAnimationDuration);
-                pivot.rotation = Quaternion.AngleAxis(setup.Angle * t, setup.Axis);
-                yield return null;
-            }
-
-            pivot.rotation = Quaternion.AngleAxis(setup.Angle, setup.Axis);
-
-            positionRoot.SetParent(transform, true);
-            positionRoot.localRotation = Quaternion.identity;
-            positionRoot.localScale = Vector3.one;
-            Destroy(pivotObject);
-
-            SnapTo(toState, board, registry);
-
-            isAnimating = false;
-            rollCoroutine = null;
-            onComplete?.Invoke();
         }
 
         IEnumerator JumpRollCoroutine(

@@ -241,7 +241,7 @@ namespace DiceGame.Gameplay
                     return topFallTransition;
                 }
 
-                if (fromLayer == SurfaceLayer.Bottom && CanRoll(fromCell, standingDice, standingTier)) {
+                if (TryEvaluateGridRoll(fromCell, toCell, standingDice, standingTier, direction)) {
                     if (isJumping
                         && standingDice != null
                         && !standingDice.IsDissolving) {
@@ -278,6 +278,10 @@ namespace DiceGame.Gameplay
                 isJumping,
                 out var jumpTopTransition)) {
                 return jumpTopTransition;
+            }
+
+            if (TryEvaluateGridRoll(fromCell, toCell, standingDice, standingTier, direction)) {
+                return MovementTransition.Roll();
             }
 
             target = registry.GetTransferTargetAt(standingDice, direction, standingTier);
@@ -410,12 +414,31 @@ namespace DiceGame.Gameplay
             return transition.TargetDice.GetTopSurfaceWorldY();
         }
 
-        bool CanRoll(Vector2Int fromCell, DiceController standingDice, DiceStackTier standingTier) {
-            return standingDice != null
-                && !standingDice.IsDissolving
-                && standingTier == DiceStackTier.Bottom
-                && standingDice.CurrentState.Tier == DiceStackTier.Bottom
-                && !registry.HasTopAt(fromCell);
+        bool TryEvaluateGridRoll(
+            Vector2Int fromCell,
+            Vector2Int toCell,
+            DiceController standingDice,
+            DiceStackTier standingTier,
+            Direction direction) {
+            if (standingDice == null || standingDice.IsDissolving) {
+                return false;
+            }
+
+            if (standingTier != standingDice.CurrentState.Tier) {
+                return false;
+            }
+
+            if (fromCell + direction.ToGridDelta() != toCell) {
+                return false;
+            }
+
+            var hasTopOnSameCell = registry.HasTopAt(fromCell);
+            return RollResolver.TryRoll(
+                standingDice.CurrentState,
+                direction,
+                registry,
+                hasTopOnSameCell,
+                out _);
         }
 
         bool CanStepBetween(float fromSurfaceY, float toSurfaceY) {
