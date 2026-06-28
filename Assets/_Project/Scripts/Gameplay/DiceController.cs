@@ -115,17 +115,23 @@ namespace DiceGame.Gameplay
             return BeginGridTransition(currentState, nextState);
         }
 
-        public bool TryJumpRoll(Direction direction, float jumpYOffset) {
+        public bool TryJumpRoll(Direction direction, float jumpYOffset, int distance = 1) {
             if (isDissolving || isCarried || isRolling || board == null || diceView == null || registry == null) {
                 return false;
             }
 
-            return TryBeginParallelRoll(direction, jumpYOffset);
+            return TryBeginParallelRoll(direction, jumpYOffset, distance);
         }
 
-        bool TryBeginParallelRoll(Direction direction, float jumpYOffset) {
+        bool TryBeginParallelRoll(Direction direction, float jumpYOffset, int distance = 1) {
             var hasTopOnSameCell = registry.HasTopAt(currentState.GridPos);
-            if (!RollResolver.TryRoll(currentState, direction, registry, hasTopOnSameCell, out var nextState)) {
+            if (!RollResolver.TryRollDistance(
+                currentState,
+                direction,
+                registry,
+                hasTopOnSameCell,
+                distance,
+                out var nextState)) {
                 return false;
             }
 
@@ -139,7 +145,7 @@ namespace DiceGame.Gameplay
                 fromState.Tier,
                 nextState.Tier);
 
-            diceView.PlayJumpRoll(direction, fromState, nextState, jumpYOffset, board, registry, () => {
+            diceView.PlayJumpRoll(direction, fromState, nextState, jumpYOffset, distance, board, registry, () => {
                 isRolling = false;
                 StateChanged?.Invoke(currentState);
             });

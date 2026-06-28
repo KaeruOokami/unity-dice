@@ -5,37 +5,69 @@ namespace DiceGame.Core
 {
     public static class RollResolver
     {
+        public const int MaxParallelRollDistance = 2;
+
         public static bool TryRoll(
             DiceState state,
             Direction direction,
             IDicePlacement placement,
             bool hasTopOnSameCell,
             out DiceState nextState) {
+            return TryRollDistance(state, direction, placement, hasTopOnSameCell, 1, out nextState);
+        }
+
+        public static bool TryRollDistance(
+            DiceState state,
+            Direction direction,
+            IDicePlacement placement,
+            bool hasTopOnSameCell,
+            int distance,
+            out DiceState nextState) {
             nextState = default;
 
-            if (state.Tier == DiceStackTier.Bottom) {
-                if (hasTopOnSameCell) {
-                    return false;
-                }
-
-                var targetPos = state.GridPos + direction.ToGridDelta();
-                if (!placement.CanDiceRollInto(targetPos)) {
-                    return false;
-                }
-
-                return TryBuildRolledState(state, targetPos, state.Tier, direction, out nextState);
+            if (distance < 1 || distance > MaxParallelRollDistance) {
+                return false;
             }
 
-            if (state.Tier == DiceStackTier.Top) {
-                if (!SlideResolver.TrySlideTop(state, direction, placement, out var slideState, out var result)
-                    || result != TopSlideResult.Parallel) {
-                    return false;
+            var rollingState = state;
+            for (var step = 0; step < distance; step++) {
+                var hasTopOnCell = step == 0 && hasTopOnSameCell;
+
+                if (rollingState.Tier == DiceStackTier.Bottom) {
+                    if (hasTopOnCell) {
+                        return false;
+                    }
+
+                    var targetPos = rollingState.GridPos + direction.ToGridDelta();
+                    if (!placement.CanDiceRollInto(targetPos)) {
+                        return false;
+                    }
+
+                    if (!TryBuildRolledState(rollingState, targetPos, rollingState.Tier, direction, out rollingState)) {
+                        return false;
+                    }
+
+                    continue;
                 }
 
-                return TryBuildRolledState(state, slideState.GridPos, DiceStackTier.Top, direction, out nextState);
+                if (rollingState.Tier == DiceStackTier.Top) {
+                    if (!SlideResolver.TrySlideTop(rollingState, direction, placement, out var slideState, out var result)
+                        || result != TopSlideResult.Parallel) {
+                        return false;
+                    }
+
+                    if (!TryBuildRolledState(rollingState, slideState.GridPos, DiceStackTier.Top, direction, out rollingState)) {
+                        return false;
+                    }
+
+                    continue;
+                }
+
+                return false;
             }
 
-            return false;
+            nextState = rollingState;
+            return true;
         }
 
         static bool TryBuildRolledState(

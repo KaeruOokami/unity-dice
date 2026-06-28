@@ -186,8 +186,88 @@ namespace DiceGame.Gameplay
         }
 
         public static bool IsOrthogonalAdjacent(Vector2Int fromCell, Vector2Int toCell) {
+            return GetOrthogonalDistance(fromCell, toCell) == 1;
+        }
+
+        public static int GetOrthogonalDistance(Vector2Int fromCell, Vector2Int toCell) {
             var delta = toCell - fromCell;
-            return (Mathf.Abs(delta.x) + Mathf.Abs(delta.y)) == 1;
+            if (delta.x != 0 && delta.y != 0) {
+                return -1;
+            }
+
+            return Mathf.Abs(delta.x) + Mathf.Abs(delta.y);
+        }
+
+        public static bool IsOrthogonalWithinDistance(
+            Vector2Int fromCell,
+            Vector2Int toCell,
+            int maxDistance) {
+            var distance = GetOrthogonalDistance(fromCell, toCell);
+            return distance >= 1 && distance <= maxDistance;
+        }
+
+        public bool TryGetJumpParallelRollTarget(
+            Vector2Int fromCell,
+            Direction direction,
+            DiceController standingDice,
+            DiceStackTier standingTier,
+            out Vector2Int toCell,
+            out int distance) {
+            toCell = default;
+            distance = 0;
+
+            for (var candidateDistance = RollResolver.MaxParallelRollDistance;
+                candidateDistance >= 1;
+                candidateDistance--) {
+                var candidate = fromCell + direction.ToGridDelta() * candidateDistance;
+                if (!board.IsInside(candidate) || board.GetCell(candidate) == CellType.Wall) {
+                    continue;
+                }
+
+                if (TryEvaluateGridRoll(
+                    fromCell,
+                    candidate,
+                    standingDice,
+                    standingTier,
+                    direction,
+                    candidateDistance,
+                    allowMultiCell: true)) {
+                    toCell = candidate;
+                    distance = candidateDistance;
+                    return true;
+                }
+            }
+
+            return false;
+        }
+
+        public MovementTransition EvaluateToTargetCell(
+            Vector2Int fromCell,
+            Vector2Int toCell,
+            SurfaceLayer fromLayer,
+            float fromSurfaceY,
+            DiceController standingDice,
+            DiceStackTier standingTier,
+            bool ignoreStepHeight,
+            bool isJumping) {
+            if (!board.IsInside(toCell) || board.GetCell(toCell) == CellType.Wall) {
+                return MovementTransition.Blocked();
+            }
+
+            if (!TryGetDirectionBetween(fromCell, toCell, out var direction)) {
+                return MovementTransition.Blocked();
+            }
+
+            return EvaluateToCell(
+                fromCell,
+                toCell,
+                fromLayer,
+                fromSurfaceY,
+                standingDice,
+                standingTier,
+                direction,
+                ignoreStepHeight,
+                isJumping);
         }
 
         public static bool TryGetDirectionBetween(
@@ -196,22 +276,26 @@ namespace DiceGame.Gameplay
             out Direction direction) {
             direction = default;
             var delta = toCell - fromCell;
-            if (delta == Vector2Int.right) {
+            if (delta.x != 0 && delta.y != 0) {
+                return false;
+            }
+
+            if (delta.x > 0) {
                 direction = Direction.East;
                 return true;
             }
 
-            if (delta == Vector2Int.left) {
+            if (delta.x < 0) {
                 direction = Direction.West;
                 return true;
             }
 
-            if (delta == new Vector2Int(0, 1)) {
+            if (delta.y > 0) {
                 direction = Direction.North;
                 return true;
             }
 
-            if (delta == new Vector2Int(0, -1)) {
+            if (delta.y < 0) {
                 direction = Direction.South;
                 return true;
             }
@@ -241,7 +325,14 @@ namespace DiceGame.Gameplay
                     return topFallTransition;
                 }
 
-                if (TryEvaluateGridRoll(fromCell, toCell, standingDice, standingTier, direction)) {
+                if (TryEvaluateGridRoll(
+                    fromCell,
+                    toCell,
+                    standingDice,
+                    standingTier,
+                    direction,
+                    GetOrthogonalDistance(fromCell, toCell),
+                    allowMultiCell: isJumping)) {
                     if (TryCreateJumpSameTierRollTransition(
                         isJumping,
                         standingDice,
@@ -250,6 +341,10 @@ namespace DiceGame.Gameplay
                     }
 
                     return MovementTransition.Roll();
+                }
+
+                if (isJumping && fromLayer != SurfaceLayer.Floor && standingDice != null) {
+                    return MovementTransition.Blocked();
                 }
 
                 return EvaluateFloorTransition(fromSurfaceY, ignoreStepHeight);
@@ -281,7 +376,14 @@ namespace DiceGame.Gameplay
                 return jumpTopTransition;
             }
 
-            if (TryEvaluateGridRoll(fromCell, toCell, standingDice, standingTier, direction)) {
+            if (TryEvaluateGridRoll(
+                fromCell,
+                toCell,
+                standingDice,
+                standingTier,
+                direction,
+                GetOrthogonalDistance(fromCell, toCell),
+                allowMultiCell: isJumping)) {
                 if (TryCreateJumpSameTierRollTransition(
                     isJumping,
                     standingDice,
@@ -441,7 +543,9 @@ namespace DiceGame.Gameplay
             Vector2Int toCell,
             DiceController standingDice,
             DiceStackTier standingTier,
-            Direction direction) {
+            Direction direction,
+            int distance,
+            bool allowMultiCell) {
             if (standingDice == null || standingDice.IsDissolving) {
                 return false;
             }
@@ -450,16 +554,25 @@ namespace DiceGame.Gameplay
                 return false;
             }
 
-            if (fromCell + direction.ToGridDelta() != toCell) {
+            if (distance < 1 || distance > RollResolver.MaxParallelRollDistance) {
+                return false;
+            }
+
+            if (distance > 1 && !allowMultiCell) {
+                return false;
+            }
+
+            if (fromCell + direction.ToGridDelta() * distance != toCell) {
                 return false;
             }
 
             var hasTopOnSameCell = registry.HasTopAt(fromCell);
-            return RollResolver.TryRoll(
+            return RollResolver.TryRollDistance(
                 standingDice.CurrentState,
                 direction,
                 registry,
                 hasTopOnSameCell,
+                distance,
                 out _);
         }
 

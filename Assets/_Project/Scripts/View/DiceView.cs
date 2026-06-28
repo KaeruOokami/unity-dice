@@ -204,30 +204,29 @@ namespace DiceGame.View
 
         public Vector3 GetAnchoredWorldPosition(DiceState state, Board board, DiceRegistry registry) {
             EnsureMesh();
+            return ComputeAnchoredWorldPosition(state, board, registry, visualYOffset);
+        }
+
+        Vector3 ComputeAnchoredWorldPosition(
+            DiceState state,
+            Board board,
+            DiceRegistry registry,
+            float yOffset) {
             if (positionRoot == null || rotationRoot == null || board == null) {
                 return Vector3.zero;
             }
 
-            var savedGrid = gridWorldPosition;
-            var savedFace = currentTopFace;
-            var savedBase = surfaceBaseWorldY;
+            var grid = board.GridToWorld(state.GridPos);
             var savedRotation = rotationRoot.rotation;
-
-            gridWorldPosition = board.GridToWorld(state.GridPos);
-            currentTopFace = state.Orientation.Top;
+            var savedFace = currentTopFace;
             rotationRoot.rotation = DiceOrientationMapper.ToRotation(state.Orientation);
-            UpdateSurfaceBase(state, board, registry);
-            ApplySurfaceVisual(board, dissolveProgress);
-
-            var worldPosition = positionRoot.position;
-
-            gridWorldPosition = savedGrid;
-            currentTopFace = savedFace;
-            surfaceBaseWorldY = savedBase;
+            currentTopFace = state.Orientation.Top;
+            ComputeVerticalExtents(board, state.Orientation.Top, 1f - dissolveProgress, out var minY, out _);
             rotationRoot.rotation = savedRotation;
-            ApplySurfaceVisual(board, dissolveProgress);
+            currentTopFace = savedFace;
 
-            return worldPosition;
+            var baseY = ResolveSurfaceBaseWorldY(state, board, registry);
+            return new Vector3(grid.x, baseY - minY + yOffset, grid.z);
         }
 
         public void PlayRoll(
@@ -249,6 +248,19 @@ namespace DiceGame.View
             DiceRegistry registry,
             Action onComplete,
             bool fallBeforeSnap = false) {
+            PlayJumpRoll(direction, fromState, toState, jumpYOffset, 1, board, registry, onComplete, fallBeforeSnap);
+        }
+
+        public void PlayJumpRoll(
+            Direction direction,
+            DiceState fromState,
+            DiceState toState,
+            float jumpYOffset,
+            int rollDistance,
+            Board board,
+            DiceRegistry registry,
+            Action onComplete,
+            bool fallBeforeSnap = false) {
             if (!HasGameplaySettings()) {
                 return;
             }
@@ -266,6 +278,7 @@ namespace DiceGame.View
                 fromState,
                 toState,
                 jumpYOffset,
+                rollDistance,
                 fallBeforeSnap,
                 board,
                 registry,
@@ -359,12 +372,48 @@ namespace DiceGame.View
         }
 
         void UpdateSurfaceBase(DiceState state, Board board, DiceRegistry registry) {
-            surfaceBaseWorldY = board.FloorSurfaceWorldY;
+            surfaceBaseWorldY = ResolveSurfaceBaseWorldY(state, board, registry);
+        }
+
+        static float ResolveSurfaceBaseWorldY(DiceState state, Board board, DiceRegistry registry) {
+            var baseY = board.FloorSurfaceWorldY;
             if (state.Tier == DiceStackTier.Top
                 && registry != null
                 && registry.TryGetBottomAt(state.GridPos, out var bottom)
                 && bottom != null) {
-                surfaceBaseWorldY = bottom.GetTopSurfaceWorldY();
+                baseY = bottom.GetTopSurfaceWorldY();
+            }
+
+            return baseY;
+        }
+
+        static DiceState BuildParallelRollStepState(DiceState fromState, Direction direction, int step) {
+            var orientation = fromState.Orientation;
+            for (var i = 0; i < step; i++) {
+                orientation = orientation.Roll(direction);
+            }
+
+            return new DiceState(fromState.GridPos + direction.ToGridDelta() * step, orientation, fromState.Tier);
+        }
+
+        void CommitGridPlacement(
+            DiceState state,
+            Board board,
+            DiceRegistry registry,
+            float? preserveWorldY = null) {
+            if (board == null || positionRoot == null || rotationRoot == null) {
+                return;
+            }
+
+            gridWorldPosition = board.GridToWorld(state.GridPos);
+            currentTopFace = state.Orientation.Top;
+            rotationRoot.rotation = DiceOrientationMapper.ToRotation(state.Orientation);
+            UpdateSurfaceBase(state, board, registry);
+            ApplySurfaceVisual(board, dissolveProgress);
+
+            if (preserveWorldY.HasValue) {
+                var position = positionRoot.position;
+                positionRoot.position = new Vector3(position.x, preserveWorldY.Value, position.z);
             }
         }
 
@@ -373,6 +422,7 @@ namespace DiceGame.View
             DiceState fromState,
             DiceState toState,
             float jumpYOffset,
+            int rollDistance,
             bool fallBeforeSnap,
             Board board,
             DiceRegistry registry,
@@ -388,9 +438,20 @@ namespace DiceGame.View
             currentTopFace = fromState.Orientation.Top;
             rotationRoot.rotation = DiceOrientationMapper.ToRotation(fromState.Orientation);
 
-            yield return RollPhaseCoroutine(direction, board);
+            var rolls = Mathf.Clamp(rollDistance, 1, RollResolver.MaxParallelRollDistance);
+            for (var i = 0; i < rolls; i++) {
+                yield return RollPhaseCoroutine(direction, board);
+                var stepState = BuildParallelRollStepState(fromState, direction, i + 1);
+                CommitGridPlacement(stepState, board, registry, preserveWorldY: positionRoot.position.y);
+            }
 
-            yield return FinalizeJumpRollPlacement(fromState, toState, jumpYOffset, fallBeforeSnap, board, registry);
+            yield return FinalizeJumpRollPlacement(
+                fromState,
+                toState,
+                jumpYOffset,
+                fallBeforeSnap,
+                board,
+                registry);
 
             onComplete?.Invoke();
         }
@@ -402,18 +463,28 @@ namespace DiceGame.View
             bool fallBeforeSnap,
             Board board,
             DiceRegistry registry) {
-            currentTopFace = toState.Orientation.Top;
-            rotationRoot.rotation = DiceOrientationMapper.ToRotation(toState.Orientation);
+            CommitGridPlacement(toState, board, registry, preserveWorldY: positionRoot.position.y);
 
             if (fallBeforeSnap) {
-                var targetWorld = GetAnchoredWorldPosition(toState, board, registry);
+                var targetWorld = ComputeAnchoredWorldPosition(toState, board, registry, visualYOffset);
                 positionRoot.position = new Vector3(targetWorld.x, positionRoot.position.y, targetWorld.z);
                 yield return AnimateGravityFall(targetWorld);
+            } else {
+                var targetWorld = ComputeAnchoredWorldPosition(toState, board, registry, visualYOffset);
+                var rolled = new Vector3(targetWorld.x, positionRoot.position.y, targetWorld.z);
+                if (Vector3.SqrMagnitude(rolled - positionRoot.position) > 0.0001f) {
+                    yield return AnimatePositionLerp(
+                        positionRoot.position,
+                        rolled,
+                        animationSettings.FallHorizontalDuration);
+                    positionRoot.position = rolled;
+                }
             }
 
             // SnapTo stops rollCoroutine; detach first so the caller can finish and invoke onComplete.
             rollCoroutine = null;
             SnapTo(toState, board, registry);
+
             if (fromState.Tier == DiceStackTier.Bottom && toState.Tier == DiceStackTier.Top) {
                 ClearVisualYOffset(board);
             } else if (jumpYOffset > 0f && ShouldApplyJumpVisualYOffsetAfterSnap(fromState, toState)) {
@@ -467,7 +538,13 @@ namespace DiceGame.View
 
                 PrepareRollTransitionStart(transition.From, board, registry, transition.FromWorldOverride);
                 yield return RollPhaseCoroutine(transition.RollDirection, board);
-                yield return FinalizeJumpRollPlacement(transition.From, transition.To, 0f, fallBeforeSnap: true, board, registry);
+                yield return FinalizeJumpRollPlacement(
+                    transition.From,
+                    transition.To,
+                    0f,
+                    fallBeforeSnap: true,
+                    board,
+                    registry);
             } else if (transition.Path == DiceTransitionPath.RollThenRise) {
                 if (rotationRoot == null) {
                     isAnimating = false;
