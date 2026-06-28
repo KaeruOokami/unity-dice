@@ -2,6 +2,8 @@
 using System.Collections.Generic;
 using DiceGame.Config;
 using DiceGame.Core;
+using DiceGame.Gameplay.Character;
+using DiceGame.Gameplay.Coupling;
 using DiceGame.Grid;
 using DiceGame.View;
 using UnityEngine;
@@ -42,28 +44,18 @@ namespace DiceGame.Gameplay
             Airborne
         }
 
-        enum JumpDiceMoveKind {
-            None,
-            SameTierParallel,
-            StackOntoTop,
-            DemoteToBottom
-        }
-
         DiceRegistry registry;
-        DiceController currentDice;
-        SurfaceLayer standingSurfaceLayer;
-        DiceStackTier standingTier;
-        Vector2Int standingGridCell;
+        CharacterStandingController standingController;
+        CharacterTransformDriver transformDriver;
+        DiceCharacterCoupling coupling;
+        CharacterMovePlanner movePlanner;
+        CharacterMovementExecutor movementExecutor;
+        DissolveDescentHoldState dissolveHoldState;
         Transform characterMount;
         Transform characterTransform;
         CapsuleCollider characterPushCollider;
-        bool isTrackingDiceRoll;
-        Vector3 rollStartCharacterPosition;
-        Vector3 rollStartDiceCenter;
         float currentSpeed;
         float pushContactTime;
-        Direction? dissolveDescentHoldDirection;
-        float dissolveDescentHoldTime;
         DiceController pushTargetDice;
         Direction pushDirection;
         bool hasPushDirection;
@@ -80,12 +72,6 @@ namespace DiceGame.Gameplay
         VerticalMotionState jumpMotion;
         float jumpYOffset;
         DiceController jumpVisualDice;
-        bool jumpDiceGridMoved;
-        bool jumpArcRollActive;
-        JumpDiceMoveKind jumpDiceMoveKind;
-        bool hasPendingJumpDiceStandingUpdate;
-        Vector2Int pendingJumpDiceToCell;
-        DiceStackTier pendingJumpDiceTier;
 
         struct PushContactCandidate {
             public DiceController Dice;
@@ -94,13 +80,13 @@ namespace DiceGame.Gameplay
             public float FaceDistance;
         }
 
-        public bool IsOnFloor => standingSurfaceLayer == SurfaceLayer.Floor;
-        public bool IsBusy => !IsOnFloor && currentDice != null && currentDice.IsRolling;
+        public bool IsOnFloor => standingController.IsOnFloor;
+        public bool IsBusy => !IsOnFloor && standingController.CurrentDice != null && standingController.CurrentDice.IsRolling;
         public bool IsCarrying => liftPhase != LiftPhase.None;
-        public Vector2 FacePosition => TryGetStandingDice(out var standingDice)
-            ? GetOffsetFromDiceCenter(standingDice, characterTransform != null ? characterTransform.position : Vector3.zero)
+        public Vector2 FacePosition => standingController.TryGetStandingDice(out var standingDice)
+            ? CharacterTransformDriver.GetOffsetFromDiceCenter(standingDice, characterTransform != null ? characterTransform.position : Vector3.zero)
             : Vector2.zero;
-        public DiceController CurrentDice => currentDice;
+        public DiceController CurrentDice => standingController.CurrentDice;
 
         public void Configure(
             Board targetBoard,
@@ -112,13 +98,16 @@ namespace DiceGame.Gameplay
             registry = targetRegistry;
             movementSettings = movement;
             physicsSettings = physics;
+            standingController = new CharacterStandingController();
+            coupling = new DiceCharacterCoupling();
+            standingController.Configure(board, registry, () => coupling.EndRollTracking());
             if (startDice != null) {
-                SetStandingOnDice(
+                standingController.SetInitialStanding(CharacterStandingState.OnDice(
                     startDice.CurrentState.GridPos,
                     startDice.CurrentState.Tier,
-                    startDice);
+                    startDice));
             } else {
-                SetStandingOnFloor(startGridCellFromTransform());
+                standingController.SetInitialStanding(CharacterStandingState.OnFloor(startGridCellFromTransform()));
             }
 
             Initialize();
@@ -141,9 +130,9 @@ namespace DiceGame.Gameplay
                 return;
             }
 
-            if (currentDice != null) {
-                currentDice.View.EnsureDiceInstance();
-                if (currentDice.View.DiceTransform == null) {
+            if (standingController.CurrentDice != null) {
+                standingController.CurrentDice.View.EnsureDiceInstance();
+                if (standingController.CurrentDice.View.DiceTransform == null) {
                     Debug.LogError("CharacterController: Dice visual is not available.");
                     return;
                 }
@@ -151,39 +140,87 @@ namespace DiceGame.Gameplay
 
             EnsureCharacterInstance();
             EnsureCharacterPushCollider();
+
+            transformDriver = new CharacterTransformDriver();
+            transformDriver.Configure(
+                board,
+                characterTransform,
+                () => standingController.Current,
+                GetCharacterWorldY,
+                () => coupling.IsTrackingRoll);
+
             movementTransition = new MovementTransitionEvaluator(board, registry, movementSettings.MaxStepHeight);
             movementTransition.SetJumpParallelRollDebugLog(
                 movementSettings.DebugJumpParallelRoll ? LogJumpParallelRoll : null);
+
+            coupling.Configure(
+                board,
+                registry,
+                standingController,
+                transformDriver,
+                movementSettings,
+                () => jumpYOffset,
+                () => jumpMotion);
+
+            movePlanner = new CharacterMovePlanner(
+                board,
+                registry,
+                movementTransition,
+                transformDriver,
+                LogJumpParallelRoll);
+            movementExecutor = new CharacterMovementExecutor(
+                board,
+                movementTransition,
+                movementSettings,
+                standingController,
+                transformDriver,
+                coupling);
+            dissolveHoldState = new DissolveDescentHoldState();
+            standingController.StandingDiceStateChanged += OnStandingDiceStateChanged;
+
             currentSpeed = 0f;
             isInitialized = true;
 
-            SyncStandingDiceCache();
-            if (!IsOnFloor && TryGetStandingDice(out var startStanding) && startStanding.View.DiceTransform != null) {
+            standingController.SyncStandingDiceCache();
+            if (!IsOnFloor
+                && standingController.TryGetStandingDice(out var startStanding)
+                && startStanding.View.DiceTransform != null) {
                 var center = startStanding.View.DiceTransform.position;
-                ApplyWorldPosition(new Vector3(center.x, 0f, center.z));
-            } else if (characterTransform != null) {
-                standingGridCell = board.WorldToGrid(characterTransform.position);
-                SnapYToSurface();
+                transformDriver.ApplyWorldPosition(new Vector3(center.x, 0f, center.z));
             } else {
-                SnapYToSurface();
+                transformDriver.SnapYToSurface();
+            }
+        }
+
+        void OnStandingDiceStateChanged(DiceState state) {
+            currentSpeed = 0f;
+            if (!isInitialized) {
+                return;
+            }
+
+            if (standingController.TryGetStandingDice(out var standingDice)
+                && standingDice == standingController.CurrentDice
+                && state.GridPos == standingController.GridCell
+                && state.Tier != standingController.Tier) {
+                transformDriver.SnapYToSurface();
             }
         }
 
         public void OnStandingDiceDissolved(DiceController dissolvedDice) {
-            if (!isInitialized || !TryGetStandingDice(out var standingDice) || standingDice != dissolvedDice) {
+            if (!isInitialized || !standingController.TryGetStandingDice(out var standingDice) || standingDice != dissolvedDice) {
                 return;
             }
 
-            var grid = standingGridCell;
-            if (standingTier == DiceStackTier.Top && registry.TryGetBottomAt(grid, out var bottom)) {
-                SetStandingOnDice(grid, DiceStackTier.Bottom, bottom);
-                SnapYToSurface();
+            var grid = standingController.GridCell;
+            if (standingController.Tier == DiceStackTier.Top && registry.TryGetBottomAt(grid, out var bottom)) {
+                standingController.SetOnDice(grid, DiceStackTier.Bottom, bottom);
+                transformDriver.SnapYToSurface();
                 return;
             }
 
-            if (standingTier == DiceStackTier.Bottom && registry.TryGetTopAt(grid, out var top)) {
-                SetStandingOnDice(grid, DiceStackTier.Top, top);
-                SnapYToSurface();
+            if (standingController.Tier == DiceStackTier.Bottom && registry.TryGetTopAt(grid, out var top)) {
+                standingController.SetOnDice(grid, DiceStackTier.Top, top);
+                transformDriver.SnapYToSurface();
                 return;
             }
 
@@ -191,7 +228,7 @@ namespace DiceGame.Gameplay
         }
 
         public void OnStandingDiceBecameGhost(DiceController ghostDice) {
-            if (!isInitialized || !TryGetStandingDice(out var standingDice) || standingDice != ghostDice) {
+            if (!isInitialized || !standingController.TryGetStandingDice(out var standingDice) || standingDice != ghostDice) {
                 return;
             }
 
@@ -199,10 +236,10 @@ namespace DiceGame.Gameplay
         }
 
         void OnDisable() {
-            EndRollTracking();
+            coupling?.EndRollTracking();
             EndCarryState();
             EndJump();
-            UnsubscribeStandingDice();
+            standingController?.UnsubscribeAll();
             EndPushFollow();
         }
 
@@ -236,11 +273,11 @@ namespace DiceGame.Gameplay
                 TryBeginJump();
             }
 
-            if (!IsOnFloor && currentDice != null && isTrackingDiceRoll && !currentDice.IsRolling) {
-                var wasArcRoll = jumpArcRollActive;
-                jumpArcRollActive = false;
-                EndRollTracking();
-                CompletePendingJumpDiceStandingUpdate();
+            if (!IsOnFloor
+                && standingController.CurrentDice != null
+                && coupling.IsTrackingRoll
+                && !standingController.CurrentDice.IsRolling) {
+                var wasArcRoll = coupling.CompleteRollIfFinished(standingController.CurrentDice);
                 if (wasArcRoll && jumpPhase != JumpPhase.None) {
                     EndJump();
                 }
@@ -256,7 +293,7 @@ namespace DiceGame.Gameplay
                 return;
             }
 
-            var isRolling = !IsOnFloor && currentDice != null && currentDice.IsRolling;
+            var isRolling = !IsOnFloor && standingController.CurrentDice != null && standingController.CurrentDice.IsRolling;
 
             if (isRolling) {
                 UpdateDuringRoll(input);
@@ -281,10 +318,10 @@ namespace DiceGame.Gameplay
                 carriedDice.View.SetCarryWorldPosition(GetCarryWorldPosition());
             }
 
-            if (!IsOnFloor && currentDice != null && currentDice.IsRolling) {
-                SyncPositionDuringRoll();
+            if (!IsOnFloor && standingController.CurrentDice != null && standingController.CurrentDice.IsRolling) {
+                coupling.SyncVisual();
             } else if (!IsOnFloor || jumpPhase != JumpPhase.None) {
-                SnapYToSurface();
+                transformDriver.SnapYToSurface();
             }
         }
 
@@ -292,7 +329,7 @@ namespace DiceGame.Gameplay
             if (input.sqrMagnitude <= 0f) {
                 currentSpeed = 0f;
                 ResetPushState();
-                ResetDissolveDescentHold();
+                dissolveHoldState.Reset();
                 return;
             }
 
@@ -307,16 +344,16 @@ namespace DiceGame.Gameplay
             }
 
             var move = input * (currentSpeed * Time.deltaTime);
-            SyncStandingDiceCache();
-            var currentXZ = GetWorldXZ();
-            var standingCell = GetStandingCell();
-            var fromLayer = GetCurrentLayer();
+            standingController.SyncStandingDiceCache();
+            var currentXZ = transformDriver.GetWorldXZ();
+            var standingCell = standingController.GridCell;
+            var fromLayer = standingController.Layer;
             var fromSurfaceY = GetEffectiveSurfaceWorldY();
-            var halfExtent = GetWalkHalfExtent();
+            var halfExtent = transformDriver.GetWalkHalfExtent();
             var nextXZ = currentXZ + move;
 
             if (IsOnFloor) {
-                nextXZ = ClampToBoardBounds(nextXZ);
+                nextXZ = transformDriver.ClampToBoardBounds(nextXZ);
             }
 
             if (TryApplyPositionBasedMovement(
@@ -330,7 +367,7 @@ namespace DiceGame.Gameplay
                 return;
             }
 
-            ApplyWorldPosition(new Vector3(nextXZ.x, 0f, nextXZ.y));
+            transformDriver.ApplyWorldPosition(new Vector3(nextXZ.x, 0f, nextXZ.y));
             UpdatePushContact(input);
         }
 
@@ -343,283 +380,67 @@ namespace DiceGame.Gameplay
             float fromSurfaceY,
             float halfExtent) {
             var isJumping = jumpPhase != JumpPhase.None;
-            var hasJumpDiceGridCap = false;
-            JumpDiceGridMoveCapability jumpDiceGridCap = default;
+            var hasJumpCapability = false;
+            JumpCoupledMoveCapability jumpCapability = default;
             if (isJumping) {
-                hasJumpDiceGridCap = TryGetJumpDiceGridMoveCapability(out jumpDiceGridCap);
+                hasJumpCapability = TryGetJumpCoupledMoveCapability(out jumpCapability);
             }
 
-            var allowJumpDiceGridMove = hasJumpDiceGridCap && jumpDiceGridCap.AllowAnyDiceGridMove;
-            var nextCell = ResolveNextCell(
-                standingCell,
+            var plan = movePlanner.TryBuildPlan(
                 currentXZ,
-                nextXZ,
                 move,
+                standingCell,
+                fromLayer,
+                fromSurfaceY,
                 halfExtent,
-                jumpDiceGridCap,
-                hasJumpDiceGridCap);
+                standingController,
+                isJumping,
+                hasJumpCapability,
+                jumpCapability);
 
-            if (nextCell == standingCell) {
-                nextXZ = ClampToCellInterior(nextXZ, standingCell, halfExtent);
-
-                return false;
-            }
-
-            if (!MovementTransitionEvaluator.IsOrthogonalWithinDistance(
-                standingCell,
-                nextCell,
-                GetMaxMovementCellDistance(standingCell, nextCell))) {
-                nextXZ = ClampToCellInterior(nextXZ, standingCell, halfExtent);
-
-                return false;
-            }
-
-            if (!MovementTransitionEvaluator.TryGetDirectionBetween(standingCell, nextCell, out var direction)) {
-                nextXZ = ClampToCellInterior(nextXZ, standingCell, halfExtent);
-                return false;
-            }
-
-            var standingDice = ResolveStandingDiceForMovement();
-            var cellDistance = MovementTransitionEvaluator.GetOrthogonalDistance(standingCell, nextCell);
-            var transition = cellDistance > 1
-                ? movementTransition.EvaluateToTargetCell(
-                    standingCell,
-                    nextCell,
+            if (plan.Kind == CharacterMoveKind.Blocked) {
+                LogPositionMovementBlock(
+                    "TransitionBlocked",
+                    plan.FromCell,
+                    plan.ToCell,
                     fromLayer,
                     fromSurfaceY,
-                    standingDice,
-                    standingTier,
-                    ignoreStepHeight: isJumping,
-                    isJumping: isJumping)
-                : movementTransition.Evaluate(
-                    standingCell,
-                    fromLayer,
-                    direction,
-                    fromSurfaceY,
-                    standingDice,
-                    standingTier,
-                    ignoreStepHeight: isJumping,
-                    isJumping: isJumping);
-
-            if (isJumping && nextCell != standingCell) {
-                LogJumpParallelRoll(
-                    $"TryApplyMovement jump from={FormatMovementGrid(standingCell)} " +
-                    $"to={FormatMovementGrid(nextCell)} dir={direction} cellDistance={cellDistance} " +
-                    $"transition={transition.Kind} targetLayer={transition.TargetLayer} " +
-                    $"targetDice={FormatMovementDice(transition.TargetDice)}");
+                    halfExtent,
+                    currentXZ,
+                    nextXZ,
+                    move,
+                    MovementTransitionKind.Blocked,
+                    $"stack={FormatMovementStack(plan.ToCell)}");
             }
 
-            switch (transition.Kind) {
-                case MovementTransitionKind.Walkable:
-                    ResetDissolveDescentHold();
-                    if (transition.TargetLayer == SurfaceLayer.Bottom
-                        && standingTier == DiceStackTier.Top
-                        && transition.TargetDice == currentDice
-                        && TryGetPrimaryDirection(move, out var topFallDir)
-                        && topFallDir == direction) {
-                        if (jumpPhase == JumpPhase.None && TryExecuteTopFallRoll(direction, nextXZ, halfExtent)) {
-                            return true;
-                        }
-
-                        if (allowJumpDiceGridMove && TryExecuteJumpTopFallRoll(direction, nextXZ, halfExtent)) {
-                            return true;
-                        }
-                    }
-
-                    if (allowJumpDiceGridMove
-                        && TryApplyJumpDiceMove(standingCell, nextCell, transition, direction, nextXZ, halfExtent)) {
-                        return true;
-                    }
-
-                    if (ShouldBlockFailedJumpGridMoveFallback(isJumping, allowJumpDiceGridMove, standingCell, nextCell)) {
-                        LogJumpParallelRoll(
-                            $"TryApplyMovement blocked-fallback Walkable from={FormatMovementGrid(standingCell)} " +
-                            $"to={FormatMovementGrid(nextCell)}");
-                        nextXZ = ClampToCellInterior(nextXZ, standingCell, halfExtent);
-                        return false;
-                    }
-
-                    if (isJumping
-                        && IsJumpStackWalkableTransition(transition, standingTier)
-                        && hasJumpDiceGridCap
-                        && !jumpDiceGridCap.AllowTierChange) {
-                        nextXZ = ClampToCellInterior(nextXZ, standingCell, halfExtent);
-                        return false;
-                    }
-
-                    ApplyTransitionStanding(transition, nextCell);
-                    return false;
-                case MovementTransitionKind.CanRoll:
-                    if (allowJumpDiceGridMove && currentDice != null) {
-                        var jumpTargetLayer = standingTier == DiceStackTier.Top
-                            ? SurfaceLayer.Top
-                            : SurfaceLayer.Bottom;
-                        var jumpDiceMove = MovementTransition.Walkable(currentDice, jumpTargetLayer);
-                        if (TryApplyJumpDiceMove(standingCell, nextCell, jumpDiceMove, direction, nextXZ, halfExtent)) {
-                            return true;
-                        }
-
-                        if (ShouldBlockFailedJumpGridMoveFallback(isJumping, allowJumpDiceGridMove, standingCell, nextCell)) {
-                            LogJumpParallelRoll(
-                                $"TryApplyMovement blocked-fallback CanRoll from={FormatMovementGrid(standingCell)} " +
-                                $"to={FormatMovementGrid(nextCell)}");
-                            nextXZ = ClampToCellInterior(nextXZ, standingCell, halfExtent);
-                            return false;
-                        }
-                    }
-
-                    if (TryGetPrimaryDirection(move, out var moveDir) && moveDir == direction) {
-                        if (TryExecuteGridRoll(direction, nextXZ, halfExtent)) {
-                            UpdatePushContact(Vector2.zero);
-                            return true;
-                        }
-
-                        if (ShouldBlockFailedJumpGridMoveFallback(isJumping, allowJumpDiceGridMove, standingCell, nextCell)) {
-                            LogJumpParallelRoll(
-                                $"TryApplyMovement blocked-fallback roll-failed from={FormatMovementGrid(standingCell)} " +
-                                $"to={FormatMovementGrid(nextCell)}");
-                            nextXZ = ClampToCellInterior(nextXZ, standingCell, halfExtent);
-                            return false;
-                        }
-
-                        if (Mathf.Abs(fromSurfaceY - board.FloorSurfaceWorldY) <= movementSettings.MaxStepHeight) {
-                            ApplyTransitionStanding(MovementTransition.Walkable(null, SurfaceLayer.Floor), nextCell);
-                            return false;
-                        }
-
-                        LogPositionMovementBlock(
-                            "RollFailed",
-                            standingCell,
-                            nextCell,
-                            fromLayer,
-                            fromSurfaceY,
-                            halfExtent,
-                            currentXZ,
-                            nextXZ,
-                            move,
-                            MovementTransitionKind.CanRoll,
-                            "roll and step-to-floor both failed");
-                    }
-
-                    nextXZ = ClampToCellInterior(nextXZ, standingCell, halfExtent);
-                    return false;
-                case MovementTransitionKind.Blocked:
-                    if (TryApplyDissolveDescentHold(
-                        standingCell,
-                        nextCell,
-                        fromLayer,
-                        fromSurfaceY,
-                        move,
-                        direction,
-                        standingDice)) {
-                        return false;
-                    }
-
-                    LogPositionMovementBlock(
-                        "TransitionBlocked",
-                        standingCell,
-                        nextCell,
-                        fromLayer,
-                        fromSurfaceY,
-                        halfExtent,
-                        currentXZ,
-                        nextXZ,
-                        move,
-                        transition.Kind,
-                        $"stack={FormatMovementStack(nextCell)}");
-                    nextXZ = CancelMoveIntoDirection(currentXZ, nextXZ, direction);
-                    nextXZ = ClampToCellInterior(nextXZ, standingCell, halfExtent);
-
-                    return false;
-                default:
-                    return false;
-            }
-        }
-
-        void ResetDissolveDescentHold() {
-            dissolveDescentHoldDirection = null;
-            dissolveDescentHoldTime = 0f;
-        }
-
-        bool TryApplyDissolveDescentHold(
-            Vector2Int standingCell,
-            Vector2Int nextCell,
-            SurfaceLayer fromLayer,
-            float fromSurfaceY,
-            Vector2 move,
-            Direction direction,
-            DiceController standingDice) {
-            if (standingDice == null || !standingDice.IsDissolving) {
-                ResetDissolveDescentHold();
-                return false;
-            }
-
-            if (!TryGetPrimaryDirection(move, out var moveDir) || moveDir != direction) {
-                ResetDissolveDescentHold();
-                return false;
-            }
-
-            if (!movementTransition.IsDescentBlockedOnlyByStepHeight(
-                standingCell,
+            if (movementExecutor.TryExecutePlan(
+                plan,
+                currentXZ,
+                ref nextXZ,
+                move,
                 fromLayer,
-                direction,
                 fromSurfaceY,
-                standingDice,
-                standingTier)) {
-                ResetDissolveDescentHold();
-                return false;
+                halfExtent,
+                isJumping,
+                hasJumpCapability,
+                jumpCapability,
+                LogJumpParallelRoll,
+                dissolveHoldState,
+                out var consumedMovement)) {
+                if (consumedMovement) {
+                    UpdatePushContact(Vector2.zero);
+                }
+
+                return consumedMovement;
             }
 
-            if (dissolveDescentHoldDirection != direction) {
-                dissolveDescentHoldDirection = direction;
-                dissolveDescentHoldTime = 0f;
-            }
-
-            dissolveDescentHoldTime += Time.deltaTime;
-            if (dissolveDescentHoldTime < movementSettings.DissolveDescentHoldDuration) {
-                return false;
-            }
-
-            var transition = movementTransition.Evaluate(
-                standingCell,
-                fromLayer,
-                direction,
-                fromSurfaceY,
-                standingDice,
-                standingTier,
-                ignoreStepHeight: true);
-            if (transition.Kind != MovementTransitionKind.Walkable) {
-                ResetDissolveDescentHold();
-                return false;
-            }
-
-            ApplyTransitionStanding(transition, nextCell);
-            ResetDissolveDescentHold();
-            return true;
+            return false;
         }
 
-        Vector2Int XZToGrid(Vector2 xz) {
-            return board.WorldToGrid(new Vector3(xz.x, 0f, xz.y));
-        }
-
-        int GetMaxMovementCellDistance(Vector2Int standingCell, Vector2Int nextCell) {
-            if (jumpPhase == JumpPhase.None) {
-                return 1;
-            }
-
-            var distance = MovementTransitionEvaluator.GetOrthogonalDistance(standingCell, nextCell);
-            var resolvedDistance = distance > 0 ? distance : 1;
-            if (TryGetJumpDiceGridMoveCapability(out var cap) && cap.AllowAnyDiceGridMove) {
-                return resolvedDistance;
-            }
-
-            return Mathf.Min(resolvedDistance, 1);
-        }
-
-        bool TryGetJumpDiceGridMoveCapability(out JumpDiceGridMoveCapability capability) {
-            var evaluated = JumpDiceGridMoveGate.TryEvaluate(
+        bool TryGetJumpCoupledMoveCapability(out JumpCoupledMoveCapability capability) {
+            var evaluated = JumpCoupledMoveGate.TryEvaluate(
                 jumpPhase != JumpPhase.None,
-                jumpDiceGridMoved,
+                coupling.JumpDiceGridMoved,
                 physicsSettings,
                 jumpMotion,
                 GetDiceJumpHeight(),
@@ -629,88 +450,26 @@ namespace DiceGame.Gameplay
                 return evaluated;
             }
 
-            if (jumpDiceGridMoved) {
+            if (coupling.JumpDiceGridMoved) {
                 LogJumpParallelRoll(
-                    "JumpDiceGridMoveGate blocked reason=already-moved " +
-                    $"jumpPhase={jumpPhase} jumpDiceGridMoved={jumpDiceGridMoved}");
+                    "JumpCoupledMoveGate blocked reason=already-moved " +
+                    $"jumpPhase={jumpPhase} coupling.JumpDiceGridMoved={coupling.JumpDiceGridMoved}");
                 return true;
             }
 
-            if (!capability.AllowAnyDiceGridMove) {
+            if (!capability.AllowCrossCellMove) {
                 LogJumpParallelRoll(
-                    $"JumpDiceGridMoveGate blocked timeline={capability.Timeline:F3} " +
+                    $"JumpCoupledMoveGate blocked timeline={capability.Timeline:F3} " +
                     $"oneCellMax={physicsSettings.JumpGridMoveOneCellMaxTimeline:F3}");
                 return true;
             }
 
             LogJumpParallelRoll(
-                $"JumpDiceGridMoveGate allowed timeline={capability.Timeline:F3} " +
+                $"JumpCoupledMoveGate allowed timeline={capability.Timeline:F3} " +
                 $"maxDistance={capability.MaxDistance} allowTierChange={capability.AllowTierChange} " +
                 $"twoCellMax={physicsSettings.JumpGridMoveTwoCellMaxTimeline:F3} " +
                 $"oneCellMax={physicsSettings.JumpGridMoveOneCellMaxTimeline:F3}");
             return true;
-        }
-
-        Vector2Int ResolveNextCell(
-            Vector2Int standingCell,
-            Vector2 currentXZ,
-            Vector2 nextXZ,
-            Vector2 move,
-            float halfExtent,
-            JumpDiceGridMoveCapability jumpDiceGridCap,
-            bool hasJumpDiceGridCap) {
-            if (TryGetPrimaryDirection(move, out var moveDir)) {
-                if (IsAtOrPastFaceEdge(currentXZ, standingCell, moveDir, halfExtent)) {
-                    if (hasJumpDiceGridCap
-                        && jumpDiceGridCap.AllowAnyDiceGridMove
-                        && jumpDiceGridCap.MaxDistance > 0
-                        && TryResolveJumpParallelRollTarget(
-                            standingCell,
-                            moveDir,
-                            jumpDiceGridCap.MaxDistance,
-                            out var parallelRollTarget)) {
-                        LogJumpParallelRoll(
-                            $"ResolveNextCell parallel-roll from={FormatMovementGrid(standingCell)} " +
-                            $"to={FormatMovementGrid(parallelRollTarget)} dir={moveDir}");
-                        return parallelRollTarget;
-                    }
-
-                    return standingCell + moveDir.ToGridDelta();
-                }
-
-                return standingCell;
-            }
-
-            var positionCell = XZToGrid(nextXZ);
-            if (positionCell == standingCell) {
-                return standingCell;
-            }
-
-            if (MovementTransitionEvaluator.IsOrthogonalWithinDistance(
-                standingCell,
-                positionCell,
-                1)) {
-                return positionCell;
-            }
-
-            return standingCell;
-        }
-
-        bool IsAtOrPastFaceEdge(Vector2 xz, Vector2Int cell, Direction direction, float halfExtent) {
-            var center = GetCellCenterXZ(cell);
-
-            switch (direction) {
-                case Direction.East:
-                    return xz.x >= center.x + halfExtent - EdgeEpsilon;
-                case Direction.West:
-                    return xz.x <= center.x - halfExtent + EdgeEpsilon;
-                case Direction.North:
-                    return xz.y >= center.y + halfExtent - EdgeEpsilon;
-                case Direction.South:
-                    return xz.y <= center.y - halfExtent + EdgeEpsilon;
-                default:
-                    return false;
-            }
         }
 
         void LogPositionMovementBlock(
@@ -733,21 +492,21 @@ namespace DiceGame.Gameplay
                 direction = Direction.North;
             }
 
-            var standingDice = ResolveStandingDiceForMovement();
+            var standingDice = standingController.ResolveStandingDiceForMovement();
             var target = movementTransition.IsWalkableBetween(
                 standingCell,
                 nextCell,
                 fromLayer,
                 fromSurfaceY,
                 standingDice,
-                standingTier)
+                standingController.Tier)
                 ? DescribeWalkableTarget(standingCell, nextCell, fromLayer, fromSurfaceY)
                 : "(none)";
 
             var detail =
                 $"from={FormatMovementGrid(standingCell)} to={FormatMovementGrid(nextCell)} " +
-                $"posCell={FormatMovementGrid(XZToGrid(nextXZ))} " +
-                $"layer={fromLayer} tier={standingTier} dice={FormatMovementDice(standingDice)} " +
+                $"posCell={FormatMovementGrid(board.WorldToGrid(new Vector3(nextXZ.x, 0f, nextXZ.y)))} " +
+                $"layer={fromLayer} tier={standingController.Tier} dice={FormatMovementDice(standingDice)} " +
                 $"target={target} stack={FormatMovementStack(nextCell)} " +
                 $"transition={transitionKind} surfaceY={fromSurfaceY:F3} halfExtent={halfExtent:F3} " +
                 $"pos={FormatMovementVector2(currentXZ)} final={FormatMovementVector2(nextXZ)} " +
@@ -767,14 +526,14 @@ namespace DiceGame.Gameplay
                 return "(none)";
             }
 
-            var standingDice = ResolveStandingDiceForMovement();
+            var standingDice = standingController.ResolveStandingDiceForMovement();
             var transition = movementTransition.Evaluate(
                 fromCell,
                 fromLayer,
                 direction,
                 fromSurfaceY,
                 standingDice,
-                standingTier);
+                standingController.Tier);
             if (transition.TargetLayer == SurfaceLayer.Floor) {
                 return "Floor";
             }
@@ -840,513 +599,19 @@ namespace DiceGame.Gameplay
             return $"Grid({state.GridPos.x},{state.GridPos.y}) {state.Tier}";
         }
 
-        Vector2Int GetStandingCell() {
-            return standingGridCell;
-        }
-
-        DiceController ResolveStandingDiceForMovement() {
-            SyncStandingDiceCache();
-            return currentDice;
-        }
-
-        bool TryGetStandingDice(out DiceController dice) {
-            dice = null;
-            if (registry == null || standingSurfaceLayer == SurfaceLayer.Floor) {
-                return false;
-            }
-
-            if (standingSurfaceLayer == SurfaceLayer.Top) {
-                if (registry.TryGetTopAt(standingGridCell, out dice)) {
-                    return true;
-                }
-
-                if (currentDice != null
-                    && currentDice.CurrentState.Tier == DiceStackTier.Bottom
-                    && currentDice.CurrentState.GridPos == standingGridCell) {
-                    dice = currentDice;
-                    return true;
-                }
-
-                return false;
-            }
-
-            return registry.TryGetBottomAt(standingGridCell, out dice);
-        }
-
-        void SyncStandingDiceCache() {
-            if (!TryGetStandingDice(out var dice)) {
-                if (currentDice != null) {
-                    UnsubscribeStandingDice();
-                    currentDice = null;
-                }
-
-                return;
-            }
-
-            if (currentDice != dice) {
-                ResubscribeStandingDice(dice);
-            }
-        }
-
-        void ApplyTransitionStanding(MovementTransition transition, Vector2Int toCell) {
-            if (transition.TargetLayer == SurfaceLayer.Floor) {
-                SetStandingOnFloor(toCell);
-                return;
-            }
-
-            if (transition.TargetDice != null) {
-                var tier = transition.TargetLayer == SurfaceLayer.Top
-                    ? DiceStackTier.Top
-                    : DiceStackTier.Bottom;
-                SetStandingOnDice(toCell, tier, transition.TargetDice);
-            }
-        }
-
-        bool ShouldBlockFailedJumpGridMoveFallback(
-            bool isJumping,
-            bool allowJumpDiceGridMove,
-            Vector2Int fromCell,
-            Vector2Int toCell) {
-            if (!isJumping || !allowJumpDiceGridMove) {
-                return false;
-            }
-
-            return MovementTransitionEvaluator.GetOrthogonalDistance(fromCell, toCell) >= 1;
-        }
-
-        bool TryApplyJumpDiceMove(
-            Vector2Int fromCell,
-            Vector2Int toCell,
-            MovementTransition transition,
-            Direction direction,
-            Vector2 nextXZ,
-            float halfExtent) {
-            if (jumpDiceGridMoved
-                || currentDice == null
-                || transition.TargetDice != currentDice
-                || currentDice.IsDissolving) {
-                LogJumpParallelRoll(
-                    $"TryApplyJumpDiceMove reject from={FormatMovementGrid(fromCell)} " +
-                    $"to={FormatMovementGrid(toCell)} dice={FormatMovementDice(currentDice)} " +
-                    $"targetDice={FormatMovementDice(transition.TargetDice)} dissolving={currentDice?.IsDissolving}");
-                return false;
-            }
-
-            JumpDiceMoveKind moveKind;
-            DiceStackTier targetTier;
-            if (!TryBeginJumpDiceRoll(
-                fromCell,
-                toCell,
-                direction,
-                out moveKind,
-                out targetTier)) {
-                LogJumpParallelRoll(
-                    $"TryApplyJumpDiceMove reject begin-roll-failed from={FormatMovementGrid(fromCell)} " +
-                    $"to={FormatMovementGrid(toCell)} transition={transition.Kind} " +
-                    $"targetLayer={transition.TargetLayer}");
-                return false;
-            }
-
-            jumpDiceMoveKind = moveKind;
-            QueuePendingJumpDiceStandingUpdate(toCell, targetTier);
-            jumpDiceGridMoved = true;
-
-            var diceCenter = currentDice.View.DiceTransform.position;
-            var diceCenterAnchor = diceCenter;
-            var nextOffset = WorldOffsetFromDiceCenter(diceCenter, nextXZ);
-            var clamped = ClampToFace(nextOffset, halfExtent);
-            ApplyWorldPosition(new Vector3(diceCenter.x + clamped.x, 0f, diceCenter.z + clamped.y));
-            BeginRollTracking(characterTransform.position, diceCenterAnchor);
-            return true;
-        }
-
-        bool TryBeginJumpDiceRoll(
-            Vector2Int fromCell,
-            Vector2Int toCell,
-            Direction direction,
-            out JumpDiceMoveKind moveKind,
-            out DiceStackTier targetTier) {
-            moveKind = JumpDiceMoveKind.None;
-            targetTier = standingTier;
-
-            var rollDistance = MovementTransitionEvaluator.GetOrthogonalDistance(fromCell, toCell);
-            if (rollDistance < 1) {
-                rollDistance = 1;
-            }
-
-            var hasTopOnSameCell = registry.HasTopAt(fromCell);
-            if (!DiceGridMovePlanner.TryBuildJumpPlan(
-                currentDice.CurrentState,
-                direction,
-                rollDistance,
-                registry,
-                hasTopOnSameCell,
-                out var plan,
-                out _)) {
-                return false;
-            }
-
-            if (plan.Kind == DiceGridMoveKind.Stack
-                && TryGetJumpDiceGridMoveCapability(out var jumpDiceGridCap)
-                && !jumpDiceGridCap.AllowTierChange) {
-                return false;
-            }
-
-            jumpArcRollActive = true;
-            if (!currentDice.TryExecuteJumpMovePlan(plan, jumpYOffset, () => jumpMotion)) {
-                jumpArcRollActive = false;
-                LogJumpParallelRoll(
-                    $"TryBeginJumpDiceRoll reject execute-plan-failed from={FormatMovementGrid(fromCell)} " +
-                    $"to={FormatMovementGrid(toCell)} kind={plan.Kind} distance={plan.Distance}");
-                return false;
-            }
-
-            moveKind = plan.Kind switch {
-                DiceGridMoveKind.Parallel => JumpDiceMoveKind.SameTierParallel,
-                DiceGridMoveKind.Stack => JumpDiceMoveKind.StackOntoTop,
-                DiceGridMoveKind.Demote => JumpDiceMoveKind.DemoteToBottom,
-                _ => JumpDiceMoveKind.None
-            };
-            targetTier = plan.To.Tier;
-            return true;
-        }
-
-        void QueuePendingJumpDiceStandingUpdate(Vector2Int toCell, DiceStackTier tier) {
-            hasPendingJumpDiceStandingUpdate = true;
-            pendingJumpDiceToCell = toCell;
-            pendingJumpDiceTier = tier;
-        }
-
-        void CompletePendingJumpDiceStandingUpdate() {
-            if (!hasPendingJumpDiceStandingUpdate) {
-                return;
-            }
-
-            hasPendingJumpDiceStandingUpdate = false;
-            UpdateStandingAfterJumpDiceMove(pendingJumpDiceToCell, pendingJumpDiceTier);
-        }
-
-        void ClearPendingJumpDiceStandingUpdate() {
-            hasPendingJumpDiceStandingUpdate = false;
-        }
-
-        bool TryResolveJumpParallelRollTarget(
-            Vector2Int standingCell,
-            Direction direction,
-            int maxRollDistance,
-            out Vector2Int rollTarget) {
-            rollTarget = standingCell;
-            SyncStandingDiceCache();
-            if (currentDice == null) {
-                LogJumpParallelRoll(
-                    $"TryResolveJumpParallelRollTarget fail from={FormatMovementGrid(standingCell)} " +
-                    $"dir={direction} reason=no-current-dice");
-                return false;
-            }
-
-            if (maxRollDistance < 1) {
-                LogJumpParallelRoll(
-                    $"TryResolveJumpParallelRollTarget fail from={FormatMovementGrid(standingCell)} " +
-                    $"dir={direction} reason=max-roll-distance={maxRollDistance}");
-                return false;
-            }
-
-            var standingDice = ResolveStandingDiceForMovement();
-            LogJumpParallelRoll(
-                $"TryResolveJumpParallelRollTarget start from={FormatMovementGrid(standingCell)} " +
-                $"dir={direction} maxRollDistance={maxRollDistance} tier={standingTier} " +
-                $"dice={standingDice.name} stack={FormatMovementStack(standingCell)}");
-
-            for (var distance = maxRollDistance; distance >= 1; distance--) {
-                if (!movementTransition.TryGetJumpParallelRollTarget(
-                    standingCell,
-                    direction,
-                    standingDice,
-                    standingTier,
-                    distance,
-                    out var candidate,
-                    out _)) {
-                    LogJumpParallelRoll(
-                        $"TryResolveJumpParallelRollTarget try distance={distance} rejected");
-                    continue;
-                }
-
-                rollTarget = candidate;
-                LogJumpParallelRoll(
-                    $"TryResolveJumpParallelRollTarget ok distance={distance} " +
-                    $"to={FormatMovementGrid(candidate)}");
-                return true;
-            }
-
-            LogJumpParallelRoll(
-                $"TryResolveJumpParallelRollTarget fail from={FormatMovementGrid(standingCell)} " +
-                $"dir={direction} all-distances-rejected maxRollDistance={maxRollDistance}");
-            return false;
-        }
-
-        void UpdateStandingAfterJumpDiceMove(Vector2Int toCell, DiceStackTier tier) {
-            standingGridCell = toCell;
-            standingTier = tier;
-            standingSurfaceLayer = tier == DiceStackTier.Top ? SurfaceLayer.Top : SurfaceLayer.Bottom;
-            ResubscribeStandingDice(currentDice);
-        }
-
-        bool TryExecuteJumpTopFallRoll(Direction direction, Vector2 nextXZ, float edgeLimit) {
-            if (jumpPhase == JumpPhase.None || jumpDiceGridMoved) {
-                return false;
-            }
-
-            SyncStandingDiceCache();
-            if (currentDice?.View.DiceTransform == null || currentDice.IsDissolving) {
-                return false;
-            }
-
-            if (standingTier != DiceStackTier.Top
-                || currentDice.CurrentState.Tier != DiceStackTier.Top) {
-                return false;
-            }
-
-            var targetPos = standingGridCell + direction.ToGridDelta();
-            if (!DiceGridMovePlanner.TryBuildJumpPlan(
-                currentDice.CurrentState,
-                direction,
-                1,
-                registry,
-                registry.HasTopAt(standingGridCell),
-                out var plan,
-                out _)
-                || plan.Kind != DiceGridMoveKind.Demote) {
-                return false;
-            }
-
-            jumpArcRollActive = true;
-            if (!currentDice.TryExecuteJumpMovePlan(plan, jumpYOffset, () => jumpMotion)) {
-                jumpArcRollActive = false;
-                return false;
-            }
-
-            jumpDiceGridMoved = true;
-            jumpDiceMoveKind = JumpDiceMoveKind.DemoteToBottom;
-            QueuePendingJumpDiceStandingUpdate(plan.To.GridPos, plan.To.Tier);
-
-            var diceCenter = currentDice.View.DiceTransform.position;
-            var diceCenterAnchor = diceCenter;
-            var nextOffset = WorldOffsetFromDiceCenter(diceCenter, nextXZ);
-            var clamped = ClampToFace(nextOffset, edgeLimit);
-            ApplyWorldPosition(new Vector3(diceCenter.x + clamped.x, 0f, diceCenter.z + clamped.y));
-            BeginRollTracking(characterTransform.position, diceCenterAnchor);
-            return true;
-        }
-
-        void SetStandingOnFloor(Vector2Int gridCell) {
-            EndRollTracking();
-            UnsubscribeStandingDice();
-            currentDice = null;
-            standingSurfaceLayer = SurfaceLayer.Floor;
-            standingTier = DiceStackTier.Bottom;
-            standingGridCell = gridCell;
-        }
-
-        void SetStandingOnDice(Vector2Int gridCell, DiceStackTier tier, DiceController dice) {
-            EndRollTracking();
-            standingGridCell = gridCell;
-            standingTier = tier;
-            standingSurfaceLayer = tier == DiceStackTier.Top ? SurfaceLayer.Top : SurfaceLayer.Bottom;
-            ResubscribeStandingDice(dice);
-        }
-
-        SurfaceLayer GetCurrentLayer() {
-            return standingSurfaceLayer;
-        }
-
-        float GetWalkHalfExtent() {
-            return board.CellSize * 0.5f;
-        }
-
-        Vector2 GetCellCenterXZ(Vector2Int grid) {
-            var world = board.GridToWorld(grid);
-            return new Vector2(world.x, world.z);
-        }
-
-        bool TryExecuteGridRoll(Direction direction, Vector2 nextXZ, float edgeLimit) {
-            if (jumpPhase != JumpPhase.None) {
-                return false;
-            }
-
-            SyncStandingDiceCache();
-            if (currentDice?.View.DiceTransform == null || currentDice.IsDissolving) {
-                return false;
-            }
-
-            if (standingTier != currentDice.CurrentState.Tier) {
-                return false;
-            }
-
-            if (standingTier == DiceStackTier.Bottom && registry.HasTopAt(standingGridCell)) {
-                return false;
-            }
-
-            var hasTopOnSameCell = registry.HasTopAt(standingGridCell);
-            if (!RollResolver.TryRoll(
-                currentDice.CurrentState,
-                direction,
-                registry,
-                hasTopOnSameCell,
-                out _)) {
-                return false;
-            }
-
-            var diceCenter = currentDice.View.DiceTransform.position;
-            var nextOffset = WorldOffsetFromDiceCenter(diceCenter, nextXZ);
-            var clamped = ClampToFace(nextOffset, edgeLimit);
-            ApplyWorldPosition(new Vector3(diceCenter.x + clamped.x, 0f, diceCenter.z + clamped.y));
-
-            var characterAnchor = characterTransform.position;
-            var diceCenterAnchor = diceCenter;
-
-            if (!currentDice.TryRoll(direction)) {
-                return false;
-            }
-
-            standingGridCell = currentDice.CurrentState.GridPos;
-            BeginRollTracking(characterAnchor, diceCenterAnchor);
-            return true;
-        }
-
-        bool TryExecuteTopFallRoll(Direction direction, Vector2 nextXZ, float edgeLimit) {
-            if (jumpPhase != JumpPhase.None) {
-                return false;
-            }
-
-            SyncStandingDiceCache();
-            if (currentDice?.View.DiceTransform == null || currentDice.IsDissolving) {
-                return false;
-            }
-
-            if (standingTier != DiceStackTier.Top
-                || currentDice.CurrentState.Tier != DiceStackTier.Top) {
-                return false;
-            }
-
-            var targetPos = standingGridCell + direction.ToGridDelta();
-            if (!registry.CanPlaceBottomDiceAt(targetPos)) {
-                return false;
-            }
-
-            var diceCenter = currentDice.View.DiceTransform.position;
-            var nextOffset = WorldOffsetFromDiceCenter(diceCenter, nextXZ);
-            var clamped = ClampToFace(nextOffset, edgeLimit);
-            ApplyWorldPosition(new Vector3(diceCenter.x + clamped.x, 0f, diceCenter.z + clamped.y));
-
-            var characterAnchor = characterTransform.position;
-            var diceCenterAnchor = diceCenter;
-
-            if (!currentDice.TryRollThenDemote(direction)) {
-                return false;
-            }
-
-            standingGridCell = currentDice.CurrentState.GridPos;
-            standingTier = DiceStackTier.Bottom;
-            standingSurfaceLayer = SurfaceLayer.Bottom;
-            BeginRollTracking(characterAnchor, diceCenterAnchor);
-            return true;
-        }
-
-        static Vector2 CancelMoveIntoDirection(Vector2 current, Vector2 proposed, Direction direction) {
-            var result = proposed;
-
-            switch (direction) {
-                case Direction.East:
-                    if (proposed.x > current.x) {
-                        result.x = current.x;
-                    }
-
-                    break;
-                case Direction.West:
-                    if (proposed.x < current.x) {
-                        result.x = current.x;
-                    }
-
-                    break;
-                case Direction.North:
-                    if (proposed.y > current.y) {
-                        result.y = current.y;
-                    }
-
-                    break;
-                case Direction.South:
-                    if (proposed.y < current.y) {
-                        result.y = current.y;
-                    }
-
-                    break;
-            }
-
-            return result;
-        }
-
-        Vector2 ClampToCellInterior(Vector2 position, Vector2Int cell, float halfExtent) {
-            var center = GetCellCenterXZ(cell);
-            return new Vector2(
-                Mathf.Clamp(position.x, center.x - halfExtent, center.x + halfExtent),
-                Mathf.Clamp(position.y, center.y - halfExtent, center.y + halfExtent));
-        }
-
-        Vector2 ClampToBoardBounds(Vector2 position) {
-            var clamped = ClampToWalkBounds(new Vector3(position.x, 0f, position.y));
-            return new Vector2(clamped.x, clamped.z);
-        }
-
         void UpdateDuringRoll(Vector2 input) {
-            if (!isTrackingDiceRoll) {
-                BeginRollTracking();
-            }
-
+            coupling.EnsureTrackingFromCurrentPose();
             currentSpeed = 0f;
-        }
-
-        void OnDiceStateChanged(DiceState state) {
-            if (!isInitialized) {
-                return;
-            }
-
-            currentSpeed = 0f;
-            if (standingSurfaceLayer != SurfaceLayer.Floor) {
-                standingGridCell = state.GridPos;
-            }
-
-            if (TryGetStandingDice(out var standingDice)
-                && standingDice == currentDice
-                && state.GridPos == standingGridCell
-                && state.Tier != standingTier) {
-                SetStandingOnDice(state.GridPos, state.Tier, standingDice);
-                SnapYToSurface();
-            }
-        }
-
-        void ResubscribeStandingDice(DiceController dice) {
-            UnsubscribeStandingDice();
-            currentDice = dice;
-            if (currentDice != null) {
-                currentDice.StateChanged += OnDiceStateChanged;
-            }
-        }
-
-        void UnsubscribeStandingDice() {
-            if (currentDice != null) {
-                currentDice.StateChanged -= OnDiceStateChanged;
-            }
         }
 
         void MoveToFloorAtCurrentWorldPosition() {
-            EndRollTracking();
+            coupling.EndRollTracking();
             var gridCell = characterTransform != null
                 ? board.WorldToGrid(characterTransform.position)
-                : standingGridCell;
-            SetStandingOnFloor(gridCell);
-            SnapYToSurface();
+                : standingController.GridCell;
+            standingController.SetOnFloor(gridCell);
+            transformDriver.SnapYToSurface();
         }
-
         void EnsureCharacterInstance() {
             characterMount = transform;
 
@@ -1398,24 +663,15 @@ namespace DiceGame.Gameplay
             topY = bounds.max.y;
         }
 
-        Vector2 GetWorldXZ() {
-            if (characterTransform == null) {
-                return Vector2.zero;
-            }
-
-            var position = characterTransform.position;
-            return new Vector2(position.x, position.z);
-        }
-
         float GetSurfaceWorldY() {
             if (IsOnFloor) {
                 return board.FloorSurfaceWorldY;
             }
 
-            if (TryGetStandingDice(out var standingDice)) {
-                if (standingTier == DiceStackTier.Top
+            if (standingController.TryGetStandingDice(out var standingDice)) {
+                if (standingController.Tier == DiceStackTier.Top
                     && standingDice.CurrentState.Tier == DiceStackTier.Bottom
-                    && !registry.HasTopAt(standingGridCell)) {
+                    && !registry.HasTopAt(standingController.GridCell)) {
                     return movementTransition.GetStackTopStandingSurfaceY(standingDice);
                 }
 
@@ -1452,112 +708,13 @@ namespace DiceGame.Gameplay
                 return true;
             }
 
-            return TryGetStandingDice(out var standingDice) && standingDice.IsDissolving;
-        }
-
-        void ApplyWorldPosition(Vector3 worldPos) {
-            if (characterTransform == null || board == null) {
-                return;
-            }
-
-            worldPos.y = GetCharacterWorldY();
-            characterTransform.position = worldPos;
-            characterTransform.rotation = Quaternion.identity;
-        }
-
-        void SnapYToSurface() {
-            if (characterTransform == null || isTrackingDiceRoll) {
-                return;
-            }
-
-            var position = characterTransform.position;
-            position.y = GetCharacterWorldY();
-            characterTransform.position = position;
-            characterTransform.rotation = Quaternion.identity;
-        }
-
-        Vector3 ClampToWalkBounds(Vector3 worldPos) {
-            if (IsOnFloor) {
-                var minX = 0f;
-                var minZ = 0f;
-                var maxX = (board.Width - 1) * board.CellSize;
-                var maxZ = (board.Height - 1) * board.CellSize;
-                worldPos.x = Mathf.Clamp(worldPos.x, minX, maxX);
-                worldPos.z = Mathf.Clamp(worldPos.z, minZ, maxZ);
-                return worldPos;
-            }
-
-            var center = GetCellCenterXZ(standingGridCell);
-            var limit = GetWalkHalfExtent();
-            worldPos.x = Mathf.Clamp(worldPos.x, center.x - limit, center.x + limit);
-            worldPos.z = Mathf.Clamp(worldPos.z, center.y - limit, center.y + limit);
-            return worldPos;
-        }
-
-        static Vector2 GetOffsetFromDiceCenter(DiceController dice, Vector3 worldPos) {
-            if (dice?.View.DiceTransform == null) {
-                return Vector2.zero;
-            }
-
-            var center = dice.View.DiceTransform.position;
-            return new Vector2(worldPos.x - center.x, worldPos.z - center.z);
-        }
-
-        void BeginRollTracking() {
-            if (characterTransform == null || currentDice?.View.DiceTransform == null) {
-                return;
-            }
-
-            rollStartCharacterPosition = characterTransform.position;
-            rollStartDiceCenter = currentDice.View.DiceTransform.position;
-            isTrackingDiceRoll = true;
-        }
-
-        void BeginRollTracking(Vector3 characterAnchor, Vector3 diceCenterAnchor) {
-            rollStartCharacterPosition = characterAnchor;
-            rollStartDiceCenter = diceCenterAnchor;
-            isTrackingDiceRoll = true;
-        }
-
-        void EndRollTracking() {
-            if (!isTrackingDiceRoll) {
-                return;
-            }
-
-            SyncPositionDuringRoll();
-            isTrackingDiceRoll = false;
-            SnapYToSurface();
-            if (characterTransform != null) {
-                characterTransform.rotation = Quaternion.identity;
-            }
-        }
-
-        void SyncPositionDuringRoll() {
-            if (!isTrackingDiceRoll || characterTransform == null || currentDice?.View.DiceTransform == null) {
-                return;
-            }
-
-            var diceCenter = currentDice.View.DiceTransform.position;
-            var delta = diceCenter - rollStartDiceCenter;
-            var worldPosition = rollStartCharacterPosition + delta;
-            worldPosition.y = currentDice.GetTopSurfaceWorldY() + movementSettings.CharacterHeightOffset;
-
-            characterTransform.position = worldPosition;
-            characterTransform.rotation = Quaternion.identity;
+            return standingController.TryGetStandingDice(out var standingDice) && standingDice.IsDissolving;
         }
 
         float GetDiceJumpHeight() {
             return board != null
                 ? board.CellSize * physicsSettings.JumpHeightDiceMultiplier
                 : physicsSettings.JumpHeightFallback;
-        }
-
-        static bool IsJumpStackWalkableTransition(
-            MovementTransition transition,
-            DiceStackTier standingTier) {
-            return transition.Kind == MovementTransitionKind.Walkable
-                && standingTier == DiceStackTier.Bottom
-                && transition.TargetLayer == SurfaceLayer.Top;
         }
 
         void ResetPushState() {
@@ -1677,7 +834,7 @@ namespace DiceGame.Gameplay
                 return;
             }
 
-            EndRollTracking();
+            coupling.EndRollTracking();
             SyncPushFollowStanding();
 
             var diceCenter = diceTransform.position;
@@ -1692,7 +849,7 @@ namespace DiceGame.Gameplay
                 _ => beforePosition
             };
 
-            ApplyWorldPosition(position);
+            transformDriver.ApplyWorldPosition(position);
         }
 
         void SyncPushFollowStanding() {
@@ -1728,25 +885,25 @@ namespace DiceGame.Gameplay
         }
 
         void ApplyFloorStanding(Vector2Int gridCell) {
-            if (standingSurfaceLayer == SurfaceLayer.Floor
-                && standingGridCell == gridCell
-                && currentDice == null) {
+            if (standingController.Layer == SurfaceLayer.Floor
+                && standingController.GridCell == gridCell
+                && standingController.CurrentDice == null) {
                 return;
             }
 
-            SetStandingOnFloor(gridCell);
+            standingController.SetOnFloor(gridCell);
         }
 
         void ApplyDiceStanding(Vector2Int gridCell, DiceStackTier tier, DiceController dice) {
             var layer = tier == DiceStackTier.Top ? SurfaceLayer.Top : SurfaceLayer.Bottom;
-            if (standingSurfaceLayer == layer
-                && standingGridCell == gridCell
-                && standingTier == tier
-                && currentDice == dice) {
+            if (standingController.Layer == layer
+                && standingController.GridCell == gridCell
+                && standingController.Tier == tier
+                && standingController.CurrentDice == dice) {
                 return;
             }
 
-            SetStandingOnDice(gridCell, tier, dice);
+            standingController.SetOnDice(gridCell, tier, dice);
         }
 
         void CollectPushCandidates(Vector2 input, List<PushContactCandidate> candidates) {
@@ -1768,7 +925,7 @@ namespace DiceGame.Gameplay
                 ~0,
                 QueryTriggerInteraction.Collide);
 
-            var characterXZ = GetWorldXZ();
+            var characterXZ = transformDriver.GetWorldXZ();
             var overlapSummary = new System.Text.StringBuilder();
 
             foreach (var hit in hits) {
@@ -1826,8 +983,8 @@ namespace DiceGame.Gameplay
             LogPushDebugWhenInput(
                 input,
                 "overlap-summary",
-                $"stage=overlap standing={FormatMovementGrid(GetStandingCell())} layer={standingSurfaceLayer} " +
-                $"tier={standingTier} charXZ=({characterXZ.x:F2},{characterXZ.y:F2}) input=({input.x:F2},{input.y:F2}) " +
+                $"stage=overlap standing={FormatMovementGrid(standingController.GridCell)} layer={standingController.Layer} " +
+                $"tier={standingController.Tier} charXZ=({characterXZ.x:F2},{characterXZ.y:F2}) input=({input.x:F2},{input.y:F2}) " +
                 $"hits={hits.Length} dice={overlapSummary} candidates={candidates.Count}");
         }
 
@@ -1954,7 +1111,7 @@ namespace DiceGame.Gameplay
                 return false;
             }
 
-            if (TryGetStandingDice(out var standingDice) && dice == standingDice) {
+            if (standingController.TryGetStandingDice(out var standingDice) && dice == standingDice) {
                 rejectReason = "standingDice";
                 return false;
             }
@@ -1991,7 +1148,7 @@ namespace DiceGame.Gameplay
                 return false;
             }
 
-            if (TryGetStandingDice(out var standingDice) && dice == standingDice) {
+            if (standingController.TryGetStandingDice(out var standingDice) && dice == standingDice) {
                 return false;
             }
 
@@ -2008,7 +1165,7 @@ namespace DiceGame.Gameplay
                     && !registry.HasTopAt(dice.CurrentState.GridPos);
             }
 
-            if (standingTier == DiceStackTier.Bottom) {
+            if (standingController.Tier == DiceStackTier.Bottom) {
                 return true;
             }
 
@@ -2016,8 +1173,8 @@ namespace DiceGame.Gameplay
         }
 
         DiceSlot GetPlayerDiceSlot() {
-            var tier = IsOnFloor ? DiceStackTier.Bottom : standingTier;
-            return new DiceSlot(GetStandingCell(), tier);
+            var tier = IsOnFloor ? DiceStackTier.Bottom : standingController.Tier;
+            return new DiceSlot(standingController.GridCell, tier);
         }
 
         bool IsPushReachableFromStanding(DiceController dice) {
@@ -2167,8 +1324,8 @@ namespace DiceGame.Gameplay
                 return;
             }
 
-            var center = GetCellCenterXZ(GetStandingCell());
-            ApplyWorldPosition(new Vector3(center.x, 0f, center.y));
+            var center = transformDriver.GetCellCenterXZ(standingController.GridCell);
+            transformDriver.ApplyWorldPosition(new Vector3(center.x, 0f, center.y));
         }
 
         Vector3 GetCarryWorldPosition() {
@@ -2223,7 +1380,7 @@ namespace DiceGame.Gameplay
                 return false;
             }
 
-            var originGrid = GetStandingCell();
+            var originGrid = standingController.GridCell;
             var targetGrid = originGrid + direction.ToGridDelta();
 
             DiceStackTier targetTier;
@@ -2263,7 +1420,7 @@ namespace DiceGame.Gameplay
                 return false;
             }
 
-            var neighborGrid = GetStandingCell() + lastFacing.ToGridDelta();
+            var neighborGrid = standingController.GridCell + lastFacing.ToGridDelta();
             if (!board.IsInside(neighborGrid)) {
                 return false;
             }
@@ -2273,7 +1430,7 @@ namespace DiceGame.Gameplay
                 return false;
             }
 
-            if (candidate == ResolveStandingDiceForMovement()
+            if (candidate == standingController.ResolveStandingDiceForMovement()
                 || candidate.IsDissolving
                 || candidate.IsBusy
                 || !CanLiftDice(candidate)) {
@@ -2304,7 +1461,7 @@ namespace DiceGame.Gameplay
                 return false;
             }
 
-            if (!IsOnFloor && currentDice != null && currentDice.IsRolling) {
+            if (!IsOnFloor && standingController.CurrentDice != null && standingController.CurrentDice.IsRolling) {
                 return false;
             }
 
@@ -2315,10 +1472,7 @@ namespace DiceGame.Gameplay
             jumpMotion = GravityMotion.CreateLaunch(GetDiceJumpHeight(), physicsSettings.Gravity);
             jumpPhase = JumpPhase.Airborne;
             jumpYOffset = 0f;
-            jumpDiceGridMoved = false;
-            jumpArcRollActive = false;
-            jumpDiceMoveKind = JumpDiceMoveKind.None;
-            ClearPendingJumpDiceStandingUpdate();
+            coupling.ResetJumpSessionFlags();
             ResetPushState();
             return true;
         }
@@ -2328,7 +1482,7 @@ namespace DiceGame.Gameplay
                 return;
             }
 
-            if (jumpDiceGridMoved && currentDice != null && currentDice.IsRolling && !jumpArcRollActive) {
+            if (coupling.JumpDiceGridMoved && standingController.CurrentDice != null && standingController.CurrentDice.IsRolling && !coupling.IsJumpArc) {
                 return;
             }
 
@@ -2336,7 +1490,7 @@ namespace DiceGame.Gameplay
             jumpYOffset = jumpMotion.Offset;
 
             if (jumpMotion.IsGrounded) {
-                if (jumpArcRollActive && currentDice != null && currentDice.IsRolling) {
+                if (coupling.IsJumpArc && standingController.CurrentDice != null && standingController.CurrentDice.IsRolling) {
                     return;
                 }
 
@@ -2349,12 +1503,12 @@ namespace DiceGame.Gameplay
                 return;
             }
 
-            if (currentDice != null && currentDice.IsRolling) {
+            if (standingController.CurrentDice != null && standingController.CurrentDice.IsRolling) {
                 return;
             }
 
             DiceController targetDice = null;
-            if (TryGetStandingDice(out var standingDice) && !standingDice.IsDissolving) {
+            if (standingController.TryGetStandingDice(out var standingDice) && !standingDice.IsDissolving) {
                 targetDice = standingDice;
             }
 
@@ -2367,14 +1521,14 @@ namespace DiceGame.Gameplay
                 return;
             }
 
-            if (jumpDiceMoveKind == JumpDiceMoveKind.StackOntoTop) {
+            if (coupling.JumpMoveKind == JumpDiceMoveKind.StackOntoTop) {
                 targetDice.View.ClearVisualYOffset(board);
                 return;
             }
 
             targetDice.View.ApplyVisualYOffset(board, jumpYOffset);
-            if (standingTier == DiceStackTier.Bottom && registry.HasTopAt(standingGridCell)) {
-                registry.SyncStackedTopAt(standingGridCell, board);
+            if (standingController.Tier == DiceStackTier.Bottom && registry.HasTopAt(standingController.GridCell)) {
+                registry.SyncStackedTopAt(standingController.GridCell, board);
             }
         }
 
@@ -2404,11 +1558,8 @@ namespace DiceGame.Gameplay
                 IsGrounded = true
             };
             jumpYOffset = 0f;
-            jumpDiceGridMoved = false;
-            jumpArcRollActive = false;
-            jumpDiceMoveKind = JumpDiceMoveKind.None;
-            ClearPendingJumpDiceStandingUpdate();
-            SnapYToSurface();
+            coupling.ResetJumpSessionFlags();
+            transformDriver.SnapYToSurface();
         }
     }
 }

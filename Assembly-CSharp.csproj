@@ -68,7 +68,14 @@
      <Compile Include="Assets\_Project\Scripts\Core\DiceGridMovePlanner.cs" />
      <Compile Include="Assets\_Project\Scripts\Core\DiceGridMovePlan.cs" />
      <Compile Include="Assets\_Project\Scripts\Gameplay\DiceMoveVisualContext.cs" />
-     <Compile Include="Assets\_Project\Scripts\Gameplay\JumpDiceGridMoveGate.cs" />
+     <Compile Include="Assets\_Project\Scripts\Gameplay\Coupling\DiceCharacterCoupling.cs" />
+     <Compile Include="Assets\_Project\Scripts\Gameplay\Character\CharacterTransformDriver.cs" />
+     <Compile Include="Assets\_Project\Scripts\Gameplay\Character\CharacterMovementExecutor.cs" />
+     <Compile Include="Assets\_Project\Scripts\Gameplay\Coupling\JumpCoupledMoveGate.cs" />
+     <Compile Include="Assets\_Project\Scripts\Gameplay\Character\CharacterStandingController.cs" />
+     <Compile Include="Assets\_Project\Scripts\Gameplay\Character\CharacterMovePlan.cs" />
+     <Compile Include="Assets\_Project\Scripts\Gameplay\Character\CharacterStandingState.cs" />
+     <Compile Include="Assets\_Project\Scripts\Gameplay\Character\CharacterMovePlanner.cs" />
      <None Include="Assets\Packages\Dice_6\Documentation\Readmy.txt" />
     <Reference Include="UnityEngine">
         <HintPath>D:\Program Files\Unity\Hub\Editor\2021.3.10f1\Editor\Data\Managed\UnityEngine\UnityEngine.dll</HintPath>

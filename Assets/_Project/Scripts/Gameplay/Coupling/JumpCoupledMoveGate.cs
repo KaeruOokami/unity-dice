@@ -1,31 +1,34 @@
 using DiceGame.Config;
 using DiceGame.Core;
 
-namespace DiceGame.Gameplay
+namespace DiceGame.Gameplay.Coupling
 {
-    public readonly struct JumpDiceGridMoveCapability
+    public readonly struct JumpCoupledMoveCapability
     {
         public bool IsJumping { get; }
-        public bool AllowAnyDiceGridMove { get; }
+        public bool AllowCrossCellMove { get; }
+        public bool AllowDiceGridMove { get; }
         public int MaxDistance { get; }
         public bool AllowTierChange { get; }
         public float Timeline { get; }
 
-        public JumpDiceGridMoveCapability(
+        public JumpCoupledMoveCapability(
             bool isJumping,
-            bool allowAnyDiceGridMove,
+            bool allowCrossCellMove,
+            bool allowDiceGridMove,
             int maxDistance,
             bool allowTierChange,
             float timeline) {
             IsJumping = isJumping;
-            AllowAnyDiceGridMove = allowAnyDiceGridMove;
+            AllowCrossCellMove = allowCrossCellMove;
+            AllowDiceGridMove = allowDiceGridMove;
             MaxDistance = maxDistance;
             AllowTierChange = allowTierChange;
             Timeline = timeline;
         }
     }
 
-    static class JumpDiceGridMoveGate
+    static class JumpCoupledMoveGate
     {
         const float TimelineEpsilon = 0.001f;
         const float ApexTimeline = 0.5f;
@@ -36,27 +39,27 @@ namespace DiceGame.Gameplay
             PhysicsSettings physicsSettings,
             VerticalMotionState jumpMotion,
             float jumpHeight,
-            out JumpDiceGridMoveCapability capability) {
+            out JumpCoupledMoveCapability capability) {
             capability = default;
             if (!isJumping) {
                 return false;
             }
 
             if (jumpDiceGridMoved || physicsSettings == null || jumpHeight <= 0f) {
-                capability = new JumpDiceGridMoveCapability(true, false, 0, false, 0f);
+                capability = new JumpCoupledMoveCapability(true, false, false, 0, false, 0f);
                 return true;
             }
 
             if (!TryGetAscentTimeline(physicsSettings, jumpMotion, jumpHeight, out var timeline)) {
                 TryGetFullTimeline(physicsSettings, jumpMotion, jumpHeight, out timeline);
-                capability = new JumpDiceGridMoveCapability(true, false, 0, false, timeline);
+                capability = new JumpCoupledMoveCapability(true, false, false, 0, false, timeline);
                 return true;
             }
 
             var twoCellMax = physicsSettings.JumpGridMoveTwoCellMaxTimeline;
             var oneCellMax = physicsSettings.JumpGridMoveOneCellMaxTimeline;
             if (timeline > oneCellMax + TimelineEpsilon) {
-                capability = new JumpDiceGridMoveCapability(true, false, 0, false, timeline);
+                capability = new JumpCoupledMoveCapability(true, false, false, 0, false, timeline);
                 return true;
             }
 
@@ -67,7 +70,14 @@ namespace DiceGame.Gameplay
             var tierMax = physicsSettings.JumpGridMoveTierChangeMaxTimeline;
             var allowTierChange = timeline + TimelineEpsilon >= tierMin
                 && timeline <= tierMax + TimelineEpsilon;
-            capability = new JumpDiceGridMoveCapability(true, true, maxDistance, allowTierChange, timeline);
+            var allowed = true;
+            capability = new JumpCoupledMoveCapability(
+                true,
+                allowed,
+                allowed,
+                maxDistance,
+                allowTierChange,
+                timeline);
             return true;
         }
 
