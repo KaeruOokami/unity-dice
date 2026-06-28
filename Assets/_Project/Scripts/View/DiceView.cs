@@ -442,13 +442,14 @@ namespace DiceGame.View
             rotationRoot.rotation = DiceOrientationMapper.ToRotation(fromState.Orientation);
 
             var rolls = Mathf.Clamp(rollDistance, 1, RollResolver.MaxParallelRollDistance);
-            var useArcRoll = rolls >= 2 && !fallBeforeSnap && jumpMotionProvider != null;
+            var useArcRoll = !fallBeforeSnap && jumpMotionProvider != null;
             if (useArcRoll) {
                 visualYOffset = 0f;
-                yield return JumpArcTwoCellRollCoroutine(
+                yield return JumpArcRollCoroutine(
                     direction,
                     fromState,
                     toState,
+                    rolls,
                     jumpMotionProvider,
                     board,
                     registry);
@@ -473,10 +474,11 @@ namespace DiceGame.View
             onComplete?.Invoke();
         }
 
-        IEnumerator JumpArcTwoCellRollCoroutine(
+        IEnumerator JumpArcRollCoroutine(
             Direction direction,
             DiceState fromState,
             DiceState toState,
+            int rollCount,
             Func<VerticalMotionState> jumpMotionProvider,
             Board board,
             DiceRegistry registry) {
@@ -489,6 +491,7 @@ namespace DiceGame.View
             positionRoot.localScale = Vector3.one;
 
             var jumpHeight = board.CellSize * physicsSettings.JumpHeightDiceMultiplier;
+            var launchVelocityY = GravityMotion.ComputeLaunchVelocity(jumpHeight, physicsSettings.Gravity);
             var startWorld = positionRoot.position;
             var endGrid = board.GridToWorld(toState.GridPos);
             var fromBaseY = ResolveSurfaceBaseWorldY(fromState, board, registry);
@@ -498,9 +501,10 @@ namespace DiceGame.View
             var orientFrom = DiceOrientationMapper.ToRotation(fromState.Orientation);
             var orientMid = DiceOrientationMapper.ToRotation(midOrientation);
             var orientTo = DiceOrientationMapper.ToRotation(toState.Orientation);
+            var useSplitRotation = rollCount >= 2;
 
             var startMotion = jumpMotionProvider();
-            var startVelocityY = startMotion.VelocityY;
+            var jumpTimelineAtRollStart = ComputeFullJumpTimeline(startMotion, launchVelocityY, jumpHeight);
 
             while (true) {
                 var motion = jumpMotionProvider();
@@ -508,17 +512,20 @@ namespace DiceGame.View
                     break;
                 }
 
-                var arcT = ComputeJumpArcProgress(motion, startVelocityY, jumpHeight);
-                var smoothT = Mathf.SmoothStep(0f, 1f, arcT);
+                var jumpTimeline = ComputeFullJumpTimeline(motion, launchVelocityY, jumpHeight);
+                var rollT = ComputeRollArcProgress(jumpTimeline, jumpTimelineAtRollStart);
+                var smoothT = Mathf.SmoothStep(0f, 1f, rollT);
 
                 var xz = Vector2.Lerp(
                     new Vector2(startWorld.x, startWorld.z),
                     new Vector2(endGrid.x, endGrid.z),
                     smoothT);
 
-                var rotation = arcT <= 0.5f
-                    ? Quaternion.Slerp(orientFrom, orientMid, arcT * 2f)
-                    : Quaternion.Slerp(orientMid, orientTo, (arcT - 0.5f) * 2f);
+                var rotation = useSplitRotation
+                    ? rollT <= 0.5f
+                        ? Quaternion.Slerp(orientFrom, orientMid, rollT * 2f)
+                        : Quaternion.Slerp(orientMid, orientTo, (rollT - 0.5f) * 2f)
+                    : Quaternion.Slerp(orientFrom, orientTo, smoothT);
                 rotationRoot.rotation = rotation;
 
                 ComputeVerticalExtents(board, currentTopFace, 1f, out var minY, out _);
@@ -537,13 +544,22 @@ namespace DiceGame.View
             positionRoot.position = new Vector3(endGrid.x, toBaseY - landedMinY, endGrid.z);
         }
 
-        static float ComputeJumpArcProgress(VerticalMotionState motion, float startVelocityY, float jumpHeight) {
-            if (startVelocityY > 0.001f && motion.VelocityY > 0f) {
-                return 0.5f * (1f - motion.VelocityY / startVelocityY);
+        static float ComputeFullJumpTimeline(VerticalMotionState motion, float launchVelocityY, float jumpHeight) {
+            if (launchVelocityY > 0.001f && motion.VelocityY > 0f) {
+                return 0.5f * (1f - motion.VelocityY / launchVelocityY);
             }
 
             var safeHeight = Mathf.Max(jumpHeight, 0.001f);
             return 0.5f + 0.5f * (1f - motion.Offset / safeHeight);
+        }
+
+        static float ComputeRollArcProgress(float jumpTimeline, float jumpTimelineAtRollStart) {
+            var remaining = 1f - jumpTimelineAtRollStart;
+            if (remaining <= 0.001f) {
+                return jumpTimeline >= 1f - 0.001f ? 1f : 0f;
+            }
+
+            return Mathf.Clamp01((jumpTimeline - jumpTimelineAtRollStart) / remaining);
         }
 
         IEnumerator FinalizeJumpRollPlacement(

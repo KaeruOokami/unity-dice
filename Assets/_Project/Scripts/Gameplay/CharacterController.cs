@@ -902,16 +902,12 @@ namespace DiceGame.Gameplay
                     rollDistance = 1;
                 }
 
-                var useArcRoll = rollDistance >= 2;
-                if (useArcRoll) {
-                    jumpArcRollActive = true;
-                }
-
+                jumpArcRollActive = true;
                 if (!currentDice.TryJumpRoll(
                     direction,
                     jumpYOffset,
                     rollDistance,
-                    useArcRoll ? () => jumpMotion : null)) {
+                    () => jumpMotion)) {
                     jumpArcRollActive = false;
                     return false;
                 }
