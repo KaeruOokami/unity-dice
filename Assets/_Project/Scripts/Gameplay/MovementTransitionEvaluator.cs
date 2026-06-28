@@ -337,22 +337,15 @@ namespace DiceGame.Gameplay
             bool ignoreStepHeight,
             bool isJumping) {
             if (registry.CanPlaceBottomDiceAt(toCell)) {
-                var cellDistance = GetOrthogonalDistance(fromCell, toCell);
                 if (isJumping
-                    && cellDistance > 1
-                    && TryEvaluateGridRoll(
+                    && TryCreateJumpDiceMoveTransition(
                         fromCell,
                         toCell,
                         standingDice,
                         standingTier,
                         direction,
-                        cellDistance,
-                        allowMultiCell: true)
-                    && TryCreateJumpSameTierRollTransition(
-                        isJumping,
-                        standingDice,
-                        out var multiCellJumpRollTransition)) {
-                    return multiCellJumpRollTransition;
+                        out var jumpDiceTransition)) {
+                    return jumpDiceTransition;
                 }
 
                 if (TryEvaluateTopFallToBottom(
@@ -373,7 +366,7 @@ namespace DiceGame.Gameplay
                     standingTier,
                     direction,
                     GetOrthogonalDistance(fromCell, toCell),
-                    allowMultiCell: isJumping)) {
+                    allowMultiCell: false)) {
                     if (TryCreateJumpSameTierRollTransition(
                         isJumping,
                         standingDice,
@@ -405,6 +398,17 @@ namespace DiceGame.Gameplay
                 return MovementTransition.Blocked();
             }
 
+            if (isJumping
+                && TryCreateJumpDiceMoveTransition(
+                    fromCell,
+                    toCell,
+                    standingDice,
+                    standingTier,
+                    direction,
+                    out var occupiedJumpDiceTransition)) {
+                return occupiedJumpDiceTransition;
+            }
+
             if (TryEvaluateJumpTopLanding(
                 toCell,
                 fromLayer,
@@ -424,7 +428,7 @@ namespace DiceGame.Gameplay
                 standingTier,
                 direction,
                 GetOrthogonalDistance(fromCell, toCell),
-                allowMultiCell: isJumping)) {
+                allowMultiCell: false)) {
                 if (TryCreateJumpSameTierRollTransition(
                     isJumping,
                     standingDice,
@@ -563,6 +567,57 @@ namespace DiceGame.Gameplay
             return transition.TargetDice.GetTopSurfaceWorldY();
         }
 
+        bool TryCreateJumpDiceMoveTransition(
+            Vector2Int fromCell,
+            Vector2Int toCell,
+            DiceController standingDice,
+            DiceStackTier standingTier,
+            Direction direction,
+            out MovementTransition transition) {
+            transition = default;
+
+            if (standingDice == null || standingDice.IsDissolving) {
+                return false;
+            }
+
+            if (standingTier != standingDice.CurrentState.Tier) {
+                return false;
+            }
+
+            var distance = GetOrthogonalDistance(fromCell, toCell);
+            if (distance < 1 || distance > RollResolver.MaxParallelRollDistance) {
+                return false;
+            }
+
+            if (fromCell + direction.ToGridDelta() * distance != toCell) {
+                return false;
+            }
+
+            if (!DiceGridMovePlanner.TryBuildJumpPlan(
+                standingDice.CurrentState,
+                direction,
+                distance,
+                registry,
+                registry.HasTopAt(fromCell),
+                out var plan,
+                out _)) {
+                return false;
+            }
+
+            switch (plan.Kind) {
+                case DiceGridMoveKind.Parallel:
+                    return TryCreateJumpSameTierRollTransition(true, standingDice, out transition);
+                case DiceGridMoveKind.Demote:
+                    transition = MovementTransition.Walkable(standingDice, SurfaceLayer.Bottom);
+                    return true;
+                case DiceGridMoveKind.Stack:
+                    transition = MovementTransition.Walkable(standingDice, SurfaceLayer.Top);
+                    return true;
+                default:
+                    return false;
+            }
+        }
+
         static bool TryCreateJumpSameTierRollTransition(
             bool isJumping,
             DiceController standingDice,
@@ -637,13 +692,24 @@ namespace DiceGame.Gameplay
             }
 
             var hasTopOnSameCell = registry.HasTopAt(fromCell);
+            if (allowMultiCell) {
+                return DiceGridMovePlanner.TryBuildJumpPlan(
+                    standingDice.CurrentState,
+                    direction,
+                    distance,
+                    registry,
+                    hasTopOnSameCell,
+                    out _,
+                    out rejectReason);
+            }
+
             if (!RollResolver.TryRollDistance(
                 standingDice.CurrentState,
                 direction,
                 registry,
                 hasTopOnSameCell,
                 distance,
-                useJumpPathRules: allowMultiCell,
+                useJumpPathRules: false,
                 out _,
                 out var rollReject)) {
                 rejectReason = rollReject ?? "roll-resolver-failed";

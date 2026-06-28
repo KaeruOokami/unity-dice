@@ -342,7 +342,22 @@ namespace DiceGame.Gameplay
             SurfaceLayer fromLayer,
             float fromSurfaceY,
             float halfExtent) {
-            var nextCell = ResolveNextCell(standingCell, currentXZ, nextXZ, move, halfExtent);
+            var isJumping = jumpPhase != JumpPhase.None;
+            var hasJumpDiceGridCap = false;
+            JumpDiceGridMoveCapability jumpDiceGridCap = default;
+            if (isJumping) {
+                hasJumpDiceGridCap = TryGetJumpDiceGridMoveCapability(out jumpDiceGridCap);
+            }
+
+            var allowJumpDiceGridMove = hasJumpDiceGridCap && jumpDiceGridCap.AllowAnyDiceGridMove;
+            var nextCell = ResolveNextCell(
+                standingCell,
+                currentXZ,
+                nextXZ,
+                move,
+                halfExtent,
+                jumpDiceGridCap,
+                hasJumpDiceGridCap);
 
             if (nextCell == standingCell) {
                 nextXZ = ClampToCellInterior(nextXZ, standingCell, halfExtent);
@@ -365,7 +380,6 @@ namespace DiceGame.Gameplay
             }
 
             var standingDice = ResolveStandingDiceForMovement();
-            var isJumping = jumpPhase != JumpPhase.None;
             var cellDistance = MovementTransitionEvaluator.GetOrthogonalDistance(standingCell, nextCell);
             var transition = cellDistance > 1
                 ? movementTransition.EvaluateToTargetCell(
@@ -407,16 +421,17 @@ namespace DiceGame.Gameplay
                             return true;
                         }
 
-                        if (jumpPhase != JumpPhase.None && TryExecuteJumpTopFallRoll(direction, nextXZ, halfExtent)) {
+                        if (allowJumpDiceGridMove && TryExecuteJumpTopFallRoll(direction, nextXZ, halfExtent)) {
                             return true;
                         }
                     }
 
-                    if (TryApplyJumpDiceMove(standingCell, nextCell, transition, direction, nextXZ, halfExtent)) {
+                    if (allowJumpDiceGridMove
+                        && TryApplyJumpDiceMove(standingCell, nextCell, transition, direction, nextXZ, halfExtent)) {
                         return true;
                     }
 
-                    if (ShouldBlockFailedJumpGridMoveFallback(isJumping, standingCell, nextCell)) {
+                    if (ShouldBlockFailedJumpGridMoveFallback(isJumping, allowJumpDiceGridMove, standingCell, nextCell)) {
                         LogJumpParallelRoll(
                             $"TryApplyMovement blocked-fallback Walkable from={FormatMovementGrid(standingCell)} " +
                             $"to={FormatMovementGrid(nextCell)}");
@@ -426,7 +441,8 @@ namespace DiceGame.Gameplay
 
                     if (isJumping
                         && IsJumpStackWalkableTransition(transition, standingTier)
-                        && !CanPerformJumpTierChangeMove()) {
+                        && hasJumpDiceGridCap
+                        && !jumpDiceGridCap.AllowTierChange) {
                         nextXZ = ClampToCellInterior(nextXZ, standingCell, halfExtent);
                         return false;
                     }
@@ -434,7 +450,7 @@ namespace DiceGame.Gameplay
                     ApplyTransitionStanding(transition, nextCell);
                     return false;
                 case MovementTransitionKind.CanRoll:
-                    if (jumpPhase != JumpPhase.None && currentDice != null) {
+                    if (allowJumpDiceGridMove && currentDice != null) {
                         var jumpTargetLayer = standingTier == DiceStackTier.Top
                             ? SurfaceLayer.Top
                             : SurfaceLayer.Bottom;
@@ -443,7 +459,7 @@ namespace DiceGame.Gameplay
                             return true;
                         }
 
-                        if (ShouldBlockFailedJumpGridMoveFallback(isJumping, standingCell, nextCell)) {
+                        if (ShouldBlockFailedJumpGridMoveFallback(isJumping, allowJumpDiceGridMove, standingCell, nextCell)) {
                             LogJumpParallelRoll(
                                 $"TryApplyMovement blocked-fallback CanRoll from={FormatMovementGrid(standingCell)} " +
                                 $"to={FormatMovementGrid(nextCell)}");
@@ -458,7 +474,7 @@ namespace DiceGame.Gameplay
                             return true;
                         }
 
-                        if (ShouldBlockFailedJumpGridMoveFallback(isJumping, standingCell, nextCell)) {
+                        if (ShouldBlockFailedJumpGridMoveFallback(isJumping, allowJumpDiceGridMove, standingCell, nextCell)) {
                             LogJumpParallelRoll(
                                 $"TryApplyMovement blocked-fallback roll-failed from={FormatMovementGrid(standingCell)} " +
                                 $"to={FormatMovementGrid(nextCell)}");
@@ -592,68 +608,71 @@ namespace DiceGame.Gameplay
             }
 
             var distance = MovementTransitionEvaluator.GetOrthogonalDistance(standingCell, nextCell);
-            return distance > 0 ? distance : 1;
+            var resolvedDistance = distance > 0 ? distance : 1;
+            if (TryGetJumpDiceGridMoveCapability(out var cap) && cap.AllowAnyDiceGridMove) {
+                return resolvedDistance;
+            }
+
+            return Mathf.Min(resolvedDistance, 1);
         }
 
-        int GetJumpParallelRollDistance() {
-            if (!CanAttemptJumpGridMove()) {
+        bool TryGetJumpDiceGridMoveCapability(out JumpDiceGridMoveCapability capability) {
+            var evaluated = JumpDiceGridMoveGate.TryEvaluate(
+                jumpPhase != JumpPhase.None,
+                jumpDiceGridMoved,
+                physicsSettings,
+                jumpMotion,
+                GetDiceJumpHeight(),
+                out capability);
+
+            if (!evaluated || !capability.IsJumping) {
+                return evaluated;
+            }
+
+            if (jumpDiceGridMoved) {
                 LogJumpParallelRoll(
-                    "GetJumpParallelRollDistance=0 reason=can-not-attempt " +
+                    "JumpDiceGridMoveGate blocked reason=already-moved " +
                     $"jumpPhase={jumpPhase} jumpDiceGridMoved={jumpDiceGridMoved}");
-                return 0;
+                return true;
             }
 
-            if (!IsJumpOnAscent(out var timeline)) {
-                TryGetJumpTimeline(out var fullTimeline);
+            if (!capability.AllowAnyDiceGridMove) {
                 LogJumpParallelRoll(
-                    $"GetJumpParallelRollDistance=0 reason=not-on-ascent timeline={fullTimeline:F3}");
-                return 0;
-            }
-
-            var twoCellMax = physicsSettings.JumpGridMoveTwoCellMaxTimeline;
-            var oneCellMax = physicsSettings.JumpGridMoveOneCellMaxTimeline;
-            if (timeline <= twoCellMax + JumpTimelineEpsilon) {
-                LogJumpParallelRoll(
-                    $"GetJumpParallelRollDistance=2 timeline={timeline:F3} twoCellMax={twoCellMax:F3}");
-                return RollResolver.MaxParallelRollDistance;
-            }
-
-            if (timeline <= oneCellMax + JumpTimelineEpsilon) {
-                LogJumpParallelRoll(
-                    $"GetJumpParallelRollDistance=1 timeline={timeline:F3} oneCellMax={oneCellMax:F3}");
-                return 1;
+                    $"JumpDiceGridMoveGate blocked timeline={capability.Timeline:F3} " +
+                    $"oneCellMax={physicsSettings.JumpGridMoveOneCellMaxTimeline:F3}");
+                return true;
             }
 
             LogJumpParallelRoll(
-                $"GetJumpParallelRollDistance=0 reason=outside-window timeline={timeline:F3} " +
-                $"twoCellMax={twoCellMax:F3} oneCellMax={oneCellMax:F3}");
-            return 0;
+                $"JumpDiceGridMoveGate allowed timeline={capability.Timeline:F3} " +
+                $"maxDistance={capability.MaxDistance} allowTierChange={capability.AllowTierChange} " +
+                $"twoCellMax={physicsSettings.JumpGridMoveTwoCellMaxTimeline:F3} " +
+                $"oneCellMax={physicsSettings.JumpGridMoveOneCellMaxTimeline:F3}");
+            return true;
         }
-
-        const float JumpTimelineEpsilon = 0.001f;
-        const float JumpApexTimeline = 0.5f;
 
         Vector2Int ResolveNextCell(
             Vector2Int standingCell,
             Vector2 currentXZ,
             Vector2 nextXZ,
             Vector2 move,
-            float halfExtent) {
+            float halfExtent,
+            JumpDiceGridMoveCapability jumpDiceGridCap,
+            bool hasJumpDiceGridCap) {
             if (TryGetPrimaryDirection(move, out var moveDir)) {
                 if (IsAtOrPastFaceEdge(currentXZ, standingCell, moveDir, halfExtent)) {
-                    if (jumpPhase != JumpPhase.None && CanAttemptJumpGridMove()) {
-                        if (TryResolveJumpParallelRollTarget(standingCell, moveDir, out var parallelRollTarget)) {
-                            LogJumpParallelRoll(
-                                $"ResolveNextCell parallel-roll from={FormatMovementGrid(standingCell)} " +
-                                $"to={FormatMovementGrid(parallelRollTarget)} dir={moveDir}");
-                            return parallelRollTarget;
-                        }
-
-                        var fallback = standingCell + moveDir.ToGridDelta();
+                    if (hasJumpDiceGridCap
+                        && jumpDiceGridCap.AllowAnyDiceGridMove
+                        && jumpDiceGridCap.MaxDistance > 0
+                        && TryResolveJumpParallelRollTarget(
+                            standingCell,
+                            moveDir,
+                            jumpDiceGridCap.MaxDistance,
+                            out var parallelRollTarget)) {
                         LogJumpParallelRoll(
-                            $"ResolveNextCell fallback-adjacent from={FormatMovementGrid(standingCell)} " +
-                            $"to={FormatMovementGrid(fallback)} dir={moveDir}");
-                        return fallback;
+                            $"ResolveNextCell parallel-roll from={FormatMovementGrid(standingCell)} " +
+                            $"to={FormatMovementGrid(parallelRollTarget)} dir={moveDir}");
+                        return parallelRollTarget;
                     }
 
                     return standingCell + moveDir.ToGridDelta();
@@ -885,9 +904,10 @@ namespace DiceGame.Gameplay
 
         bool ShouldBlockFailedJumpGridMoveFallback(
             bool isJumping,
+            bool allowJumpDiceGridMove,
             Vector2Int fromCell,
             Vector2Int toCell) {
-            if (!isJumping) {
+            if (!isJumping || !allowJumpDiceGridMove) {
                 return false;
             }
 
@@ -901,17 +921,14 @@ namespace DiceGame.Gameplay
             Direction direction,
             Vector2 nextXZ,
             float halfExtent) {
-            if (!CanAttemptJumpGridMove()
+            if (jumpDiceGridMoved
                 || currentDice == null
                 || transition.TargetDice != currentDice
                 || currentDice.IsDissolving) {
-                if (CanAttemptJumpGridMove()) {
-                    LogJumpParallelRoll(
-                        $"TryApplyJumpDiceMove reject from={FormatMovementGrid(fromCell)} " +
-                        $"to={FormatMovementGrid(toCell)} dice={FormatMovementDice(currentDice)} " +
-                        $"targetDice={FormatMovementDice(transition.TargetDice)} dissolving={currentDice?.IsDissolving}");
-                }
-
+                LogJumpParallelRoll(
+                    $"TryApplyJumpDiceMove reject from={FormatMovementGrid(fromCell)} " +
+                    $"to={FormatMovementGrid(toCell)} dice={FormatMovementDice(currentDice)} " +
+                    $"targetDice={FormatMovementDice(transition.TargetDice)} dissolving={currentDice?.IsDissolving}");
                 return false;
             }
 
@@ -920,7 +937,6 @@ namespace DiceGame.Gameplay
             if (!TryBeginJumpDiceRoll(
                 fromCell,
                 toCell,
-                transition,
                 direction,
                 out moveKind,
                 out targetTier)) {
@@ -947,73 +963,52 @@ namespace DiceGame.Gameplay
         bool TryBeginJumpDiceRoll(
             Vector2Int fromCell,
             Vector2Int toCell,
-            MovementTransition transition,
             Direction direction,
             out JumpDiceMoveKind moveKind,
             out DiceStackTier targetTier) {
             moveKind = JumpDiceMoveKind.None;
             targetTier = standingTier;
 
-            if (IsSameTierJumpParallelRoll(transition)) {
-                var rollDistance = MovementTransitionEvaluator.GetOrthogonalDistance(fromCell, toCell);
-                if (rollDistance < 1) {
-                    rollDistance = 1;
-                }
-
-                jumpArcRollActive = true;
-                if (!currentDice.TryJumpRoll(
-                    direction,
-                    jumpYOffset,
-                    rollDistance,
-                    () => jumpMotion)) {
-                    jumpArcRollActive = false;
-                    LogJumpParallelRoll(
-                        $"TryBeginJumpDiceRoll reject TryJumpRoll-failed from={FormatMovementGrid(fromCell)} " +
-                        $"to={FormatMovementGrid(toCell)} rollDistance={rollDistance}");
-                    return false;
-                }
-
-                moveKind = JumpDiceMoveKind.SameTierParallel;
-                return true;
+            var rollDistance = MovementTransitionEvaluator.GetOrthogonalDistance(fromCell, toCell);
+            if (rollDistance < 1) {
+                rollDistance = 1;
             }
 
-            if (standingTier == DiceStackTier.Top
-                && standingSurfaceLayer == SurfaceLayer.Top
-                && transition.TargetLayer == SurfaceLayer.Bottom) {
-                if (!CanPerformJumpTierChangeMove()) {
-                    return false;
-                }
-
-                jumpArcRollActive = true;
-                if (!currentDice.TryJumpRollThenDemote(direction, jumpYOffset, () => jumpMotion)) {
-                    jumpArcRollActive = false;
-                    return false;
-                }
-
-                moveKind = JumpDiceMoveKind.DemoteToBottom;
-                targetTier = DiceStackTier.Bottom;
-                return true;
+            var hasTopOnSameCell = registry.HasTopAt(fromCell);
+            if (!DiceGridMovePlanner.TryBuildJumpPlan(
+                currentDice.CurrentState,
+                direction,
+                rollDistance,
+                registry,
+                hasTopOnSameCell,
+                out var plan,
+                out _)) {
+                return false;
             }
 
-            if (standingTier == DiceStackTier.Bottom
-                && standingSurfaceLayer == SurfaceLayer.Bottom
-                && transition.TargetLayer == SurfaceLayer.Top) {
-                if (!CanPerformJumpTierChangeMove() || !registry.CanPlaceTopDiceAt(toCell)) {
-                    return false;
-                }
-
-                jumpArcRollActive = true;
-                if (!currentDice.TryJumpStack(direction, jumpYOffset, () => jumpMotion)) {
-                    jumpArcRollActive = false;
-                    return false;
-                }
-
-                moveKind = JumpDiceMoveKind.StackOntoTop;
-                targetTier = DiceStackTier.Top;
-                return true;
+            if (plan.Kind == DiceGridMoveKind.Stack
+                && TryGetJumpDiceGridMoveCapability(out var jumpDiceGridCap)
+                && !jumpDiceGridCap.AllowTierChange) {
+                return false;
             }
 
-            return false;
+            jumpArcRollActive = true;
+            if (!currentDice.TryExecuteJumpMovePlan(plan, jumpYOffset, () => jumpMotion)) {
+                jumpArcRollActive = false;
+                LogJumpParallelRoll(
+                    $"TryBeginJumpDiceRoll reject execute-plan-failed from={FormatMovementGrid(fromCell)} " +
+                    $"to={FormatMovementGrid(toCell)} kind={plan.Kind} distance={plan.Distance}");
+                return false;
+            }
+
+            moveKind = plan.Kind switch {
+                DiceGridMoveKind.Parallel => JumpDiceMoveKind.SameTierParallel,
+                DiceGridMoveKind.Stack => JumpDiceMoveKind.StackOntoTop,
+                DiceGridMoveKind.Demote => JumpDiceMoveKind.DemoteToBottom,
+                _ => JumpDiceMoveKind.None
+            };
+            targetTier = plan.To.Tier;
+            return true;
         }
 
         void QueuePendingJumpDiceStandingUpdate(Vector2Int toCell, DiceStackTier tier) {
@@ -1038,6 +1033,7 @@ namespace DiceGame.Gameplay
         bool TryResolveJumpParallelRollTarget(
             Vector2Int standingCell,
             Direction direction,
+            int maxRollDistance,
             out Vector2Int rollTarget) {
             rollTarget = standingCell;
             SyncStandingDiceCache();
@@ -1048,7 +1044,6 @@ namespace DiceGame.Gameplay
                 return false;
             }
 
-            var maxRollDistance = GetJumpParallelRollDistance();
             if (maxRollDistance < 1) {
                 LogJumpParallelRoll(
                     $"TryResolveJumpParallelRollTarget fail from={FormatMovementGrid(standingCell)} " +
@@ -1089,20 +1084,6 @@ namespace DiceGame.Gameplay
             return false;
         }
 
-        bool IsSameTierJumpParallelRoll(MovementTransition transition) {
-            if (currentDice == null || transition.TargetDice != currentDice) {
-                return false;
-            }
-
-            var tier = currentDice.CurrentState.Tier;
-            if (standingTier != tier) {
-                return false;
-            }
-
-            var expectedLayer = tier == DiceStackTier.Top ? SurfaceLayer.Top : SurfaceLayer.Bottom;
-            return standingSurfaceLayer == expectedLayer && transition.TargetLayer == expectedLayer;
-        }
-
         void UpdateStandingAfterJumpDiceMove(Vector2Int toCell, DiceStackTier tier) {
             standingGridCell = toCell;
             standingTier = tier;
@@ -1126,18 +1107,27 @@ namespace DiceGame.Gameplay
             }
 
             var targetPos = standingGridCell + direction.ToGridDelta();
-            if (!registry.CanPlaceBottomDiceAt(targetPos)) {
-                return false;
-            }
-
-            if (!currentDice.TryJumpRollThenDemote(direction, jumpYOffset, () => jumpMotion)) {
+            if (!DiceGridMovePlanner.TryBuildJumpPlan(
+                currentDice.CurrentState,
+                direction,
+                1,
+                registry,
+                registry.HasTopAt(standingGridCell),
+                out var plan,
+                out _)
+                || plan.Kind != DiceGridMoveKind.Demote) {
                 return false;
             }
 
             jumpArcRollActive = true;
+            if (!currentDice.TryExecuteJumpMovePlan(plan, jumpYOffset, () => jumpMotion)) {
+                jumpArcRollActive = false;
+                return false;
+            }
+
             jumpDiceGridMoved = true;
             jumpDiceMoveKind = JumpDiceMoveKind.DemoteToBottom;
-            QueuePendingJumpDiceStandingUpdate(currentDice.CurrentState.GridPos, DiceStackTier.Bottom);
+            QueuePendingJumpDiceStandingUpdate(plan.To.GridPos, plan.To.Tier);
 
             var diceCenter = currentDice.View.DiceTransform.position;
             var diceCenterAnchor = diceCenter;
@@ -1560,54 +1550,6 @@ namespace DiceGame.Gameplay
             return board != null
                 ? board.CellSize * physicsSettings.JumpHeightDiceMultiplier
                 : physicsSettings.JumpHeightFallback;
-        }
-
-        bool TryGetJumpTimeline(out float timeline) {
-            timeline = 0f;
-            if (jumpPhase == JumpPhase.None || physicsSettings == null) {
-                return false;
-            }
-
-            var jumpHeight = GetDiceJumpHeight();
-            if (jumpHeight <= 0f) {
-                return false;
-            }
-
-            var launchVelocityY = GravityMotion.ComputeLaunchVelocity(jumpHeight, physicsSettings.Gravity);
-            timeline = GravityMotion.ComputeFullJumpTimeline(jumpMotion, launchVelocityY, jumpHeight);
-            return true;
-        }
-
-        bool IsJumpOnAscent(out float timeline) {
-            timeline = 0f;
-            if (!TryGetJumpTimeline(out timeline)) {
-                return false;
-            }
-
-            return timeline <= JumpApexTimeline + JumpTimelineEpsilon;
-        }
-
-        bool IsJumpTimelineInRange(float minTimeline, float maxTimeline) {
-            if (!IsJumpOnAscent(out var timeline)) {
-                return false;
-            }
-
-            return timeline + JumpTimelineEpsilon >= minTimeline
-                && timeline <= maxTimeline + JumpTimelineEpsilon;
-        }
-
-        bool CanAttemptJumpGridMove() {
-            return jumpPhase != JumpPhase.None && !jumpDiceGridMoved && board != null;
-        }
-
-        bool CanPerformJumpTierChangeMove() {
-            if (!CanAttemptJumpGridMove()) {
-                return false;
-            }
-
-            return IsJumpTimelineInRange(
-                physicsSettings.JumpGridMoveTierChangeMinTimeline,
-                physicsSettings.JumpGridMoveTierChangeMaxTimeline);
         }
 
         static bool IsJumpStackWalkableTransition(

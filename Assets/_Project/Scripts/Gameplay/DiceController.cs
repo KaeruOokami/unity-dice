@@ -88,7 +88,141 @@ namespace DiceGame.Gameplay
                 return false;
             }
 
-            return TryBeginParallelRoll(direction, 0f);
+            return TryBeginGroundParallelRoll(direction);
+        }
+
+        bool TryBeginGroundParallelRoll(Direction direction) {
+            var hasTopOnSameCell = registry.HasTopAt(currentState.GridPos);
+            if (!DiceGridMovePlanner.TryBuildGroundParallelPlan(
+                currentState,
+                direction,
+                1,
+                registry,
+                hasTopOnSameCell,
+                out var plan,
+                out _)) {
+                return false;
+            }
+
+            return TryExecuteMovePlan(plan, DiceMoveVisualContext.Ground);
+        }
+
+        void ApplyLogicalMove(DiceState fromState, DiceState toState) {
+            currentState = toState;
+            registry.MoveDice(
+                this,
+                fromState.GridPos,
+                toState.GridPos,
+                fromState.Tier,
+                toState.Tier);
+        }
+
+        bool TryExecuteMovePlan(DiceGridMovePlan plan, DiceMoveVisualContext context) {
+            if (isDissolving || isCarried || isRolling || board == null || diceView == null || registry == null) {
+                return false;
+            }
+
+            ApplyLogicalMove(plan.From, plan.To);
+            isRolling = true;
+            PlayVisualForPlan(
+                plan,
+                context,
+                () => {
+                    isRolling = false;
+                    StateChanged?.Invoke(currentState);
+                });
+
+            return true;
+        }
+
+        void PlayVisualForPlan(DiceGridMovePlan plan, DiceMoveVisualContext context, Action onComplete) {
+            switch (plan.Kind) {
+                case DiceGridMoveKind.Parallel:
+                    if (context.IsJump) {
+                        PlayJumpParallelRollVisual(plan, context, onComplete);
+                    } else {
+                        PlayGroundParallelRollVisual(plan, onComplete);
+                    }
+
+                    return;
+                case DiceGridMoveKind.Demote:
+                    if (context.IsJump) {
+                        PlayJumpTierChangeRollVisual(plan, context, onComplete);
+                    } else {
+                        PlayGroundTierChangeRollVisual(plan, onComplete);
+                    }
+
+                    return;
+                case DiceGridMoveKind.Stack:
+                    if (context.IsJump) {
+                        PlayJumpTierChangeRollVisual(plan, context, onComplete);
+                    } else {
+                        PlayGroundTierChangeRollVisual(plan, onComplete);
+                    }
+
+                    return;
+            }
+
+            onComplete?.Invoke();
+        }
+
+        void PlayGroundParallelRollVisual(DiceGridMovePlan plan, Action onComplete) {
+            diceView.PlayJumpRoll(
+                plan.Direction,
+                plan.From,
+                plan.To,
+                0f,
+                plan.Distance,
+                board,
+                registry,
+                onComplete,
+                fallBeforeSnap: false);
+        }
+
+        void PlayJumpParallelRollVisual(
+            DiceGridMovePlan plan,
+            DiceMoveVisualContext context,
+            Action onComplete) {
+            diceView.PlayJumpRoll(
+                plan.Direction,
+                plan.From,
+                plan.To,
+                context.JumpYOffset,
+                plan.Distance,
+                board,
+                registry,
+                onComplete,
+                fallBeforeSnap: false,
+                context.JumpMotionProvider);
+        }
+
+        void PlayGroundTierChangeRollVisual(DiceGridMovePlan plan, Action onComplete) {
+            var transition = plan.Kind == DiceGridMoveKind.Stack
+                ? DiceTransition.RollThenRise(plan.From, plan.To, plan.Direction)
+                : DiceTransition.RollThenDemote(plan.From, plan.To, plan.Direction);
+            diceView.PlayTransition(transition, board, registry, onComplete);
+        }
+
+        void PlayJumpTierChangeRollVisual(
+            DiceGridMovePlan plan,
+            DiceMoveVisualContext context,
+            Action onComplete) {
+            diceView.PlayJumpRoll(
+                plan.Direction,
+                plan.From,
+                plan.To,
+                context.JumpYOffset,
+                plan.Distance,
+                board,
+                registry,
+                onComplete,
+                fallBeforeSnap: context.JumpMotionProvider == null,
+                context.JumpMotionProvider);
+        }
+
+        void PlaySlideVisual(DiceState fromState, DiceState toState, Action onComplete) {
+            var transition = DiceTransition.GridMove(fromState, toState);
+            diceView.PlayTransition(transition, board, registry, onComplete);
         }
 
         public bool TrySlide(Direction direction) {
@@ -104,7 +238,7 @@ namespace DiceGame.Gameplay
                 return false;
             }
 
-            return BeginGridTransition(fromState: currentState, nextState);
+            return BeginSlide(fromState: currentState, nextState);
         }
 
         bool TrySlideTop(Direction direction) {
@@ -112,7 +246,18 @@ namespace DiceGame.Gameplay
                 return false;
             }
 
-            return BeginGridTransition(currentState, nextState);
+            return BeginSlide(currentState, nextState);
+        }
+
+        bool BeginSlide(DiceState fromState, DiceState nextState) {
+            ApplyLogicalMove(fromState, nextState);
+            isRolling = true;
+            PlaySlideVisual(fromState, nextState, () => {
+                isRolling = false;
+                StateChanged?.Invoke(currentState);
+            });
+
+            return true;
         }
 
         public bool TryJumpRoll(
@@ -124,54 +269,26 @@ namespace DiceGame.Gameplay
                 return false;
             }
 
-            return TryBeginParallelRoll(direction, jumpYOffset, distance, jumpMotionProvider);
-        }
-
-        bool TryBeginParallelRoll(
-            Direction direction,
-            float jumpYOffset,
-            int distance = 1,
-            Func<VerticalMotionState> jumpMotionProvider = null) {
             var hasTopOnSameCell = registry.HasTopAt(currentState.GridPos);
-            var useJumpPathRules = jumpMotionProvider != null || jumpYOffset > 0f || distance > 1;
-            if (!RollResolver.TryRollDistance(
+            if (!DiceGridMovePlanner.TryBuildJumpPlan(
                 currentState,
                 direction,
+                distance,
                 registry,
                 hasTopOnSameCell,
-                distance,
-                useJumpPathRules,
-                out var nextState,
+                out var plan,
                 out _)) {
                 return false;
             }
 
-            var fromState = currentState;
-            isRolling = true;
-            currentState = nextState;
-            registry.MoveDice(
-                this,
-                fromState.GridPos,
-                nextState.GridPos,
-                fromState.Tier,
-                nextState.Tier);
+            return TryExecuteJumpMovePlan(plan, jumpYOffset, jumpMotionProvider);
+        }
 
-            diceView.PlayJumpRoll(
-                direction,
-                fromState,
-                nextState,
-                jumpYOffset,
-                distance,
-                board,
-                registry,
-                () => {
-                    isRolling = false;
-                    StateChanged?.Invoke(currentState);
-                },
-                fallBeforeSnap: false,
-                jumpMotionProvider);
-
-            return true;
+        public bool TryExecuteJumpMovePlan(
+            DiceGridMovePlan plan,
+            float jumpYOffset,
+            Func<VerticalMotionState> jumpMotionProvider = null) {
+            return TryExecuteMovePlan(plan, DiceMoveVisualContext.Jump(jumpYOffset, jumpMotionProvider));
         }
 
         public bool TryJumpStack(
@@ -182,47 +299,20 @@ namespace DiceGame.Gameplay
                 return false;
             }
 
-            if (currentState.Tier != DiceStackTier.Bottom) {
-                return false;
-            }
-
-            var targetPos = currentState.GridPos + direction.ToGridDelta();
-            if (!registry.CanPlaceTopDiceAt(targetPos)) {
-                return false;
-            }
-
-            var rolledOrientation = currentState.Orientation.Roll(direction);
-            if (!rolledOrientation.IsValid()) {
-                return false;
-            }
-
-            var nextState = new DiceState(targetPos, rolledOrientation, DiceStackTier.Top);
-            var fromState = currentState;
-            isRolling = true;
-            currentState = nextState;
-            registry.MoveDice(
-                this,
-                fromState.GridPos,
-                nextState.GridPos,
-                DiceStackTier.Bottom,
-                DiceStackTier.Top);
-
-            diceView.PlayJumpRoll(
+            var hasTopOnSameCell = registry.HasTopAt(currentState.GridPos);
+            if (!DiceGridMovePlanner.TryBuildJumpPlan(
+                currentState,
                 direction,
-                fromState,
-                nextState,
-                jumpYOffset,
                 1,
-                board,
                 registry,
-                () => {
-                    isRolling = false;
-                    StateChanged?.Invoke(currentState);
-                },
-                fallBeforeSnap: jumpMotionProvider == null,
-                jumpMotionProvider);
+                hasTopOnSameCell,
+                out var plan,
+                out _)
+                || plan.Kind != DiceGridMoveKind.Stack) {
+                return false;
+            }
 
-            return true;
+            return TryExecuteJumpMovePlan(plan, jumpYOffset, jumpMotionProvider);
         }
 
         public bool TryJumpRollThenDemote(
@@ -233,48 +323,20 @@ namespace DiceGame.Gameplay
                 return false;
             }
 
-            if (currentState.Tier != DiceStackTier.Top) {
-                return false;
-            }
-
-            if (!SlideResolver.TrySlideTop(currentState, direction, registry, out var nextState, out var result)
-                || result != TopSlideResult.FallToBottom) {
-                return false;
-            }
-
-            var rolledOrientation = currentState.Orientation.Roll(direction);
-            if (!rolledOrientation.IsValid()) {
-                return false;
-            }
-
-            nextState = new DiceState(nextState.GridPos, rolledOrientation, DiceStackTier.Bottom);
-
-            var fromState = currentState;
-            isRolling = true;
-            currentState = nextState;
-            registry.MoveDice(
-                this,
-                fromState.GridPos,
-                nextState.GridPos,
-                DiceStackTier.Top,
-                DiceStackTier.Bottom);
-
-            diceView.PlayJumpRoll(
+            var hasTopOnSameCell = registry.HasTopAt(currentState.GridPos);
+            if (!DiceGridMovePlanner.TryBuildJumpPlan(
+                currentState,
                 direction,
-                fromState,
-                nextState,
-                jumpYOffset,
                 1,
-                board,
                 registry,
-                () => {
-                    isRolling = false;
-                    StateChanged?.Invoke(currentState);
-                },
-                fallBeforeSnap: jumpMotionProvider == null,
-                jumpMotionProvider);
+                hasTopOnSameCell,
+                out var plan,
+                out _)
+                || plan.Kind != DiceGridMoveKind.Demote) {
+                return false;
+            }
 
-            return true;
+            return TryExecuteJumpMovePlan(plan, jumpYOffset, jumpMotionProvider);
         }
 
         public bool TryRollThenDemote(Direction direction) {
@@ -286,7 +348,7 @@ namespace DiceGame.Gameplay
                 return false;
             }
 
-            if (!SlideResolver.TrySlideTop(currentState, direction, registry, out var nextState, out var result)
+            if (!SlideResolver.TrySlideTop(currentState, direction, registry, out var slideState, out var result)
                 || result != TopSlideResult.FallToBottom) {
                 return false;
             }
@@ -296,51 +358,15 @@ namespace DiceGame.Gameplay
                 return false;
             }
 
-            nextState = new DiceState(nextState.GridPos, rolledOrientation, DiceStackTier.Bottom);
+            var plan = new DiceGridMovePlan {
+                From = currentState,
+                To = new DiceState(slideState.GridPos, rolledOrientation, DiceStackTier.Bottom),
+                Kind = DiceGridMoveKind.Demote,
+                Direction = direction,
+                Distance = 1
+            };
 
-            var fromState = currentState;
-            isRolling = true;
-            currentState = nextState;
-            registry.MoveDice(
-                this,
-                fromState.GridPos,
-                nextState.GridPos,
-                DiceStackTier.Top,
-                DiceStackTier.Bottom);
-
-            diceView.PlayJumpRoll(
-                direction,
-                fromState,
-                nextState,
-                0f,
-                board,
-                registry,
-                () => {
-                    isRolling = false;
-                    StateChanged?.Invoke(currentState);
-                },
-                fallBeforeSnap: true);
-
-            return true;
-        }
-
-        bool BeginGridTransition(DiceState fromState, DiceState nextState) {
-            isRolling = true;
-            currentState = nextState;
-            registry.MoveDice(
-                this,
-                fromState.GridPos,
-                nextState.GridPos,
-                fromState.Tier,
-                nextState.Tier);
-
-            var transition = DiceTransition.GridMove(fromState, nextState);
-            diceView.PlayTransition(transition, board, registry, () => {
-                isRolling = false;
-                StateChanged?.Invoke(currentState);
-            });
-
-            return true;
+            return TryExecuteMovePlan(plan, DiceMoveVisualContext.Ground);
         }
 
         public void BeginDissolve(Action onComplete) {
@@ -402,9 +428,8 @@ namespace DiceGame.Gameplay
 
             var fromState = currentState;
             var toState = new DiceState(fromState.GridPos, fromState.Orientation, DiceStackTier.Bottom);
-            currentState = toState;
+            ApplyLogicalMove(fromState, toState);
             isRolling = true;
-            registry.MoveDice(this, fromState.GridPos, toState.GridPos, DiceStackTier.Top, DiceStackTier.Bottom);
 
             var transition = DiceTransition.CrushDemote(fromState, toState, fromWorld);
             diceView.PlayTransition(transition, board, registry, () => {

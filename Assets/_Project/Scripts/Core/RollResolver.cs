@@ -98,30 +98,20 @@ namespace DiceGame.Core
             int distance,
             out DiceState nextState,
             out string rejectReason) {
+            if (DiceGridMovePlanner.TryBuildJumpPlan(
+                state,
+                direction,
+                distance,
+                placement,
+                hasTopOnSameCell,
+                out var plan,
+                out rejectReason)) {
+                nextState = plan.To;
+                return true;
+            }
+
             nextState = default;
-            rejectReason = null;
-
-            if (state.Tier == DiceStackTier.Bottom && hasTopOnSameCell) {
-                rejectReason = "has-top-on-start-cell";
-                return false;
-            }
-
-            var rollingState = state;
-            for (var step = 0; step < distance; step++) {
-                var targetPos = rollingState.GridPos + direction.ToGridDelta();
-                if (!CanPassJumpRollCell(placement, state.Tier, targetPos, out var cellReject)) {
-                    rejectReason = $"step={step + 1}/{distance} target={FormatGrid(targetPos)} {cellReject}";
-                    return false;
-                }
-
-                if (!TryBuildRolledState(rollingState, targetPos, state.Tier, direction, out rollingState)) {
-                    rejectReason = $"step={step + 1}/{distance} target={FormatGrid(targetPos)} invalid-orientation";
-                    return false;
-                }
-            }
-
-            nextState = rollingState;
-            return true;
+            return false;
         }
 
         static bool TryRollDistanceGroundPath(
@@ -194,30 +184,6 @@ namespace DiceGame.Core
 
             nextState = rollingState;
             return true;
-        }
-
-        static bool CanPassJumpRollCell(
-            IDicePlacement placement,
-            DiceStackTier tier,
-            Vector2Int targetPos,
-            out string rejectReason) {
-            rejectReason = null;
-
-            if (tier == DiceStackTier.Bottom) {
-                if (placement.CanPlaceBottomDiceAt(targetPos)) {
-                    return true;
-                }
-
-                rejectReason = "bottom-path-blocked not-empty-floor";
-                return false;
-            }
-
-            if (placement.CanPlaceBottomDiceAt(targetPos) || placement.CanPlaceTopDiceAt(targetPos)) {
-                return true;
-            }
-
-            rejectReason = "top-path-blocked has-top-dice";
-            return false;
         }
 
         static bool CanEnterRollCell(
