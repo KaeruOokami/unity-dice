@@ -38,12 +38,9 @@
   <ItemGroup>
      <Compile Include="Assets\_Project\Scripts\Core\DiceState.cs" />
      <Compile Include="Assets\_Project\Scripts\Core\DiceOrientation.cs" />
-     <Compile Include="Assets\_Project\Scripts\Gameplay\MovementTransitionEvaluator.cs" />
      <Compile Include="Assets\_Project\Scripts\Core\RollResolver.cs" />
      <Compile Include="Assets\_Project\Scripts\Core\SlideResolver.cs" />
      <Compile Include="Assets\_Project\Scripts\Board\CellType.cs" />
-     <Compile Include="Assets\_Project\Scripts\Gameplay\DiceRegistry.cs" />
-     <Compile Include="Assets\_Project\Scripts\Board\IDicePlacement.cs" />
      <Compile Include="Assets\_Project\Scripts\Core\Direction.cs" />
      <Compile Include="Assets\_Project\Scripts\View\DiceView.cs" />
      <Compile Include="Assets\_Project\Scripts\Gameplay\DiceController.cs" />
@@ -74,8 +71,13 @@
      <Compile Include="Assets\_Project\Scripts\Gameplay\Coupling\JumpCoupledMoveGate.cs" />
      <Compile Include="Assets\_Project\Scripts\Gameplay\Character\CharacterStandingController.cs" />
      <Compile Include="Assets\_Project\Scripts\Gameplay\Character\CharacterMovePlan.cs" />
-     <Compile Include="Assets\_Project\Scripts\Gameplay\Character\CharacterStandingState.cs" />
      <Compile Include="Assets\_Project\Scripts\Gameplay\Character\CharacterMovePlanner.cs" />
+     <Compile Include="Assets\_Project\Scripts\Placement\CharacterPlacement.cs" />
+     <Compile Include="Assets\_Project\Scripts\Placement\IDicePlacement.cs" />
+     <Compile Include="Assets\_Project\Scripts\Placement\MovementTransition.cs" />
+     <Compile Include="Assets\_Project\Scripts\Placement\DiceRegistry.cs" />
+     <Compile Include="Assets\_Project\Scripts\Placement\PlacementService.cs" />
+     <Compile Include="Assets\_Project\Scripts\Placement\MovementTransitionEvaluator.cs" />
      <None Include="Assets\Packages\Dice_6\Documentation\Readmy.txt" />
     <Reference Include="UnityEngine">
         <HintPath>D:\Program Files\Unity\Hub\Editor\2021.3.10f1\Editor\Data\Managed\UnityEngine\UnityEngine.dll</HintPath>

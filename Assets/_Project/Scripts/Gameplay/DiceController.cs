@@ -1,5 +1,6 @@
 using System;
 using DiceGame.Grid;
+using DiceGame.Placement;
 using DiceGame.Core;
 using DiceGame.View;
 using UnityEngine;

@@ -3,6 +3,7 @@ using DiceGame.Core;
 using DiceGame.Gameplay;
 using DiceGame.Gameplay.Coupling;
 using DiceGame.Grid;
+using DiceGame.Placement;
 using UnityEngine;
 
 namespace DiceGame.Gameplay.Character
@@ -12,19 +13,16 @@ namespace DiceGame.Gameplay.Character
         const float EdgeEpsilon = 0.001f;
 
         Board board;
-        DiceRegistry registry;
         MovementTransitionEvaluator movementTransition;
         CharacterTransformDriver transformDriver;
         Action<string> logJumpParallelRoll;
 
         public CharacterMovePlanner(
             Board board,
-            DiceRegistry registry,
             MovementTransitionEvaluator movementTransition,
             CharacterTransformDriver transformDriver,
             Action<string> logJumpParallelRoll) {
             this.board = board;
-            this.registry = registry;
             this.movementTransition = movementTransition;
             this.transformDriver = transformDriver;
             this.logJumpParallelRoll = logJumpParallelRoll;
@@ -296,7 +294,6 @@ namespace DiceGame.Gameplay.Character
             CharacterStandingController standing,
             out Vector2Int rollTarget) {
             rollTarget = standingCell;
-            standing.SyncStandingDiceCache();
             if (standing.CurrentDice == null || maxRollDistance < 1) {
                 return false;
             }

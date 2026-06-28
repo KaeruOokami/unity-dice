@@ -1,7 +1,7 @@
 using DiceGame.Core;
 using UnityEngine;
 
-namespace DiceGame.Grid
+namespace DiceGame.Placement
 {
     public interface IDicePlacement
     {

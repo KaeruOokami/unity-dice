@@ -5,6 +5,7 @@ using DiceGame.Core;
 using DiceGame.Gameplay.Character;
 using DiceGame.Gameplay.Coupling;
 using DiceGame.Grid;
+using DiceGame.Placement;
 using DiceGame.View;
 using UnityEngine;
 
@@ -44,6 +45,7 @@ namespace DiceGame.Gameplay
             Airborne
         }
 
+        PlacementService placement;
         DiceRegistry registry;
         CharacterStandingController standingController;
         CharacterTransformDriver transformDriver;
@@ -90,24 +92,25 @@ namespace DiceGame.Gameplay
 
         public void Configure(
             Board targetBoard,
-            DiceRegistry targetRegistry,
+            PlacementService targetPlacement,
             DiceController startDice,
             CharacterMovementSettings movement,
             PhysicsSettings physics) {
             board = targetBoard;
-            registry = targetRegistry;
+            placement = targetPlacement;
+            registry = targetPlacement.Dice;
             movementSettings = movement;
             physicsSettings = physics;
             standingController = new CharacterStandingController();
             coupling = new DiceCharacterCoupling();
-            standingController.Configure(board, registry, () => coupling.EndRollTracking());
+            standingController.Configure(placement, () => coupling.EndRollTracking());
             if (startDice != null) {
-                standingController.SetInitialStanding(CharacterStandingState.OnDice(
+                standingController.SetInitialStanding(CharacterPlacement.OnDice(
                     startDice.CurrentState.GridPos,
                     startDice.CurrentState.Tier,
                     startDice));
             } else {
-                standingController.SetInitialStanding(CharacterStandingState.OnFloor(startGridCellFromTransform()));
+                standingController.SetInitialStanding(CharacterPlacement.OnFloor(startGridCellFromTransform()));
             }
 
             Initialize();
@@ -120,8 +123,8 @@ namespace DiceGame.Gameplay
         }
 
         public void Initialize() {
-            if (board == null || registry == null) {
-                Debug.LogError("CharacterController: Board or DiceRegistry is not assigned.");
+            if (board == null || placement == null || registry == null) {
+                Debug.LogError("CharacterController: Board or PlacementService is not assigned.");
                 return;
             }
 
@@ -164,7 +167,6 @@ namespace DiceGame.Gameplay
 
             movePlanner = new CharacterMovePlanner(
                 board,
-                registry,
                 movementTransition,
                 transformDriver,
                 LogJumpParallelRoll);
@@ -181,7 +183,6 @@ namespace DiceGame.Gameplay
             currentSpeed = 0f;
             isInitialized = true;
 
-            standingController.SyncStandingDiceCache();
             if (!IsOnFloor
                 && standingController.TryGetStandingDice(out var startStanding)
                 && startStanding.View.DiceTransform != null) {
@@ -344,7 +345,6 @@ namespace DiceGame.Gameplay
             }
 
             var move = input * (currentSpeed * Time.deltaTime);
-            standingController.SyncStandingDiceCache();
             var currentXZ = transformDriver.GetWorldXZ();
             var standingCell = standingController.GridCell;
             var fromLayer = standingController.Layer;

@@ -5,6 +5,7 @@ using DiceGame.Config;
 using DiceGame.Core;
 using DiceGame.Gameplay;
 using DiceGame.Grid;
+using DiceGame.Placement;
 using UnityEngine;
 using UnityEngine.Rendering;
 

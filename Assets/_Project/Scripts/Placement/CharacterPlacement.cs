@@ -2,9 +2,9 @@ using DiceGame.Core;
 using DiceGame.Gameplay;
 using UnityEngine;
 
-namespace DiceGame.Gameplay.Character
+namespace DiceGame.Placement
 {
-    public struct CharacterStandingState
+    public struct CharacterPlacement
     {
         public Vector2Int GridCell;
         public DiceStackTier Tier;
@@ -13,8 +13,8 @@ namespace DiceGame.Gameplay.Character
 
         public bool IsOnFloor => Layer == SurfaceLayer.Floor;
 
-        public static CharacterStandingState OnFloor(Vector2Int gridCell) {
-            return new CharacterStandingState {
+        public static CharacterPlacement OnFloor(Vector2Int gridCell) {
+            return new CharacterPlacement {
                 GridCell = gridCell,
                 Tier = DiceStackTier.Bottom,
                 Layer = SurfaceLayer.Floor,
@@ -22,11 +22,11 @@ namespace DiceGame.Gameplay.Character
             };
         }
 
-        public static CharacterStandingState OnDice(
+        public static CharacterPlacement OnDice(
             Vector2Int gridCell,
             DiceStackTier tier,
             DiceController dice) {
-            return new CharacterStandingState {
+            return new CharacterPlacement {
                 GridCell = gridCell,
                 Tier = tier,
                 Layer = tier == DiceStackTier.Top ? SurfaceLayer.Top : SurfaceLayer.Bottom,

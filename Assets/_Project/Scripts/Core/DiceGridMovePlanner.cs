@@ -1,4 +1,4 @@
-using DiceGame.Grid;
+using DiceGame.Placement;
 using UnityEngine;
 
 namespace DiceGame.Core

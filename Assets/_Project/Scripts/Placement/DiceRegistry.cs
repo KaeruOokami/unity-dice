@@ -1,9 +1,10 @@
 using System.Collections.Generic;
 using DiceGame.Core;
+using DiceGame.Gameplay;
 using DiceGame.Grid;
 using UnityEngine;
 
-namespace DiceGame.Gameplay
+namespace DiceGame.Placement
 {
     public class DiceRegistry : MonoBehaviour, IDicePlacement
     {

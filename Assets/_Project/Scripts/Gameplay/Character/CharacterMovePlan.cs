@@ -1,5 +1,5 @@
 using DiceGame.Core;
-using DiceGame.Gameplay;
+using DiceGame.Placement;
 using UnityEngine;
 
 namespace DiceGame.Gameplay.Character

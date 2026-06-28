@@ -2,6 +2,7 @@ using System;
 using DiceGame.Core;
 using DiceGame.Gameplay;
 using DiceGame.Grid;
+using DiceGame.Placement;
 using UnityEngine;
 
 namespace DiceGame.Gameplay.Character
@@ -12,14 +13,14 @@ namespace DiceGame.Gameplay.Character
 
         Board board;
         Transform characterTransform;
-        Func<CharacterStandingState> getStanding;
+        Func<CharacterPlacement> getStanding;
         Func<float> getCharacterWorldY;
         Func<bool> isTrackingDiceRoll;
 
         public void Configure(
             Board targetBoard,
             Transform transform,
-            Func<CharacterStandingState> standingProvider,
+            Func<CharacterPlacement> standingProvider,
             Func<float> characterWorldYProvider,
             Func<bool> trackingDiceRollProvider) {
             board = targetBoard;

@@ -4,6 +4,7 @@ using DiceGame.Core;
 using DiceGame.Gameplay;
 using DiceGame.Gameplay.Character;
 using DiceGame.Grid;
+using DiceGame.Placement;
 using UnityEngine;
 
 namespace DiceGame.Gameplay.Coupling
@@ -66,7 +67,6 @@ namespace DiceGame.Gameplay.Coupling
             session.JumpDiceGridMoved = false;
             session.IsJumpArc = false;
             session.JumpMoveKind = JumpDiceMoveKind.None;
-            standing.ClearDeferredStanding();
         }
 
         public void EndRollTracking() {
@@ -99,7 +99,6 @@ namespace DiceGame.Gameplay.Coupling
 
             var wasJumpArc = session.IsJumpArc;
             EndRollTracking();
-            standing.CompleteDeferredStanding(dice);
             session.IsActive = false;
             session.IsJumpArc = false;
             return wasJumpArc;
@@ -223,7 +222,7 @@ namespace DiceGame.Gameplay.Coupling
                 _ => JumpDiceMoveKind.None
             };
             session.JumpDiceGridMoved = true;
-            standing.QueueDeferredStanding(plan.To.GridPos, plan.To.Tier);
+            standing.SetOnDice(plan.To.GridPos, plan.To.Tier, dice);
 
             transformDriver.AlignToDiceFace(dice, nextXZ, halfExtent);
             var diceCenter = dice.View.DiceTransform.position;
@@ -267,7 +266,7 @@ namespace DiceGame.Gameplay.Coupling
 
             session.JumpDiceGridMoved = true;
             session.JumpMoveKind = JumpDiceMoveKind.DemoteToBottom;
-            standing.QueueDeferredStanding(plan.To.GridPos, plan.To.Tier);
+            standing.SetOnDice(plan.To.GridPos, plan.To.Tier, dice);
 
             transformDriver.AlignToDiceFace(dice, nextXZ, halfExtent);
             var diceCenter = dice.View.DiceTransform.position;

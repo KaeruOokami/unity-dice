@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using DiceGame.Core;
 using DiceGame.Grid;
+using DiceGame.Placement;
 using UnityEngine;
 
 namespace DiceGame.Gameplay

@@ -4,6 +4,7 @@ using DiceGame.Core;
 using DiceGame.Gameplay;
 using DiceGame.Gameplay.Coupling;
 using DiceGame.Grid;
+using DiceGame.Placement;
 using UnityEngine;
 
 namespace DiceGame.Gameplay.Character

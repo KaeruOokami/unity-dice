@@ -1,44 +1,35 @@
 using System;
 using DiceGame.Core;
 using DiceGame.Gameplay;
-using DiceGame.Grid;
+using DiceGame.Placement;
 using UnityEngine;
 
 namespace DiceGame.Gameplay.Character
 {
     public sealed class CharacterStandingController
     {
-        Board board;
-        DiceRegistry registry;
+        PlacementService placement;
         Action endRollTracking;
+        DiceController subscribedDice;
 
-        CharacterStandingState current;
-        bool hasPendingStandingUpdate;
-        Vector2Int pendingGridCell;
-        DiceStackTier pendingTier;
-
-        public CharacterStandingState Current => current;
-        public DiceController CurrentDice => current.Dice;
-        public bool IsOnFloor => current.IsOnFloor;
-        public Vector2Int GridCell => current.GridCell;
-        public DiceStackTier Tier => current.Tier;
-        public SurfaceLayer Layer => current.Layer;
-        public bool HasPendingStandingUpdate => hasPendingStandingUpdate;
+        public CharacterPlacement Current => placement.Character;
+        public DiceController CurrentDice => placement.Character.Dice;
+        public bool IsOnFloor => placement.Character.IsOnFloor;
+        public Vector2Int GridCell => placement.Character.GridCell;
+        public DiceStackTier Tier => placement.Character.Tier;
+        public SurfaceLayer Layer => placement.Character.Layer;
 
         public event Action<DiceState> StandingDiceStateChanged;
 
-        public void Configure(Board targetBoard, DiceRegistry targetRegistry, Action onEndRollTracking) {
-            board = targetBoard;
-            registry = targetRegistry;
+        public void Configure(PlacementService placementService, Action onEndRollTracking) {
+            placement = placementService;
             endRollTracking = onEndRollTracking;
         }
 
-        public void SetInitialStanding(CharacterStandingState standing) {
+        public void SetInitialStanding(CharacterPlacement standing) {
             UnsubscribeDice();
-            current = standing;
-            if (standing.Dice != null) {
-                SubscribeDice(standing.Dice);
-            }
+            placement.SetInitialCharacterPlacement(standing);
+            SubscribeDice(standing.Dice);
         }
 
         public void ApplyFromTransition(MovementTransition transition, Vector2Int toCell) {
@@ -58,12 +49,13 @@ namespace DiceGame.Gameplay.Character
         public void SetOnFloor(Vector2Int gridCell) {
             endRollTracking?.Invoke();
             UnsubscribeDice();
-            current = CharacterStandingState.OnFloor(gridCell);
+            placement.SetCharacterOnFloor(gridCell);
         }
 
         public void SetOnDice(Vector2Int gridCell, DiceStackTier tier, DiceController dice) {
             endRollTracking?.Invoke();
-            current = CharacterStandingState.OnDice(gridCell, tier, dice);
+            UnsubscribeDice();
+            placement.SetCharacterOnDice(gridCell, tier, dice);
             SubscribeDice(dice);
         }
 
@@ -76,68 +68,12 @@ namespace DiceGame.Gameplay.Character
             SetOnDice(state.GridPos, state.Tier, dice);
         }
 
-        public void QueueDeferredStanding(Vector2Int toCell, DiceStackTier tier) {
-            hasPendingStandingUpdate = true;
-            pendingGridCell = toCell;
-            pendingTier = tier;
-        }
-
-        public void CompleteDeferredStanding(DiceController dice) {
-            if (!hasPendingStandingUpdate) {
-                return;
-            }
-
-            hasPendingStandingUpdate = false;
-            SetOnDice(pendingGridCell, pendingTier, dice);
-        }
-
-        public void ClearDeferredStanding() {
-            hasPendingStandingUpdate = false;
-        }
-
         public bool TryGetStandingDice(out DiceController dice) {
-            dice = null;
-            if (registry == null || current.IsOnFloor) {
-                return false;
-            }
-
-            if (current.Layer == SurfaceLayer.Top) {
-                if (registry.TryGetTopAt(current.GridCell, out dice)) {
-                    return true;
-                }
-
-                if (current.Dice != null
-                    && current.Dice.CurrentState.Tier == DiceStackTier.Bottom
-                    && current.Dice.CurrentState.GridPos == current.GridCell) {
-                    dice = current.Dice;
-                    return true;
-                }
-
-                return false;
-            }
-
-            return registry.TryGetBottomAt(current.GridCell, out dice);
-        }
-
-        public void SyncStandingDiceCache() {
-            if (!TryGetStandingDice(out var dice)) {
-                if (current.Dice != null) {
-                    UnsubscribeDice();
-                    current = CharacterStandingState.OnFloor(current.GridCell);
-                }
-
-                return;
-            }
-
-            if (current.Dice != dice) {
-                current = CharacterStandingState.OnDice(current.GridCell, current.Tier, dice);
-                SubscribeDice(dice);
-            }
+            return placement.TryGetCharacterStandingDice(out dice);
         }
 
         public DiceController ResolveStandingDiceForMovement() {
-            SyncStandingDiceCache();
-            return current.Dice;
+            return placement.Character.Dice;
         }
 
         public void UnsubscribeAll() {
@@ -146,40 +82,33 @@ namespace DiceGame.Gameplay.Character
 
         void SubscribeDice(DiceController dice) {
             UnsubscribeDice();
-            current = new CharacterStandingState {
-                GridCell = current.GridCell,
-                Tier = current.Tier,
-                Layer = current.Layer,
-                Dice = dice
-            };
+            subscribedDice = dice;
             if (dice != null) {
                 dice.StateChanged += OnDiceStateChanged;
             }
         }
 
         void UnsubscribeDice() {
-            if (current.Dice != null) {
-                current.Dice.StateChanged -= OnDiceStateChanged;
+            if (subscribedDice != null) {
+                subscribedDice.StateChanged -= OnDiceStateChanged;
+                subscribedDice = null;
             }
         }
 
         void OnDiceStateChanged(DiceState state) {
             StandingDiceStateChanged?.Invoke(state);
 
-            if (!current.IsOnFloor) {
-                current = new CharacterStandingState {
-                    GridCell = state.GridPos,
-                    Tier = current.Tier,
-                    Layer = current.Layer,
-                    Dice = current.Dice
-                };
+            var current = placement.Character;
+            if (current.IsOnFloor || current.Dice == null) {
+                return;
             }
 
-            if (TryGetStandingDice(out var standingDice)
-                && standingDice == current.Dice
-                && state.GridPos == current.GridCell
-                && state.Tier != current.Tier) {
-                SetOnDice(state.GridPos, state.Tier, standingDice);
+            if (current.Dice != subscribedDice) {
+                return;
+            }
+
+            if (state.GridPos == current.GridCell && state.Tier != current.Tier) {
+                SetOnDice(state.GridPos, state.Tier, current.Dice);
             }
         }
     }

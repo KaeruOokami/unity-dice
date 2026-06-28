@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using DiceGame.Config;
 using DiceGame.Core;
 using DiceGame.Grid;
+using DiceGame.Placement;
 using DiceGame.View;
 using UnityEngine;
 
@@ -59,6 +60,7 @@ namespace DiceGame.Gameplay
         [SerializeField] CameraSetupSettings cameraSetup = new();
 
         DiceRegistry registry;
+        PlacementService placement;
 
         void Start() {
             if (board == null) {
@@ -90,6 +92,7 @@ namespace DiceGame.Gameplay
             }
 
             registry.Configure(board);
+            placement = new PlacementService(registry);
 
             var positions = PickRandomDicePositions(diceCount);
             if (positions.Count == 0) {
@@ -141,7 +144,7 @@ namespace DiceGame.Gameplay
 
             characterController.Configure(
                 board,
-                registry,
+                placement,
                 firstDice,
                 characterMovementSettings,
                 physicsSettings);
