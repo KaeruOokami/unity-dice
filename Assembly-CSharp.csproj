@@ -78,6 +78,9 @@
      <Compile Include="Assets\_Project\Scripts\Placement\DiceRegistry.cs" />
      <Compile Include="Assets\_Project\Scripts\Placement\PlacementService.cs" />
      <Compile Include="Assets\_Project\Scripts\Placement\MovementTransitionEvaluator.cs" />
+     <Compile Include="Assets\_Project\Scripts\Placement\BoardSurface.cs" />
+     <Compile Include="Assets\_Project\Scripts\Placement\SurfaceState.cs" />
+     <Compile Include="Assets\_Project\Scripts\Placement\SurfaceQuery.cs" />
      <None Include="Assets\Packages\Dice_6\Documentation\Readmy.txt" />
     <Reference Include="UnityEngine">
         <HintPath>D:\Program Files\Unity\Hub\Editor\2021.3.10f1\Editor\Data\Managed\UnityEngine\UnityEngine.dll</HintPath>

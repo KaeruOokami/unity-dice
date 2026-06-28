@@ -12,7 +12,6 @@ namespace DiceGame.Gameplay.Character
     public sealed class CharacterMovementExecutor
     {
         Board board;
-        MovementTransitionEvaluator movementTransition;
         CharacterMovementSettings movementSettings;
         CharacterStandingController standing;
         CharacterTransformDriver transformDriver;
@@ -20,13 +19,11 @@ namespace DiceGame.Gameplay.Character
 
         public CharacterMovementExecutor(
             Board board,
-            MovementTransitionEvaluator movementTransition,
             CharacterMovementSettings movementSettings,
             CharacterStandingController standingController,
             CharacterTransformDriver transformDriver,
             DiceCharacterCoupling diceCharacterCoupling) {
             this.board = board;
-            this.movementTransition = movementTransition;
             this.movementSettings = movementSettings;
             standing = standingController;
             this.transformDriver = transformDriver;
@@ -101,16 +98,13 @@ namespace DiceGame.Gameplay.Character
                 case CharacterMoveKind.Blocked:
                     if (dissolveHold != null
                         && dissolveHold.TryApplyHold(
-                            plan.FromCell,
                             plan.ToCell,
-                            fromLayer,
-                            fromSurfaceY,
                             move,
                             plan.Direction,
-                            standing,
-                            movementTransition,
+                            plan.Transition,
                             movementSettings,
                             standing.ApplyFromTransition)) {
+                        nextXZ = transformDriver.ClampToCellInterior(nextXZ, plan.FromCell, halfExtent);
                         return false;
                     }
 
@@ -164,34 +158,18 @@ namespace DiceGame.Gameplay.Character
         }
 
         public bool TryApplyHold(
-            Vector2Int standingCell,
             Vector2Int nextCell,
-            SurfaceLayer fromLayer,
-            float fromSurfaceY,
             Vector2 move,
             Direction direction,
-            CharacterStandingController standing,
-            MovementTransitionEvaluator movementTransition,
+            MovementTransition transition,
             CharacterMovementSettings movementSettings,
             System.Action<MovementTransition, Vector2Int> applyStanding) {
-            var standingDice = standing.ResolveStandingDiceForMovement();
-            if (standingDice == null || !standingDice.IsDissolving) {
+            if (!transition.IsDissolveDescentToFloor) {
                 Reset();
                 return false;
             }
 
             if (!TryGetPrimaryDirection(move, out var moveDir) || moveDir != direction) {
-                Reset();
-                return false;
-            }
-
-            if (!movementTransition.IsDescentBlockedOnlyByStepHeight(
-                standingCell,
-                fromLayer,
-                direction,
-                fromSurfaceY,
-                standingDice,
-                standing.Tier)) {
                 Reset();
                 return false;
             }
@@ -206,20 +184,9 @@ namespace DiceGame.Gameplay.Character
                 return true;
             }
 
-            var transition = movementTransition.Evaluate(
-                standingCell,
-                fromLayer,
-                direction,
-                fromSurfaceY,
-                standingDice,
-                standing.Tier,
-                ignoreStepHeight: true);
-            if (transition.Kind != MovementTransitionKind.Walkable) {
-                Reset();
-                return false;
-            }
-
-            applyStanding(transition, nextCell);
+            applyStanding(
+                MovementTransition.Walkable(null, SurfaceLayer.Floor),
+                nextCell);
             Reset();
             return true;
         }

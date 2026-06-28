@@ -202,6 +202,7 @@ namespace DiceGame.Gameplay.Character
                     return CharacterMovePlan.FaceSlide(standingCell);
 
                 case MovementTransitionKind.Blocked:
+                case MovementTransitionKind.BlockedStepOnly:
                     return new CharacterMovePlan {
                         Kind = CharacterMoveKind.Blocked,
                         FromCell = standingCell,

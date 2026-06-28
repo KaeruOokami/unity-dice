@@ -29,7 +29,14 @@ namespace DiceGame.Core
             var landingCell = fromState.GridPos + direction.ToGridDelta() * distance;
             for (var step = 1; step <= distance; step++) {
                 var pathCell = fromState.GridPos + direction.ToGridDelta() * step;
-                if (!CanPassJumpRollCell(placement, fromState.Tier, pathCell, out var cellReject)) {
+                var isFinalStep = step == distance;
+                if (!CanPassJumpRollCell(
+                    placement,
+                    fromState.Tier,
+                    pathCell,
+                    isFinalStep,
+                    distance,
+                    out var cellReject)) {
                     rejectReason = $"step={step}/{distance} target={FormatGrid(pathCell)} {cellReject}";
                     return false;
                 }
@@ -140,23 +147,39 @@ namespace DiceGame.Core
             IDicePlacement placement,
             DiceStackTier tier,
             Vector2Int targetPos,
+            bool isFinalStep,
+            int distance,
             out string rejectReason) {
             rejectReason = null;
 
-            if (tier == DiceStackTier.Bottom) {
-                if (placement.CanPlaceBottomDiceAt(targetPos)) {
-                    return true;
-                }
-
-                rejectReason = "bottom-path-blocked not-empty-floor";
-                return false;
-            }
-
-            if (placement.CanPlaceBottomDiceAt(targetPos) || placement.CanPlaceTopDiceAt(targetPos)) {
+            if (placement.CanDiceRollInto(targetPos)) {
                 return true;
             }
 
-            rejectReason = "top-path-blocked has-top-dice";
+            if (tier == DiceStackTier.Bottom) {
+                if (isFinalStep) {
+                    if (placement.CanPlaceTopDiceAt(targetPos)) {
+                        return true;
+                    }
+
+                    if (distance > 1 && placement.CanParallelRollLandAt(targetPos, tier)) {
+                        return true;
+                    }
+                }
+
+                rejectReason = "bottom-path-blocked";
+                return false;
+            }
+
+            if (placement.CanPlaceTopDiceAt(targetPos)) {
+                return true;
+            }
+
+            if (isFinalStep && distance > 1 && placement.CanParallelRollLandAt(targetPos, tier)) {
+                return true;
+            }
+
+            rejectReason = "top-path-blocked";
             return false;
         }
 

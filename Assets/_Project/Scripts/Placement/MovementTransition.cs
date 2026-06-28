@@ -13,7 +13,8 @@ namespace DiceGame.Placement
     {
         Walkable,
         Blocked,
-        CanRoll
+        CanRoll,
+        BlockedStepOnly
     }
 
     public readonly struct MovementTransition
@@ -42,5 +43,12 @@ namespace DiceGame.Placement
         public static MovementTransition Roll() {
             return new MovementTransition(MovementTransitionKind.CanRoll, null, SurfaceLayer.Floor);
         }
+
+        public static MovementTransition BlockedStepOnly(DiceController targetDice, SurfaceLayer targetLayer) {
+            return new MovementTransition(MovementTransitionKind.BlockedStepOnly, targetDice, targetLayer);
+        }
+
+        public bool IsDissolveDescentToFloor =>
+            Kind == MovementTransitionKind.BlockedStepOnly && TargetLayer == SurfaceLayer.Floor;
     }
 }

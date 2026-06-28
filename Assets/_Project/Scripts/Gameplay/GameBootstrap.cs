@@ -92,7 +92,7 @@ namespace DiceGame.Gameplay
             }
 
             registry.Configure(board);
-            placement = new PlacementService(registry);
+            placement = new PlacementService(registry, board, characterMovementSettings.MaxStepHeight);
 
             var positions = PickRandomDicePositions(diceCount);
             if (positions.Count == 0) {

@@ -152,7 +152,7 @@ namespace DiceGame.Gameplay
                 GetCharacterWorldY,
                 () => coupling.IsTrackingRoll);
 
-            movementTransition = new MovementTransitionEvaluator(board, registry, movementSettings.MaxStepHeight);
+            movementTransition = placement.Passability;
             movementTransition.SetJumpParallelRollDebugLog(
                 movementSettings.DebugJumpParallelRoll ? LogJumpParallelRoll : null);
 
@@ -172,7 +172,6 @@ namespace DiceGame.Gameplay
                 LogJumpParallelRoll);
             movementExecutor = new CharacterMovementExecutor(
                 board,
-                movementTransition,
                 movementSettings,
                 standingController,
                 transformDriver,
@@ -400,7 +399,9 @@ namespace DiceGame.Gameplay
 
             if (plan.Kind == CharacterMoveKind.Blocked) {
                 LogPositionMovementBlock(
-                    "TransitionBlocked",
+                    plan.Transition.Kind == MovementTransitionKind.BlockedStepOnly
+                        ? "DissolveDescentBlocked"
+                        : "TransitionBlocked",
                     plan.FromCell,
                     plan.ToCell,
                     fromLayer,
@@ -409,7 +410,7 @@ namespace DiceGame.Gameplay
                     currentXZ,
                     nextXZ,
                     move,
-                    MovementTransitionKind.Blocked,
+                    plan.Transition.Kind,
                     $"stack={FormatMovementStack(plan.ToCell)}");
             }
 

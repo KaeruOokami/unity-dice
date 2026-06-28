@@ -1,5 +1,6 @@
 using DiceGame.Core;
 using DiceGame.Gameplay;
+using DiceGame.Grid;
 using UnityEngine;
 
 namespace DiceGame.Placement
@@ -7,14 +8,20 @@ namespace DiceGame.Placement
     public sealed class PlacementService
     {
         readonly DiceRegistry diceRegistry;
+        readonly SurfaceQuery surfaceQuery;
+        readonly MovementTransitionEvaluator passability;
         CharacterPlacement character;
 
-        public PlacementService(DiceRegistry registry) {
+        public PlacementService(DiceRegistry registry, Board board, float maxStepHeight) {
             diceRegistry = registry;
+            surfaceQuery = new SurfaceQuery(board, registry);
+            passability = new MovementTransitionEvaluator(board, registry, surfaceQuery, maxStepHeight);
         }
 
         public DiceRegistry Dice => diceRegistry;
         public CharacterPlacement Character => character;
+        public SurfaceQuery Surfaces => surfaceQuery;
+        public MovementTransitionEvaluator Passability => passability;
 
         public void SetCharacterOnFloor(Vector2Int gridCell) {
             character = CharacterPlacement.OnFloor(gridCell);
