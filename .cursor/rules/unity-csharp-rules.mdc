@@ -1,0 +1,23 @@
+---
+description: Unity C# rules (Input, scenes, architecture, lifecycle, serialization)
+globs: Assets/_Project/Scripts/**/*.cs
+alwaysApply: false
+---
+
+# Unity C# Rules
+
+- Input は **Input System** を使用する。Legacy の `UnityEngine.Input`（`Input.GetKey*`, `Input.GetAxis*` 等）は使用しない。
+
+- シーン遷移・シーン名は一元管理する（文字列直書き禁止）。
+  - 既存の `SceneNames` 等に統一する。
+
+- Unity 依存を境界に閉じる。
+  - ゲームロジック（純C#）と `MonoBehaviour` を分離し、参照方向を固定する。
+
+- null/ライフサイクル安全を徹底する。
+  - `OnEnable`/`OnDisable` で購読/解除（イベント、InputAction 等）をペアで管理する。
+  - `Destroy` 後に参照しない。
+
+- SerializeField の方針
+  - `public` フィールドの乱用禁止。
+  - Inspector 露出は最小限（必要なものだけ `SerializeField`）。

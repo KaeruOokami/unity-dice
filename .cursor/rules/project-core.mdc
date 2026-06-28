@@ -1,0 +1,14 @@
+---
+description: Project core standards
+alwaysApply: true
+---
+
+# Project Core Standards
+
+- ハードコーディングは行わない（数値/文字列/シーン名/タグ/レイヤー/リソースパス等）。
+  - 必要な値は「定数」「設定（ScriptableObject 等）」「ProjectSettings」「Addressables/Resources 管理」等に寄せる。
+
+- 新しいソースファイルは、既存ソースとの関係性（責務/依存方向/レイヤ/ドメイン）を考慮して、適切なパスと名前で配置する。
+  - 似た責務は同一フォルダに集約し、循環参照・肥大化を避ける。
+
+- アセット命名規約（Prefab/ScriptableObject/Scene の命名と配置ルール）を固定し、既存の構造・命名に合わせて追加する。

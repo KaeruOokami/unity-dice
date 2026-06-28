@@ -1,0 +1,13 @@
+---
+description: Review policy (scope and exclusions)
+alwaysApply: true
+---
+
+# Review Policy
+
+- レビュー対象は原則 `Assets/_Project/Scripts/` 配下のソースのみ。
+  - ただし、ユーザーが対象ファイル/フォルダを明示的に指定した場合はその限りではない。
+
+- ビルド成果物・自動生成物は編集・レビュー対象にしない。
+  - 例: `Build/` 配下、生成 dll、生成ログ、生成アセットなど
+  - 必要なら「生成元（ソース/設定/ビルドパイプライン）」を修正する。
