@@ -211,34 +211,35 @@ namespace DiceGame.Gameplay
             Direction direction,
             DiceController standingDice,
             DiceStackTier standingTier,
+            int requiredDistance,
             out Vector2Int toCell,
             out int distance) {
             toCell = default;
             distance = 0;
 
-            for (var candidateDistance = RollResolver.MaxParallelRollDistance;
-                candidateDistance >= 1;
-                candidateDistance--) {
-                var candidate = fromCell + direction.ToGridDelta() * candidateDistance;
-                if (!board.IsInside(candidate) || board.GetCell(candidate) == CellType.Wall) {
-                    continue;
-                }
-
-                if (TryEvaluateGridRoll(
-                    fromCell,
-                    candidate,
-                    standingDice,
-                    standingTier,
-                    direction,
-                    candidateDistance,
-                    allowMultiCell: true)) {
-                    toCell = candidate;
-                    distance = candidateDistance;
-                    return true;
-                }
+            if (requiredDistance < 1 || requiredDistance > RollResolver.MaxParallelRollDistance) {
+                return false;
             }
 
-            return false;
+            var candidate = fromCell + direction.ToGridDelta() * requiredDistance;
+            if (!board.IsInside(candidate) || board.GetCell(candidate) == CellType.Wall) {
+                return false;
+            }
+
+            if (!TryEvaluateGridRoll(
+                fromCell,
+                candidate,
+                standingDice,
+                standingTier,
+                direction,
+                requiredDistance,
+                allowMultiCell: requiredDistance > 1)) {
+                return false;
+            }
+
+            toCell = candidate;
+            distance = requiredDistance;
+            return true;
         }
 
         public MovementTransition EvaluateToTargetCell(

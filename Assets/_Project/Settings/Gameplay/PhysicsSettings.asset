@@ -12,7 +12,8 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: f1a2b3c4d5e6478899aabbccddeeff01, type: 3}
   m_Name: PhysicsSettings
   m_EditorClassIdentifier: 
-  gravity: 25
+  gravity: 55
   jumpHeightFallback: 1
-  jumpHeightDiceMinMultiplier: 1
-  jumpHeightDiceMultiplier: 1.2
+  jumpHeightDiceMinMultiplier: 0.3
+  jumpHeightDiceMultiplier: 1
+  jumpParallelRollTwoCellMaxRatio: 0.6

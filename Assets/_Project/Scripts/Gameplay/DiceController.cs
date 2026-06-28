@@ -115,15 +115,23 @@ namespace DiceGame.Gameplay
             return BeginGridTransition(currentState, nextState);
         }
 
-        public bool TryJumpRoll(Direction direction, float jumpYOffset, int distance = 1) {
+        public bool TryJumpRoll(
+            Direction direction,
+            float jumpYOffset,
+            int distance = 1,
+            Func<VerticalMotionState> jumpMotionProvider = null) {
             if (isDissolving || isCarried || isRolling || board == null || diceView == null || registry == null) {
                 return false;
             }
 
-            return TryBeginParallelRoll(direction, jumpYOffset, distance);
+            return TryBeginParallelRoll(direction, jumpYOffset, distance, jumpMotionProvider);
         }
 
-        bool TryBeginParallelRoll(Direction direction, float jumpYOffset, int distance = 1) {
+        bool TryBeginParallelRoll(
+            Direction direction,
+            float jumpYOffset,
+            int distance = 1,
+            Func<VerticalMotionState> jumpMotionProvider = null) {
             var hasTopOnSameCell = registry.HasTopAt(currentState.GridPos);
             if (!RollResolver.TryRollDistance(
                 currentState,
@@ -145,10 +153,20 @@ namespace DiceGame.Gameplay
                 fromState.Tier,
                 nextState.Tier);
 
-            diceView.PlayJumpRoll(direction, fromState, nextState, jumpYOffset, distance, board, registry, () => {
-                isRolling = false;
-                StateChanged?.Invoke(currentState);
-            });
+            diceView.PlayJumpRoll(
+                direction,
+                fromState,
+                nextState,
+                jumpYOffset,
+                distance,
+                board,
+                registry,
+                () => {
+                    isRolling = false;
+                    StateChanged?.Invoke(currentState);
+                },
+                fallBeforeSnap: false,
+                jumpMotionProvider);
 
             return true;
         }

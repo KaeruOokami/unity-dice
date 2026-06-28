@@ -13,7 +13,7 @@ namespace DiceGame.Core
 
     public static class GravityMotion
     {
-        public const float DefaultGravity = 25f;
+        public const float DefaultGravity = 55f;
 
         public static float ComputeLaunchVelocity(float height, float gravity) {
             return Mathf.Sqrt(Mathf.Max(0f, 2f * gravity * height));

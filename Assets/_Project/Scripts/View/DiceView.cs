@@ -260,7 +260,8 @@ namespace DiceGame.View
             Board board,
             DiceRegistry registry,
             Action onComplete,
-            bool fallBeforeSnap = false) {
+            bool fallBeforeSnap = false,
+            Func<VerticalMotionState> jumpMotionProvider = null) {
             if (!HasGameplaySettings()) {
                 return;
             }
@@ -282,7 +283,8 @@ namespace DiceGame.View
                 fallBeforeSnap,
                 board,
                 registry,
-                onComplete));
+                onComplete,
+                jumpMotionProvider));
         }
 
         public void PlayTransition(
@@ -426,7 +428,8 @@ namespace DiceGame.View
             bool fallBeforeSnap,
             Board board,
             DiceRegistry registry,
-            Action onComplete) {
+            Action onComplete,
+            Func<VerticalMotionState> jumpMotionProvider = null) {
             isAnimating = true;
             EnsureMesh();
             if (positionRoot == null || rotationRoot == null) {
@@ -439,10 +442,22 @@ namespace DiceGame.View
             rotationRoot.rotation = DiceOrientationMapper.ToRotation(fromState.Orientation);
 
             var rolls = Mathf.Clamp(rollDistance, 1, RollResolver.MaxParallelRollDistance);
-            for (var i = 0; i < rolls; i++) {
-                yield return RollPhaseCoroutine(direction, board);
-                var stepState = BuildParallelRollStepState(fromState, direction, i + 1);
-                CommitGridPlacement(stepState, board, registry, preserveWorldY: positionRoot.position.y);
+            var useArcRoll = rolls >= 2 && !fallBeforeSnap && jumpMotionProvider != null;
+            if (useArcRoll) {
+                visualYOffset = 0f;
+                yield return JumpArcTwoCellRollCoroutine(
+                    direction,
+                    fromState,
+                    toState,
+                    jumpMotionProvider,
+                    board,
+                    registry);
+            } else {
+                for (var i = 0; i < rolls; i++) {
+                    yield return RollPhaseCoroutine(direction, board);
+                    var stepState = BuildParallelRollStepState(fromState, direction, i + 1);
+                    CommitGridPlacement(stepState, board, registry, preserveWorldY: positionRoot.position.y);
+                }
             }
 
             yield return FinalizeJumpRollPlacement(
@@ -451,9 +466,84 @@ namespace DiceGame.View
                 jumpYOffset,
                 fallBeforeSnap,
                 board,
-                registry);
+                registry,
+                skipHorizontalAlign: useArcRoll,
+                skipJumpVisualAfterSnap: useArcRoll);
 
             onComplete?.Invoke();
+        }
+
+        IEnumerator JumpArcTwoCellRollCoroutine(
+            Direction direction,
+            DiceState fromState,
+            DiceState toState,
+            Func<VerticalMotionState> jumpMotionProvider,
+            Board board,
+            DiceRegistry registry) {
+            if (positionRoot == null || rotationRoot == null || board == null || jumpMotionProvider == null) {
+                yield break;
+            }
+
+            positionRoot.SetParent(transform, true);
+            positionRoot.localRotation = Quaternion.identity;
+            positionRoot.localScale = Vector3.one;
+
+            var jumpHeight = board.CellSize * physicsSettings.JumpHeightDiceMultiplier;
+            var startWorld = positionRoot.position;
+            var endGrid = board.GridToWorld(toState.GridPos);
+            var fromBaseY = ResolveSurfaceBaseWorldY(fromState, board, registry);
+            var toBaseY = ResolveSurfaceBaseWorldY(toState, board, registry);
+
+            var midOrientation = fromState.Orientation.Roll(direction);
+            var orientFrom = DiceOrientationMapper.ToRotation(fromState.Orientation);
+            var orientMid = DiceOrientationMapper.ToRotation(midOrientation);
+            var orientTo = DiceOrientationMapper.ToRotation(toState.Orientation);
+
+            var startMotion = jumpMotionProvider();
+            var startVelocityY = startMotion.VelocityY;
+
+            while (true) {
+                var motion = jumpMotionProvider();
+                if (motion.IsGrounded) {
+                    break;
+                }
+
+                var arcT = ComputeJumpArcProgress(motion, startVelocityY, jumpHeight);
+                var smoothT = Mathf.SmoothStep(0f, 1f, arcT);
+
+                var xz = Vector2.Lerp(
+                    new Vector2(startWorld.x, startWorld.z),
+                    new Vector2(endGrid.x, endGrid.z),
+                    smoothT);
+
+                var rotation = arcT <= 0.5f
+                    ? Quaternion.Slerp(orientFrom, orientMid, arcT * 2f)
+                    : Quaternion.Slerp(orientMid, orientTo, (arcT - 0.5f) * 2f);
+                rotationRoot.rotation = rotation;
+
+                ComputeVerticalExtents(board, currentTopFace, 1f, out var minY, out _);
+                var baseY = Mathf.Lerp(fromBaseY, toBaseY, smoothT);
+                positionRoot.position = new Vector3(xz.x, baseY - minY + motion.Offset, xz.y);
+                yield return null;
+            }
+
+            rotationRoot.rotation = orientTo;
+            currentTopFace = toState.Orientation.Top;
+            gridWorldPosition = endGrid;
+            UpdateSurfaceBase(toState, board, registry);
+            ApplySurfaceVisual(board, dissolveProgress);
+
+            ComputeVerticalExtents(board, currentTopFace, 1f, out var landedMinY, out _);
+            positionRoot.position = new Vector3(endGrid.x, toBaseY - landedMinY, endGrid.z);
+        }
+
+        static float ComputeJumpArcProgress(VerticalMotionState motion, float startVelocityY, float jumpHeight) {
+            if (startVelocityY > 0.001f && motion.VelocityY > 0f) {
+                return 0.5f * (1f - motion.VelocityY / startVelocityY);
+            }
+
+            var safeHeight = Mathf.Max(jumpHeight, 0.001f);
+            return 0.5f + 0.5f * (1f - motion.Offset / safeHeight);
         }
 
         IEnumerator FinalizeJumpRollPlacement(
@@ -462,14 +552,16 @@ namespace DiceGame.View
             float jumpYOffset,
             bool fallBeforeSnap,
             Board board,
-            DiceRegistry registry) {
+            DiceRegistry registry,
+            bool skipHorizontalAlign = false,
+            bool skipJumpVisualAfterSnap = false) {
             CommitGridPlacement(toState, board, registry, preserveWorldY: positionRoot.position.y);
 
             if (fallBeforeSnap) {
                 var targetWorld = ComputeAnchoredWorldPosition(toState, board, registry, visualYOffset);
                 positionRoot.position = new Vector3(targetWorld.x, positionRoot.position.y, targetWorld.z);
                 yield return AnimateGravityFall(targetWorld);
-            } else {
+            } else if (!skipHorizontalAlign) {
                 var targetWorld = ComputeAnchoredWorldPosition(toState, board, registry, visualYOffset);
                 var rolled = new Vector3(targetWorld.x, positionRoot.position.y, targetWorld.z);
                 if (Vector3.SqrMagnitude(rolled - positionRoot.position) > 0.0001f) {
@@ -487,7 +579,9 @@ namespace DiceGame.View
 
             if (fromState.Tier == DiceStackTier.Bottom && toState.Tier == DiceStackTier.Top) {
                 ClearVisualYOffset(board);
-            } else if (jumpYOffset > 0f && ShouldApplyJumpVisualYOffsetAfterSnap(fromState, toState)) {
+            } else if (!skipJumpVisualAfterSnap
+                && jumpYOffset > 0f
+                && ShouldApplyJumpVisualYOffsetAfterSnap(fromState, toState)) {
                 ApplyVisualYOffset(board, jumpYOffset);
             }
         }
