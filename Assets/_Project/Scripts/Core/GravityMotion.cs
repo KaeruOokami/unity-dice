@@ -53,6 +53,30 @@ namespace DiceGame.Core
             return state;
         }
 
+        /// <summary>
+        /// Normalized jump timeline: 0 = launch, 0.5 = apex, 1 = landing.
+        /// </summary>
+        public static float ComputeFullJumpTimeline(
+            VerticalMotionState motion,
+            float launchVelocityY,
+            float jumpHeight) {
+            if (launchVelocityY > 0.001f && motion.VelocityY > 0f) {
+                return 0.5f * (1f - motion.VelocityY / launchVelocityY);
+            }
+
+            var safeHeight = Mathf.Max(jumpHeight, 0.001f);
+            return 0.5f + 0.5f * (1f - motion.Offset / safeHeight);
+        }
+
+        public static float ComputeRollArcProgress(float jumpTimeline, float jumpTimelineAtRollStart) {
+            var remaining = 1f - jumpTimelineAtRollStart;
+            if (remaining <= 0.001f) {
+                return jumpTimeline >= 1f - 0.001f ? 1f : 0f;
+            }
+
+            return Mathf.Clamp01((jumpTimeline - jumpTimelineAtRollStart) / remaining);
+        }
+
         public static IEnumerator AnimateVerticalDropCoroutine(
             VerticalMotionState state,
             float gravity,

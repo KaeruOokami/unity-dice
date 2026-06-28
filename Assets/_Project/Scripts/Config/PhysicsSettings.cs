@@ -8,14 +8,20 @@ namespace DiceGame.Config
     {
         [SerializeField] float gravity = GravityMotion.DefaultGravity;
         [SerializeField] float jumpHeightFallback = 1f;
-        [SerializeField] float jumpHeightDiceMinMultiplier = 0.3f;
         [SerializeField] float jumpHeightDiceMultiplier = 1.0f;
-        [SerializeField] float jumpParallelRollTwoCellMaxRatio = 0.1f;
+
+        [Header("Jump Grid Move Timelines (ascent only, u: 0 = launch, 0.5 = apex)")]
+        [SerializeField] float jumpGridMoveTwoCellMaxTimeline = 0.1f;
+        [SerializeField] float jumpGridMoveOneCellMaxTimeline = 0.5f;
+        [SerializeField] float jumpGridMoveTierChangeMinTimeline = 0.2f;
+        [SerializeField] float jumpGridMoveTierChangeMaxTimeline = 0.5f;
 
         public float Gravity => gravity;
         public float JumpHeightFallback => jumpHeightFallback;
-        public float JumpHeightDiceMinMultiplier => jumpHeightDiceMinMultiplier;
         public float JumpHeightDiceMultiplier => jumpHeightDiceMultiplier;
-        public float JumpParallelRollTwoCellMaxRatio => jumpParallelRollTwoCellMaxRatio;
+        public float JumpGridMoveTwoCellMaxTimeline => jumpGridMoveTwoCellMaxTimeline;
+        public float JumpGridMoveOneCellMaxTimeline => jumpGridMoveOneCellMaxTimeline;
+        public float JumpGridMoveTierChangeMinTimeline => jumpGridMoveTierChangeMinTimeline;
+        public float JumpGridMoveTierChangeMaxTimeline => jumpGridMoveTierChangeMaxTimeline;
     }
 }

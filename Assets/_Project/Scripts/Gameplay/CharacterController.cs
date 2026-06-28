@@ -412,7 +412,7 @@ namespace DiceGame.Gameplay
 
                     if (isJumping
                         && IsJumpStackWalkableTransition(transition, standingTier)
-                        && !CanPerformJumpStackMove()) {
+                        && !CanPerformJumpTierChangeMove()) {
                         nextXZ = ClampToCellInterior(nextXZ, standingCell, halfExtent);
                         return false;
                     }
@@ -580,20 +580,25 @@ namespace DiceGame.Gameplay
                 return 0;
             }
 
-            var ratio = GetJumpHeightDiceRatio();
-            var twoCellMax = physicsSettings.JumpParallelRollTwoCellMaxRatio;
-            if (ratio <= twoCellMax + JumpHeightEpsilon) {
+            if (!IsJumpOnAscent(out var timeline)) {
+                return 0;
+            }
+
+            var twoCellMax = physicsSettings.JumpGridMoveTwoCellMaxTimeline;
+            var oneCellMax = physicsSettings.JumpGridMoveOneCellMaxTimeline;
+            if (timeline <= twoCellMax + JumpTimelineEpsilon) {
                 return RollResolver.MaxParallelRollDistance;
             }
 
-            if (ratio <= physicsSettings.JumpHeightDiceMultiplier + JumpHeightEpsilon) {
+            if (timeline <= oneCellMax + JumpTimelineEpsilon) {
                 return 1;
             }
 
             return 0;
         }
 
-        const float JumpHeightEpsilon = 0.001f;
+        const float JumpTimelineEpsilon = 0.001f;
+        const float JumpApexTimeline = 0.5f;
 
         Vector2Int ResolveNextCell(
             Vector2Int standingCell,
@@ -919,6 +924,10 @@ namespace DiceGame.Gameplay
             if (standingTier == DiceStackTier.Top
                 && standingSurfaceLayer == SurfaceLayer.Top
                 && transition.TargetLayer == SurfaceLayer.Bottom) {
+                if (!CanPerformJumpTierChangeMove()) {
+                    return false;
+                }
+
                 if (!currentDice.TryJumpRollThenDemote(direction, jumpYOffset)) {
                     return false;
                 }
@@ -931,7 +940,7 @@ namespace DiceGame.Gameplay
             if (standingTier == DiceStackTier.Bottom
                 && standingSurfaceLayer == SurfaceLayer.Bottom
                 && transition.TargetLayer == SurfaceLayer.Top) {
-                if (!CanPerformJumpStackMove() || !registry.CanPlaceTopDiceAt(toCell)) {
+                if (!CanPerformJumpTierChangeMove() || !registry.CanPlaceTopDiceAt(toCell)) {
                     return false;
                 }
 
@@ -1457,26 +1466,52 @@ namespace DiceGame.Gameplay
                 : physicsSettings.JumpHeightFallback;
         }
 
-        float GetJumpHeightDiceRatio() {
-            if (board == null || board.CellSize <= 0f) {
-                return 0f;
+        bool TryGetJumpTimeline(out float timeline) {
+            timeline = 0f;
+            if (jumpPhase == JumpPhase.None || physicsSettings == null) {
+                return false;
             }
 
-            return jumpYOffset / board.CellSize;
+            var jumpHeight = GetDiceJumpHeight();
+            if (jumpHeight <= 0f) {
+                return false;
+            }
+
+            var launchVelocityY = GravityMotion.ComputeLaunchVelocity(jumpHeight, physicsSettings.Gravity);
+            timeline = GravityMotion.ComputeFullJumpTimeline(jumpMotion, launchVelocityY, jumpHeight);
+            return true;
+        }
+
+        bool IsJumpOnAscent(out float timeline) {
+            timeline = 0f;
+            if (!TryGetJumpTimeline(out timeline)) {
+                return false;
+            }
+
+            return timeline <= JumpApexTimeline + JumpTimelineEpsilon;
+        }
+
+        bool IsJumpTimelineInRange(float minTimeline, float maxTimeline) {
+            if (!IsJumpOnAscent(out var timeline)) {
+                return false;
+            }
+
+            return timeline + JumpTimelineEpsilon >= minTimeline
+                && timeline <= maxTimeline + JumpTimelineEpsilon;
         }
 
         bool CanAttemptJumpGridMove() {
             return jumpPhase != JumpPhase.None && !jumpDiceGridMoved && board != null;
         }
 
-        bool CanPerformJumpStackMove() {
+        bool CanPerformJumpTierChangeMove() {
             if (!CanAttemptJumpGridMove()) {
                 return false;
             }
 
-            var ratio = GetJumpHeightDiceRatio();
-            return ratio >= physicsSettings.JumpHeightDiceMinMultiplier
-                && ratio <= physicsSettings.JumpHeightDiceMultiplier + JumpHeightEpsilon;
+            return IsJumpTimelineInRange(
+                physicsSettings.JumpGridMoveTierChangeMinTimeline,
+                physicsSettings.JumpGridMoveTierChangeMaxTimeline);
         }
 
         static bool IsJumpStackWalkableTransition(

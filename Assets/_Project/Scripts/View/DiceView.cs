@@ -504,7 +504,10 @@ namespace DiceGame.View
             var useSplitRotation = rollCount >= 2;
 
             var startMotion = jumpMotionProvider();
-            var jumpTimelineAtRollStart = ComputeFullJumpTimeline(startMotion, launchVelocityY, jumpHeight);
+            var jumpTimelineAtRollStart = GravityMotion.ComputeFullJumpTimeline(
+                startMotion,
+                launchVelocityY,
+                jumpHeight);
 
             while (true) {
                 var motion = jumpMotionProvider();
@@ -512,8 +515,8 @@ namespace DiceGame.View
                     break;
                 }
 
-                var jumpTimeline = ComputeFullJumpTimeline(motion, launchVelocityY, jumpHeight);
-                var rollT = ComputeRollArcProgress(jumpTimeline, jumpTimelineAtRollStart);
+                var jumpTimeline = GravityMotion.ComputeFullJumpTimeline(motion, launchVelocityY, jumpHeight);
+                var rollT = GravityMotion.ComputeRollArcProgress(jumpTimeline, jumpTimelineAtRollStart);
                 var smoothT = Mathf.SmoothStep(0f, 1f, rollT);
 
                 var xz = Vector2.Lerp(
@@ -542,24 +545,6 @@ namespace DiceGame.View
 
             ComputeVerticalExtents(board, currentTopFace, 1f, out var landedMinY, out _);
             positionRoot.position = new Vector3(endGrid.x, toBaseY - landedMinY, endGrid.z);
-        }
-
-        static float ComputeFullJumpTimeline(VerticalMotionState motion, float launchVelocityY, float jumpHeight) {
-            if (launchVelocityY > 0.001f && motion.VelocityY > 0f) {
-                return 0.5f * (1f - motion.VelocityY / launchVelocityY);
-            }
-
-            var safeHeight = Mathf.Max(jumpHeight, 0.001f);
-            return 0.5f + 0.5f * (1f - motion.Offset / safeHeight);
-        }
-
-        static float ComputeRollArcProgress(float jumpTimeline, float jumpTimelineAtRollStart) {
-            var remaining = 1f - jumpTimelineAtRollStart;
-            if (remaining <= 0.001f) {
-                return jumpTimeline >= 1f - 0.001f ? 1f : 0f;
-            }
-
-            return Mathf.Clamp01((jumpTimeline - jumpTimelineAtRollStart) / remaining);
         }
 
         IEnumerator FinalizeJumpRollPlacement(
