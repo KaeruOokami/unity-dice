@@ -1,3 +1,4 @@
+using System;
 using DiceGame.Core;
 using DiceGame.Grid;
 using UnityEngine;
@@ -47,11 +48,20 @@ namespace DiceGame.Gameplay
         readonly Board board;
         readonly DiceRegistry registry;
         readonly float maxStepHeight;
+        Action<string> jumpParallelRollDebugLog;
 
         public MovementTransitionEvaluator(Board board, DiceRegistry registry, float maxStepHeight) {
             this.board = board;
             this.registry = registry;
             this.maxStepHeight = maxStepHeight;
+        }
+
+        public void SetJumpParallelRollDebugLog(Action<string> log) {
+            jumpParallelRollDebugLog = log;
+        }
+
+        void LogJumpParallelRoll(string message) {
+            jumpParallelRollDebugLog?.Invoke(message);
         }
 
         public MovementTransition Evaluate(
@@ -218,11 +228,16 @@ namespace DiceGame.Gameplay
             distance = 0;
 
             if (requiredDistance < 1 || requiredDistance > RollResolver.MaxParallelRollDistance) {
+                LogJumpParallelRoll(
+                    $"TryGetJumpParallelRollTarget reject distance-out-of-range required={requiredDistance}");
                 return false;
             }
 
             var candidate = fromCell + direction.ToGridDelta() * requiredDistance;
             if (!board.IsInside(candidate) || board.GetCell(candidate) == CellType.Wall) {
+                LogJumpParallelRoll(
+                    $"TryGetJumpParallelRollTarget reject invalid-candidate from={FormatGrid(fromCell)} " +
+                    $"candidate={FormatGrid(candidate)} dir={direction}");
                 return false;
             }
 
@@ -233,12 +248,19 @@ namespace DiceGame.Gameplay
                 standingTier,
                 direction,
                 requiredDistance,
-                allowMultiCell: requiredDistance > 1)) {
+                allowMultiCell: requiredDistance > 1,
+                out var rejectReason)) {
+                LogJumpParallelRoll(
+                    $"TryGetJumpParallelRollTarget reject from={FormatGrid(fromCell)} candidate={FormatGrid(candidate)} " +
+                    $"dir={direction} requiredDistance={requiredDistance} stack={FormatStack(candidate)} {rejectReason}");
                 return false;
             }
 
             toCell = candidate;
             distance = requiredDistance;
+            LogJumpParallelRoll(
+                $"TryGetJumpParallelRollTarget ok from={FormatGrid(fromCell)} to={FormatGrid(candidate)} " +
+                $"dir={direction} distance={requiredDistance} stack={FormatStack(candidate)}");
             return true;
         }
 
@@ -315,6 +337,24 @@ namespace DiceGame.Gameplay
             bool ignoreStepHeight,
             bool isJumping) {
             if (registry.CanPlaceBottomDiceAt(toCell)) {
+                var cellDistance = GetOrthogonalDistance(fromCell, toCell);
+                if (isJumping
+                    && cellDistance > 1
+                    && TryEvaluateGridRoll(
+                        fromCell,
+                        toCell,
+                        standingDice,
+                        standingTier,
+                        direction,
+                        cellDistance,
+                        allowMultiCell: true)
+                    && TryCreateJumpSameTierRollTransition(
+                        isJumping,
+                        standingDice,
+                        out var multiCellJumpRollTransition)) {
+                    return multiCellJumpRollTransition;
+                }
+
                 if (TryEvaluateTopFallToBottom(
                     fromLayer,
                     fromSurfaceY,
@@ -547,34 +587,84 @@ namespace DiceGame.Gameplay
             Direction direction,
             int distance,
             bool allowMultiCell) {
+            return TryEvaluateGridRoll(
+                fromCell,
+                toCell,
+                standingDice,
+                standingTier,
+                direction,
+                distance,
+                allowMultiCell,
+                out _);
+        }
+
+        bool TryEvaluateGridRoll(
+            Vector2Int fromCell,
+            Vector2Int toCell,
+            DiceController standingDice,
+            DiceStackTier standingTier,
+            Direction direction,
+            int distance,
+            bool allowMultiCell,
+            out string rejectReason) {
+            rejectReason = null;
+
             if (standingDice == null || standingDice.IsDissolving) {
+                rejectReason = "no-standing-dice-or-dissolving";
                 return false;
             }
 
             if (standingTier != standingDice.CurrentState.Tier) {
+                rejectReason =
+                    $"standing-tier-mismatch standingTier={standingTier} diceTier={standingDice.CurrentState.Tier}";
                 return false;
             }
 
             if (distance < 1 || distance > RollResolver.MaxParallelRollDistance) {
+                rejectReason = $"distance-out-of-range distance={distance}";
                 return false;
             }
 
             if (distance > 1 && !allowMultiCell) {
+                rejectReason = "multi-cell-not-allowed";
                 return false;
             }
 
             if (fromCell + direction.ToGridDelta() * distance != toCell) {
+                rejectReason =
+                    $"cell-mismatch from={FormatGrid(fromCell)} to={FormatGrid(toCell)} dir={direction} distance={distance}";
                 return false;
             }
 
             var hasTopOnSameCell = registry.HasTopAt(fromCell);
-            return RollResolver.TryRollDistance(
+            if (!RollResolver.TryRollDistance(
                 standingDice.CurrentState,
                 direction,
                 registry,
                 hasTopOnSameCell,
                 distance,
-                out _);
+                useJumpPathRules: allowMultiCell,
+                out _,
+                out var rollReject)) {
+                rejectReason = rollReject ?? "roll-resolver-failed";
+                return false;
+            }
+
+            return true;
+        }
+
+        static string FormatGrid(Vector2Int grid) {
+            return $"({grid.x},{grid.y})";
+        }
+
+        string FormatStack(Vector2Int gridPos) {
+            registry.TryGetTopAt(gridPos, out var top);
+            registry.TryGetBottomAt(gridPos, out var bottom);
+            return $"Top={FormatDice(top)} Bottom={FormatDice(bottom)}";
+        }
+
+        static string FormatDice(DiceController dice) {
+            return dice != null ? dice.name : "(none)";
         }
 
         bool CanStepBetween(float fromSurfaceY, float toSurfaceY) {

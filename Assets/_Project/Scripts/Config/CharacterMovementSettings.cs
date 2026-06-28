@@ -18,6 +18,7 @@ namespace DiceGame.Config
         [SerializeField] KeyCode jumpKey = KeyCode.Space;
         [SerializeField] bool debugMovementBlock;
         [SerializeField] bool debugPush;
+        [SerializeField] bool debugJumpParallelRoll;
 
         public float CharacterHeightOffset => characterHeightOffset;
         public float MaxMoveSpeed => maxMoveSpeed;
@@ -32,5 +33,6 @@ namespace DiceGame.Config
         public KeyCode JumpKey => jumpKey;
         public bool DebugMovementBlock => debugMovementBlock;
         public bool DebugPush => debugPush;
+        public bool DebugJumpParallelRoll => debugJumpParallelRoll;
     }
 }

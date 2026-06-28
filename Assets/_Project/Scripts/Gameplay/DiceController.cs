@@ -133,13 +133,16 @@ namespace DiceGame.Gameplay
             int distance = 1,
             Func<VerticalMotionState> jumpMotionProvider = null) {
             var hasTopOnSameCell = registry.HasTopAt(currentState.GridPos);
+            var useJumpPathRules = jumpMotionProvider != null || jumpYOffset > 0f || distance > 1;
             if (!RollResolver.TryRollDistance(
                 currentState,
                 direction,
                 registry,
                 hasTopOnSameCell,
                 distance,
-                out var nextState)) {
+                useJumpPathRules,
+                out var nextState,
+                out _)) {
                 return false;
             }
 
@@ -171,7 +174,10 @@ namespace DiceGame.Gameplay
             return true;
         }
 
-        public bool TryJumpStack(Direction direction, float jumpYOffset) {
+        public bool TryJumpStack(
+            Direction direction,
+            float jumpYOffset,
+            Func<VerticalMotionState> jumpMotionProvider = null) {
             if (isDissolving || isCarried || isRolling || board == null || diceView == null || registry == null) {
                 return false;
             }
@@ -201,15 +207,28 @@ namespace DiceGame.Gameplay
                 DiceStackTier.Bottom,
                 DiceStackTier.Top);
 
-            diceView.PlayJumpRoll(direction, fromState, nextState, jumpYOffset, board, registry, () => {
-                isRolling = false;
-                StateChanged?.Invoke(currentState);
-            });
+            diceView.PlayJumpRoll(
+                direction,
+                fromState,
+                nextState,
+                jumpYOffset,
+                1,
+                board,
+                registry,
+                () => {
+                    isRolling = false;
+                    StateChanged?.Invoke(currentState);
+                },
+                fallBeforeSnap: jumpMotionProvider == null,
+                jumpMotionProvider);
 
             return true;
         }
 
-        public bool TryJumpRollThenDemote(Direction direction, float jumpYOffset) {
+        public bool TryJumpRollThenDemote(
+            Direction direction,
+            float jumpYOffset,
+            Func<VerticalMotionState> jumpMotionProvider = null) {
             if (isDissolving || isCarried || isRolling || board == null || diceView == null || registry == null) {
                 return false;
             }
@@ -245,13 +264,15 @@ namespace DiceGame.Gameplay
                 fromState,
                 nextState,
                 jumpYOffset,
+                1,
                 board,
                 registry,
                 () => {
                     isRolling = false;
                     StateChanged?.Invoke(currentState);
                 },
-                fallBeforeSnap: true);
+                fallBeforeSnap: jumpMotionProvider == null,
+                jumpMotionProvider);
 
             return true;
         }

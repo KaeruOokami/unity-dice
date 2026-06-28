@@ -442,7 +442,7 @@ namespace DiceGame.View
             rotationRoot.rotation = DiceOrientationMapper.ToRotation(fromState.Orientation);
 
             var rolls = Mathf.Clamp(rollDistance, 1, RollResolver.MaxParallelRollDistance);
-            var useArcRoll = !fallBeforeSnap && jumpMotionProvider != null;
+            var useArcRoll = jumpMotionProvider != null;
             if (useArcRoll) {
                 visualYOffset = 0f;
                 yield return JumpArcRollCoroutine(

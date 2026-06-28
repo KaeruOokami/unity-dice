@@ -43,6 +43,30 @@ namespace DiceGame.Gameplay
             return CanPlaceBottomDiceAt(gridPos);
         }
 
+        public bool CanParallelRollLandAt(Vector2Int gridPos, DiceStackTier tier) {
+            if (board == null || !board.IsInside(gridPos) || board.GetCell(gridPos) != CellType.Floor) {
+                return false;
+            }
+
+            if (tier == DiceStackTier.Bottom) {
+                if (CanPlaceBottomDiceAt(gridPos)) {
+                    return true;
+                }
+
+                return HasBottomAt(gridPos) && !HasTopAt(gridPos);
+            }
+
+            if (tier == DiceStackTier.Top) {
+                if (CanPlaceTopDiceAt(gridPos)) {
+                    return true;
+                }
+
+                return HasTopAt(gridPos);
+            }
+
+            return false;
+        }
+
         public void RemoveFromGrid(DiceController dice) {
             if (dice == null) {
                 return;

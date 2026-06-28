@@ -25,3 +25,4 @@ MonoBehaviour:
   jumpKey: 32
   debugMovementBlock: 0
   debugPush: 0
+  debugJumpParallelRoll: 0
