@@ -36,11 +36,9 @@ namespace DiceGame.Placement
             Vector2Int fromCell,
             SurfaceLayer fromLayer,
             Direction direction,
-            float fromSurfaceY,
             DiceController standingDice,
             DiceStackTier standingTier,
-            bool ignoreStepHeight = false,
-            bool isJumping = false) {
+            PassabilityContext context) {
             var toCell = fromCell + direction.ToGridDelta();
             if (!board.IsInside(toCell) || board.GetCell(toCell) == CellType.Wall) {
                 return MovementTransition.Blocked();
@@ -50,12 +48,10 @@ namespace DiceGame.Placement
                 fromCell,
                 toCell,
                 fromLayer,
-                fromSurfaceY,
                 standingDice,
                 standingTier,
                 direction,
-                ignoreStepHeight,
-                isJumping);
+                context);
         }
 
         public float GetStackTopStandingSurfaceY(DiceController bottomDice) {
@@ -66,16 +62,16 @@ namespace DiceGame.Placement
             Vector2Int fromCell,
             SurfaceLayer fromLayer,
             Direction direction,
-            float fromSurfaceY,
+            float effectiveReachY,
             DiceController standingDice,
             DiceStackTier standingTier) {
             var transition = Evaluate(
                 fromCell,
                 fromLayer,
                 direction,
-                fromSurfaceY,
                 standingDice,
-                standingTier);
+                standingTier,
+                PassabilityContext.ForGround(effectiveReachY));
             return transition.IsDissolveDescentToFloor;
         }
 
@@ -83,10 +79,16 @@ namespace DiceGame.Placement
             Vector2Int fromCell,
             SurfaceLayer fromLayer,
             Direction direction,
-            float fromSurfaceY,
+            float effectiveReachY,
             DiceController standingDice,
             DiceStackTier standingTier) {
-            return Evaluate(fromCell, fromLayer, direction, fromSurfaceY, standingDice, standingTier).Kind
+            return Evaluate(
+                fromCell,
+                fromLayer,
+                direction,
+                standingDice,
+                standingTier,
+                PassabilityContext.ForGround(effectiveReachY)).Kind
                 == MovementTransitionKind.Walkable;
         }
 
@@ -94,14 +96,14 @@ namespace DiceGame.Placement
             Vector2Int fromCell,
             Vector2Int toCell,
             SurfaceLayer fromLayer,
-            float fromSurfaceY,
+            float effectiveReachY,
             DiceController standingDice,
             DiceStackTier standingTier) {
             return TryEvaluateBetween(
                 fromCell,
                 toCell,
                 fromLayer,
-                fromSurfaceY,
+                effectiveReachY,
                 standingDice,
                 standingTier,
                 out var transition)
@@ -112,7 +114,7 @@ namespace DiceGame.Placement
             Vector2Int fromCell,
             Vector2Int toCell,
             SurfaceLayer fromLayer,
-            float fromSurfaceY,
+            float effectiveReachY,
             DiceController standingDice,
             DiceStackTier standingTier,
             out MovementTransition transition) {
@@ -130,12 +132,10 @@ namespace DiceGame.Placement
                 fromCell,
                 toCell,
                 fromLayer,
-                fromSurfaceY,
                 standingDice,
                 standingTier,
                 direction,
-                ignoreStepHeight: false,
-                isJumping: false);
+                PassabilityContext.ForGround(effectiveReachY));
             return true;
         }
 
@@ -160,12 +160,47 @@ namespace DiceGame.Placement
             return distance >= 1 && distance <= maxDistance;
         }
 
+        public bool TryBuildJumpGridMovePlan(
+            DiceState fromState,
+            Direction direction,
+            int distance,
+            PassabilityContext context,
+            out DiceGridMovePlan plan,
+            out string rejectReason) {
+            plan = default;
+            rejectReason = null;
+
+            var hasTopOnSameCell = registry.HasTopAt(fromState.GridPos);
+            if (!JumpGridPassability.TryEvaluate(
+                fromState,
+                direction,
+                distance,
+                registry,
+                hasTopOnSameCell,
+                context,
+                out var landingTier,
+                out var moveKind,
+                out rejectReason)) {
+                return false;
+            }
+
+            return DiceGridMovePlanner.TryBuildPlan(
+                fromState,
+                direction,
+                distance,
+                landingTier,
+                moveKind,
+                out plan,
+                out rejectReason);
+        }
+
         public bool TryGetJumpParallelRollTarget(
             Vector2Int fromCell,
             Direction direction,
             DiceController standingDice,
             DiceStackTier standingTier,
             int requiredDistance,
+            PassabilityContext context,
             out Vector2Int toCell,
             out int distance) {
             toCell = default;
@@ -201,6 +236,7 @@ namespace DiceGame.Placement
                 direction,
                 requiredDistance,
                 allowMultiCell: requiredDistance > 1,
+                context,
                 out var rejectReason)) {
                 LogJumpParallelRoll(
                     $"TryGetJumpParallelRollTarget reject from={FormatGrid(fromCell)} candidate={FormatGrid(candidate)} " +
@@ -220,11 +256,9 @@ namespace DiceGame.Placement
             Vector2Int fromCell,
             Vector2Int toCell,
             SurfaceLayer fromLayer,
-            float fromSurfaceY,
             DiceController standingDice,
             DiceStackTier standingTier,
-            bool ignoreStepHeight,
-            bool isJumping) {
+            PassabilityContext context) {
             if (!board.IsInside(toCell) || board.GetCell(toCell) == CellType.Wall) {
                 return MovementTransition.Blocked();
             }
@@ -237,12 +271,10 @@ namespace DiceGame.Placement
                 fromCell,
                 toCell,
                 fromLayer,
-                fromSurfaceY,
                 standingDice,
                 standingTier,
                 direction,
-                ignoreStepHeight,
-                isJumping);
+                context);
         }
 
         public static bool TryGetDirectionBetween(
@@ -282,12 +314,12 @@ namespace DiceGame.Placement
             Vector2Int fromCell,
             Vector2Int toCell,
             SurfaceLayer fromLayer,
-            float fromSurfaceY,
             DiceController standingDice,
             DiceStackTier standingTier,
             Direction direction,
-            bool ignoreStepHeight,
-            bool isJumping) {
+            PassabilityContext context) {
+            var isJumping = context.IsJumping;
+            var reachY = context.EffectiveReachY;
             var fromSurface = surfaceQuery.GetStandingSurface(
                 fromCell,
                 fromLayer,
@@ -303,6 +335,7 @@ namespace DiceGame.Placement
                         standingDice,
                         standingTier,
                         direction,
+                        context,
                         out var jumpDiceTransition)) {
                     return jumpDiceTransition;
                 }
@@ -313,7 +346,6 @@ namespace DiceGame.Placement
                     standingDice,
                     standingTier,
                     direction,
-                    ignoreStepHeight,
                     out var topFallTransition)) {
                     return topFallTransition;
                 }
@@ -326,7 +358,13 @@ namespace DiceGame.Placement
                     standingTier,
                     direction,
                     GetOrthogonalDistance(fromCell, toCell),
-                    allowMultiCell: false)) {
+                    allowMultiCell: false,
+                    context,
+                    out _)) {
+                    if (isJumping && !context.AllowJumpGridMove) {
+                        return MovementTransition.Blocked();
+                    }
+
                     if (TryCreateJumpSameTierRollTransition(
                         isJumping,
                         fromSurface,
@@ -342,18 +380,20 @@ namespace DiceGame.Placement
                     return MovementTransition.Blocked();
                 }
 
-                return EvaluateFloorTransition(fromSurfaceY, ignoreStepHeight, fromSurface);
+                return EvaluateFloorTransition(reachY, fromSurface);
             }
 
             DiceController target;
             if (fromLayer == SurfaceLayer.Floor) {
                 if (registry.TryGetBottomAt(toCell, out target)) {
-                    if (!ignoreStepHeight
-                        && !CanStepBetween(fromSurfaceY, target.GetTopSurfaceWorldY())) {
+                    if (!CanStepBetween(reachY, GetLogicalTopSurfaceY(target))) {
                         return MovementTransition.Blocked();
                     }
 
-                    return MovementTransition.Walkable(target, SurfaceLayer.Bottom);
+                    return MovementTransition.Walkable(
+                        target,
+                        SurfaceLayer.Bottom,
+                        MovementTransitionRoute.HeightTransfer);
                 }
 
                 return MovementTransition.Blocked();
@@ -367,19 +407,19 @@ namespace DiceGame.Placement
                     standingDice,
                     standingTier,
                     direction,
+                    context,
                     out var occupiedJumpDiceTransition)) {
                 return occupiedJumpDiceTransition;
             }
 
             if (TryEvaluateJumpTopLanding(
+                fromCell,
                 toCell,
                 fromLayer,
                 fromSurface,
-                fromSurfaceY,
                 standingDice,
                 standingTier,
-                ignoreStepHeight,
-                isJumping,
+                context,
                 out var jumpTopTransition)) {
                 return jumpTopTransition;
             }
@@ -392,7 +432,13 @@ namespace DiceGame.Placement
                 standingTier,
                 direction,
                 GetOrthogonalDistance(fromCell, toCell),
-                allowMultiCell: false)) {
+                allowMultiCell: false,
+                context,
+                out _)) {
+                if (isJumping && !context.AllowJumpGridMove) {
+                    return MovementTransition.Blocked();
+                }
+
                 if (TryCreateJumpSameTierRollTransition(
                     isJumping,
                     fromSurface,
@@ -423,23 +469,30 @@ namespace DiceGame.Placement
                 return MovementTransition.Blocked();
             }
 
-            if (!ignoreStepHeight && !CanStepBetween(fromSurfaceY, target.GetTopSurfaceWorldY())) {
+            if (!CanStepBetween(reachY, GetLogicalTopSurfaceY(target))) {
                 return MovementTransition.Blocked();
             }
 
             var targetLayer = target.CurrentState.Tier == DiceStackTier.Top
                 ? SurfaceLayer.Top
                 : SurfaceLayer.Bottom;
-            return MovementTransition.Walkable(target, targetLayer);
+            return MovementTransition.Walkable(
+                target,
+                targetLayer,
+                MovementTransitionRoute.HeightTransfer);
         }
 
-        MovementTransition EvaluateFloorTransition(
-            float fromSurfaceY,
-            bool ignoreStepHeight,
-            BoardSurface fromSurface) {
+        static float GetLogicalTopSurfaceY(DiceController dice) {
+            return dice != null ? dice.GetLogicalTopSurfaceWorldY() : 0f;
+        }
+
+        MovementTransition EvaluateFloorTransition(float effectiveReachY, BoardSurface fromSurface) {
             var floorY = board.FloorSurfaceWorldY;
-            if (ignoreStepHeight || CanStepBetween(fromSurfaceY, floorY)) {
-                return MovementTransition.Walkable(null, SurfaceLayer.Floor);
+            if (CanStepBetween(effectiveReachY, floorY)) {
+                return MovementTransition.Walkable(
+                    null,
+                    SurfaceLayer.Floor,
+                    MovementTransitionRoute.FloorTransfer);
             }
 
             if (fromSurface.IsDissolving && fromSurface.Layer == SurfaceLayer.Bottom) {
@@ -455,7 +508,6 @@ namespace DiceGame.Placement
             DiceController standingDice,
             DiceStackTier standingTier,
             Direction direction,
-            bool ignoreStepHeight,
             out MovementTransition transition) {
             transition = default;
 
@@ -477,23 +529,29 @@ namespace DiceGame.Placement
                 return false;
             }
 
-            transition = MovementTransition.Walkable(standingDice, SurfaceLayer.Bottom);
+            transition = MovementTransition.Walkable(
+                standingDice,
+                SurfaceLayer.Bottom,
+                MovementTransitionRoute.TopFall);
             return true;
         }
 
         bool TryEvaluateJumpTopLanding(
+            Vector2Int fromCell,
             Vector2Int toCell,
             SurfaceLayer fromLayer,
             BoardSurface fromSurface,
-            float fromSurfaceY,
             DiceController standingDice,
             DiceStackTier standingTier,
-            bool ignoreStepHeight,
-            bool isJumping,
+            PassabilityContext context,
             out MovementTransition transition) {
             transition = default;
 
-            if (!isJumping
+            if (GetOrthogonalDistance(fromCell, toCell) != 1) {
+                return false;
+            }
+
+            if (!context.IsJumping
                 || fromLayer != SurfaceLayer.Bottom
                 || standingTier != DiceStackTier.Bottom
                 || standingDice == null
@@ -501,10 +559,19 @@ namespace DiceGame.Placement
                 return false;
             }
 
+            if (!context.AllowJumpTierChange) {
+                return false;
+            }
+
+            var reachY = context.EffectiveReachY;
+
             if (registry.TryGetTopAt(toCell, out var topDice)
                 && topDice != null
-                && (ignoreStepHeight || CanStepBetween(fromSurfaceY, topDice.GetTopSurfaceWorldY()))) {
-                transition = MovementTransition.Walkable(topDice, SurfaceLayer.Top);
+                && CanStepBetween(reachY, GetLogicalTopSurfaceY(topDice))) {
+                transition = MovementTransition.Walkable(
+                    topDice,
+                    SurfaceLayer.Top,
+                    MovementTransitionRoute.TierLanding);
                 return true;
             }
 
@@ -515,11 +582,14 @@ namespace DiceGame.Placement
             }
 
             var topSurfaceY = GetStackTopStandingSurfaceY(bottomDice);
-            if (!ignoreStepHeight && !CanStepBetween(fromSurfaceY, topSurfaceY)) {
+            if (!CanStepBetween(reachY, topSurfaceY)) {
                 return false;
             }
 
-            transition = MovementTransition.Walkable(standingDice, SurfaceLayer.Top);
+            transition = MovementTransition.Walkable(
+                standingDice,
+                SurfaceLayer.Top,
+                MovementTransitionRoute.TierLanding);
             return true;
         }
 
@@ -542,7 +612,7 @@ namespace DiceGame.Placement
                 return board.FloorSurfaceWorldY;
             }
 
-            return transition.TargetDice.GetTopSurfaceWorldY();
+            return transition.TargetDice.GetLogicalTopSurfaceWorldY();
         }
 
         bool TryCreateJumpDiceMoveTransition(
@@ -552,6 +622,7 @@ namespace DiceGame.Placement
             DiceController standingDice,
             DiceStackTier standingTier,
             Direction direction,
+            PassabilityContext context,
             out MovementTransition transition) {
             transition = default;
 
@@ -572,12 +643,11 @@ namespace DiceGame.Placement
                 return false;
             }
 
-            if (!DiceGridMovePlanner.TryBuildJumpPlan(
+            if (!TryBuildJumpGridMovePlan(
                 standingDice.CurrentState,
                 direction,
                 distance,
-                registry,
-                registry.HasTopAt(fromCell),
+                context,
                 out var plan,
                 out _)) {
                 return false;
@@ -587,10 +657,16 @@ namespace DiceGame.Placement
                 case DiceGridMoveKind.Parallel:
                     return TryCreateJumpSameTierRollTransition(true, fromSurface, standingDice, out transition);
                 case DiceGridMoveKind.Demote:
-                    transition = MovementTransition.Walkable(standingDice, SurfaceLayer.Bottom);
+                    transition = MovementTransition.Walkable(
+                        standingDice,
+                        SurfaceLayer.Bottom,
+                        MovementTransitionRoute.CoupledGridMove);
                     return true;
                 case DiceGridMoveKind.Stack:
-                    transition = MovementTransition.Walkable(standingDice, SurfaceLayer.Top);
+                    transition = MovementTransition.Walkable(
+                        standingDice,
+                        SurfaceLayer.Top,
+                        MovementTransitionRoute.CoupledGridMove);
                     return true;
                 default:
                     return false;
@@ -610,7 +686,10 @@ namespace DiceGame.Placement
 
             var tier = standingDice.CurrentState.Tier;
             var layer = tier == DiceStackTier.Top ? SurfaceLayer.Top : SurfaceLayer.Bottom;
-            transition = MovementTransition.Walkable(standingDice, layer);
+            transition = MovementTransition.Walkable(
+                standingDice,
+                layer,
+                MovementTransitionRoute.CoupledGridMove);
             return true;
         }
 
@@ -622,7 +701,8 @@ namespace DiceGame.Placement
             DiceStackTier standingTier,
             Direction direction,
             int distance,
-            bool allowMultiCell) {
+            bool allowMultiCell,
+            PassabilityContext context) {
             return TryEvaluateGridRoll(
                 fromCell,
                 toCell,
@@ -632,6 +712,7 @@ namespace DiceGame.Placement
                 direction,
                 distance,
                 allowMultiCell,
+                context,
                 out _);
         }
 
@@ -644,6 +725,7 @@ namespace DiceGame.Placement
             Direction direction,
             int distance,
             bool allowMultiCell,
+            PassabilityContext context,
             out string rejectReason) {
             rejectReason = null;
 
@@ -676,12 +758,14 @@ namespace DiceGame.Placement
 
             var hasTopOnSameCell = registry.HasTopAt(fromCell);
             if (allowMultiCell) {
-                return DiceGridMovePlanner.TryBuildJumpPlan(
+                return JumpGridPassability.TryEvaluate(
                     standingDice.CurrentState,
                     direction,
                     distance,
                     registry,
                     hasTopOnSameCell,
+                    context,
+                    out _,
                     out _,
                     out rejectReason);
             }
@@ -692,7 +776,6 @@ namespace DiceGame.Placement
                 registry,
                 hasTopOnSameCell,
                 distance,
-                useJumpPathRules: false,
                 out _,
                 out var rollReject)) {
                 rejectReason = rollReject ?? "roll-resolver-failed";

@@ -41,43 +41,12 @@ namespace DiceGame.Core
             int distance,
             out DiceState nextState,
             out string rejectReason) {
-            return TryRollDistance(
-                state,
-                direction,
-                placement,
-                hasTopOnSameCell,
-                distance,
-                useJumpPathRules: false,
-                out nextState,
-                out rejectReason);
-        }
-
-        public static bool TryRollDistance(
-            DiceState state,
-            Direction direction,
-            IDicePlacement placement,
-            bool hasTopOnSameCell,
-            int distance,
-            bool useJumpPathRules,
-            out DiceState nextState,
-            out string rejectReason) {
             nextState = default;
             rejectReason = null;
 
             if (distance < 1 || distance > MaxParallelRollDistance) {
                 rejectReason = $"distance-out-of-range distance={distance}";
                 return false;
-            }
-
-            if (useJumpPathRules) {
-                return TryRollDistanceJumpPath(
-                    state,
-                    direction,
-                    placement,
-                    hasTopOnSameCell,
-                    distance,
-                    out nextState,
-                    out rejectReason);
             }
 
             return TryRollDistanceGroundPath(
@@ -88,30 +57,6 @@ namespace DiceGame.Core
                 distance,
                 out nextState,
                 out rejectReason);
-        }
-
-        static bool TryRollDistanceJumpPath(
-            DiceState state,
-            Direction direction,
-            IDicePlacement placement,
-            bool hasTopOnSameCell,
-            int distance,
-            out DiceState nextState,
-            out string rejectReason) {
-            if (DiceGridMovePlanner.TryBuildJumpPlan(
-                state,
-                direction,
-                distance,
-                placement,
-                hasTopOnSameCell,
-                out var plan,
-                out rejectReason)) {
-                nextState = plan.To;
-                return true;
-            }
-
-            nextState = default;
-            return false;
         }
 
         static bool TryRollDistanceGroundPath(

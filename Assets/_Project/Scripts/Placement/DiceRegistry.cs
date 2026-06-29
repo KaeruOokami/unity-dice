@@ -279,6 +279,15 @@ namespace DiceGame.Placement
                 stack = default;
             }
 
+            if (tier == DiceStackTier.Bottom
+                && stack.Bottom != null
+                && stack.Bottom != dice
+                && !stack.Bottom.IsDissolveGhost) {
+                Debug.LogError(
+                    $"DiceRegistry: overwriting bottom at ({gridPos.x},{gridPos.y}) " +
+                    $"existing={stack.Bottom.name} incoming={dice?.name}");
+            }
+
             if (tier == DiceStackTier.Top) {
                 stack.Top = dice;
             } else {

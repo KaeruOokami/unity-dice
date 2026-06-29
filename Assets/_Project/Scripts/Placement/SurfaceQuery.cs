@@ -85,10 +85,10 @@ namespace DiceGame.Placement
             }
 
             if (registry.TryGetTopAt(bottomDice.CurrentState.GridPos, out var top) && top != null) {
-                return top.GetTopSurfaceWorldY();
+                return top.GetLogicalTopSurfaceWorldY();
             }
 
-            return bottomDice.GetTopSurfaceWorldY() + board.CellSize;
+            return bottomDice.GetLogicalTopSurfaceWorldY() + board.CellSize;
         }
     }
 }

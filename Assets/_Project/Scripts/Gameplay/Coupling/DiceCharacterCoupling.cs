@@ -32,6 +32,7 @@ namespace DiceGame.Gameplay.Coupling
 
         Board board;
         DiceRegistry registry;
+        MovementTransitionEvaluator passability;
         CharacterStandingController standing;
         CharacterTransformDriver transformDriver;
         CharacterMovementSettings movementSettings;
@@ -49,6 +50,7 @@ namespace DiceGame.Gameplay.Coupling
         public void Configure(
             Board targetBoard,
             DiceRegistry targetRegistry,
+            MovementTransitionEvaluator movementPassability,
             CharacterStandingController standingController,
             CharacterTransformDriver driver,
             CharacterMovementSettings movement,
@@ -56,6 +58,7 @@ namespace DiceGame.Gameplay.Coupling
             Func<VerticalMotionState> jumpMotionProvider) {
             board = targetBoard;
             registry = targetRegistry;
+            passability = movementPassability;
             standing = standingController;
             transformDriver = driver;
             movementSettings = movement;
@@ -191,20 +194,22 @@ namespace DiceGame.Gameplay.Coupling
                 rollDistance = 1;
             }
 
-            var hasTopOnSameCell = registry.HasTopAt(fromCell);
-            if (!DiceGridMovePlanner.TryBuildJumpPlan(
+            var jumpContext = PassabilityContext.Jump(
+                capability.AllowDiceGridMove,
+                capability.AllowTierChange,
+                0f);
+            if (!passability.TryBuildJumpGridMovePlan(
                 dice.CurrentState,
                 direction,
                 rollDistance,
-                registry,
-                hasTopOnSameCell,
+                jumpContext,
                 out var plan,
                 out _)) {
                 log?.Invoke($"Coupling jump-grid reject plan-failed from=({fromCell.x},{fromCell.y}) to=({toCell.x},{toCell.y})");
                 return false;
             }
 
-            if (plan.Kind == DiceGridMoveKind.Stack && !capability.AllowTierChange) {
+            if (plan.ChangesTier && !capability.AllowTierChange) {
                 return false;
             }
 
@@ -246,15 +251,24 @@ namespace DiceGame.Gameplay.Coupling
                 return false;
             }
 
-            if (!DiceGridMovePlanner.TryBuildJumpPlan(
+            if (!SlideResolver.TrySlideTop(
+                dice.CurrentState,
+                direction,
+                registry,
+                out _,
+                out var result)
+                || result != TopSlideResult.FallToBottom) {
+                return false;
+            }
+
+            if (!DiceGridMovePlanner.TryBuildPlan(
                 dice.CurrentState,
                 direction,
                 1,
-                registry,
-                registry.HasTopAt(standing.GridCell),
+                DiceStackTier.Bottom,
+                DiceGridMoveKind.Demote,
                 out var plan,
-                out _)
-                || plan.Kind != DiceGridMoveKind.Demote) {
+                out _)) {
                 return false;
             }
 

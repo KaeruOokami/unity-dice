@@ -5,12 +5,12 @@ namespace DiceGame.Core
 {
     public static class DiceGridMovePlanner
     {
-        public static bool TryBuildJumpPlan(
+        public static bool TryBuildPlan(
             DiceState fromState,
             Direction direction,
             int distance,
-            IDicePlacement placement,
-            bool hasTopOnSameCell,
+            DiceStackTier landingTier,
+            DiceGridMoveKind kind,
             out DiceGridMovePlan plan,
             out string rejectReason) {
             plan = default;
@@ -21,32 +21,13 @@ namespace DiceGame.Core
                 return false;
             }
 
-            if (fromState.Tier == DiceStackTier.Bottom && hasTopOnSameCell) {
-                rejectReason = "has-top-on-start-cell";
+            var expectedKind = ResolveMoveKind(fromState.Tier, landingTier);
+            if (kind != expectedKind) {
+                rejectReason = $"kind-mismatch expected={expectedKind} actual={kind}";
                 return false;
             }
 
             var landingCell = fromState.GridPos + direction.ToGridDelta() * distance;
-            for (var step = 1; step <= distance; step++) {
-                var pathCell = fromState.GridPos + direction.ToGridDelta() * step;
-                var isFinalStep = step == distance;
-                if (!CanPassJumpRollCell(
-                    placement,
-                    fromState.Tier,
-                    pathCell,
-                    isFinalStep,
-                    distance,
-                    out var cellReject)) {
-                    rejectReason = $"step={step}/{distance} target={FormatGrid(pathCell)} {cellReject}";
-                    return false;
-                }
-            }
-
-            if (!TryResolveLandingTier(fromState.Tier, landingCell, placement, out var landingTier, out var tierReject)) {
-                rejectReason = $"landing={FormatGrid(landingCell)} {tierReject}";
-                return false;
-            }
-
             if (!TryBuildRolledState(fromState, landingCell, landingTier, direction, distance, out var toState)) {
                 rejectReason = $"landing={FormatGrid(landingCell)} invalid-orientation";
                 return false;
@@ -55,7 +36,7 @@ namespace DiceGame.Core
             plan = new DiceGridMovePlan {
                 From = fromState,
                 To = toState,
-                Kind = ResolveMoveKind(fromState.Tier, landingTier),
+                Kind = kind,
                 Direction = direction,
                 Distance = distance
             };
@@ -79,7 +60,6 @@ namespace DiceGame.Core
                 placement,
                 hasTopOnSameCell,
                 distance,
-                useJumpPathRules: false,
                 out var nextState,
                 out rejectReason)) {
                 return false;
@@ -103,84 +83,6 @@ namespace DiceGame.Core
             return fromTier == DiceStackTier.Top
                 ? DiceGridMoveKind.Demote
                 : DiceGridMoveKind.Stack;
-        }
-
-        static bool TryResolveLandingTier(
-            DiceStackTier fromTier,
-            Vector2Int landingCell,
-            IDicePlacement placement,
-            out DiceStackTier landingTier,
-            out string rejectReason) {
-            landingTier = default;
-            rejectReason = null;
-
-            if (fromTier == DiceStackTier.Bottom) {
-                if (placement.CanPlaceBottomDiceAt(landingCell)) {
-                    landingTier = DiceStackTier.Bottom;
-                    return true;
-                }
-
-                if (placement.CanPlaceTopDiceAt(landingCell)) {
-                    landingTier = DiceStackTier.Top;
-                    return true;
-                }
-
-                rejectReason = "bottom-start invalid-landing";
-                return false;
-            }
-
-            if (placement.CanPlaceBottomDiceAt(landingCell)) {
-                landingTier = DiceStackTier.Bottom;
-                return true;
-            }
-
-            if (placement.CanPlaceTopDiceAt(landingCell)) {
-                landingTier = DiceStackTier.Top;
-                return true;
-            }
-
-            rejectReason = "top-start invalid-landing";
-            return false;
-        }
-
-        public static bool CanPassJumpRollCell(
-            IDicePlacement placement,
-            DiceStackTier tier,
-            Vector2Int targetPos,
-            bool isFinalStep,
-            int distance,
-            out string rejectReason) {
-            rejectReason = null;
-
-            if (placement.CanDiceRollInto(targetPos)) {
-                return true;
-            }
-
-            if (tier == DiceStackTier.Bottom) {
-                if (isFinalStep) {
-                    if (placement.CanPlaceTopDiceAt(targetPos)) {
-                        return true;
-                    }
-
-                    if (distance > 1 && placement.CanParallelRollLandAt(targetPos, tier)) {
-                        return true;
-                    }
-                }
-
-                rejectReason = "bottom-path-blocked";
-                return false;
-            }
-
-            if (placement.CanPlaceTopDiceAt(targetPos)) {
-                return true;
-            }
-
-            if (isFinalStep && distance > 1 && placement.CanParallelRollLandAt(targetPos, tier)) {
-                return true;
-            }
-
-            rejectReason = "top-path-blocked";
-            return false;
         }
 
         static bool TryBuildRolledState(

@@ -84,6 +84,12 @@ namespace DiceGame.Gameplay
                 : board != null ? board.FloorSurfaceWorldY : 0f;
         }
 
+        public float GetLogicalTopSurfaceWorldY() {
+            return diceView != null && board != null
+                ? diceView.GetLogicalTopSurfaceWorldY(board)
+                : board != null ? board.FloorSurfaceWorldY : 0f;
+        }
+
         public bool TryRoll(Direction direction) {
             if (IsBusy || board == null || diceView == null || registry == null) {
                 return false;
@@ -261,83 +267,11 @@ namespace DiceGame.Gameplay
             return true;
         }
 
-        public bool TryJumpRoll(
-            Direction direction,
-            float jumpYOffset,
-            int distance = 1,
-            Func<VerticalMotionState> jumpMotionProvider = null) {
-            if (isDissolving || isCarried || isRolling || board == null || diceView == null || registry == null) {
-                return false;
-            }
-
-            var hasTopOnSameCell = registry.HasTopAt(currentState.GridPos);
-            if (!DiceGridMovePlanner.TryBuildJumpPlan(
-                currentState,
-                direction,
-                distance,
-                registry,
-                hasTopOnSameCell,
-                out var plan,
-                out _)) {
-                return false;
-            }
-
-            return TryExecuteJumpMovePlan(plan, jumpYOffset, jumpMotionProvider);
-        }
-
         public bool TryExecuteJumpMovePlan(
             DiceGridMovePlan plan,
             float jumpYOffset,
             Func<VerticalMotionState> jumpMotionProvider = null) {
             return TryExecuteMovePlan(plan, DiceMoveVisualContext.Jump(jumpYOffset, jumpMotionProvider));
-        }
-
-        public bool TryJumpStack(
-            Direction direction,
-            float jumpYOffset,
-            Func<VerticalMotionState> jumpMotionProvider = null) {
-            if (isDissolving || isCarried || isRolling || board == null || diceView == null || registry == null) {
-                return false;
-            }
-
-            var hasTopOnSameCell = registry.HasTopAt(currentState.GridPos);
-            if (!DiceGridMovePlanner.TryBuildJumpPlan(
-                currentState,
-                direction,
-                1,
-                registry,
-                hasTopOnSameCell,
-                out var plan,
-                out _)
-                || plan.Kind != DiceGridMoveKind.Stack) {
-                return false;
-            }
-
-            return TryExecuteJumpMovePlan(plan, jumpYOffset, jumpMotionProvider);
-        }
-
-        public bool TryJumpRollThenDemote(
-            Direction direction,
-            float jumpYOffset,
-            Func<VerticalMotionState> jumpMotionProvider = null) {
-            if (isDissolving || isCarried || isRolling || board == null || diceView == null || registry == null) {
-                return false;
-            }
-
-            var hasTopOnSameCell = registry.HasTopAt(currentState.GridPos);
-            if (!DiceGridMovePlanner.TryBuildJumpPlan(
-                currentState,
-                direction,
-                1,
-                registry,
-                hasTopOnSameCell,
-                out var plan,
-                out _)
-                || plan.Kind != DiceGridMoveKind.Demote) {
-                return false;
-            }
-
-            return TryExecuteJumpMovePlan(plan, jumpYOffset, jumpMotionProvider);
         }
 
         public bool TryRollThenDemote(Direction direction) {
@@ -349,23 +283,21 @@ namespace DiceGame.Gameplay
                 return false;
             }
 
-            if (!SlideResolver.TrySlideTop(currentState, direction, registry, out var slideState, out var result)
+            if (!SlideResolver.TrySlideTop(currentState, direction, registry, out _, out var result)
                 || result != TopSlideResult.FallToBottom) {
                 return false;
             }
 
-            var rolledOrientation = currentState.Orientation.Roll(direction);
-            if (!rolledOrientation.IsValid()) {
+            if (!DiceGridMovePlanner.TryBuildPlan(
+                currentState,
+                direction,
+                1,
+                DiceStackTier.Bottom,
+                DiceGridMoveKind.Demote,
+                out var plan,
+                out _)) {
                 return false;
             }
-
-            var plan = new DiceGridMovePlan {
-                From = currentState,
-                To = new DiceState(slideState.GridPos, rolledOrientation, DiceStackTier.Bottom),
-                Kind = DiceGridMoveKind.Demote,
-                Direction = direction,
-                Distance = 1
-            };
 
             return TryExecuteMovePlan(plan, DiceMoveVisualContext.Ground);
         }

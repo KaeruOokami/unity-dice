@@ -50,7 +50,7 @@ namespace DiceGame.Placement
                 ? SurfaceState.Dissolving
                 : SurfaceState.Normal;
             var surfaceY = dice != null
-                ? dice.GetTopSurfaceWorldY()
+                ? dice.GetLogicalTopSurfaceWorldY()
                 : 0f;
             return new BoardSurface(gridCell, layer, state, dice, surfaceY);
         }

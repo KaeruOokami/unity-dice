@@ -33,7 +33,7 @@ namespace DiceGame.Gameplay.Character
             Vector2 move,
             Vector2Int standingCell,
             SurfaceLayer fromLayer,
-            float fromSurfaceY,
+            float passabilityReachY,
             float halfExtent,
             CharacterStandingController standing,
             bool isJumping,
@@ -41,6 +41,9 @@ namespace DiceGame.Gameplay.Character
             JumpCoupledMoveCapability jumpCapability) {
             var allowCrossCell = !isJumping || (hasJumpCapability && jumpCapability.AllowCrossCellMove);
             var allowDiceGridMove = hasJumpCapability && jumpCapability.AllowDiceGridMove;
+            var passabilityContext = isJumping
+                ? PassabilityContext.Jump(allowDiceGridMove, jumpCapability.AllowTierChange, passabilityReachY)
+                : PassabilityContext.ForGround(passabilityReachY);
 
             var nextCell = ResolveNextCell(
                 standingCell,
@@ -52,7 +55,8 @@ namespace DiceGame.Gameplay.Character
                 hasJumpCapability,
                 jumpCapability,
                 allowCrossCell,
-                allowDiceGridMove);
+                allowDiceGridMove,
+                passabilityContext);
 
             if (nextCell == standingCell) {
                 return CharacterMovePlan.FaceSlide(standingCell);
@@ -80,20 +84,16 @@ namespace DiceGame.Gameplay.Character
                     standingCell,
                     nextCell,
                     fromLayer,
-                    fromSurfaceY,
                     standingDice,
                     standing.Tier,
-                    ignoreStepHeight: isJumping,
-                    isJumping: isJumping)
+                    passabilityContext)
                 : movementTransition.Evaluate(
                     standingCell,
                     fromLayer,
                     direction,
-                    fromSurfaceY,
                     standingDice,
                     standing.Tier,
-                    ignoreStepHeight: isJumping,
-                    isJumping: isJumping);
+                    passabilityContext);
 
             if (isJumping) {
                 logJumpParallelRoll?.Invoke(
@@ -104,11 +104,12 @@ namespace DiceGame.Gameplay.Character
 
             switch (transition.Kind) {
                 case MovementTransitionKind.Walkable:
-                    if (transition.TargetLayer == SurfaceLayer.Bottom
-                        && standing.Tier == DiceStackTier.Top
-                        && transition.TargetDice == standing.CurrentDice
-                        && TryGetPrimaryDirection(move, out var topFallDir)
-                        && topFallDir == direction) {
+                    if (transition.Route == MovementTransitionRoute.TopFall
+                        || (transition.TargetLayer == SurfaceLayer.Bottom
+                            && standing.Tier == DiceStackTier.Top
+                            && transition.TargetDice == standing.CurrentDice
+                            && TryGetPrimaryDirection(move, out var topFallDir)
+                            && topFallDir == direction)) {
                         return new CharacterMovePlan {
                             Kind = CharacterMoveKind.CoupledDiceMove,
                             FromCell = standingCell,
@@ -121,8 +122,7 @@ namespace DiceGame.Gameplay.Character
                         };
                     }
 
-                    if (allowDiceGridMove
-                        && transition.TargetDice == standing.CurrentDice
+                    if (transition.Route == MovementTransitionRoute.CoupledGridMove
                         && isJumping) {
                         return new CharacterMovePlan {
                             Kind = CharacterMoveKind.CoupledDiceMove,
@@ -135,23 +135,6 @@ namespace DiceGame.Gameplay.Character
                         };
                     }
 
-                    if (isJumping && allowDiceGridMove) {
-                        return new CharacterMovePlan {
-                            Kind = CharacterMoveKind.FaceSlide,
-                            FromCell = standingCell,
-                            ToCell = standingCell,
-                            BlockFailedJumpGridFallback = true,
-                            BlockReason = "jump-grid-fallback-blocked"
-                        };
-                    }
-
-                    if (isJumping
-                        && IsJumpStackWalkableTransition(transition, standing.Tier)
-                        && hasJumpCapability
-                        && !jumpCapability.AllowTierChange) {
-                        return CharacterMovePlan.FaceSlide(standingCell);
-                    }
-
                     return new CharacterMovePlan {
                         Kind = CharacterMoveKind.Transfer,
                         FromCell = standingCell,
@@ -161,7 +144,10 @@ namespace DiceGame.Gameplay.Character
                     };
 
                 case MovementTransitionKind.CanRoll:
-                    if (allowDiceGridMove && standing.CurrentDice != null && isJumping) {
+                    if (transition.Route == MovementTransitionRoute.DiceRoll
+                        && allowDiceGridMove
+                        && standing.CurrentDice != null
+                        && isJumping) {
                         var jumpTargetLayer = standing.Tier == DiceStackTier.Top
                             ? SurfaceLayer.Top
                             : SurfaceLayer.Bottom;
@@ -186,15 +172,6 @@ namespace DiceGame.Gameplay.Character
                                 Direction = direction,
                                 Transition = transition,
                                 CoupledIntent = CoupledMoveIntent.GroundParallelRoll
-                            };
-                        }
-
-                        if (allowDiceGridMove) {
-                            return new CharacterMovePlan {
-                                Kind = CharacterMoveKind.FaceSlide,
-                                FromCell = standingCell,
-                                ToCell = standingCell,
-                                BlockFailedJumpGridFallback = true
                             };
                         }
                     }
@@ -245,7 +222,8 @@ namespace DiceGame.Gameplay.Character
             bool hasJumpCapability,
             JumpCoupledMoveCapability jumpCapability,
             bool allowCrossCell,
-            bool allowDiceGridMove) {
+            bool allowDiceGridMove,
+            PassabilityContext passabilityContext) {
             if (TryGetPrimaryDirection(move, out var moveDir)) {
                 if (transformDriver.IsAtOrPastFaceEdge(currentXZ, standingCell, moveDir, halfExtent)) {
                     if (!allowCrossCell) {
@@ -259,6 +237,7 @@ namespace DiceGame.Gameplay.Character
                             moveDir,
                             jumpCapability.MaxDistance,
                             standing,
+                            passabilityContext,
                             out var parallelRollTarget)) {
                         logJumpParallelRoll?.Invoke(
                             $"ResolveNextCell parallel-roll from=({standingCell.x},{standingCell.y}) " +
@@ -293,6 +272,7 @@ namespace DiceGame.Gameplay.Character
             Direction direction,
             int maxRollDistance,
             CharacterStandingController standing,
+            PassabilityContext passabilityContext,
             out Vector2Int rollTarget) {
             rollTarget = standingCell;
             if (standing.CurrentDice == null || maxRollDistance < 1) {
@@ -307,6 +287,7 @@ namespace DiceGame.Gameplay.Character
                     standingDice,
                     standing.Tier,
                     distance,
+                    passabilityContext,
                     out var candidate,
                     out _)) {
                     rollTarget = candidate;
@@ -315,12 +296,6 @@ namespace DiceGame.Gameplay.Character
             }
 
             return false;
-        }
-
-        static bool IsJumpStackWalkableTransition(MovementTransition transition, DiceStackTier standingTier) {
-            return transition.Kind == MovementTransitionKind.Walkable
-                && standingTier == DiceStackTier.Bottom
-                && transition.TargetLayer == SurfaceLayer.Top;
         }
 
         static bool TryGetPrimaryDirection(Vector2 move, out Direction direction) {

@@ -171,6 +171,16 @@ namespace DiceGame.View
             return positionRoot.position.y + maxY;
         }
 
+        public float GetLogicalTopSurfaceWorldY(Board board) {
+            if (board == null || rotationRoot == null) {
+                return 0f;
+            }
+
+            var squash = 1f - dissolveProgress;
+            ComputeVerticalExtents(board, currentTopFace, squash, out var minY, out var maxY);
+            return surfaceBaseWorldY - minY + maxY;
+        }
+
         public void SnapTo(DiceState state, Board board, DiceRegistry registry = null) {
             if (rollCoroutine != null) {
                 StopCoroutine(rollCoroutine);
