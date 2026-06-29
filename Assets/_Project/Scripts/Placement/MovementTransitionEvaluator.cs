@@ -393,6 +393,19 @@ namespace DiceGame.Placement
                 return MovementTransition.Blocked();
             }
 
+            if (TryEvaluateHeightTransfer(
+                toCell,
+                fromLayer,
+                fromSurface,
+                standingDice,
+                standingTier,
+                direction,
+                isJumping,
+                reachY,
+                out var heightTransferTransition)) {
+                return heightTransferTransition;
+            }
+
             if (isJumping
                 && JumpGridRollPolicy.TryCreateCoupledTransition(
                     fromCell,
@@ -444,16 +457,34 @@ namespace DiceGame.Placement
                 return MovementTransition.GridRoll(occupiedGridPlan);
             }
 
-            target = registry.GetTransferTargetAt(standingDice, direction, standingTier);
-            if (target == null) {
-                return MovementTransition.Blocked();
+            return MovementTransition.Blocked();
+        }
+
+        bool TryEvaluateHeightTransfer(
+            Vector2Int toCell,
+            SurfaceLayer fromLayer,
+            BoardSurface fromSurface,
+            DiceController standingDice,
+            DiceStackTier standingTier,
+            Direction direction,
+            bool isJumping,
+            float reachY,
+            out MovementTransition transition) {
+            transition = default;
+            if (fromLayer == SurfaceLayer.Floor || standingDice == null) {
+                return false;
+            }
+
+            var target = registry.GetTransferTargetAt(standingDice, direction, standingTier);
+            if (target == null || target.CurrentState.GridPos != toCell) {
+                return false;
             }
 
             var targetSurface = BoardSurface.FromDice(
                 toCell,
                 target.CurrentState.Tier == DiceStackTier.Top ? SurfaceLayer.Top : SurfaceLayer.Bottom,
                 target);
-            if (!WalkTransferPolicy.TryEvaluateDiceToDice(
+            return WalkTransferPolicy.TryEvaluateDiceToDice(
                 reachY,
                 target,
                 standingTier,
@@ -462,11 +493,7 @@ namespace DiceGame.Placement
                 targetSurface,
                 isJumping,
                 maxStepHeight,
-                out var heightTransferTransition)) {
-                return MovementTransition.Blocked();
-            }
-
-            return heightTransferTransition;
+                out transition);
         }
 
         static MovementTransition CreateCoupledGridMoveTransition(
