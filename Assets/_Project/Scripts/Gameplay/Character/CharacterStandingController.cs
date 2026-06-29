@@ -14,7 +14,7 @@ namespace DiceGame.Gameplay.Character
 
         public CharacterPlacement Current => placement.Character;
         public DiceController CurrentDice => placement.Character.Dice;
-        public bool IsOnFloor => placement.Character.IsOnFloor;
+        public bool IsOnFloor => placement != null && placement.Character.IsOnFloor;
         public Vector2Int GridCell => placement.Character.GridCell;
         public DiceStackTier Tier => placement.Character.Tier;
         public SurfaceLayer Layer => placement.Character.Layer;

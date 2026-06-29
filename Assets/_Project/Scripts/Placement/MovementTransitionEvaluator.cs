@@ -577,22 +577,7 @@ namespace DiceGame.Placement
                 return true;
             }
 
-            if (!registry.TryGetBottomAt(toCell, out var bottomDice)
-                || bottomDice == null
-                || !registry.CanPlaceTopDiceAt(toCell)) {
-                return false;
-            }
-
-            var topSurfaceY = GetStackTopStandingSurfaceY(bottomDice);
-            if (!CanStepBetween(reachY, topSurfaceY)) {
-                return false;
-            }
-
-            transition = MovementTransition.Walkable(
-                standingDice,
-                SurfaceLayer.Top,
-                MovementTransitionRoute.TierLanding);
-            return true;
+            return false;
         }
 
         float GetTargetSurfaceWorldY(MovementTransition transition) {

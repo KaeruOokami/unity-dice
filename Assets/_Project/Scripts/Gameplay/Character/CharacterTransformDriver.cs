@@ -59,7 +59,7 @@ namespace DiceGame.Gameplay.Character
         }
 
         public void SnapYToSurface() {
-            if (characterTransform == null || isTrackingDiceRoll()) {
+            if (characterTransform == null || (isTrackingDiceRoll?.Invoke() ?? false)) {
                 return;
             }
 

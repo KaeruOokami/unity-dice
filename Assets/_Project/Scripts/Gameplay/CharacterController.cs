@@ -82,13 +82,17 @@ namespace DiceGame.Gameplay
             public float FaceDistance;
         }
 
-        public bool IsOnFloor => standingController.IsOnFloor;
-        public bool IsBusy => !IsOnFloor && standingController.CurrentDice != null && standingController.CurrentDice.IsRolling;
+        public bool IsOnFloor => standingController != null && standingController.IsOnFloor;
+        public bool IsBusy => standingController != null
+            && !IsOnFloor
+            && standingController.CurrentDice != null
+            && standingController.CurrentDice.IsRolling;
         public bool IsCarrying => liftPhase != LiftPhase.None;
-        public Vector2 FacePosition => standingController.TryGetStandingDice(out var standingDice)
+        public Vector2 FacePosition => standingController != null
+            && standingController.TryGetStandingDice(out var standingDice)
             ? CharacterTransformDriver.GetOffsetFromDiceCenter(standingDice, characterTransform != null ? characterTransform.position : Vector3.zero)
             : Vector2.zero;
-        public DiceController CurrentDice => standingController.CurrentDice;
+        public DiceController CurrentDice => standingController?.CurrentDice;
 
         public void Configure(
             Board targetBoard,
@@ -239,13 +243,15 @@ namespace DiceGame.Gameplay
         void OnDisable() {
             coupling?.EndRollTracking();
             EndCarryState();
-            EndJump();
-            standingController?.UnsubscribeAll();
+            if (isInitialized) {
+                EndJump();
+                standingController?.UnsubscribeAll();
+            }
             EndPushFollow();
         }
 
         void Update() {
-            if (!isInitialized) {
+            if (!isInitialized || standingController == null) {
                 return;
             }
 
@@ -304,7 +310,7 @@ namespace DiceGame.Gameplay
         }
 
         void LateUpdate() {
-            if (!isInitialized) {
+            if (!isInitialized || standingController == null) {
                 return;
             }
 
@@ -666,11 +672,15 @@ namespace DiceGame.Gameplay
         }
 
         float GetSurfaceWorldY() {
+            if (board == null) {
+                return 0f;
+            }
+
             if (IsOnFloor) {
                 return board.FloorSurfaceWorldY;
             }
 
-            if (standingController.TryGetStandingDice(out var standingDice)) {
+            if (standingController != null && standingController.TryGetStandingDice(out var standingDice)) {
                 if (standingController.Tier == DiceStackTier.Top
                     && standingDice.CurrentState.Tier == DiceStackTier.Bottom
                     && !registry.HasTopAt(standingController.GridCell)) {
@@ -684,11 +694,15 @@ namespace DiceGame.Gameplay
         }
 
         float GetLogicalSurfaceWorldY() {
+            if (board == null) {
+                return 0f;
+            }
+
             if (IsOnFloor) {
                 return board.FloorSurfaceWorldY;
             }
 
-            if (standingController.TryGetStandingDice(out var standingDice)) {
+            if (standingController != null && standingController.TryGetStandingDice(out var standingDice)) {
                 if (standingController.Tier == DiceStackTier.Top
                     && standingDice.CurrentState.Tier == DiceStackTier.Bottom
                     && !registry.HasTopAt(standingController.GridCell)) {
@@ -1578,8 +1592,8 @@ namespace DiceGame.Gameplay
                 IsGrounded = true
             };
             jumpYOffset = 0f;
-            coupling.ResetJumpSessionFlags();
-            transformDriver.SnapYToSurface();
+            coupling?.ResetJumpSessionFlags();
+            transformDriver?.SnapYToSurface();
         }
     }
 }
