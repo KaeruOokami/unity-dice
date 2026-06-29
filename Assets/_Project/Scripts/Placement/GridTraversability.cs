@@ -89,6 +89,11 @@ namespace DiceGame.Placement
                 return false;
             }
 
+            if (!CanTraverseCell(query, fromTier, cell, out rejectReason)) {
+                rejectReason = $"cell={FormatGrid(cell)} land-occupancy {rejectReason}";
+                return false;
+            }
+
             return true;
         }
 

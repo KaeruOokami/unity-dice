@@ -1,0 +1,46 @@
+using DiceGame.Core;
+using DiceGame.Gameplay;
+
+namespace DiceGame.Placement
+{
+    public static class TopFallPolicy
+    {
+        public static bool TryEvaluate(
+            SurfaceLayer fromLayer,
+            BoardSurface fromSurface,
+            DiceController standingDice,
+            DiceStackTier standingTier,
+            Direction direction,
+            PassabilityContext context,
+            GridMovePlanBuilder planBuilder,
+            out MovementTransition transition) {
+            transition = default;
+
+            if (fromLayer != SurfaceLayer.Top
+                || standingTier != DiceStackTier.Top
+                || standingDice == null
+                || !fromSurface.AllowsRoll
+                || standingDice.CurrentState.Tier != DiceStackTier.Top) {
+                return false;
+            }
+
+            if (!planBuilder.TryBuild(
+                standingDice.CurrentState,
+                direction,
+                1,
+                context,
+                out var plan,
+                out _)
+                || plan.Kind != DiceGridMoveKind.Demote) {
+                return false;
+            }
+
+            transition = MovementTransition.WalkableWithGridPlan(
+                standingDice,
+                SurfaceLayer.Bottom,
+                MovementTransitionRoute.TopFall,
+                plan);
+            return true;
+        }
+    }
+}

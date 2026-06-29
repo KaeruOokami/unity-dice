@@ -1,7 +1,7 @@
 using DiceGame.Config;
 using DiceGame.Core;
 
-namespace DiceGame.Gameplay.Coupling
+namespace DiceGame.Placement
 {
     public readonly struct JumpCoupledMoveCapability
     {
@@ -28,7 +28,7 @@ namespace DiceGame.Gameplay.Coupling
         }
     }
 
-    static class JumpCoupledMoveGate
+    public static class JumpInputPolicy
     {
         const float TimelineEpsilon = 0.001f;
         const float ApexTimeline = 0.5f;
@@ -64,17 +64,16 @@ namespace DiceGame.Gameplay.Coupling
             }
 
             var maxDistance = timeline <= twoCellMax + TimelineEpsilon
-                ? RollResolver.MaxParallelRollDistance
+                ? DiceGridRollLimits.MaxParallelRollDistance
                 : 1;
             var tierMin = physicsSettings.JumpGridMoveTierChangeMinTimeline;
             var tierMax = physicsSettings.JumpGridMoveTierChangeMaxTimeline;
             var allowTierChange = timeline + TimelineEpsilon >= tierMin
                 && timeline <= tierMax + TimelineEpsilon;
-            var allowed = true;
             capability = new JumpCoupledMoveCapability(
                 true,
-                allowed,
-                allowed,
+                true,
+                true,
                 maxDistance,
                 allowTierChange,
                 timeline);

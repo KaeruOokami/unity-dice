@@ -1,4 +1,3 @@
-using DiceGame.Placement;
 using UnityEngine;
 
 namespace DiceGame.Core
@@ -16,7 +15,7 @@ namespace DiceGame.Core
             plan = default;
             rejectReason = null;
 
-            if (distance < 1 || distance > RollResolver.MaxParallelRollDistance) {
+            if (distance < 1 || distance > DiceGridRollLimits.MaxParallelRollDistance) {
                 rejectReason = $"distance-out-of-range distance={distance}";
                 return false;
             }
@@ -37,38 +36,6 @@ namespace DiceGame.Core
                 From = fromState,
                 To = toState,
                 Kind = kind,
-                Direction = direction,
-                Distance = distance
-            };
-            return true;
-        }
-
-        public static bool TryBuildGroundParallelPlan(
-            DiceState fromState,
-            Direction direction,
-            int distance,
-            IDicePlacement placement,
-            bool hasTopOnSameCell,
-            out DiceGridMovePlan plan,
-            out string rejectReason) {
-            plan = default;
-            rejectReason = null;
-
-            if (!RollResolver.TryRollDistance(
-                fromState,
-                direction,
-                placement,
-                hasTopOnSameCell,
-                distance,
-                out var nextState,
-                out rejectReason)) {
-                return false;
-            }
-
-            plan = new DiceGridMovePlan {
-                From = fromState,
-                To = nextState,
-                Kind = DiceGridMoveKind.Parallel,
                 Direction = direction,
                 Distance = distance
             };

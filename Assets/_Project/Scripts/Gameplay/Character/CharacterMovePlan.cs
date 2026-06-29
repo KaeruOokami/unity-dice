@@ -30,6 +30,8 @@ namespace DiceGame.Gameplay.Character
         public Direction Direction;
         public MovementTransition Transition;
         public CoupledMoveIntent CoupledIntent;
+        public bool HasDiceGridMovePlan;
+        public DiceGridMovePlan DiceGridMovePlan;
         public bool BlockFailedJumpGridFallback;
         public bool BlockJumpStackTransfer;
         public string BlockReason;

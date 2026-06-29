@@ -163,7 +163,6 @@ namespace DiceGame.Gameplay
             coupling.Configure(
                 board,
                 registry,
-                movementTransition,
                 standingController,
                 transformDriver,
                 movementSettings,
@@ -446,7 +445,7 @@ namespace DiceGame.Gameplay
         }
 
         bool TryGetJumpCoupledMoveCapability(out JumpCoupledMoveCapability capability) {
-            var evaluated = JumpCoupledMoveGate.TryEvaluate(
+            var evaluated = JumpInputPolicy.TryEvaluate(
                 jumpPhase != JumpPhase.None,
                 coupling.JumpDiceGridMoved,
                 physicsSettings,
@@ -460,20 +459,20 @@ namespace DiceGame.Gameplay
 
             if (coupling.JumpDiceGridMoved) {
                 LogJumpParallelRoll(
-                    "JumpCoupledMoveGate blocked reason=already-moved " +
+                    "JumpInputPolicy blocked reason=already-moved " +
                     $"jumpPhase={jumpPhase} coupling.JumpDiceGridMoved={coupling.JumpDiceGridMoved}");
                 return true;
             }
 
             if (!capability.AllowCrossCellMove) {
                 LogJumpParallelRoll(
-                    $"JumpCoupledMoveGate blocked timeline={capability.Timeline:F3} " +
+                    $"JumpInputPolicy blocked timeline={capability.Timeline:F3} " +
                     $"oneCellMax={physicsSettings.JumpGridMoveOneCellMaxTimeline:F3}");
                 return true;
             }
 
             LogJumpParallelRoll(
-                $"JumpCoupledMoveGate allowed timeline={capability.Timeline:F3} " +
+                $"JumpInputPolicy allowed timeline={capability.Timeline:F3} " +
                 $"maxDistance={capability.MaxDistance} allowTierChange={capability.AllowTierChange} " +
                 $"twoCellMax={physicsSettings.JumpGridMoveTwoCellMaxTimeline:F3} " +
                 $"oneCellMax={physicsSettings.JumpGridMoveOneCellMaxTimeline:F3}");
@@ -798,7 +797,13 @@ namespace DiceGame.Gameplay
 
             var pushed = false;
             foreach (var candidate in pushCandidates) {
-                if (candidate.Dice.TrySlide(candidate.Direction)) {
+                if (DiceSlidePassability.TryEvaluate(
+                    candidate.Dice.CurrentState,
+                    candidate.Direction,
+                    registry,
+                    out var slidePlan,
+                    out _)
+                    && candidate.Dice.TryExecuteSlidePlan(slidePlan)) {
                     LogPushDebug(
                         "slide-ok",
                         $"stage=slide dice={FormatMovementDice(candidate.Dice)} dir={candidate.Direction}");
@@ -809,7 +814,7 @@ namespace DiceGame.Gameplay
 
                 LogPushDebug(
                     $"slide-fail-{FormatMovementDice(candidate.Dice)}-{candidate.Direction}",
-                    $"stage=slide dice={FormatMovementDice(candidate.Dice)} dir={candidate.Direction} TrySlide=false");
+                    $"stage=slide dice={FormatMovementDice(candidate.Dice)} dir={candidate.Direction} slide-plan-failed");
             }
 
             if (!pushed) {
@@ -1139,97 +1144,30 @@ namespace DiceGame.Gameplay
         }
 
         bool CanPushDice(DiceController dice, out string rejectReason) {
-            rejectReason = null;
-            if (dice == null || registry == null) {
-                rejectReason = dice == null ? "nullDice" : "nullRegistry";
-                return false;
-            }
-
-            if (standingController.TryGetStandingDice(out var standingDice) && dice == standingDice) {
-                rejectReason = "standingDice";
-                return false;
-            }
-
-            if (!IsPushReachableFromStanding(dice)) {
-                rejectReason = "notReachable";
-                return false;
-            }
-
-            if (IsOnFloor) {
-                if (dice.CurrentState.Tier != DiceStackTier.Bottom) {
-                    rejectReason = "floorRequiresBottom";
-                    return false;
-                }
-
-                if (registry.HasTopAt(dice.CurrentState.GridPos)) {
-                    rejectReason = "floorRequiresNoTop";
-                    return false;
-                }
-
-                return true;
-            }
-
-            if (dice.CurrentState.Tier != DiceStackTier.Top) {
-                rejectReason = "onDiceRequiresTop";
-                return false;
-            }
-
-            return true;
+            return PushPassability.CanPush(
+                standingController.Current,
+                IsOnFloor,
+                standingController.ResolveStandingDiceForMovement(),
+                dice,
+                registry,
+                out rejectReason);
         }
 
         bool CanLiftDice(DiceController dice) {
-            if (dice == null || registry == null) {
-                return false;
-            }
-
-            if (standingController.TryGetStandingDice(out var standingDice) && dice == standingDice) {
-                return false;
-            }
-
-            if (!IsLiftReachableFromStanding(dice)) {
-                return false;
-            }
-
-            if (IsOnFloor) {
-                if (dice.CurrentState.Tier == DiceStackTier.Top) {
-                    return true;
-                }
-
-                return dice.CurrentState.Tier == DiceStackTier.Bottom
-                    && !registry.HasTopAt(dice.CurrentState.GridPos);
-            }
-
-            if (standingController.Tier == DiceStackTier.Bottom) {
-                return true;
-            }
-
-            return dice.CurrentState.Tier == DiceStackTier.Top;
-        }
-
-        DiceSlot GetPlayerDiceSlot() {
-            var tier = IsOnFloor ? DiceStackTier.Bottom : standingController.Tier;
-            return new DiceSlot(standingController.GridCell, tier);
+            return LiftPassability.CanLift(
+                standingController.Current,
+                IsOnFloor,
+                standingController.ResolveStandingDiceForMovement(),
+                dice,
+                registry);
         }
 
         bool IsPushReachableFromStanding(DiceController dice) {
-            if (dice == null) {
-                return false;
-            }
-
-            return DiceStackAdjacency.IsAdjacentForPush(
-                GetPlayerDiceSlot(),
-                DiceSlot.FromDice(dice),
-                IsOnFloor);
+            return PushPassability.IsReachable(standingController.Current, IsOnFloor, dice);
         }
 
         bool IsLiftReachableFromStanding(DiceController dice) {
-            if (dice == null) {
-                return false;
-            }
-
-            return DiceStackAdjacency.IsAdjacentForLift(
-                GetPlayerDiceSlot(),
-                DiceSlot.FromDice(dice));
+            return LiftPassability.IsReachable(standingController.Current, dice);
         }
 
         void LogPushDebugWhenInput(Vector2 input, string key, string message) {
@@ -1417,12 +1355,7 @@ namespace DiceGame.Gameplay
             var originGrid = standingController.GridCell;
             var targetGrid = originGrid + direction.ToGridDelta();
 
-            DiceStackTier targetTier;
-            if (registry.CanPlaceBottomDiceAt(targetGrid)) {
-                targetTier = DiceStackTier.Bottom;
-            } else if (registry.CanPlaceTopDiceAt(targetGrid)) {
-                targetTier = DiceStackTier.Top;
-            } else {
+            if (!CarryPlacementPassability.TryResolveTarget(targetGrid, registry, out var targetTier, out _)) {
                 return false;
             }
 

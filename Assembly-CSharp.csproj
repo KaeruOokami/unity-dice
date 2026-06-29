@@ -40,8 +40,6 @@
      <Compile Include="Assets\_Project\Scripts\Core\DiceState.cs" />
      <Compile Include="Assets\_Project\Scripts\Config\DiceAnimationSettings.cs" />
      <Compile Include="Assets\_Project\Scripts\Core\DiceOrientation.cs" />
-     <Compile Include="Assets\_Project\Scripts\Core\RollResolver.cs" />
-     <Compile Include="Assets\_Project\Scripts\Core\SlideResolver.cs" />
      <Compile Include="Assets\_Project\Scripts\Core\DiceGridMovePlan.cs" />
      <Compile Include="Assets\_Project\Scripts\Core\DiceTransition.cs" />
      <Compile Include="Assets\_Project\Scripts\Board\CellType.cs" />
@@ -64,7 +62,6 @@
      <Compile Include="Assets\_Project\Scripts\Gameplay\Coupling\DiceCharacterCoupling.cs" />
      <Compile Include="Assets\_Project\Scripts\Board\IBoard.cs" />
      <Compile Include="Assets\_Project\Scripts\Gameplay\DiceMatchFinder.cs" />
-     <Compile Include="Assets\_Project\Scripts\Gameplay\Coupling\JumpCoupledMoveGate.cs" />
      <Compile Include="Assets\_Project\Scripts\Placement\DiceRegistry.cs" />
      <Compile Include="Assets\_Project\Scripts\Gameplay\CharacterController.cs" />
      <Compile Include="Assets\_Project\Scripts\Gameplay\Character\CharacterTransformDriver.cs" />
@@ -86,6 +83,20 @@
      <Compile Include="Assets\_Project\Scripts\Gameplay\DiceStackAdjacency.cs" />
      <Compile Include="Assets\_Project\Scripts\Placement\CellOccupancyQuery.cs" />
      <Compile Include="Assets\_Project\Scripts\Placement\SurfaceQuery.cs" />
+     <Compile Include="Assets\_Project\Scripts\Placement\GroundGridPassability.cs" />
+     <Compile Include="Assets\_Project\Scripts\Placement\HeightReachPolicy.cs" />
+     <Compile Include="Assets\_Project\Scripts\Placement\DiceSlidePassability.cs" />
+     <Compile Include="Assets\_Project\Scripts\Placement\JumpInputPolicy.cs" />
+     <Compile Include="Assets\_Project\Scripts\Placement\PushPassability.cs" />
+     <Compile Include="Assets\_Project\Scripts\Placement\WalkTransferPolicy.cs" />
+     <Compile Include="Assets\_Project\Scripts\Placement\JumpGridRollPolicy.cs" />
+     <Compile Include="Assets\_Project\Scripts\Placement\CarryPlacementPassability.cs" />
+     <Compile Include="Assets\_Project\Scripts\Placement\TierLandingPolicy.cs" />
+     <Compile Include="Assets\_Project\Scripts\Placement\LiftPassability.cs" />
+     <Compile Include="Assets\_Project\Scripts\Placement\TopFallPolicy.cs" />
+     <Compile Include="Assets\_Project\Scripts\Core\DiceGridRollLimits.cs" />
+     <Compile Include="Assets\_Project\Scripts\Placement\GridMovePlanBuilder.cs" />
+     <Compile Include="Assets\_Project\Scripts\Core\DiceSlidePlan.cs" />
      <None Include="Assets\Packages\Dice_6\Documentation\Readmy.txt" />
     <Reference Include="UnityEngine">
         <HintPath>D:\Program Files\Unity\Hub\Editor\2021.3.10f1\Editor\Data\Managed\UnityEngine\UnityEngine.dll</HintPath>

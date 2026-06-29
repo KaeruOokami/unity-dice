@@ -1,3 +1,4 @@
+using DiceGame.Core;
 using DiceGame.Gameplay;
 
 namespace DiceGame.Placement
@@ -35,23 +36,49 @@ namespace DiceGame.Placement
         public MovementTransitionRoute Route { get; }
         public DiceController TargetDice { get; }
         public SurfaceLayer TargetLayer { get; }
+        public bool HasDiceGridMovePlan { get; }
+        public DiceGridMovePlan DiceGridMovePlan { get; }
 
         MovementTransition(
             MovementTransitionKind kind,
             MovementTransitionRoute route,
             DiceController targetDice,
-            SurfaceLayer targetLayer) {
+            SurfaceLayer targetLayer,
+            bool hasDiceGridMovePlan,
+            DiceGridMovePlan diceGridMovePlan) {
             Kind = kind;
             Route = route;
             TargetDice = targetDice;
             TargetLayer = targetLayer;
+            HasDiceGridMovePlan = hasDiceGridMovePlan;
+            DiceGridMovePlan = diceGridMovePlan;
         }
 
         public static MovementTransition Walkable(
             DiceController dice,
             SurfaceLayer layer,
             MovementTransitionRoute route = MovementTransitionRoute.HeightTransfer) {
-            return new MovementTransition(MovementTransitionKind.Walkable, route, dice, layer);
+            return new MovementTransition(
+                MovementTransitionKind.Walkable,
+                route,
+                dice,
+                layer,
+                false,
+                default);
+        }
+
+        public static MovementTransition WalkableWithGridPlan(
+            DiceController dice,
+            SurfaceLayer layer,
+            MovementTransitionRoute route,
+            DiceGridMovePlan plan) {
+            return new MovementTransition(
+                MovementTransitionKind.Walkable,
+                route,
+                dice,
+                layer,
+                true,
+                plan);
         }
 
         public static MovementTransition Blocked() {
@@ -59,15 +86,19 @@ namespace DiceGame.Placement
                 MovementTransitionKind.Blocked,
                 MovementTransitionRoute.None,
                 null,
-                SurfaceLayer.Floor);
+                SurfaceLayer.Floor,
+                false,
+                default);
         }
 
-        public static MovementTransition Roll() {
+        public static MovementTransition GridRoll(DiceGridMovePlan plan) {
             return new MovementTransition(
                 MovementTransitionKind.CanRoll,
                 MovementTransitionRoute.DiceRoll,
                 null,
-                SurfaceLayer.Floor);
+                SurfaceLayer.Floor,
+                true,
+                plan);
         }
 
         public static MovementTransition BlockedStepOnly(DiceController targetDice, SurfaceLayer targetLayer) {
@@ -75,7 +106,9 @@ namespace DiceGame.Placement
                 MovementTransitionKind.BlockedStepOnly,
                 MovementTransitionRoute.DissolveDescent,
                 targetDice,
-                targetLayer);
+                targetLayer,
+                false,
+                default);
         }
 
         public bool IsDissolveDescentToFloor =>

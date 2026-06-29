@@ -124,22 +124,31 @@ namespace DiceGame.Gameplay.Character
             float halfExtent,
             JumpCoupledMoveCapability jumpCapability,
             System.Action<string> logJumpParallelRoll) {
+            if (!plan.HasDiceGridMovePlan) {
+                return false;
+            }
+
             switch (plan.CoupledIntent) {
                 case CoupledMoveIntent.GroundParallelRoll:
-                    return coupling.TryBeginGroundParallelRoll(plan.Direction, nextXZ, halfExtent);
+                    return coupling.TryBeginGroundParallelRoll(
+                        plan.DiceGridMovePlan,
+                        nextXZ,
+                        halfExtent);
                 case CoupledMoveIntent.GroundTopFallRoll:
-                    return coupling.TryBeginGroundTopFallRoll(plan.Direction, nextXZ, halfExtent);
+                    return coupling.TryBeginGroundTopFallRoll(
+                        plan.DiceGridMovePlan,
+                        nextXZ,
+                        halfExtent);
                 case CoupledMoveIntent.JumpTopFallRoll:
-                    return coupling.TryBeginJumpTopFallRoll(plan.Direction, nextXZ, halfExtent);
+                    return coupling.TryBeginJumpTopFallRoll(
+                        plan.DiceGridMovePlan,
+                        nextXZ,
+                        halfExtent);
                 case CoupledMoveIntent.JumpGridMove:
                     return coupling.TryBeginJumpGridMoveForTransition(
-                        plan.FromCell,
-                        plan.ToCell,
-                        plan.Transition,
-                        plan.Direction,
+                        plan.DiceGridMovePlan,
                         nextXZ,
                         halfExtent,
-                        jumpCapability,
                         logJumpParallelRoll);
                 default:
                     return false;

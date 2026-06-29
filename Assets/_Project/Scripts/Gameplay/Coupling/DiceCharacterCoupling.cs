@@ -32,7 +32,6 @@ namespace DiceGame.Gameplay.Coupling
 
         Board board;
         DiceRegistry registry;
-        MovementTransitionEvaluator passability;
         CharacterStandingController standing;
         CharacterTransformDriver transformDriver;
         CharacterMovementSettings movementSettings;
@@ -50,7 +49,6 @@ namespace DiceGame.Gameplay.Coupling
         public void Configure(
             Board targetBoard,
             DiceRegistry targetRegistry,
-            MovementTransitionEvaluator movementPassability,
             CharacterStandingController standingController,
             CharacterTransformDriver driver,
             CharacterMovementSettings movement,
@@ -58,7 +56,6 @@ namespace DiceGame.Gameplay.Coupling
             Func<VerticalMotionState> jumpMotionProvider) {
             board = targetBoard;
             registry = targetRegistry;
-            passability = movementPassability;
             standing = standingController;
             transformDriver = driver;
             movementSettings = movement;
@@ -107,116 +104,72 @@ namespace DiceGame.Gameplay.Coupling
             return wasJumpArc;
         }
 
-        public bool TryBeginGroundParallelRoll(Direction direction, Vector2 nextXZ, float halfExtent) {
-            var dice = standing.CurrentDice;
-            if (dice?.View.DiceTransform == null || dice.IsDissolving) {
-                return false;
-            }
-
-            if (standing.Tier != dice.CurrentState.Tier) {
-                return false;
-            }
-
-            if (standing.Tier == DiceStackTier.Bottom && registry.HasTopAt(standing.GridCell)) {
-                return false;
-            }
-
-            var hasTopOnSameCell = registry.HasTopAt(standing.GridCell);
-            if (!RollResolver.TryRoll(
-                dice.CurrentState,
-                direction,
-                registry,
-                hasTopOnSameCell,
-                out _)) {
-                return false;
-            }
-
-            transformDriver.AlignToDiceFace(dice, nextXZ, halfExtent);
-            var characterAnchor = transformDriver.GetWorldXZ();
-            var diceCenter = dice.View.DiceTransform.position;
-
-            if (!dice.TryRoll(direction)) {
-                return false;
-            }
-
-            standing.SetOnDice(dice.CurrentState.GridPos, standing.Tier, dice);
-            BeginFollow(new Vector3(characterAnchor.x, 0f, characterAnchor.y), diceCenter, false, JumpDiceMoveKind.None);
-            return true;
+        public bool TryBeginGroundParallelRoll(DiceGridMovePlan plan, Vector2 nextXZ, float halfExtent) {
+            return TryBeginGridMovePlan(plan, jumpArc: false, nextXZ, halfExtent);
         }
 
-        public bool TryBeginGroundTopFallRoll(Direction direction, Vector2 nextXZ, float halfExtent) {
-            var dice = standing.CurrentDice;
-            if (dice?.View.DiceTransform == null || dice.IsDissolving) {
-                return false;
-            }
-
-            if (standing.Tier != DiceStackTier.Top || dice.CurrentState.Tier != DiceStackTier.Top) {
-                return false;
-            }
-
-            var targetPos = standing.GridCell + direction.ToGridDelta();
-            if (!registry.CanPlaceBottomDiceAt(targetPos)) {
-                return false;
-            }
-
-            transformDriver.AlignToDiceFace(dice, nextXZ, halfExtent);
-            var characterAnchor = transformDriver.GetWorldXZ();
-            var diceCenter = dice.View.DiceTransform.position;
-
-            if (!dice.TryRollThenDemote(direction)) {
-                return false;
-            }
-
-            standing.SetOnDice(dice.CurrentState.GridPos, DiceStackTier.Bottom, dice);
-            BeginFollow(new Vector3(characterAnchor.x, 0f, characterAnchor.y), diceCenter, false, JumpDiceMoveKind.DemoteToBottom);
-            return true;
+        public bool TryBeginGroundTopFallRoll(DiceGridMovePlan plan, Vector2 nextXZ, float halfExtent) {
+            return TryBeginGridMovePlan(plan, jumpArc: false, nextXZ, halfExtent);
         }
 
         public bool TryBeginJumpGridMove(
-            Vector2Int fromCell,
-            Vector2Int toCell,
-            Direction direction,
+            DiceGridMovePlan plan,
             Vector2 nextXZ,
             float halfExtent,
-            JumpCoupledMoveCapability capability,
             Action<string> log) {
             if (session.JumpDiceGridMoved) {
                 return false;
             }
 
-            var dice = standing.CurrentDice;
-            if (dice == null || dice.IsDissolving) {
-                return false;
-            }
-
-            var rollDistance = MovementTransitionEvaluator.GetOrthogonalDistance(fromCell, toCell);
-            if (rollDistance < 1) {
-                rollDistance = 1;
-            }
-
-            var jumpContext = PassabilityContext.Jump(
-                capability.AllowDiceGridMove,
-                capability.AllowTierChange,
-                0f);
-            if (!passability.TryBuildJumpGridMovePlan(
-                dice.CurrentState,
-                direction,
-                rollDistance,
-                jumpContext,
-                out var plan,
-                out _)) {
-                log?.Invoke($"Coupling jump-grid reject plan-failed from=({fromCell.x},{fromCell.y}) to=({toCell.x},{toCell.y})");
-                return false;
-            }
-
-            if (plan.ChangesTier && !capability.AllowTierChange) {
-                return false;
-            }
-
-            session.IsJumpArc = true;
-            if (!dice.TryExecuteJumpMovePlan(plan, getJumpYOffset(), getJumpMotion)) {
-                session.IsJumpArc = false;
+            if (!TryBeginGridMovePlan(plan, jumpArc: true, nextXZ, halfExtent)) {
                 log?.Invoke($"Coupling jump-grid reject execute-failed kind={plan.Kind}");
+                return false;
+            }
+
+            return true;
+        }
+
+        public bool TryBeginJumpTopFallRoll(DiceGridMovePlan plan, Vector2 nextXZ, float halfExtent) {
+            if (session.JumpDiceGridMoved) {
+                return false;
+            }
+
+            return TryBeginGridMovePlan(plan, jumpArc: true, nextXZ, halfExtent);
+        }
+
+        public bool TryBeginJumpGridMoveForTransition(
+            DiceGridMovePlan plan,
+            Vector2 nextXZ,
+            float halfExtent,
+            Action<string> log) {
+            return TryBeginJumpGridMove(plan, nextXZ, halfExtent, log);
+        }
+
+        bool TryBeginGridMovePlan(
+            DiceGridMovePlan plan,
+            bool jumpArc,
+            Vector2 nextXZ,
+            float halfExtent) {
+            var dice = standing.CurrentDice;
+            if (dice?.View.DiceTransform == null || dice.IsDissolving) {
+                return false;
+            }
+
+            if (jumpArc) {
+                session.IsJumpArc = true;
+                if (!dice.TryExecuteJumpMovePlan(plan, getJumpYOffset(), getJumpMotion)) {
+                    session.IsJumpArc = false;
+                    Debug.LogError(
+                        $"DiceCharacterCoupling: jump grid move execution failed kind={plan.Kind} " +
+                        $"from={plan.From.GridPos} to={plan.To.GridPos}");
+                    return false;
+                }
+
+                session.JumpDiceGridMoved = true;
+            } else if (!dice.TryExecuteGroundMovePlan(plan)) {
+                Debug.LogError(
+                    $"DiceCharacterCoupling: ground grid move execution failed kind={plan.Kind} " +
+                    $"from={plan.From.GridPos} to={plan.To.GridPos}");
                 return false;
             }
 
@@ -226,84 +179,14 @@ namespace DiceGame.Gameplay.Coupling
                 DiceGridMoveKind.Demote => JumpDiceMoveKind.DemoteToBottom,
                 _ => JumpDiceMoveKind.None
             };
-            session.JumpDiceGridMoved = true;
             standing.SetOnDice(plan.To.GridPos, plan.To.Tier, dice);
 
             transformDriver.AlignToDiceFace(dice, nextXZ, halfExtent);
             var diceCenter = dice.View.DiceTransform.position;
             var charPos = transformDriver.GetWorldXZ();
-            BeginFollow(new Vector3(charPos.x, 0f, charPos.y), diceCenter, true, session.JumpMoveKind);
+            BeginFollow(new Vector3(charPos.x, 0f, charPos.y), diceCenter, jumpArc, session.JumpMoveKind);
             session.IsActive = true;
             return true;
-        }
-
-        public bool TryBeginJumpTopFallRoll(Direction direction, Vector2 nextXZ, float halfExtent) {
-            if (session.JumpDiceGridMoved) {
-                return false;
-            }
-
-            var dice = standing.CurrentDice;
-            if (dice?.View.DiceTransform == null || dice.IsDissolving) {
-                return false;
-            }
-
-            if (standing.Tier != DiceStackTier.Top || dice.CurrentState.Tier != DiceStackTier.Top) {
-                return false;
-            }
-
-            if (!SlideResolver.TrySlideTop(
-                dice.CurrentState,
-                direction,
-                registry,
-                out _,
-                out var result)
-                || result != TopSlideResult.FallToBottom) {
-                return false;
-            }
-
-            if (!DiceGridMovePlanner.TryBuildPlan(
-                dice.CurrentState,
-                direction,
-                1,
-                DiceStackTier.Bottom,
-                DiceGridMoveKind.Demote,
-                out var plan,
-                out _)) {
-                return false;
-            }
-
-            session.IsJumpArc = true;
-            if (!dice.TryExecuteJumpMovePlan(plan, getJumpYOffset(), getJumpMotion)) {
-                session.IsJumpArc = false;
-                return false;
-            }
-
-            session.JumpDiceGridMoved = true;
-            session.JumpMoveKind = JumpDiceMoveKind.DemoteToBottom;
-            standing.SetOnDice(plan.To.GridPos, plan.To.Tier, dice);
-
-            transformDriver.AlignToDiceFace(dice, nextXZ, halfExtent);
-            var diceCenter = dice.View.DiceTransform.position;
-            var charPos = transformDriver.GetWorldXZ();
-            BeginFollow(new Vector3(charPos.x, 0f, charPos.y), diceCenter, true, session.JumpMoveKind);
-            session.IsActive = true;
-            return true;
-        }
-
-        public bool TryBeginJumpGridMoveForTransition(
-            Vector2Int fromCell,
-            Vector2Int toCell,
-            MovementTransition transition,
-            Direction direction,
-            Vector2 nextXZ,
-            float halfExtent,
-            JumpCoupledMoveCapability capability,
-            Action<string> log) {
-            if (transition.TargetDice != standing.CurrentDice) {
-                return false;
-            }
-
-            return TryBeginJumpGridMove(fromCell, toCell, direction, nextXZ, halfExtent, capability, log);
         }
 
         void BeginFollow(Vector3 characterAnchor, Vector3 diceCenterAnchor, bool jumpArc, JumpDiceMoveKind moveKind) {

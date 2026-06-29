@@ -105,34 +105,27 @@ namespace DiceGame.Gameplay.Character
             switch (transition.Kind) {
                 case MovementTransitionKind.Walkable:
                     if (transition.Route == MovementTransitionRoute.TopFall
-                        || (transition.TargetLayer == SurfaceLayer.Bottom
-                            && standing.Tier == DiceStackTier.Top
-                            && transition.TargetDice == standing.CurrentDice
-                            && TryGetPrimaryDirection(move, out var topFallDir)
-                            && topFallDir == direction)) {
-                        return new CharacterMovePlan {
-                            Kind = CharacterMoveKind.CoupledDiceMove,
-                            FromCell = standingCell,
-                            ToCell = nextCell,
-                            Direction = direction,
-                            Transition = transition,
-                            CoupledIntent = isJumping
+                        && transition.HasDiceGridMovePlan) {
+                        return BuildCoupledDiceMovePlan(
+                            standingCell,
+                            nextCell,
+                            direction,
+                            transition,
+                            isJumping
                                 ? CoupledMoveIntent.JumpTopFallRoll
-                                : CoupledMoveIntent.GroundTopFallRoll
-                        };
+                                : CoupledMoveIntent.GroundTopFallRoll);
                     }
 
                     if (transition.Route == MovementTransitionRoute.CoupledGridMove
-                        && isJumping) {
-                        return new CharacterMovePlan {
-                            Kind = CharacterMoveKind.CoupledDiceMove,
-                            FromCell = standingCell,
-                            ToCell = nextCell,
-                            Direction = direction,
-                            Transition = transition,
-                            CoupledIntent = CoupledMoveIntent.JumpGridMove,
-                            BlockFailedJumpGridFallback = true
-                        };
+                        && isJumping
+                        && transition.HasDiceGridMovePlan) {
+                        return BuildCoupledDiceMovePlan(
+                            standingCell,
+                            nextCell,
+                            direction,
+                            transition,
+                            CoupledMoveIntent.JumpGridMove,
+                            blockFailedJumpGridFallback: true);
                     }
 
                     return new CharacterMovePlan {
@@ -144,36 +137,16 @@ namespace DiceGame.Gameplay.Character
                     };
 
                 case MovementTransitionKind.CanRoll:
-                    if (transition.Route == MovementTransitionRoute.DiceRoll
-                        && allowDiceGridMove
-                        && standing.CurrentDice != null
-                        && isJumping) {
-                        var jumpTargetLayer = standing.Tier == DiceStackTier.Top
-                            ? SurfaceLayer.Top
-                            : SurfaceLayer.Bottom;
-                        var jumpDiceMove = MovementTransition.Walkable(standing.CurrentDice, jumpTargetLayer);
-                        return new CharacterMovePlan {
-                            Kind = CharacterMoveKind.CoupledDiceMove,
-                            FromCell = standingCell,
-                            ToCell = nextCell,
-                            Direction = direction,
-                            Transition = jumpDiceMove,
-                            CoupledIntent = CoupledMoveIntent.JumpGridMove,
-                            BlockFailedJumpGridFallback = true
-                        };
-                    }
-
-                    if (TryGetPrimaryDirection(move, out var moveDir) && moveDir == direction) {
-                        if (!isJumping) {
-                            return new CharacterMovePlan {
-                                Kind = CharacterMoveKind.CoupledDiceMove,
-                                FromCell = standingCell,
-                                ToCell = nextCell,
-                                Direction = direction,
-                                Transition = transition,
-                                CoupledIntent = CoupledMoveIntent.GroundParallelRoll
-                            };
-                        }
+                    if (transition.HasDiceGridMovePlan
+                        && !isJumping
+                        && TryGetPrimaryDirection(move, out var moveDir)
+                        && moveDir == direction) {
+                        return BuildCoupledDiceMovePlan(
+                            standingCell,
+                            nextCell,
+                            direction,
+                            transition,
+                            CoupledMoveIntent.GroundParallelRoll);
                     }
 
                     return CharacterMovePlan.FaceSlide(standingCell);
@@ -191,6 +164,26 @@ namespace DiceGame.Gameplay.Character
                 default:
                     return CharacterMovePlan.FaceSlide(standingCell);
             }
+        }
+
+        static CharacterMovePlan BuildCoupledDiceMovePlan(
+            Vector2Int fromCell,
+            Vector2Int toCell,
+            Direction direction,
+            MovementTransition transition,
+            CoupledMoveIntent intent,
+            bool blockFailedJumpGridFallback = false) {
+            return new CharacterMovePlan {
+                Kind = CharacterMoveKind.CoupledDiceMove,
+                FromCell = fromCell,
+                ToCell = toCell,
+                Direction = direction,
+                Transition = transition,
+                CoupledIntent = intent,
+                HasDiceGridMovePlan = transition.HasDiceGridMovePlan,
+                DiceGridMovePlan = transition.DiceGridMovePlan,
+                BlockFailedJumpGridFallback = blockFailedJumpGridFallback
+            };
         }
 
         public int GetMaxMovementCellDistance(

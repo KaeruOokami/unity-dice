@@ -452,7 +452,7 @@ namespace DiceGame.View
             currentTopFace = fromState.Orientation.Top;
             rotationRoot.rotation = DiceOrientationMapper.ToRotation(fromState.Orientation);
 
-            var rolls = Mathf.Clamp(rollDistance, 1, RollResolver.MaxParallelRollDistance);
+            var rolls = Mathf.Clamp(rollDistance, 1, DiceGridRollLimits.MaxParallelRollDistance);
             var useArcRoll = jumpMotionProvider != null;
             if (useArcRoll) {
                 visualYOffset = 0f;
