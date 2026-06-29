@@ -82,7 +82,7 @@ namespace DiceGame.Core
 
                     var targetPos = rollingState.GridPos + direction.ToGridDelta();
                     var isFinalStep = step == distance - 1;
-                    if (!CanEnterRollCell(placement, targetPos, rollingState.Tier, isFinalStep, distance, out var cellReject)) {
+                    if (!CanEnterRollCell(placement, targetPos, rollingState.Tier, isFinalStep, out var cellReject)) {
                         rejectReason = $"step={step + 1}/{distance} target={FormatGrid(targetPos)} {cellReject}";
                         return false;
                     }
@@ -97,16 +97,6 @@ namespace DiceGame.Core
 
                 if (rollingState.Tier == DiceStackTier.Top) {
                     var targetPos = rollingState.GridPos + direction.ToGridDelta();
-                    var isFinalStep = step == distance - 1;
-
-                    if (isFinalStep && distance > 1 && placement.CanParallelRollLandAt(targetPos, DiceStackTier.Top)) {
-                        if (!TryBuildRolledState(rollingState, targetPos, DiceStackTier.Top, direction, out rollingState)) {
-                            rejectReason = $"step={step + 1}/{distance} target={FormatGrid(targetPos)} invalid-orientation";
-                            return false;
-                        }
-
-                        continue;
-                    }
 
                     if (!SlideResolver.TrySlideTop(rollingState, direction, placement, out var slideState, out var result)
                         || result != TopSlideResult.Parallel) {
@@ -136,21 +126,21 @@ namespace DiceGame.Core
             Vector2Int targetPos,
             DiceStackTier tier,
             bool isFinalStep,
-            int distance,
             out string rejectReason) {
             rejectReason = null;
-            if (placement.CanDiceRollInto(targetPos)) {
-                return true;
+            if (tier != DiceStackTier.Bottom) {
+                rejectReason = "unsupported-tier";
+                return false;
             }
 
-            if (isFinalStep && distance > 1 && placement.CanParallelRollLandAt(targetPos, tier)) {
-                return true;
+            if (!placement.CanPlaceBottomDiceAt(targetPos)) {
+                rejectReason = isFinalStep
+                    ? "occupied-final"
+                    : "occupied-intermediate";
+                return false;
             }
 
-            rejectReason = isFinalStep
-                ? $"occupied-final distance={distance} canRollInto=false canParallelLand=false"
-                : "occupied-intermediate canRollInto=false";
-            return false;
+            return true;
         }
 
         static bool TryBuildRolledState(

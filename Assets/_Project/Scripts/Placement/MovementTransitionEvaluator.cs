@@ -10,6 +10,7 @@ namespace DiceGame.Placement
         readonly Board board;
         readonly DiceRegistry registry;
         readonly SurfaceQuery surfaceQuery;
+        readonly CellOccupancyQuery occupancyQuery;
         readonly float maxStepHeight;
         Action<string> jumpParallelRollDebugLog;
 
@@ -21,6 +22,7 @@ namespace DiceGame.Placement
             this.board = board;
             this.registry = registry;
             this.surfaceQuery = surfaceQuery;
+            occupancyQuery = new CellOccupancyQuery(board, registry);
             this.maxStepHeight = maxStepHeight;
         }
 
@@ -172,10 +174,10 @@ namespace DiceGame.Placement
 
             var hasTopOnSameCell = registry.HasTopAt(fromState.GridPos);
             if (!JumpGridPassability.TryEvaluate(
+                occupancyQuery,
                 fromState,
                 direction,
                 distance,
-                registry,
                 hasTopOnSameCell,
                 context,
                 out var landingTier,
@@ -759,10 +761,10 @@ namespace DiceGame.Placement
             var hasTopOnSameCell = registry.HasTopAt(fromCell);
             if (allowMultiCell) {
                 return JumpGridPassability.TryEvaluate(
+                    occupancyQuery,
                     standingDice.CurrentState,
                     direction,
                     distance,
-                    registry,
                     hasTopOnSameCell,
                     context,
                     out _,

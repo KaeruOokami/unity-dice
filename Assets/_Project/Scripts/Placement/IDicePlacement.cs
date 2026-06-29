@@ -7,7 +7,7 @@ namespace DiceGame.Placement
     {
         bool CanPlaceBottomDiceAt(Vector2Int gridPos);
         bool CanPlaceTopDiceAt(Vector2Int gridPos);
-        bool CanDiceRollInto(Vector2Int gridPos);
-        bool CanParallelRollLandAt(Vector2Int gridPos, DiceStackTier tier);
+        bool HasTopAt(Vector2Int gridPos);
+        bool HasBottomAt(Vector2Int gridPos);
     }
 }
