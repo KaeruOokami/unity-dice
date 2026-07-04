@@ -335,7 +335,7 @@ namespace DiceGame.Gameplay.Coupling
 
             var passability = PassabilityContext.Jump(
                 allowJumpGridMove: true,
-                allowJumpTierChange: false,
+                allowJumpTierChange: true,
                 passabilityReachY);
 
             for (var distance = DiceGridRollLimits.MaxParallelRollDistance; distance >= 1; distance--) {
@@ -395,8 +395,8 @@ namespace DiceGame.Gameplay.Coupling
             BeginFollow(new Vector3(charPos.x, 0f, charPos.y), diceCenter, jumpArc, session.JumpMoveKind);
             session.IsActive = true;
 
-            if (plan.Kind == DiceGridMoveKind.Parallel) {
-                BeginRollCancelSession(plan, !jumpArc);
+            if (!jumpArc && RollCancelPolicy.IsCancelEligiblePlan(plan)) {
+                BeginRollCancelSession(plan, wasGroundRoll: true);
             }
 
             return true;

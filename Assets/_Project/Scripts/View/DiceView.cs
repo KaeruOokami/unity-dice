@@ -940,6 +940,7 @@ namespace DiceGame.View
                 yield break;
             }
 
+            groundRollProgress = 0f;
             var half = board.CellSize * 0.5f;
             var setup = DiceRollTransform.GetRollSetup(direction, half);
 

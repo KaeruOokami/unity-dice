@@ -12,6 +12,10 @@ namespace DiceGame.Gameplay.Coupling
 
     public static class RollCancelPolicy
     {
+        public static bool IsCancelEligiblePlan(DiceGridMovePlan plan) {
+            return plan.Kind is DiceGridMoveKind.Parallel or DiceGridMoveKind.Demote;
+        }
+
         public static RollCancelKind Evaluate(
             DiceGridMovePlan activePlan,
             float rollProgress,
@@ -19,7 +23,7 @@ namespace DiceGame.Gameplay.Coupling
             Vector2 input,
             bool jumpPressed,
             bool wasGroundRoll) {
-            if (activePlan.Kind != DiceGridMoveKind.Parallel) {
+            if (!IsCancelEligiblePlan(activePlan)) {
                 return RollCancelKind.None;
             }
 
