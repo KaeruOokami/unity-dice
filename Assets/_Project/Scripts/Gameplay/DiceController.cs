@@ -19,16 +19,20 @@ namespace DiceGame.Gameplay
         DiceRegistry registry;
         DiceState currentState;
         bool isRolling;
+        bool isSpawning;
         bool isDissolving;
         bool isCarried;
         bool isInitialized;
 
-        public bool IsRolling => isRolling || (diceView != null && diceView.IsAnimating && !isDissolving && !isCarried);
+        public bool IsSpawning => isSpawning;
+        public bool IsRolling =>
+            !isSpawning
+            && (isRolling || (diceView != null && diceView.IsAnimating && !isDissolving && !isCarried));
         public bool IsDissolving => isDissolving;
         public bool IsDissolveGhost =>
             isDissolving && diceView != null && diceView.IsDissolveGhost;
         public bool IsCarried => isCarried;
-        public bool IsBusy => IsRolling || isDissolving || isCarried;
+        public bool IsBusy => IsRolling || isSpawning || isDissolving || isCarried;
         public DiceState CurrentState => currentState;
         public DiceView View => diceView;
         public float GroundRollProgress => diceView != null ? diceView.GroundRollProgress : 0f;
@@ -169,7 +173,7 @@ namespace DiceGame.Gameplay
             float minBounceVelocity,
             Action onComplete) {
             isInitialized = true;
-            isRolling = true;
+            isSpawning = true;
             currentState = new DiceState(gridPos, orientation, tier);
             registry?.Place(this, gridPos, tier);
 
@@ -182,7 +186,7 @@ namespace DiceGame.Gameplay
                 maxBounceCount,
                 minBounceVelocity,
                 () => {
-                    isRolling = false;
+                    isSpawning = false;
                     ConfigurePushBody();
                     StateChanged?.Invoke(currentState);
                     onComplete?.Invoke();
@@ -245,7 +249,7 @@ namespace DiceGame.Gameplay
 
         public bool TryInterruptActiveRoll(out DiceRollVisualSnapshot snapshot) {
             snapshot = DiceRollVisualSnapshot.Invalid;
-            if (!isRolling && (diceView == null || !diceView.IsAnimating)) {
+            if (isSpawning || (!isRolling && (diceView == null || !diceView.IsAnimating))) {
                 return false;
             }
 

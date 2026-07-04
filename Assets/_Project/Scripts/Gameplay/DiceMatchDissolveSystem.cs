@@ -100,10 +100,6 @@ namespace DiceGame.Gameplay
 
             var clusters = DiceMatchFinder.FindMatchingClusters(registry.AllDice);
             foreach (var cluster in clusters) {
-                if (!cluster.Contains(triggerDice)) {
-                    continue;
-                }
-
                 ProcessCluster(cluster);
             }
         }
@@ -119,7 +115,7 @@ namespace DiceGame.Gameplay
 
                 if (dice.IsDissolving) {
                     dissolvingMembers.Add(dice);
-                } else {
+                } else if (!dice.IsSpawning) {
                     newMembers.Add(dice);
                 }
             }
