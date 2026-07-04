@@ -123,6 +123,42 @@ namespace DiceGame.Gameplay
             return true;
         }
 
+        public bool TryInterruptActiveRoll() {
+            if (!isRolling && (diceView == null || !diceView.IsAnimating)) {
+                return false;
+            }
+
+            diceView?.InterruptRollAnimation();
+            isRolling = false;
+            return true;
+        }
+
+        public bool TryRollbackToState(DiceState targetState) {
+            if (board == null || diceView == null || registry == null) {
+                return false;
+            }
+
+            TryInterruptActiveRoll();
+            var fromState = currentState;
+            if (fromState.GridPos == targetState.GridPos
+                && fromState.Tier == targetState.Tier
+                && fromState.Orientation.Equals(targetState.Orientation)) {
+                diceView.SnapTo(targetState, board, registry);
+                return true;
+            }
+
+            currentState = targetState;
+            registry.MoveDice(
+                this,
+                fromState.GridPos,
+                targetState.GridPos,
+                fromState.Tier,
+                targetState.Tier);
+            diceView.SnapTo(targetState, board, registry);
+            StateChanged?.Invoke(currentState);
+            return true;
+        }
+
         void ApplyLogicalMove(DiceState fromState, DiceState toState) {
             currentState = toState;
             registry.MoveDice(

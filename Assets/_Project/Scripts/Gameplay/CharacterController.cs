@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using DiceGame.Config;
 using DiceGame.Core;
@@ -609,6 +609,25 @@ namespace DiceGame.Gameplay
         void UpdateDuringRoll(Vector2 input) {
             coupling.EnsureTrackingFromCurrentPose();
             currentSpeed = 0f;
+
+            var jumpPressed = Input.GetKeyDown(movementSettings.JumpKey);
+            var halfExtent = transformDriver.GetWalkHalfExtent();
+            coupling.TryHandleRollCancel(
+                input,
+                jumpPressed,
+                GetPassabilityReachY(),
+                movementTransition,
+                transformDriver.GetWorldXZ(),
+                halfExtent,
+                BeginJumpFromRollCancel,
+                EndJump);
+        }
+
+        void BeginJumpFromRollCancel() {
+            jumpMotion = GravityMotion.CreateLaunch(GetDiceJumpHeight(), physicsSettings.Gravity);
+            jumpPhase = JumpPhase.Airborne;
+            jumpYOffset = 0f;
+            coupling.ResetJumpSessionFlags();
         }
 
         void MoveToFloorAtCurrentWorldPosition() {

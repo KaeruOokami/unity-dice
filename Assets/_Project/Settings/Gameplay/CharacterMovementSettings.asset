@@ -19,6 +19,7 @@ MonoBehaviour:
   maxStepHeight: 0.5
   pushHoldDuration: 0.25
   dissolveDescentHoldDuration: 0.35
+  rollCancelWindowDuration: 0.1
   pushInputAlignment: 0.7
   liftKey: 113
   carryVerticalOffset: 1.05

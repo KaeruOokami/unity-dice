@@ -182,10 +182,7 @@ namespace DiceGame.View
         }
 
         public void SnapTo(DiceState state, Board board, DiceRegistry registry = null) {
-            if (rollCoroutine != null) {
-                StopCoroutine(rollCoroutine);
-                rollCoroutine = null;
-            }
+            InterruptRollAnimation();
 
             if (dissolveCoroutine != null) {
                 StopCoroutine(dissolveCoroutine);
@@ -382,6 +379,17 @@ namespace DiceGame.View
 
             isAnimating = false;
             dissolveBoard = null;
+        }
+
+        public void InterruptRollAnimation() {
+            if (rollCoroutine == null) {
+                return;
+            }
+
+            StopCoroutine(rollCoroutine);
+            rollCoroutine = null;
+            isAnimating = false;
+            visualYOffset = 0f;
         }
 
         void UpdateSurfaceBase(DiceState state, Board board, DiceRegistry registry) {

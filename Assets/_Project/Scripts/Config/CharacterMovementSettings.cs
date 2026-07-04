@@ -12,6 +12,7 @@ namespace DiceGame.Config
         [SerializeField] float maxStepHeight = 1.5f;
         [SerializeField] float pushHoldDuration = 0.25f;
         [SerializeField] float dissolveDescentHoldDuration = 0.35f;
+        [SerializeField] float rollCancelWindowDuration = 0.1f;
         [SerializeField] float pushInputAlignment = 0.7f;
         [SerializeField] KeyCode liftKey = KeyCode.Q;
         [SerializeField] float carryVerticalOffset = 1.05f;
@@ -27,6 +28,7 @@ namespace DiceGame.Config
         public float MaxStepHeight => maxStepHeight;
         public float PushHoldDuration => pushHoldDuration;
         public float DissolveDescentHoldDuration => dissolveDescentHoldDuration;
+        public float RollCancelWindowDuration => rollCancelWindowDuration;
         public float PushInputAlignment => pushInputAlignment;
         public KeyCode LiftKey => liftKey;
         public float CarryVerticalOffset => carryVerticalOffset;

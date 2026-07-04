@@ -30,6 +30,14 @@ namespace DiceGame.Gameplay.Coupling
             public Vector3 DiceCenterAnchor;
         }
 
+        struct RollCancelSession
+        {
+            public bool IsActive;
+            public DiceGridMovePlan OriginalPlan;
+            public float StartedAt;
+            public bool WasGroundRoll;
+        }
+
         Board board;
         DiceRegistry registry;
         CharacterStandingController standing;
@@ -39,6 +47,7 @@ namespace DiceGame.Gameplay.Coupling
         Func<VerticalMotionState> getJumpMotion;
 
         Session session;
+        RollCancelSession rollCancelSession;
 
         public bool IsActive => session.IsActive;
         public bool IsTrackingRoll => session.IsTracking;
@@ -101,7 +110,50 @@ namespace DiceGame.Gameplay.Coupling
             EndRollTracking();
             session.IsActive = false;
             session.IsJumpArc = false;
+            ClearRollCancelSession();
             return wasJumpArc;
+        }
+
+        public bool TryHandleRollCancel(
+            Vector2 input,
+            bool jumpPressed,
+            float passabilityReachY,
+            MovementTransitionEvaluator movementTransition,
+            Vector2 nextXZ,
+            float halfExtent,
+            Action beginJumpFromRollCancel,
+            Action revertJumpFromRollCancel) {
+            if (!rollCancelSession.IsActive || movementTransition == null) {
+                return false;
+            }
+
+            var elapsed = Time.time - rollCancelSession.StartedAt;
+            var cancelKind = RollCancelPolicy.Evaluate(
+                rollCancelSession.OriginalPlan,
+                elapsed,
+                movementSettings.RollCancelWindowDuration,
+                input,
+                jumpPressed,
+                rollCancelSession.WasGroundRoll);
+            if (cancelKind == RollCancelKind.None) {
+                return false;
+            }
+
+            return cancelKind switch {
+                RollCancelKind.Reverse => TryExecuteReverseRollCancel(
+                    movementTransition,
+                    passabilityReachY,
+                    nextXZ,
+                    halfExtent),
+                RollCancelKind.SwitchToJump => TryExecuteJumpSwitchRollCancel(
+                    movementTransition,
+                    passabilityReachY,
+                    nextXZ,
+                    halfExtent,
+                    beginJumpFromRollCancel,
+                    revertJumpFromRollCancel),
+                _ => false
+            };
         }
 
         public bool TryBeginGroundParallelRoll(DiceGridMovePlan plan, Vector2 nextXZ, float halfExtent) {
@@ -145,6 +197,114 @@ namespace DiceGame.Gameplay.Coupling
             return TryBeginJumpGridMove(plan, nextXZ, halfExtent, log);
         }
 
+        bool TryExecuteReverseRollCancel(
+            MovementTransitionEvaluator movementTransition,
+            float passabilityReachY,
+            Vector2 nextXZ,
+            float halfExtent) {
+            var dice = standing.CurrentDice;
+            if (dice == null) {
+                return false;
+            }
+
+            var originalPlan = rollCancelSession.OriginalPlan;
+            if (!dice.TryInterruptActiveRoll()) {
+                return false;
+            }
+
+            dice.View.SnapTo(dice.CurrentState, board, registry);
+
+            var reverseDirection = originalPlan.Direction.Opposite();
+            if (!movementTransition.TryBuildGridMovePlan(
+                dice.CurrentState,
+                reverseDirection,
+                originalPlan.Distance,
+                PassabilityContext.ForGround(passabilityReachY),
+                out var reversePlan,
+                out _)) {
+                dice.View.SnapTo(dice.CurrentState, board, registry);
+                return false;
+            }
+
+            ClearRollCancelSession();
+            return TryBeginGridMovePlan(reversePlan, jumpArc: false, nextXZ, halfExtent);
+        }
+
+        bool TryExecuteJumpSwitchRollCancel(
+            MovementTransitionEvaluator movementTransition,
+            float passabilityReachY,
+            Vector2 nextXZ,
+            float halfExtent,
+            Action beginJumpFromRollCancel,
+            Action revertJumpFromRollCancel) {
+            if (!rollCancelSession.WasGroundRoll) {
+                return false;
+            }
+
+            var dice = standing.CurrentDice;
+            if (dice == null) {
+                return false;
+            }
+
+            var originalPlan = rollCancelSession.OriginalPlan;
+            if (!dice.TryRollbackToState(originalPlan.From)) {
+                return false;
+            }
+
+            standing.SetOnDice(originalPlan.From.GridPos, originalPlan.From.Tier, dice);
+
+            if (!TryBuildJumpSwitchRollCancelPlan(
+                movementTransition,
+                originalPlan,
+                passabilityReachY,
+                out var jumpPlan,
+                out var rejectReason)) {
+                Debug.LogError(
+                    $"DiceCharacterCoupling: jump-switch roll cancel plan rejected " +
+                    $"from={originalPlan.From.GridPos} dir={originalPlan.Direction} {rejectReason}");
+                return false;
+            }
+
+            beginJumpFromRollCancel?.Invoke();
+            ClearRollCancelSession();
+
+            if (!TryBeginJumpGridMove(jumpPlan, nextXZ, halfExtent, null)) {
+                revertJumpFromRollCancel?.Invoke();
+                return false;
+            }
+
+            return true;
+        }
+
+        static bool TryBuildJumpSwitchRollCancelPlan(
+            MovementTransitionEvaluator movementTransition,
+            DiceGridMovePlan originalPlan,
+            float passabilityReachY,
+            out DiceGridMovePlan jumpPlan,
+            out string rejectReason) {
+            jumpPlan = default;
+            rejectReason = null;
+
+            var passability = PassabilityContext.Jump(
+                allowJumpGridMove: true,
+                allowJumpTierChange: false,
+                passabilityReachY);
+
+            for (var distance = DiceGridRollLimits.MaxParallelRollDistance; distance >= 1; distance--) {
+                if (movementTransition.TryBuildGridMovePlan(
+                    originalPlan.From,
+                    originalPlan.Direction,
+                    distance,
+                    passability,
+                    out jumpPlan,
+                    out rejectReason)) {
+                    return true;
+                }
+            }
+
+            return false;
+        }
+
         bool TryBeginGridMovePlan(
             DiceGridMovePlan plan,
             bool jumpArc,
@@ -186,7 +346,25 @@ namespace DiceGame.Gameplay.Coupling
             var charPos = transformDriver.GetWorldXZ();
             BeginFollow(new Vector3(charPos.x, 0f, charPos.y), diceCenter, jumpArc, session.JumpMoveKind);
             session.IsActive = true;
+
+            if (plan.Kind == DiceGridMoveKind.Parallel) {
+                BeginRollCancelSession(plan, !jumpArc);
+            }
+
             return true;
+        }
+
+        void BeginRollCancelSession(DiceGridMovePlan plan, bool wasGroundRoll) {
+            rollCancelSession = new RollCancelSession {
+                IsActive = true,
+                OriginalPlan = plan,
+                StartedAt = Time.time,
+                WasGroundRoll = wasGroundRoll
+            };
+        }
+
+        void ClearRollCancelSession() {
+            rollCancelSession = default;
         }
 
         void BeginFollow(Vector3 characterAnchor, Vector3 diceCenterAnchor, bool jumpArc, JumpDiceMoveKind moveKind) {
