@@ -29,10 +29,6 @@ namespace DiceGame.Placement
         public bool AllowsRoll => Dice != null && State == SurfaceState.Normal;
 
         public bool AllowsWalkFrom(BoardSurface fromSurface, bool isJumping) {
-            if (IsDissolving && !fromSurface.IsDissolving && !isJumping) {
-                return false;
-            }
-
             return true;
         }
 

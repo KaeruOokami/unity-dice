@@ -406,10 +406,6 @@ namespace DiceGame.Placement
                 return heightTransferTransition;
             }
 
-            if (!isJumping && HasNonGhostDissolvingOccupantAt(toCell)) {
-                return MovementTransition.Blocked();
-            }
-
             if (isJumping
                 && JumpGridRollPolicy.TryCreateCoupledTransition(
                     fromCell,
@@ -498,24 +494,6 @@ namespace DiceGame.Placement
                 isJumping,
                 maxStepHeight,
                 out transition);
-        }
-
-        bool HasNonGhostDissolvingOccupantAt(Vector2Int cell) {
-            if (registry.TryGetBottomAt(cell, out var bottom)
-                && bottom != null
-                && bottom.IsDissolving
-                && !bottom.IsDissolveGhost) {
-                return true;
-            }
-
-            if (registry.TryGetTopAt(cell, out var top)
-                && top != null
-                && top.IsDissolving
-                && !top.IsDissolveGhost) {
-                return true;
-            }
-
-            return false;
         }
 
         static MovementTransition CreateCoupledGridMoveTransition(

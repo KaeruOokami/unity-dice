@@ -45,6 +45,7 @@ namespace DiceGame.Placement
                 fromState.GridPos,
                 direction,
                 distance,
+                allowUpwardTier: true,
                 out landingTier,
                 out rejectReason)) {
                 return false;

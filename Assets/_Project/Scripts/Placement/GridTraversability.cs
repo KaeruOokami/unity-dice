@@ -33,6 +33,7 @@ namespace DiceGame.Placement
             Vector2Int fromCell,
             Direction direction,
             int distance,
+            bool allowUpwardTier,
             out DiceStackTier landingTier,
             out string rejectReason) {
             landingTier = default;
@@ -52,7 +53,7 @@ namespace DiceGame.Placement
             }
 
             var landingCell = fromCell + direction.ToGridDelta() * distance;
-            if (!CanLandAt(query, fromTier, landingCell, distance, out landingTier, out rejectReason)) {
+            if (!CanLandAt(query, fromTier, landingCell, allowUpwardTier, out landingTier, out rejectReason)) {
                 rejectReason = $"land step={distance}/{distance} {rejectReason}";
                 return false;
             }
@@ -64,7 +65,7 @@ namespace DiceGame.Placement
             CellOccupancyQuery query,
             DiceStackTier fromTier,
             Vector2Int cell,
-            int distance,
+            bool allowUpwardTier,
             out DiceStackTier landingTier,
             out string rejectReason) {
             landingTier = default;
@@ -78,15 +79,13 @@ namespace DiceGame.Placement
 
             var landingRank = CellOccupancyQuery.ToTierRank(landingTier);
             if (landingRank > fromRank) {
-                if (distance == 1
-                    && fromTier == DiceStackTier.Bottom
-                    && landingTier == DiceStackTier.Top) {
-                    return true;
+                if (!allowUpwardTier) {
+                    rejectReason =
+                        $"cell={FormatGrid(cell)} landingTier={landingTier} rank={landingRank} above fromTier={fromTier} rank={fromRank}";
+                    return false;
                 }
 
-                rejectReason =
-                    $"cell={FormatGrid(cell)} landingTier={landingTier} rank={landingRank} above fromTier={fromTier} rank={fromRank}";
-                return false;
+                return true;
             }
 
             if (!CanTraverseCell(query, fromTier, cell, out rejectReason)) {
