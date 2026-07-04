@@ -17,6 +17,7 @@ MonoBehaviour:
   continuousSpawnEnabled: 1
   spawnInterval: 2
   spawnIntervalJitter: 0.5
+  bottomEmergenceDuration: 0.8
   spawnHeight: 4
   bounceRestitution: 0.35
   maxBounceCount: 2

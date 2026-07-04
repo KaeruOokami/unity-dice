@@ -345,6 +345,32 @@ namespace DiceGame.View
                 onComplete));
         }
 
+        public void PlayBottomEmergenceAppear(
+            DiceState state,
+            Board board,
+            DiceRegistry registry,
+            float emergenceDuration,
+            Action onComplete) {
+            if (!HasGameplaySettings()) {
+                return;
+            }
+
+            if (dissolveCoroutine != null) {
+                return;
+            }
+
+            if (rollCoroutine != null) {
+                StopCoroutine(rollCoroutine);
+            }
+
+            rollCoroutine = StartCoroutine(BottomEmergenceCoroutine(
+                state,
+                board,
+                registry,
+                emergenceDuration,
+                onComplete));
+        }
+
         public void SyncStackedSurface(DiceState state, Board board, DiceRegistry registry) {
             if (isAnimating || dissolveProgress > 0f || board == null || registry == null) {
                 return;
@@ -1102,6 +1128,46 @@ namespace DiceGame.View
             onComplete?.Invoke();
         }
 
+        IEnumerator BottomEmergenceCoroutine(
+            DiceState state,
+            Board board,
+            DiceRegistry registry,
+            float emergenceDuration,
+            Action onComplete) {
+            isAnimating = true;
+            EnsureMesh();
+            if (dissolvePivot == null || rotationRoot == null || positionRoot == null) {
+                isAnimating = false;
+                rollCoroutine = null;
+                onComplete?.Invoke();
+                yield break;
+            }
+
+            wasDissolveGhost = false;
+            visualYOffset = 0f;
+            currentTopFace = state.Orientation.Top;
+            positionRoot.SetParent(transform);
+            positionRoot.localRotation = Quaternion.identity;
+            positionRoot.localScale = Vector3.one;
+            rotationRoot.rotation = DiceOrientationMapper.ToRotation(state.Orientation);
+            CommitGridPlacement(state, board, registry);
+
+            var duration = Mathf.Max(0.01f, emergenceDuration);
+            var progress = 1f;
+            ApplyEmergenceVisual(board, progress);
+
+            while (progress > 0f) {
+                progress = Mathf.Max(0f, progress - Time.deltaTime / duration);
+                ApplyEmergenceVisual(board, progress);
+                yield return null;
+            }
+
+            SnapTo(state, board, registry);
+            isAnimating = false;
+            rollCoroutine = null;
+            onComplete?.Invoke();
+        }
+
         IEnumerator AnimatePositionLerp(Vector3 fromWorld, Vector3 toWorld, float duration) {
             if (duration <= 0f) {
                 positionRoot.position = toWorld;
@@ -1149,6 +1215,29 @@ namespace DiceGame.View
                 return;
             }
 
+            dissolveProgress = progress;
+            ApplySurfaceLayout(board, progress);
+            ApplyDissolveGhostVisual(progress);
+            SyncStackedTopDuringDissolve();
+        }
+
+        /// <summary>
+        /// Spawn emergence only. Applies dissolve visuals without ghost gameplay side effects.
+        /// </summary>
+        void ApplyEmergenceVisual(Board board, float progress) {
+            if (dissolvePivot == null || positionRoot == null || rotationRoot == null || board == null) {
+                return;
+            }
+
+            dissolveProgress = progress;
+            ApplySurfaceLayout(board, progress);
+            ApplyDissolveAlpha(progress);
+            ApplyDissolveEmission(progress);
+            EnsurePushBody();
+            pushBody?.SetCollisionEnabled(progress < dissolveSettings.DissolveGhostThreshold);
+        }
+
+        void ApplySurfaceLayout(Board board, float progress) {
             var squash = 1f - progress;
             dissolvePivot.localScale = GetDissolveLocalScale(currentTopFace, squash);
             ComputeVerticalExtents(board, currentTopFace, squash, out var minY, out _);
@@ -1156,8 +1245,6 @@ namespace DiceGame.View
                 gridWorldPosition.x,
                 surfaceBaseWorldY - minY + visualYOffset,
                 gridWorldPosition.z);
-            ApplyDissolveGhostVisual(progress);
-            SyncStackedTopDuringDissolve();
         }
 
         void SyncStackedTopDuringDissolve() {

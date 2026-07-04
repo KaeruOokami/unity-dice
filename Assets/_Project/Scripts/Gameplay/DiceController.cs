@@ -98,11 +98,8 @@ namespace DiceGame.Gameplay
                 targetRegistry,
                 gridPos,
                 orientation,
+                spawnSettings,
                 DiceStackTier.Bottom,
-                spawnSettings.SpawnHeight,
-                spawnSettings.BounceRestitution,
-                spawnSettings.MaxBounceCount,
-                spawnSettings.MinBounceVelocity,
                 onComplete);
         }
 
@@ -120,77 +117,51 @@ namespace DiceGame.Gameplay
                 return;
             }
 
-            ConfigureWithSpawnAppear(
-                targetBoard,
-                view,
-                targetRegistry,
-                gridPos,
-                orientation,
-                tier,
-                spawnSettings.SpawnHeight,
-                spawnSettings.BounceRestitution,
-                spawnSettings.MaxBounceCount,
-                spawnSettings.MinBounceVelocity,
-                onComplete);
-        }
-
-        public void ConfigureWithSpawnAppear(
-            Board targetBoard,
-            DiceView view,
-            DiceRegistry targetRegistry,
-            Vector2Int gridPos,
-            DiceOrientation orientation,
-            DiceStackTier tier,
-            float spawnHeight,
-            float bounceRestitution,
-            int maxBounceCount,
-            float minBounceVelocity,
-            Action onComplete = null) {
             board = targetBoard;
             diceView = view;
             registry = targetRegistry;
             startGridPos = gridPos;
             startOrientation = orientation;
             startTier = tier;
-            BeginSpawnAppear(
-                gridPos,
-                orientation,
-                tier,
-                spawnHeight,
-                bounceRestitution,
-                maxBounceCount,
-                minBounceVelocity,
-                onComplete);
+            BeginSpawnAppear(gridPos, orientation, tier, spawnSettings, onComplete);
         }
 
         void BeginSpawnAppear(
             Vector2Int gridPos,
             DiceOrientation orientation,
             DiceStackTier tier,
-            float spawnHeight,
-            float bounceRestitution,
-            int maxBounceCount,
-            float minBounceVelocity,
+            DiceSpawnSettings spawnSettings,
             Action onComplete) {
             isInitialized = true;
             isSpawning = true;
             currentState = new DiceState(gridPos, orientation, tier);
             registry?.Place(this, gridPos, tier);
 
-            diceView.PlaySpawnAppear(
-                currentState,
-                board,
-                registry,
-                spawnHeight,
-                bounceRestitution,
-                maxBounceCount,
-                minBounceVelocity,
-                () => {
-                    isSpawning = false;
-                    ConfigurePushBody();
-                    StateChanged?.Invoke(currentState);
-                    onComplete?.Invoke();
-                });
+            void OnSpawnComplete() {
+                isSpawning = false;
+                ConfigurePushBody();
+                StateChanged?.Invoke(currentState);
+                onComplete?.Invoke();
+            }
+
+            if (tier == DiceStackTier.Bottom) {
+                diceView.PlayBottomEmergenceAppear(
+                    currentState,
+                    board,
+                    registry,
+                    spawnSettings.BottomEmergenceDuration,
+                    OnSpawnComplete);
+            } else {
+                diceView.PlaySpawnAppear(
+                    currentState,
+                    board,
+                    registry,
+                    spawnSettings.SpawnHeight,
+                    spawnSettings.BounceRestitution,
+                    spawnSettings.MaxBounceCount,
+                    spawnSettings.MinBounceVelocity,
+                    OnSpawnComplete);
+            }
         }
 
         void ConfigurePushBody() {
