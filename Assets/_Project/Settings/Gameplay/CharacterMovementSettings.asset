@@ -23,6 +23,6 @@ MonoBehaviour:
   liftKey: 113
   carryVerticalOffset: 1.05
   jumpKey: 32
-  debugMovementBlock: 0
+  debugMovementBlock: 1
   debugPush: 0
   debugJumpParallelRoll: 0

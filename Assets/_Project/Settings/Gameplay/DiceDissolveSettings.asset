@@ -16,8 +16,8 @@ MonoBehaviour:
   dissolveGhostThreshold: 0.7
   dissolveGhostAlpha: 0.4
   dissolveEmissionColor: {r: 1, g: 1, b: 1, a: 1}
-  dissolveEmissionIntensity: 6
-  dissolveEmissionMap: {fileID: 2800000, guid: abb831eed38ac1849960996afcff4214, type: 3}
+  dissolveEmissionIntensity: 5
+  dissolveEmissionMap: {fileID: 2800000, guid: 33d3f824f77d9084a8c29c1b7973fb19, type: 3}
   dissolveEmissionPulseSpeed: 4
   dissolveEmissionPulseMin: 0.55
   dissolveEmissionPulseMax: 1
