@@ -1,10 +1,7 @@
 using System;
-using System.Collections.Generic;
 using DiceGame.Config;
-using DiceGame.Core;
 using DiceGame.Grid;
 using DiceGame.Placement;
-using DiceGame.View;
 using UnityEngine;
 
 namespace DiceGame.Gameplay
@@ -51,16 +48,18 @@ namespace DiceGame.Gameplay
         [SerializeField] Board board;
         [SerializeField] GameObject diceEntityPrefab;
         [SerializeField] GameObject characterPrefab;
-        [SerializeField] int diceCount = 3;
         [SerializeField] int randomSeed;
         [SerializeField] PhysicsSettings physicsSettings;
         [SerializeField] CharacterMovementSettings characterMovementSettings;
         [SerializeField] DiceAnimationSettings diceAnimationSettings;
         [SerializeField] DiceDissolveSettings diceDissolveSettings;
+        [SerializeField] DiceSpawnSettings diceSpawnSettings;
         [SerializeField] CameraSetupSettings cameraSetup = new();
 
         DiceRegistry registry;
         PlacementService placement;
+        DiceSpawnSystem spawnSystem;
+        System.Random spawnRandom;
 
         void Start() {
             if (board == null) {
@@ -81,7 +80,8 @@ namespace DiceGame.Gameplay
             if (physicsSettings == null
                 || characterMovementSettings == null
                 || diceAnimationSettings == null
-                || diceDissolveSettings == null) {
+                || diceDissolveSettings == null
+                || diceSpawnSettings == null) {
                 Debug.LogError("GameBootstrap: Gameplay settings assets are not assigned.");
                 return;
             }
@@ -93,40 +93,25 @@ namespace DiceGame.Gameplay
 
             registry.Configure(board);
             placement = new PlacementService(registry, board, characterMovementSettings.MaxStepHeight);
+            spawnRandom = randomSeed != 0 ? new System.Random(randomSeed) : new System.Random();
 
-            var positions = PickRandomDicePositions(diceCount);
-            if (positions.Count == 0) {
-                Debug.LogError("GameBootstrap: No valid positions for dice.");
-                return;
+            spawnSystem = GetComponent<DiceSpawnSystem>();
+            if (spawnSystem == null) {
+                spawnSystem = gameObject.AddComponent<DiceSpawnSystem>();
             }
 
-            DiceController firstDice = null;
+            spawnSystem.Configure(
+                board,
+                registry,
+                diceEntityPrefab,
+                transform,
+                physicsSettings,
+                diceAnimationSettings,
+                diceDissolveSettings,
+                diceSpawnSettings,
+                spawnRandom);
 
-            foreach (var gridPos in positions) {
-                var diceEntity = Instantiate(diceEntityPrefab, transform);
-                diceEntity.name = $"DiceEntity_{gridPos.x}_{gridPos.y}";
-
-                var diceView = diceEntity.GetComponent<DiceView>();
-                if (diceView == null) {
-                    Debug.LogError("GameBootstrap: DiceEntity prefab must have DiceView.");
-                    Destroy(diceEntity);
-                    continue;
-                }
-
-                diceView.Configure(physicsSettings, diceAnimationSettings, diceDissolveSettings);
-
-                var diceController = diceEntity.GetComponent<DiceController>();
-                if (diceController == null) {
-                    Debug.LogError("GameBootstrap: DiceEntity prefab must have DiceController.");
-                    Destroy(diceEntity);
-                    continue;
-                }
-
-                var orientation = CreateRandomOrientation();
-                diceController.Configure(board, diceView, registry, gridPos, orientation);
-                firstDice ??= diceController;
-            }
-
+            var firstDice = spawnSystem.SpawnInitialDice();
             if (firstDice == null) {
                 Debug.LogError("GameBootstrap: Failed to spawn any dice.");
                 return;
@@ -159,36 +144,8 @@ namespace DiceGame.Gameplay
             if (cameraSetup.Enabled) {
                 cameraSetup.Apply(board);
             }
-        }
 
-        List<Vector2Int> PickRandomDicePositions(int count) {
-            var cells = new List<Vector2Int>();
-            for (var x = 0; x < board.Width; x++) {
-                for (var z = 0; z < board.Height; z++) {
-                    cells.Add(new Vector2Int(x, z));
-                }
-            }
-
-            var random = randomSeed != 0 ? new System.Random(randomSeed) : new System.Random();
-            for (var i = cells.Count - 1; i > 0; i--) {
-                var j = random.Next(i + 1);
-                (cells[i], cells[j]) = (cells[j], cells[i]);
-            }
-
-            var take = Mathf.Min(count, cells.Count);
-            return cells.GetRange(0, take);
-        }
-
-        static DiceOrientation CreateRandomOrientation() {
-            var orientation = DiceOrientation.Default;
-            var directions = new[] { Direction.East, Direction.West, Direction.North, Direction.South };
-            var steps = UnityEngine.Random.Range(0, 12);
-
-            for (var i = 0; i < steps; i++) {
-                orientation = orientation.Roll(directions[UnityEngine.Random.Range(0, directions.Length)]);
-            }
-
-            return orientation;
+            spawnSystem.StartSpawning();
         }
 
         public void ApplyCameraSetup() {

@@ -313,6 +313,38 @@ namespace DiceGame.View
             rollCoroutine = StartCoroutine(TransitionCoroutine(transition, board, registry, onComplete));
         }
 
+        public void PlaySpawnAppear(
+            DiceState state,
+            Board board,
+            DiceRegistry registry,
+            float spawnHeightAboveSurface,
+            float bounceRestitution,
+            int maxBounceCount,
+            float minBounceVelocity,
+            Action onComplete) {
+            if (!HasGameplaySettings()) {
+                return;
+            }
+
+            if (dissolveCoroutine != null) {
+                return;
+            }
+
+            if (rollCoroutine != null) {
+                StopCoroutine(rollCoroutine);
+            }
+
+            rollCoroutine = StartCoroutine(SpawnAppearCoroutine(
+                state,
+                board,
+                registry,
+                spawnHeightAboveSurface,
+                bounceRestitution,
+                maxBounceCount,
+                minBounceVelocity,
+                onComplete));
+        }
+
         public void SyncStackedSurface(DiceState state, Board board, DiceRegistry registry) {
             if (isAnimating || dissolveProgress > 0f || board == null || registry == null) {
                 return;
@@ -1016,6 +1048,58 @@ namespace DiceGame.View
                 () => positionRoot.position.x,
                 () => positionRoot.position.z,
                 (x, y, z) => positionRoot.position = new Vector3(x, y, z));
+        }
+
+        IEnumerator SpawnAppearCoroutine(
+            DiceState state,
+            Board board,
+            DiceRegistry registry,
+            float spawnHeightAboveSurface,
+            float bounceRestitution,
+            int maxBounceCount,
+            float minBounceVelocity,
+            Action onComplete) {
+            isAnimating = true;
+            EnsureMesh();
+            if (dissolvePivot == null || rotationRoot == null || positionRoot == null) {
+                isAnimating = false;
+                rollCoroutine = null;
+                onComplete?.Invoke();
+                yield break;
+            }
+
+            dissolveProgress = 0f;
+            dissolveBoard = null;
+            wasDissolveGhost = false;
+            visualYOffset = 0f;
+            currentTopFace = state.Orientation.Top;
+            positionRoot.SetParent(transform);
+            positionRoot.localRotation = Quaternion.identity;
+            positionRoot.localScale = Vector3.one;
+            rotationRoot.rotation = DiceOrientationMapper.ToRotation(state.Orientation);
+            CommitGridPlacement(state, board, registry);
+            ApplySurfaceVisual(board, 0f);
+
+            var landedWorld = positionRoot.position;
+            var groundWorldY = landedWorld.y;
+            positionRoot.position = landedWorld + Vector3.up * spawnHeightAboveSurface;
+
+            var motion = GravityMotion.CreateDrop(spawnHeightAboveSurface);
+            yield return GravityMotion.AnimateSpawnBounceDropCoroutine(
+                motion,
+                physicsSettings.Gravity,
+                groundWorldY,
+                bounceRestitution,
+                maxBounceCount,
+                minBounceVelocity,
+                () => positionRoot.position.x,
+                () => positionRoot.position.z,
+                (x, y, z) => positionRoot.position = new Vector3(x, y, z));
+
+            SnapTo(state, board, registry);
+            isAnimating = false;
+            rollCoroutine = null;
+            onComplete?.Invoke();
         }
 
         IEnumerator AnimatePositionLerp(Vector3 fromWorld, Vector3 toWorld, float duration) {

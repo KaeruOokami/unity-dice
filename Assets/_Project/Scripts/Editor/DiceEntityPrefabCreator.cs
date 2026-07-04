@@ -11,6 +11,7 @@ namespace DiceGame.Editor
         const string DiceVisualPrefabPath = "Assets/Packages/Dice_6/Prefabs/Dice_d6_Plastic Glossy Pure blue.prefab";
         const string DiceEntityPrefabPath = "Assets/_Project/Prefabs/DiceEntity.prefab";
         const string CharacterPrefabPath = "Assets/_Project/Prefabs/Character.prefab";
+        const string DiceSpawnSettingsPath = "Assets/_Project/Settings/Gameplay/DiceSpawnSettings.asset";
 
         [MenuItem("Dice/Create DiceEntity Prefab")]
         public static void CreateDiceEntityPrefab() {
@@ -104,7 +105,8 @@ namespace DiceGame.Editor
             serializedBootstrap.FindProperty("board").objectReferenceValue = board;
             serializedBootstrap.FindProperty("diceEntityPrefab").objectReferenceValue = diceEntityPrefab;
             serializedBootstrap.FindProperty("characterPrefab").objectReferenceValue = characterPrefab;
-            serializedBootstrap.FindProperty("diceCount").intValue = 3;
+            serializedBootstrap.FindProperty("diceSpawnSettings").objectReferenceValue =
+                AssetDatabase.LoadAssetAtPath<DiceGame.Config.DiceSpawnSettings>(DiceSpawnSettingsPath);
             serializedBootstrap.ApplyModifiedPropertiesWithoutUndo();
 
             bootstrap.ApplyCameraSetup();

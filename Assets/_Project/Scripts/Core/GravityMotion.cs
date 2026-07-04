@@ -94,5 +94,68 @@ namespace DiceGame.Core
             setWorldPosition(getHorizontalX(), groundWorldY, getHorizontalZ());
             onGrounded?.Invoke();
         }
+
+        /// <summary>
+        /// Spawn appearance only. Do not use for gameplay falls.
+        /// </summary>
+        public static VerticalMotionState StepSpawnBounce(
+            VerticalMotionState state,
+            float gravity,
+            float deltaTime,
+            float restitution,
+            int maxBounceCount,
+            float minBounceVelocity,
+            ref int bounceCount) {
+            if (state.IsGrounded || deltaTime <= 0f) {
+                return state;
+            }
+
+            state.VelocityY -= gravity * deltaTime;
+            state.Offset += state.VelocityY * deltaTime;
+
+            if (state.Offset <= 0f) {
+                if (-state.VelocityY > minBounceVelocity && bounceCount < maxBounceCount) {
+                    state.VelocityY = -state.VelocityY * restitution;
+                    state.Offset = 0f;
+                    bounceCount++;
+                } else {
+                    state.Offset = 0f;
+                    state.VelocityY = 0f;
+                    state.IsGrounded = true;
+                }
+            }
+
+            return state;
+        }
+
+        /// <summary>
+        /// Spawn appearance only. Do not use for gameplay falls.
+        /// </summary>
+        public static IEnumerator AnimateSpawnBounceDropCoroutine(
+            VerticalMotionState state,
+            float gravity,
+            float groundWorldY,
+            float restitution,
+            int maxBounceCount,
+            float minBounceVelocity,
+            Func<float> getHorizontalX,
+            Func<float> getHorizontalZ,
+            Action<float, float, float> setWorldPosition) {
+            var bounceCount = 0;
+            while (!state.IsGrounded) {
+                state = StepSpawnBounce(
+                    state,
+                    gravity,
+                    Time.deltaTime,
+                    restitution,
+                    maxBounceCount,
+                    minBounceVelocity,
+                    ref bounceCount);
+                setWorldPosition(getHorizontalX(), groundWorldY + state.Offset, getHorizontalZ());
+                yield return null;
+            }
+
+            setWorldPosition(getHorizontalX(), groundWorldY, getHorizontalZ());
+        }
     }
 }

@@ -1,4 +1,5 @@
 using System;
+using DiceGame.Config;
 using DiceGame.Grid;
 using DiceGame.Placement;
 using DiceGame.Core;
@@ -72,6 +73,120 @@ namespace DiceGame.Gameplay
             diceView.SnapTo(currentState, board, registry);
             ConfigurePushBody();
             StateChanged?.Invoke(currentState);
+        }
+
+        public void ConfigureWithSpawnAppear(
+            Board targetBoard,
+            DiceView view,
+            DiceRegistry targetRegistry,
+            Vector2Int gridPos,
+            DiceOrientation orientation,
+            DiceSpawnSettings spawnSettings,
+            Action onComplete = null) {
+            if (spawnSettings == null) {
+                Debug.LogError("DiceController: DiceSpawnSettings is required for spawn appear.");
+                return;
+            }
+
+            ConfigureWithSpawnAppear(
+                targetBoard,
+                view,
+                targetRegistry,
+                gridPos,
+                orientation,
+                DiceStackTier.Bottom,
+                spawnSettings.SpawnHeight,
+                spawnSettings.BounceRestitution,
+                spawnSettings.MaxBounceCount,
+                spawnSettings.MinBounceVelocity,
+                onComplete);
+        }
+
+        public void ConfigureWithSpawnAppear(
+            Board targetBoard,
+            DiceView view,
+            DiceRegistry targetRegistry,
+            Vector2Int gridPos,
+            DiceOrientation orientation,
+            DiceSpawnSettings spawnSettings,
+            DiceStackTier tier,
+            Action onComplete = null) {
+            if (spawnSettings == null) {
+                Debug.LogError("DiceController: DiceSpawnSettings is required for spawn appear.");
+                return;
+            }
+
+            ConfigureWithSpawnAppear(
+                targetBoard,
+                view,
+                targetRegistry,
+                gridPos,
+                orientation,
+                tier,
+                spawnSettings.SpawnHeight,
+                spawnSettings.BounceRestitution,
+                spawnSettings.MaxBounceCount,
+                spawnSettings.MinBounceVelocity,
+                onComplete);
+        }
+
+        public void ConfigureWithSpawnAppear(
+            Board targetBoard,
+            DiceView view,
+            DiceRegistry targetRegistry,
+            Vector2Int gridPos,
+            DiceOrientation orientation,
+            DiceStackTier tier,
+            float spawnHeight,
+            float bounceRestitution,
+            int maxBounceCount,
+            float minBounceVelocity,
+            Action onComplete = null) {
+            board = targetBoard;
+            diceView = view;
+            registry = targetRegistry;
+            startGridPos = gridPos;
+            startOrientation = orientation;
+            startTier = tier;
+            BeginSpawnAppear(
+                gridPos,
+                orientation,
+                tier,
+                spawnHeight,
+                bounceRestitution,
+                maxBounceCount,
+                minBounceVelocity,
+                onComplete);
+        }
+
+        void BeginSpawnAppear(
+            Vector2Int gridPos,
+            DiceOrientation orientation,
+            DiceStackTier tier,
+            float spawnHeight,
+            float bounceRestitution,
+            int maxBounceCount,
+            float minBounceVelocity,
+            Action onComplete) {
+            isInitialized = true;
+            isRolling = true;
+            currentState = new DiceState(gridPos, orientation, tier);
+            registry?.Place(this, gridPos, tier);
+
+            diceView.PlaySpawnAppear(
+                currentState,
+                board,
+                registry,
+                spawnHeight,
+                bounceRestitution,
+                maxBounceCount,
+                minBounceVelocity,
+                () => {
+                    isRolling = false;
+                    ConfigurePushBody();
+                    StateChanged?.Invoke(currentState);
+                    onComplete?.Invoke();
+                });
         }
 
         void ConfigurePushBody() {
