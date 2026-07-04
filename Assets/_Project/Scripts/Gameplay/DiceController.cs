@@ -30,6 +30,7 @@ namespace DiceGame.Gameplay
         public bool IsBusy => IsRolling || isDissolving || isCarried;
         public DiceState CurrentState => currentState;
         public DiceView View => diceView;
+        public float GroundRollProgress => diceView != null ? diceView.GroundRollProgress : 0f;
 
         public event Action<DiceState> StateChanged;
         public event Action<DiceController> Dissolved;
@@ -186,7 +187,7 @@ namespace DiceGame.Gameplay
         public bool TryExecuteCancelReverseGroundMovePlan(
             DiceGridMovePlan plan,
             DiceRollVisualSnapshot snapshot,
-            float cancelDuration) {
+            float cancelProgress) {
             if (isDissolving || isCarried || isRolling || board == null || diceView == null || registry == null) {
                 return false;
             }
@@ -200,7 +201,7 @@ namespace DiceGame.Gameplay
             diceView.PlayCancelGroundRollVisual(
                 snapshot,
                 plan.To,
-                cancelDuration,
+                cancelProgress,
                 board,
                 registry,
                 () => {
@@ -214,14 +215,12 @@ namespace DiceGame.Gameplay
         public bool TryExecuteCancelJumpMovePlan(
             DiceGridMovePlan plan,
             DiceRollVisualSnapshot snapshot,
-            float cancelDuration,
-            float jumpYOffset,
-            Func<VerticalMotionState> jumpMotionProvider = null) {
+            Func<VerticalMotionState> jumpMotionProvider) {
             if (isDissolving || isCarried || isRolling || board == null || diceView == null || registry == null) {
                 return false;
             }
 
-            if (!snapshot.IsValid) {
+            if (!snapshot.IsValid || jumpMotionProvider == null) {
                 return false;
             }
 
@@ -230,8 +229,6 @@ namespace DiceGame.Gameplay
             diceView.PlayCancelJumpParallelRollVisual(
                 snapshot,
                 plan,
-                cancelDuration,
-                jumpYOffset,
                 board,
                 registry,
                 () => {

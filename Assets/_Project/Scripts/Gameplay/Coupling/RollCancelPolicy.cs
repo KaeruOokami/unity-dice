@@ -14,8 +14,8 @@ namespace DiceGame.Gameplay.Coupling
     {
         public static RollCancelKind Evaluate(
             DiceGridMovePlan activePlan,
-            float elapsedSeconds,
-            float windowDuration,
+            float rollProgress,
+            float windowProgress,
             Vector2 input,
             bool jumpPressed,
             bool wasGroundRoll) {
@@ -23,7 +23,7 @@ namespace DiceGame.Gameplay.Coupling
                 return RollCancelKind.None;
             }
 
-            if (elapsedSeconds > windowDuration) {
+            if (rollProgress > windowProgress) {
                 return RollCancelKind.None;
             }
 

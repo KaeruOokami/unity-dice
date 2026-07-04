@@ -34,7 +34,6 @@ namespace DiceGame.Gameplay.Coupling
         {
             public bool IsActive;
             public DiceGridMovePlan OriginalPlan;
-            public float StartedAt;
             public bool WasGroundRoll;
         }
 
@@ -127,11 +126,13 @@ namespace DiceGame.Gameplay.Coupling
                 return false;
             }
 
-            var elapsed = Time.time - rollCancelSession.StartedAt;
+            var rollProgress = standing.CurrentDice != null
+                ? standing.CurrentDice.GroundRollProgress
+                : 0f;
             var cancelKind = RollCancelPolicy.Evaluate(
                 rollCancelSession.OriginalPlan,
-                elapsed,
-                movementSettings.RollCancelWindowDuration,
+                rollProgress,
+                movementSettings.RollCancelWindowProgress,
                 input,
                 jumpPressed,
                 rollCancelSession.WasGroundRoll);
@@ -141,13 +142,12 @@ namespace DiceGame.Gameplay.Coupling
 
             return cancelKind switch {
                 RollCancelKind.Reverse => TryExecuteReverseRollCancel(
-                    elapsed,
+                    rollProgress,
                     movementTransition,
                     passabilityReachY,
                     nextXZ,
                     halfExtent),
                 RollCancelKind.SwitchToJump => TryExecuteJumpSwitchRollCancel(
-                    elapsed,
                     movementTransition,
                     passabilityReachY,
                     nextXZ,
@@ -200,7 +200,7 @@ namespace DiceGame.Gameplay.Coupling
         }
 
         bool TryExecuteReverseRollCancel(
-            float elapsed,
+            float cancelProgress,
             MovementTransitionEvaluator movementTransition,
             float passabilityReachY,
             Vector2 nextXZ,
@@ -229,7 +229,7 @@ namespace DiceGame.Gameplay.Coupling
 
             ClearRollCancelSession();
 
-            if (!dice.TryExecuteCancelReverseGroundMovePlan(reversePlan, snapshot, elapsed)) {
+            if (!dice.TryExecuteCancelReverseGroundMovePlan(reversePlan, snapshot, cancelProgress)) {
                 Debug.LogError(
                     $"DiceCharacterCoupling: reverse roll cancel execution failed " +
                     $"from={reversePlan.From.GridPos} to={reversePlan.To.GridPos}");
@@ -242,7 +242,6 @@ namespace DiceGame.Gameplay.Coupling
         }
 
         bool TryExecuteJumpSwitchRollCancel(
-            float elapsed,
             MovementTransitionEvaluator movementTransition,
             float passabilityReachY,
             Vector2 nextXZ,
@@ -282,9 +281,6 @@ namespace DiceGame.Gameplay.Coupling
                 return false;
             }
 
-            var totalDuration = dice.View.GetJumpParallelRollDuration(jumpPlan.Distance);
-            var cancelDuration = Mathf.Max(0.001f, totalDuration - elapsed);
-
             beginJumpFromRollCancel?.Invoke();
             ClearRollCancelSession();
 
@@ -292,8 +288,6 @@ namespace DiceGame.Gameplay.Coupling
             if (!dice.TryExecuteCancelJumpMovePlan(
                 jumpPlan,
                 snapshot,
-                cancelDuration,
-                getJumpYOffset(),
                 getJumpMotion)) {
                 session.IsJumpArc = false;
                 revertJumpFromRollCancel?.Invoke();
@@ -412,7 +406,6 @@ namespace DiceGame.Gameplay.Coupling
             rollCancelSession = new RollCancelSession {
                 IsActive = true,
                 OriginalPlan = plan,
-                StartedAt = Time.time,
                 WasGroundRoll = wasGroundRoll
             };
         }

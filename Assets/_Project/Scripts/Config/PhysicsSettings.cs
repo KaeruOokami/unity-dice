@@ -11,9 +11,13 @@ namespace DiceGame.Config
         [SerializeField] float jumpHeightDiceMultiplier = 1.0f;
 
         [Header("Jump Grid Move Timelines (ascent only, u: 0 = launch, 0.5 = apex)")]
+        [Range(0f, 1f)]
         [SerializeField] float jumpGridMoveTwoCellMaxTimeline = 0.1f;
+        [Range(0f, 1f)]
         [SerializeField] float jumpGridMoveOneCellMaxTimeline = 0.5f;
+        [Range(0f, 1f)]
         [SerializeField] float jumpGridMoveTierChangeMinTimeline = 0.2f;
+        [Range(0f, 1f)]
         [SerializeField] float jumpGridMoveTierChangeMaxTimeline = 0.5f;
 
         public float Gravity => gravity;
