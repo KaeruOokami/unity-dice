@@ -13,6 +13,7 @@ MonoBehaviour:
   m_Name: DiceAnimationSettings
   m_EditorClassIdentifier: 
   rollAnimationDuration: 0.2
+  jumpParallelRollDurationPerCell: 0.2
   slideDuration: 0.2
   fallHorizontalDuration: 0.2
   liftDuration: 0.2

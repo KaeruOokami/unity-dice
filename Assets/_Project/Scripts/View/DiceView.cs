@@ -382,14 +382,124 @@ namespace DiceGame.View
         }
 
         public void InterruptRollAnimation() {
-            if (rollCoroutine == null) {
+            TryInterruptRollAnimation(out _);
+        }
+
+        public bool TryInterruptRollAnimation(out DiceRollVisualSnapshot snapshot) {
+            snapshot = DiceRollVisualSnapshot.Invalid;
+            if (rollCoroutine == null && !isAnimating) {
+                return false;
+            }
+
+            if (positionRoot != null && rotationRoot != null) {
+                snapshot = new DiceRollVisualSnapshot {
+                    WorldPosition = positionRoot.position,
+                    Rotation = rotationRoot.rotation,
+                    IsValid = true
+                };
+            }
+
+            if (rollCoroutine != null) {
+                StopCoroutine(rollCoroutine);
+                rollCoroutine = null;
+            }
+
+            DetachFromActiveRollPivot(snapshot);
+            isAnimating = false;
+            visualYOffset = 0f;
+            return snapshot.IsValid;
+        }
+
+        void DetachFromActiveRollPivot(DiceRollVisualSnapshot snapshot) {
+            if (positionRoot == null) {
                 return;
             }
 
-            StopCoroutine(rollCoroutine);
-            rollCoroutine = null;
-            isAnimating = false;
-            visualYOffset = 0f;
+            var pivotParent = positionRoot.parent;
+            positionRoot.SetParent(transform, true);
+            positionRoot.localRotation = Quaternion.identity;
+            positionRoot.localScale = Vector3.one;
+
+            if (snapshot.IsValid) {
+                positionRoot.position = snapshot.WorldPosition;
+                if (rotationRoot != null) {
+                    rotationRoot.rotation = snapshot.Rotation;
+                }
+            }
+
+            if (pivotParent != null
+                && pivotParent != transform
+                && pivotParent.name == "RollPivot") {
+                Destroy(pivotParent.gameObject);
+            }
+        }
+
+        public float GetJumpParallelRollDuration(int distance) {
+            return animationSettings != null
+                ? animationSettings.GetJumpParallelRollDuration(distance)
+                : 0f;
+        }
+
+        public void PlayCancelGroundRollVisual(
+            DiceRollVisualSnapshot snapshot,
+            DiceState toState,
+            float duration,
+            Board board,
+            DiceRegistry registry,
+            Action onComplete) {
+            if (!HasGameplaySettings() || !snapshot.IsValid) {
+                onComplete?.Invoke();
+                return;
+            }
+
+            if (dissolveCoroutine != null) {
+                return;
+            }
+
+            if (rollCoroutine != null) {
+                StopCoroutine(rollCoroutine);
+            }
+
+            rollCoroutine = StartCoroutine(CancelGroundRollCoroutine(
+                snapshot,
+                toState,
+                duration,
+                board,
+                registry,
+                onComplete));
+        }
+
+        public void PlayCancelJumpParallelRollVisual(
+            DiceRollVisualSnapshot snapshot,
+            DiceGridMovePlan plan,
+            float duration,
+            float jumpYOffset,
+            Board board,
+            DiceRegistry registry,
+            Action onComplete,
+            Func<VerticalMotionState> jumpMotionProvider = null) {
+            if (!HasGameplaySettings() || !snapshot.IsValid) {
+                onComplete?.Invoke();
+                return;
+            }
+
+            if (dissolveCoroutine != null) {
+                return;
+            }
+
+            if (rollCoroutine != null) {
+                StopCoroutine(rollCoroutine);
+            }
+
+            rollCoroutine = StartCoroutine(CancelJumpParallelRollCoroutine(
+                snapshot,
+                plan,
+                duration,
+                jumpYOffset,
+                board,
+                registry,
+                onComplete,
+                jumpMotionProvider));
         }
 
         void UpdateSurfaceBase(DiceState state, Board board, DiceRegistry registry) {
@@ -564,6 +674,129 @@ namespace DiceGame.View
 
             ComputeVerticalExtents(board, currentTopFace, 1f, out var landedMinY, out _);
             positionRoot.position = new Vector3(endGrid.x, toBaseY - landedMinY, endGrid.z);
+        }
+
+        IEnumerator CancelGroundRollCoroutine(
+            DiceRollVisualSnapshot snapshot,
+            DiceState toState,
+            float duration,
+            Board board,
+            DiceRegistry registry,
+            Action onComplete) {
+            isAnimating = true;
+            EnsureMesh();
+            if (positionRoot == null || rotationRoot == null) {
+                isAnimating = false;
+                onComplete?.Invoke();
+                yield break;
+            }
+
+            PrepareCancelRollStart(snapshot);
+            currentTopFace = toState.Orientation.Top;
+            var targetWorld = ComputeAnchoredWorldPosition(toState, board, registry, 0f);
+            var targetRotation = DiceOrientationMapper.ToRotation(toState.Orientation);
+
+            yield return AnimateCancelRollTransform(
+                snapshot.WorldPosition,
+                snapshot.Rotation,
+                targetWorld,
+                targetRotation,
+                GetSafeCancelDuration(duration));
+
+            rollCoroutine = null;
+            SnapTo(toState, board, registry);
+            onComplete?.Invoke();
+        }
+
+        IEnumerator CancelJumpParallelRollCoroutine(
+            DiceRollVisualSnapshot snapshot,
+            DiceGridMovePlan plan,
+            float duration,
+            float jumpYOffset,
+            Board board,
+            DiceRegistry registry,
+            Action onComplete,
+            Func<VerticalMotionState> jumpMotionProvider) {
+            isAnimating = true;
+            EnsureMesh();
+            if (positionRoot == null || rotationRoot == null || board == null) {
+                isAnimating = false;
+                onComplete?.Invoke();
+                yield break;
+            }
+
+            PrepareCancelRollStart(snapshot);
+            currentTopFace = plan.To.Orientation.Top;
+
+            var targetWorld = ComputeAnchoredWorldPosition(plan.To, board, registry, 0f);
+            var targetRotation = DiceOrientationMapper.ToRotation(plan.To.Orientation);
+            var fromBaseY = snapshot.WorldPosition.y;
+            ComputeVerticalExtents(board, plan.To.Orientation.Top, 1f, out var targetMinY, out _);
+            var toBaseY = ResolveSurfaceBaseWorldY(plan.To, board, registry) - targetMinY;
+
+            var orientMid = plan.Distance >= 2
+                ? DiceOrientationMapper.ToRotation(plan.From.Orientation.Roll(plan.Direction))
+                : targetRotation;
+            var useSplitRotation = plan.Distance >= 2;
+
+            var safeDuration = GetSafeCancelDuration(duration);
+            var elapsed = 0f;
+            while (elapsed < safeDuration) {
+                elapsed += Time.deltaTime;
+                var t = Mathf.SmoothStep(0f, 1f, Mathf.Clamp01(elapsed / safeDuration));
+
+                var motion = jumpMotionProvider != null
+                    ? jumpMotionProvider()
+                    : new VerticalMotionState { Offset = jumpYOffset, IsGrounded = jumpYOffset <= 0f };
+                var verticalOffset = motion.IsGrounded ? 0f : motion.Offset;
+
+                var xz = Vector3.Lerp(snapshot.WorldPosition, targetWorld, t);
+                var baseY = Mathf.Lerp(fromBaseY, toBaseY, t);
+                positionRoot.position = new Vector3(xz.x, baseY + verticalOffset, xz.z);
+
+                rotationRoot.rotation = useSplitRotation
+                    ? t <= 0.5f
+                        ? Quaternion.Slerp(snapshot.Rotation, orientMid, t * 2f)
+                        : Quaternion.Slerp(orientMid, targetRotation, (t - 0.5f) * 2f)
+                    : Quaternion.Slerp(snapshot.Rotation, targetRotation, t);
+
+                yield return null;
+            }
+
+            rollCoroutine = null;
+            SnapTo(plan.To, board, registry);
+            onComplete?.Invoke();
+        }
+
+        void PrepareCancelRollStart(DiceRollVisualSnapshot snapshot) {
+            positionRoot.SetParent(transform, true);
+            positionRoot.localRotation = Quaternion.identity;
+            positionRoot.localScale = Vector3.one;
+            positionRoot.position = snapshot.WorldPosition;
+            rotationRoot.rotation = snapshot.Rotation;
+        }
+
+        static float GetSafeCancelDuration(float duration) {
+            return Mathf.Max(duration, 0.001f);
+        }
+
+        IEnumerator AnimateCancelRollTransform(
+            Vector3 fromWorld,
+            Quaternion fromRotation,
+            Vector3 toWorld,
+            Quaternion toRotation,
+            float duration) {
+            var elapsed = 0f;
+            while (elapsed < duration) {
+                elapsed += Time.deltaTime;
+                var t = Mathf.SmoothStep(0f, 1f, Mathf.Clamp01(elapsed / duration));
+                positionRoot.position = Vector3.Lerp(fromWorld, toWorld, t);
+                rotationRoot.rotation = Quaternion.Slerp(fromRotation, toRotation, t);
+                yield return null;
+            }
+
+            positionRoot.position = toWorld;
+            rotationRoot.rotation = toRotation;
         }
 
         IEnumerator FinalizeJumpRollPlacement(

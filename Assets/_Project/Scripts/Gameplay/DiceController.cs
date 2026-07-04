@@ -124,12 +124,40 @@ namespace DiceGame.Gameplay
         }
 
         public bool TryInterruptActiveRoll() {
+            return TryInterruptActiveRoll(out _);
+        }
+
+        public bool TryInterruptActiveRoll(out DiceRollVisualSnapshot snapshot) {
+            snapshot = DiceRollVisualSnapshot.Invalid;
             if (!isRolling && (diceView == null || !diceView.IsAnimating)) {
                 return false;
             }
 
-            diceView?.InterruptRollAnimation();
+            diceView?.TryInterruptRollAnimation(out snapshot);
             isRolling = false;
+            return snapshot.IsValid;
+        }
+
+        public bool RollbackLogicalStateOnly(DiceState targetState) {
+            if (board == null || registry == null) {
+                return false;
+            }
+
+            var fromState = currentState;
+            if (fromState.GridPos == targetState.GridPos
+                && fromState.Tier == targetState.Tier
+                && fromState.Orientation.Equals(targetState.Orientation)) {
+                return true;
+            }
+
+            currentState = targetState;
+            registry.MoveDice(
+                this,
+                fromState.GridPos,
+                targetState.GridPos,
+                fromState.Tier,
+                targetState.Tier);
+            StateChanged?.Invoke(currentState);
             return true;
         }
 
@@ -147,15 +175,71 @@ namespace DiceGame.Gameplay
                 return true;
             }
 
-            currentState = targetState;
-            registry.MoveDice(
-                this,
-                fromState.GridPos,
-                targetState.GridPos,
-                fromState.Tier,
-                targetState.Tier);
+            if (!RollbackLogicalStateOnly(targetState)) {
+                return false;
+            }
+
             diceView.SnapTo(targetState, board, registry);
-            StateChanged?.Invoke(currentState);
+            return true;
+        }
+
+        public bool TryExecuteCancelReverseGroundMovePlan(
+            DiceGridMovePlan plan,
+            DiceRollVisualSnapshot snapshot,
+            float cancelDuration) {
+            if (isDissolving || isCarried || isRolling || board == null || diceView == null || registry == null) {
+                return false;
+            }
+
+            if (!snapshot.IsValid) {
+                return false;
+            }
+
+            ApplyLogicalMove(plan.From, plan.To);
+            isRolling = true;
+            diceView.PlayCancelGroundRollVisual(
+                snapshot,
+                plan.To,
+                cancelDuration,
+                board,
+                registry,
+                () => {
+                    isRolling = false;
+                    StateChanged?.Invoke(currentState);
+                });
+
+            return true;
+        }
+
+        public bool TryExecuteCancelJumpMovePlan(
+            DiceGridMovePlan plan,
+            DiceRollVisualSnapshot snapshot,
+            float cancelDuration,
+            float jumpYOffset,
+            Func<VerticalMotionState> jumpMotionProvider = null) {
+            if (isDissolving || isCarried || isRolling || board == null || diceView == null || registry == null) {
+                return false;
+            }
+
+            if (!snapshot.IsValid) {
+                return false;
+            }
+
+            ApplyLogicalMove(plan.From, plan.To);
+            isRolling = true;
+            diceView.PlayCancelJumpParallelRollVisual(
+                snapshot,
+                plan,
+                cancelDuration,
+                jumpYOffset,
+                board,
+                registry,
+                () => {
+                    isRolling = false;
+                    StateChanged?.Invoke(currentState);
+                },
+                jumpMotionProvider);
+
             return true;
         }
 
