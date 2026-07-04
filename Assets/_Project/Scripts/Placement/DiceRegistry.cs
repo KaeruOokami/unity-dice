@@ -40,6 +40,16 @@ namespace DiceGame.Placement
             return HasBottomAt(gridPos) && !HasTopAt(gridPos);
         }
 
+        public bool HasDissolvingDiceAt(Vector2Int gridPos) {
+            foreach (var dice in allDice) {
+                if (dice != null && dice.IsDissolving && dice.CurrentState.GridPos == gridPos) {
+                    return true;
+                }
+            }
+
+            return false;
+        }
+
         public void RemoveFromGrid(DiceController dice) {
             if (dice == null) {
                 return;

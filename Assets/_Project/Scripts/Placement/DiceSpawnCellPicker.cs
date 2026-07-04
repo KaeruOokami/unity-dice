@@ -18,17 +18,17 @@ namespace DiceGame.Placement
 
     public static class DiceSpawnCellPicker
     {
-        public static bool HasAnySpawnSlot(Board board, IDicePlacement placement) {
-            return CollectSpawnSlots(board, placement).Count > 0;
+        public static bool HasAnySpawnSlot(Board board, DiceRegistry registry) {
+            return CollectSpawnSlots(board, registry).Count > 0;
         }
 
         public static List<DiceSpawnSlot> PickRandomSpawnSlots(
             Board board,
-            IDicePlacement placement,
+            DiceRegistry registry,
             int count,
             System.Random random) {
-            var slots = CollectSpawnSlots(board, placement);
-            if (board == null || placement == null || count <= 0 || slots.Count == 0) {
+            var slots = CollectSpawnSlots(board, registry);
+            if (board == null || registry == null || count <= 0 || slots.Count == 0) {
                 return new List<DiceSpawnSlot>();
             }
 
@@ -43,10 +43,10 @@ namespace DiceGame.Placement
 
         public static bool TryPickRandomSpawnSlot(
             Board board,
-            IDicePlacement placement,
+            DiceRegistry registry,
             System.Random random,
             out DiceSpawnSlot slot) {
-            var slots = PickRandomSpawnSlots(board, placement, 1, random);
+            var slots = PickRandomSpawnSlots(board, registry, 1, random);
             if (slots.Count == 0) {
                 slot = default;
                 return false;
@@ -56,20 +56,24 @@ namespace DiceGame.Placement
             return true;
         }
 
-        static List<DiceSpawnSlot> CollectSpawnSlots(Board board, IDicePlacement placement) {
+        static List<DiceSpawnSlot> CollectSpawnSlots(Board board, DiceRegistry registry) {
             var slots = new List<DiceSpawnSlot>();
-            if (board == null || placement == null) {
+            if (board == null || registry == null) {
                 return slots;
             }
 
             for (var x = 0; x < board.Width; x++) {
                 for (var z = 0; z < board.Height; z++) {
                     var cell = new Vector2Int(x, z);
-                    if (placement.CanPlaceBottomDiceAt(cell)) {
+                    if (registry.HasDissolvingDiceAt(cell)) {
+                        continue;
+                    }
+
+                    if (registry.CanPlaceBottomDiceAt(cell)) {
                         slots.Add(new DiceSpawnSlot(cell, DiceStackTier.Bottom));
                     }
 
-                    if (placement.CanPlaceTopDiceAt(cell)) {
+                    if (registry.CanPlaceTopDiceAt(cell)) {
                         slots.Add(new DiceSpawnSlot(cell, DiceStackTier.Top));
                     }
                 }
