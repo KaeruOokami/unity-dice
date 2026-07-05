@@ -12,7 +12,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: f1a2b3c4d5e6478899aabbccddeeff04, type: 3}
   m_Name: DiceDissolveSettings
   m_EditorClassIdentifier: 
-  dissolveDuration: 7
+  dissolveDuration: 10
   dissolveGhostThreshold: 0.7
   dissolveGhostAlpha: 0.4
   dissolveEmissionColor: {r: 1, g: 1, b: 1, a: 1}

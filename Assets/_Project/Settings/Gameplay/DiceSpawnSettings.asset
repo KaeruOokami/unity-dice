@@ -12,11 +12,12 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: f1a2b3c4d5e6478899aabbccddeeff05, type: 3}
   m_Name: DiceSpawnSettings
   m_EditorClassIdentifier: 
-  initialDiceCount: 3
+  initialDiceCount: 30
   animateInitialDiceSpawn: 1
   continuousSpawnEnabled: 1
   spawnInterval: 2
   spawnIntervalJitter: 0.5
+  bottomSpawnWeight: 0.5
   bottomEmergenceDuration: 0.8
   spawnHeight: 4
   bounceRestitution: 0.35

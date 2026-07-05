@@ -127,6 +127,7 @@ namespace DiceGame.Gameplay
                 board,
                 registry,
                 initialCount,
+                spawnSettings.BottomSpawnWeight,
                 random);
 
             if (slots.Count == 0) {
@@ -207,7 +208,12 @@ namespace DiceGame.Gameplay
                     + Random.Range(-spawnSettings.SpawnIntervalJitter, spawnSettings.SpawnIntervalJitter);
                 yield return new WaitForSeconds(Mathf.Max(0.01f, delay));
 
-                if (!DiceSpawnCellPicker.TryPickRandomSpawnSlot(board, registry, random, out var slot)) {
+                if (!DiceSpawnCellPicker.TryPickRandomSpawnSlot(
+                        board,
+                        registry,
+                        spawnSettings.BottomSpawnWeight,
+                        random,
+                        out var slot)) {
                     yield break;
                 }
 

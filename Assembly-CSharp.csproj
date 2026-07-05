@@ -39,6 +39,7 @@
      <Compile Include="Assets\_Project\Scripts\Placement\JumpGridPassability.cs" />
      <Compile Include="Assets\_Project\Scripts\Core\DiceState.cs" />
      <Compile Include="Assets\_Project\Scripts\Config\DiceAnimationSettings.cs" />
+     <Compile Include="Assets\_Project\Scripts\Gameplay\Coupling\RollCancelPolicy.cs" />
      <Compile Include="Assets\_Project\Scripts\Core\DiceOrientation.cs" />
      <Compile Include="Assets\_Project\Scripts\Placement\HeightReachPolicy.cs" />
      <Compile Include="Assets\_Project\Scripts\Placement\TierLandingPolicy.cs" />
@@ -88,20 +89,19 @@
      <Compile Include="Assets\_Project\Scripts\Placement\PassabilityContext.cs" />
      <Compile Include="Assets\_Project\Scripts\Config\PhysicsSettings.cs" />
      <Compile Include="Assets\_Project\Scripts\View\BoardView.cs" />
+     <Compile Include="Assets\_Project\Scripts\Placement\DiceSpawnCellPicker.cs" />
      <Compile Include="Assets\_Project\Scripts\Placement\GridTraversability.cs" />
+     <Compile Include="Assets\_Project\Scripts\Config\DiceSpawnSettings.cs" />
      <Compile Include="Assets\_Project\Scripts\Placement\MovementTransitionEvaluator.cs" />
+     <Compile Include="Assets\_Project\Scripts\Core\DiceRollVisualSnapshot.cs" />
      <Compile Include="Assets\_Project\Scripts\Placement\IDicePlacement.cs" />
      <Compile Include="Assets\_Project\Scripts\Board\Board.cs" />
+     <Compile Include="Assets\_Project\Scripts\Gameplay\DiceSpawnFactory.cs" />
      <Compile Include="Assets\_Project\Scripts\Placement\GridMovePlanBuilder.cs" />
      <Compile Include="Assets\_Project\Scripts\Gameplay\GameBootstrap.cs" />
      <Compile Include="Assets\_Project\Scripts\Gameplay\DiceStackAdjacency.cs" />
      <Compile Include="Assets\_Project\Scripts\Placement\CellOccupancyQuery.cs" />
      <Compile Include="Assets\_Project\Scripts\Placement\SurfaceQuery.cs" />
-     <Compile Include="Assets\_Project\Scripts\Gameplay\Coupling\RollCancelPolicy.cs" />
-     <Compile Include="Assets\_Project\Scripts\Core\DiceRollVisualSnapshot.cs" />
-     <Compile Include="Assets\_Project\Scripts\Placement\DiceSpawnCellPicker.cs" />
-     <Compile Include="Assets\_Project\Scripts\Config\DiceSpawnSettings.cs" />
-     <Compile Include="Assets\_Project\Scripts\Gameplay\DiceSpawnFactory.cs" />
      <None Include="Assets\Packages\Dice_6\Documentation\Readmy.txt" />
     <Reference Include="UnityEngine">
         <HintPath>D:\Program Files\Unity\Hub\Editor\2021.3.10f1\Editor\Data\Managed\UnityEngine\UnityEngine.dll</HintPath>

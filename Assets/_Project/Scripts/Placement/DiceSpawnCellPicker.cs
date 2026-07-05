@@ -16,37 +16,54 @@ namespace DiceGame.Placement
         }
     }
 
+    struct SpawnSlotBuckets
+    {
+        public List<Vector2Int> BottomCells;
+        public List<Vector2Int> TopCells;
+
+        public bool HasAny =>
+            BottomCells != null && BottomCells.Count > 0
+            || TopCells != null && TopCells.Count > 0;
+    }
+
     public static class DiceSpawnCellPicker
     {
         public static bool HasAnySpawnSlot(Board board, DiceRegistry registry) {
-            return CollectSpawnSlots(board, registry).Count > 0;
+            return CollectSpawnBuckets(board, registry).HasAny;
         }
 
         public static List<DiceSpawnSlot> PickRandomSpawnSlots(
             Board board,
             DiceRegistry registry,
             int count,
+            float bottomSpawnWeight,
             System.Random random) {
-            var slots = CollectSpawnSlots(board, registry);
-            if (board == null || registry == null || count <= 0 || slots.Count == 0) {
-                return new List<DiceSpawnSlot>();
+            var buckets = CollectSpawnBuckets(board, registry);
+            var results = new List<DiceSpawnSlot>();
+            if (board == null || registry == null || count <= 0 || !buckets.HasAny) {
+                return results;
             }
 
-            for (var i = slots.Count - 1; i > 0; i--) {
-                var j = random.Next(i + 1);
-                (slots[i], slots[j]) = (slots[j], slots[i]);
+            var weight = Mathf.Clamp01(bottomSpawnWeight);
+            for (var i = 0; i < count && buckets.HasAny; i++) {
+                if (!TryPickWeightedSlot(buckets, weight, random, out var slot)) {
+                    break;
+                }
+
+                results.Add(slot);
+                RemoveSlot(ref buckets, slot);
             }
 
-            var take = Mathf.Min(count, slots.Count);
-            return slots.GetRange(0, take);
+            return results;
         }
 
         public static bool TryPickRandomSpawnSlot(
             Board board,
             DiceRegistry registry,
+            float bottomSpawnWeight,
             System.Random random,
             out DiceSpawnSlot slot) {
-            var slots = PickRandomSpawnSlots(board, registry, 1, random);
+            var slots = PickRandomSpawnSlots(board, registry, 1, bottomSpawnWeight, random);
             if (slots.Count == 0) {
                 slot = default;
                 return false;
@@ -56,10 +73,14 @@ namespace DiceGame.Placement
             return true;
         }
 
-        static List<DiceSpawnSlot> CollectSpawnSlots(Board board, DiceRegistry registry) {
-            var slots = new List<DiceSpawnSlot>();
+        static SpawnSlotBuckets CollectSpawnBuckets(Board board, DiceRegistry registry) {
+            var buckets = new SpawnSlotBuckets {
+                BottomCells = new List<Vector2Int>(),
+                TopCells = new List<Vector2Int>()
+            };
+
             if (board == null || registry == null) {
-                return slots;
+                return buckets;
             }
 
             for (var x = 0; x < board.Width; x++) {
@@ -70,16 +91,58 @@ namespace DiceGame.Placement
                     }
 
                     if (registry.CanPlaceBottomDiceAt(cell)) {
-                        slots.Add(new DiceSpawnSlot(cell, DiceStackTier.Bottom));
+                        buckets.BottomCells.Add(cell);
                     }
 
                     if (registry.CanPlaceTopDiceAt(cell)) {
-                        slots.Add(new DiceSpawnSlot(cell, DiceStackTier.Top));
+                        buckets.TopCells.Add(cell);
                     }
                 }
             }
 
-            return slots;
+            return buckets;
+        }
+
+        static bool TryPickWeightedSlot(
+            SpawnSlotBuckets buckets,
+            float bottomSpawnWeight,
+            System.Random random,
+            out DiceSpawnSlot slot) {
+            slot = default;
+            var hasBottom = buckets.BottomCells.Count > 0;
+            var hasTop = buckets.TopCells.Count > 0;
+
+            if (!hasBottom && !hasTop) {
+                return false;
+            }
+
+            DiceStackTier tier;
+            if (hasBottom && !hasTop) {
+                tier = DiceStackTier.Bottom;
+            } else if (!hasBottom && hasTop) {
+                tier = DiceStackTier.Top;
+            } else {
+                tier = random.NextDouble() < bottomSpawnWeight
+                    ? DiceStackTier.Bottom
+                    : DiceStackTier.Top;
+            }
+
+            var cells = tier == DiceStackTier.Top ? buckets.TopCells : buckets.BottomCells;
+            var index = random.Next(cells.Count);
+            slot = new DiceSpawnSlot(cells[index], tier);
+            return true;
+        }
+
+        static void RemoveSlot(ref SpawnSlotBuckets buckets, DiceSpawnSlot slot) {
+            var cells = slot.Tier == DiceStackTier.Top ? buckets.TopCells : buckets.BottomCells;
+            for (var i = 0; i < cells.Count; i++) {
+                if (cells[i] != slot.Cell) {
+                    continue;
+                }
+
+                cells.RemoveAt(i);
+                return;
+            }
         }
     }
 }
