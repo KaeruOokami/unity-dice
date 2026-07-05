@@ -15,6 +15,7 @@ namespace DiceGame.Placement
         Walkable,
         Blocked,
         CanRoll,
+        IceSlide,
         BlockedStepOnly
     }
 
@@ -27,7 +28,8 @@ namespace DiceGame.Placement
         CoupledGridMove,
         FloorTransfer,
         TopFall,
-        DissolveDescent
+        DissolveDescent,
+        IceSlide
     }
 
     public readonly struct MovementTransition
@@ -38,6 +40,8 @@ namespace DiceGame.Placement
         public SurfaceLayer TargetLayer { get; }
         public bool HasDiceGridMovePlan { get; }
         public DiceGridMovePlan DiceGridMovePlan { get; }
+        public bool HasDiceSlidePlan { get; }
+        public DiceSlidePlan DiceSlidePlan { get; }
 
         MovementTransition(
             MovementTransitionKind kind,
@@ -45,13 +49,17 @@ namespace DiceGame.Placement
             DiceController targetDice,
             SurfaceLayer targetLayer,
             bool hasDiceGridMovePlan,
-            DiceGridMovePlan diceGridMovePlan) {
+            DiceGridMovePlan diceGridMovePlan,
+            bool hasDiceSlidePlan,
+            DiceSlidePlan diceSlidePlan) {
             Kind = kind;
             Route = route;
             TargetDice = targetDice;
             TargetLayer = targetLayer;
             HasDiceGridMovePlan = hasDiceGridMovePlan;
             DiceGridMovePlan = diceGridMovePlan;
+            HasDiceSlidePlan = hasDiceSlidePlan;
+            DiceSlidePlan = diceSlidePlan;
         }
 
         public static MovementTransition Walkable(
@@ -63,6 +71,8 @@ namespace DiceGame.Placement
                 route,
                 dice,
                 layer,
+                false,
+                default,
                 false,
                 default);
         }
@@ -78,7 +88,9 @@ namespace DiceGame.Placement
                 dice,
                 layer,
                 true,
-                plan);
+                plan,
+                false,
+                default);
         }
 
         public static MovementTransition Blocked() {
@@ -87,6 +99,8 @@ namespace DiceGame.Placement
                 MovementTransitionRoute.None,
                 null,
                 SurfaceLayer.Floor,
+                false,
+                default,
                 false,
                 default);
         }
@@ -98,6 +112,20 @@ namespace DiceGame.Placement
                 null,
                 SurfaceLayer.Floor,
                 true,
+                plan,
+                false,
+                default);
+        }
+
+        public static MovementTransition IceSlide(DiceSlidePlan plan) {
+            return new MovementTransition(
+                MovementTransitionKind.IceSlide,
+                MovementTransitionRoute.IceSlide,
+                null,
+                SurfaceLayer.Floor,
+                false,
+                default,
+                true,
                 plan);
         }
 
@@ -107,6 +135,8 @@ namespace DiceGame.Placement
                 MovementTransitionRoute.DissolveDescent,
                 targetDice,
                 targetLayer,
+                false,
+                default,
                 false,
                 default);
         }

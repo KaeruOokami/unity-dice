@@ -151,6 +151,25 @@ namespace DiceGame.Gameplay.Character
 
                     return CharacterMovePlan.FaceSlide(standingCell);
 
+                case MovementTransitionKind.IceSlide:
+                    if (transition.HasDiceSlidePlan
+                        && !isJumping
+                        && TryGetPrimaryDirection(move, out var iceMoveDir)
+                        && iceMoveDir == direction) {
+                        return new CharacterMovePlan {
+                            Kind = CharacterMoveKind.CoupledDiceMove,
+                            FromCell = standingCell,
+                            ToCell = transition.DiceSlidePlan.To.GridPos,
+                            Direction = direction,
+                            Transition = transition,
+                            CoupledIntent = CoupledMoveIntent.GroundIceSlide,
+                            HasDiceSlidePlan = true,
+                            DiceSlidePlan = transition.DiceSlidePlan
+                        };
+                    }
+
+                    return CharacterMovePlan.FaceSlide(standingCell);
+
                 case MovementTransitionKind.Blocked:
                 case MovementTransitionKind.BlockedStepOnly:
                     return new CharacterMovePlan {

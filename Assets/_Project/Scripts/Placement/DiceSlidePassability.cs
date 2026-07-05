@@ -42,7 +42,7 @@ namespace DiceGame.Placement
 
             plan = new DiceSlidePlan(
                 fromState,
-                new DiceState(targetPos, fromState.Orientation, DiceStackTier.Bottom));
+                new DiceState(targetPos, fromState.Orientation, DiceStackTier.Bottom, fromState.Kind));
             return true;
         }
 
@@ -59,14 +59,14 @@ namespace DiceGame.Placement
             if (placement.CanPlaceTopDiceAt(targetPos)) {
                 plan = new DiceSlidePlan(
                     fromState,
-                    new DiceState(targetPos, fromState.Orientation, DiceStackTier.Top));
+                    new DiceState(targetPos, fromState.Orientation, DiceStackTier.Top, fromState.Kind));
                 return true;
             }
 
             if (placement.CanPlaceBottomDiceAt(targetPos)) {
                 plan = new DiceSlidePlan(
                     fromState,
-                    new DiceState(targetPos, fromState.Orientation, DiceStackTier.Bottom));
+                    new DiceState(targetPos, fromState.Orientation, DiceStackTier.Bottom, fromState.Kind));
                 return true;
             }
 

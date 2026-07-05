@@ -131,6 +131,12 @@ namespace DiceGame.Placement
             SetDiceAt(to, dice, toTier);
         }
 
+        public bool TryGetDiceAt(Vector2Int gridPos, DiceStackTier tier, out DiceController dice) {
+            return tier == DiceStackTier.Top
+                ? TryGetTopAt(gridPos, out dice)
+                : TryGetBottomAt(gridPos, out dice);
+        }
+
         public bool TryGetBottomAt(Vector2Int gridPos, out DiceController dice) {
             dice = null;
             if (!byGrid.TryGetValue(gridPos, out var stack) || stack.Bottom == null) {

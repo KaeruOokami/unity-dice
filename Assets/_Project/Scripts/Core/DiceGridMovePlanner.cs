@@ -69,7 +69,7 @@ namespace DiceGame.Core
                 }
             }
 
-            toState = new DiceState(landingCell, orientation, landingTier);
+            toState = new DiceState(landingCell, orientation, landingTier, fromState.Kind);
             return true;
         }
 

@@ -23,6 +23,16 @@ namespace DiceGame.Placement
                 return false;
             }
 
+            if (!dice.Capabilities.CanBePushedByPlayer) {
+                rejectReason = "notPushable";
+                return false;
+            }
+
+            if (!IronAdjacencyBlock.IsPlayerMovable(dice, registry)) {
+                rejectReason = "notPlayerMovable";
+                return false;
+            }
+
             if (!IsReachable(standing, isOnFloor, dice)) {
                 rejectReason = "notReachable";
                 return false;

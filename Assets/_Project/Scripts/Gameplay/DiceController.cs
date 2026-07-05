@@ -15,6 +15,7 @@ namespace DiceGame.Gameplay
         [SerializeField] Vector2Int startGridPos = new(2, 2);
         [SerializeField] DiceOrientation startOrientation = DiceOrientation.Default;
         [SerializeField] DiceStackTier startTier = DiceStackTier.Bottom;
+        [SerializeField] DiceKind startKind = DiceKind.Normal;
 
         DiceRegistry registry;
         DiceState currentState;
@@ -34,6 +35,9 @@ namespace DiceGame.Gameplay
         public bool IsCarried => isCarried;
         public bool IsBusy => IsRolling || isSpawning || isDissolving || isCarried;
         public DiceState CurrentState => currentState;
+        public DiceKind Kind => currentState.Kind;
+        public DiceCapabilities Capabilities => DiceBehaviorResolver.GetCapabilities(Kind);
+        public bool IsPlayerMovable => registry != null && IronAdjacencyBlock.IsPlayerMovable(this, registry);
         public DiceView View => diceView;
         public float GroundRollProgress => diceView != null ? diceView.GroundRollProgress : 0f;
 
@@ -49,7 +53,7 @@ namespace DiceGame.Gameplay
 
         void Start() {
             if (!isInitialized && board != null && diceView != null && registry != null) {
-                Initialize(startGridPos, startOrientation, startTier);
+                Initialize(startGridPos, startOrientation, startTier, startKind);
             }
         }
 
@@ -59,19 +63,25 @@ namespace DiceGame.Gameplay
             DiceRegistry targetRegistry,
             Vector2Int gridPos,
             DiceOrientation orientation,
-            DiceStackTier tier = DiceStackTier.Bottom) {
+            DiceStackTier tier = DiceStackTier.Bottom,
+            DiceKind kind = DiceKind.Normal) {
             board = targetBoard;
             diceView = view;
             registry = targetRegistry;
             startGridPos = gridPos;
             startOrientation = orientation;
             startTier = tier;
-            Initialize(gridPos, orientation, tier);
+            startKind = kind;
+            Initialize(gridPos, orientation, tier, kind);
         }
 
-        public void Initialize(Vector2Int gridPos, DiceOrientation orientation, DiceStackTier tier = DiceStackTier.Bottom) {
+        public void Initialize(
+            Vector2Int gridPos,
+            DiceOrientation orientation,
+            DiceStackTier tier = DiceStackTier.Bottom,
+            DiceKind kind = DiceKind.Normal) {
             isInitialized = true;
-            currentState = new DiceState(gridPos, orientation, tier);
+            currentState = new DiceState(gridPos, orientation, tier, kind);
             registry?.Place(this, gridPos, tier);
 
             diceView.SnapTo(currentState, board, registry);
@@ -100,6 +110,7 @@ namespace DiceGame.Gameplay
                 orientation,
                 spawnSettings,
                 DiceStackTier.Bottom,
+                startKind,
                 onComplete);
         }
 
@@ -112,6 +123,28 @@ namespace DiceGame.Gameplay
             DiceSpawnSettings spawnSettings,
             DiceStackTier tier,
             Action onComplete = null) {
+            ConfigureWithSpawnAppear(
+                targetBoard,
+                view,
+                targetRegistry,
+                gridPos,
+                orientation,
+                spawnSettings,
+                tier,
+                startKind,
+                onComplete);
+        }
+
+        public void ConfigureWithSpawnAppear(
+            Board targetBoard,
+            DiceView view,
+            DiceRegistry targetRegistry,
+            Vector2Int gridPos,
+            DiceOrientation orientation,
+            DiceSpawnSettings spawnSettings,
+            DiceStackTier tier,
+            DiceKind kind,
+            Action onComplete = null) {
             if (spawnSettings == null) {
                 Debug.LogError("DiceController: DiceSpawnSettings is required for spawn appear.");
                 return;
@@ -123,18 +156,20 @@ namespace DiceGame.Gameplay
             startGridPos = gridPos;
             startOrientation = orientation;
             startTier = tier;
-            BeginSpawnAppear(gridPos, orientation, tier, spawnSettings, onComplete);
+            startKind = kind;
+            BeginSpawnAppear(gridPos, orientation, tier, kind, spawnSettings, onComplete);
         }
 
         void BeginSpawnAppear(
             Vector2Int gridPos,
             DiceOrientation orientation,
             DiceStackTier tier,
+            DiceKind kind,
             DiceSpawnSettings spawnSettings,
             Action onComplete) {
             isInitialized = true;
             isSpawning = true;
-            currentState = new DiceState(gridPos, orientation, tier);
+            currentState = new DiceState(gridPos, orientation, tier, kind);
             registry?.Place(this, gridPos, tier);
 
             void OnSpawnComplete() {
@@ -152,13 +187,19 @@ namespace DiceGame.Gameplay
                     spawnSettings.BottomEmergenceDuration,
                     OnSpawnComplete);
             } else {
+                var bounceRestitution = Capabilities.HasSpawnBounce
+                    ? spawnSettings.BounceRestitution
+                    : 0f;
+                var maxBounceCount = Capabilities.HasSpawnBounce
+                    ? spawnSettings.MaxBounceCount
+                    : 0;
                 diceView.PlaySpawnAppear(
                     currentState,
                     board,
                     registry,
                     spawnSettings.SpawnHeight,
-                    spawnSettings.BounceRestitution,
-                    spawnSettings.MaxBounceCount,
+                    bounceRestitution,
+                    maxBounceCount,
                     spawnSettings.MinBounceVelocity,
                     OnSpawnComplete);
             }
@@ -186,10 +227,41 @@ namespace DiceGame.Gameplay
                 return false;
             }
 
+            if (Capabilities.HasMagnetCoupling) {
+                return MagnetMoveExecutor.TryExecuteSlide(this, plan, registry);
+            }
+
+            return TryExecuteSlidePlanInternal(plan);
+        }
+
+        internal bool TryExecuteSlidePlanInternal(DiceSlidePlan plan) {
+            if (IsBusy || isDissolving || board == null || diceView == null || registry == null) {
+                return false;
+            }
+
             return BeginSlide(plan.From, plan.To);
         }
 
         public bool TryExecuteGroundMovePlan(DiceGridMovePlan plan) {
+            if (isDissolving || isCarried || isRolling || board == null || diceView == null || registry == null) {
+                return false;
+            }
+
+            if (Capabilities.HasMagnetCoupling) {
+                var occupancyQuery = new CellOccupancyQuery(board, registry);
+                var gridPlanBuilder = new GridMovePlanBuilder(registry, occupancyQuery);
+                var context = PassabilityContext.ForGround(board.FloorSurfaceWorldY);
+                if (!MagnetMoveExecutor.TryExecuteGroundRoll(this, plan, registry, gridPlanBuilder, context)) {
+                    return false;
+                }
+
+                return true;
+            }
+
+            return TryExecuteGroundMovePlanInternal(plan);
+        }
+
+        internal bool TryExecuteGroundMovePlanInternal(DiceGridMovePlan plan) {
             if (!TryExecuteMovePlan(plan, DiceMoveVisualContext.Ground)) {
                 Debug.LogError(
                     $"DiceController: ground move plan execution failed kind={plan.Kind} " +
@@ -445,7 +517,8 @@ namespace DiceGame.Gameplay
 
         void PlaySlideVisual(DiceState fromState, DiceState toState, Action onComplete) {
             var transition = DiceTransition.GridMove(fromState, toState);
-            diceView.PlayTransition(transition, board, registry, onComplete);
+            var distance = MovementTransitionEvaluator.GetOrthogonalDistance(fromState.GridPos, toState.GridPos);
+            diceView.PlayTransition(transition, board, registry, onComplete, Mathf.Max(1, distance));
         }
 
         bool BeginSlide(DiceState fromState, DiceState nextState) {
@@ -517,7 +590,7 @@ namespace DiceGame.Gameplay
             ghostBottom.CompleteDissolveFromCrush();
 
             var fromState = currentState;
-            var toState = new DiceState(fromState.GridPos, fromState.Orientation, DiceStackTier.Bottom);
+            var toState = new DiceState(fromState.GridPos, fromState.Orientation, DiceStackTier.Bottom, fromState.Kind);
             ApplyLogicalMove(fromState, toState);
             isRolling = true;
 
@@ -574,7 +647,7 @@ namespace DiceGame.Gameplay
                 return false;
             }
 
-            var toState = new DiceState(targetGrid, currentState.Orientation, targetTier);
+            var toState = new DiceState(targetGrid, currentState.Orientation, targetTier, currentState.Kind);
             var toWorld = diceView.GetAnchoredWorldPosition(toState, board, registry);
             var transition = DiceTransition.FreeMove(fromWorld, toWorld, snapToGridOnComplete: true, toState);
 

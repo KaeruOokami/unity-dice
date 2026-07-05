@@ -102,6 +102,15 @@
      <Compile Include="Assets\_Project\Scripts\Gameplay\DiceStackAdjacency.cs" />
      <Compile Include="Assets\_Project\Scripts\Placement\CellOccupancyQuery.cs" />
      <Compile Include="Assets\_Project\Scripts\Placement\SurfaceQuery.cs" />
+     <Compile Include="Assets\_Project\Scripts\Placement\IronAdjacencyBlock.cs" />
+     <Compile Include="Assets\_Project\Scripts\Core\DiceCapabilities.cs" />
+     <Compile Include="Assets\_Project\Scripts\Core\DiceBehaviorConstants.cs" />
+     <Compile Include="Assets\_Project\Scripts\Placement\MagnetChainResolver.cs" />
+     <Compile Include="Assets\_Project\Scripts\Core\DiceBehaviorResolver.cs" />
+     <Compile Include="Assets\_Project\Scripts\Placement\MagnetMoveExecutor.cs" />
+     <Compile Include="Assets\_Project\Scripts\Placement\IceSlidePassability.cs" />
+     <Compile Include="Assets\_Project\Scripts\Core\DiceKind.cs" />
+     <Compile Include="Assets\_Project\Scripts\Config\DiceCatalog.cs" />
      <None Include="Assets\Packages\Dice_6\Documentation\Readmy.txt" />
     <Reference Include="UnityEngine">
         <HintPath>D:\Program Files\Unity\Hub\Editor\2021.3.10f1\Editor\Data\Managed\UnityEngine\UnityEngine.dll</HintPath>

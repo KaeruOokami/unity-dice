@@ -353,6 +353,28 @@ namespace DiceGame.Gameplay.Coupling
             return false;
         }
 
+        public bool TryBeginGroundIceSlide(DiceSlidePlan plan, Vector2 nextXZ, float halfExtent) {
+            var dice = standing.CurrentDice;
+            if (dice?.View.DiceTransform == null || dice.IsDissolving) {
+                return false;
+            }
+
+            if (!dice.TryExecuteSlidePlan(plan)) {
+                Debug.LogError(
+                    $"DiceCharacterCoupling: ice slide execution failed " +
+                    $"from={plan.From.GridPos} to={plan.To.GridPos}");
+                return false;
+            }
+
+            standing.SetOnDice(plan.To.GridPos, plan.To.Tier, dice);
+            transformDriver.AlignToDiceFace(dice, nextXZ, halfExtent);
+            var diceCenter = dice.View.DiceTransform.position;
+            var charPos = transformDriver.GetWorldXZ();
+            BeginFollow(new Vector3(charPos.x, 0f, charPos.y), diceCenter, jumpArc: false, JumpDiceMoveKind.None);
+            session.IsActive = true;
+            return true;
+        }
+
         bool TryBeginGridMovePlan(
             DiceGridMovePlan plan,
             bool jumpArc,

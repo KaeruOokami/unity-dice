@@ -381,6 +381,16 @@ namespace DiceGame.Placement
                     return MovementTransition.GridRoll(gridPlan);
                 }
 
+                if (!isJumping
+                    && TryEvaluateIceSlide(
+                        standingDice,
+                        standingTier,
+                        direction,
+                        out var iceSlidePlan,
+                        out _)) {
+                    return MovementTransition.IceSlide(iceSlidePlan);
+                }
+
                 if (isJumping && fromLayer != SurfaceLayer.Floor && standingDice != null) {
                     return MovementTransition.Blocked();
                 }
@@ -466,7 +476,54 @@ namespace DiceGame.Placement
                 return MovementTransition.GridRoll(occupiedGridPlan);
             }
 
+            if (!isJumping
+                && TryEvaluateIceSlide(
+                    standingDice,
+                    standingTier,
+                    direction,
+                    out var occupiedIceSlidePlan,
+                    out _)) {
+                return MovementTransition.IceSlide(occupiedIceSlidePlan);
+            }
+
             return MovementTransition.Blocked();
+        }
+
+        bool TryEvaluateIceSlide(
+            DiceController standingDice,
+            DiceStackTier standingTier,
+            Direction direction,
+            out DiceSlidePlan plan,
+            out string rejectReason) {
+            plan = default;
+            rejectReason = null;
+
+            if (standingDice == null) {
+                rejectReason = "no-standing-dice";
+                return false;
+            }
+
+            if (!standingDice.Capabilities.SlideUntilBlocked) {
+                rejectReason = "not-ice-dice";
+                return false;
+            }
+
+            if (standingTier != standingDice.CurrentState.Tier) {
+                rejectReason = "standing-tier-mismatch";
+                return false;
+            }
+
+            if (!IronAdjacencyBlock.IsPlayerMovable(standingDice, registry)) {
+                rejectReason = "dice-not-player-movable";
+                return false;
+            }
+
+            return IceSlidePassability.TryBuildUntilBlocked(
+                standingDice.CurrentState,
+                direction,
+                registry,
+                out plan,
+                out rejectReason);
         }
 
         bool TryEvaluateHeightTransfer(
@@ -698,6 +755,16 @@ namespace DiceGame.Placement
             if (standingTier != standingDice.CurrentState.Tier) {
                 rejectReason =
                     $"standing-tier-mismatch standingTier={standingTier} diceTier={standingDice.CurrentState.Tier}";
+                return false;
+            }
+
+            if (!standingDice.Capabilities.CanGridRoll) {
+                rejectReason = "dice-cannot-grid-roll";
+                return false;
+            }
+
+            if (!IronAdjacencyBlock.IsPlayerMovable(standingDice, registry)) {
+                rejectReason = "dice-not-player-movable";
                 return false;
             }
 

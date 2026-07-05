@@ -19,7 +19,8 @@ namespace DiceGame.Gameplay.Character
         GroundParallelRoll,
         GroundTopFallRoll,
         JumpGridMove,
-        JumpTopFallRoll
+        JumpTopFallRoll,
+        GroundIceSlide
     }
 
     public struct CharacterMovePlan
@@ -32,6 +33,8 @@ namespace DiceGame.Gameplay.Character
         public CoupledMoveIntent CoupledIntent;
         public bool HasDiceGridMovePlan;
         public DiceGridMovePlan DiceGridMovePlan;
+        public bool HasDiceSlidePlan;
+        public DiceSlidePlan DiceSlidePlan;
         public bool BlockFailedJumpGridFallback;
         public bool BlockJumpStackTransfer;
         public string BlockReason;

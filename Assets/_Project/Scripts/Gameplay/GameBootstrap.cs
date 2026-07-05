@@ -54,6 +54,7 @@ namespace DiceGame.Gameplay
         [SerializeField] DiceAnimationSettings diceAnimationSettings;
         [SerializeField] DiceDissolveSettings diceDissolveSettings;
         [SerializeField] DiceSpawnSettings diceSpawnSettings;
+        [SerializeField] DiceCatalog diceCatalog;
         [SerializeField] CameraSetupSettings cameraSetup = new();
 
         DiceRegistry registry;
@@ -81,7 +82,8 @@ namespace DiceGame.Gameplay
                 || characterMovementSettings == null
                 || diceAnimationSettings == null
                 || diceDissolveSettings == null
-                || diceSpawnSettings == null) {
+                || diceSpawnSettings == null
+                || diceCatalog == null) {
                 Debug.LogError("GameBootstrap: Gameplay settings assets are not assigned.");
                 return;
             }
@@ -104,6 +106,7 @@ namespace DiceGame.Gameplay
                 board,
                 registry,
                 diceEntityPrefab,
+                diceCatalog,
                 transform,
                 physicsSettings,
                 diceAnimationSettings,

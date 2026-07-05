@@ -9,17 +9,24 @@ namespace DiceGame.Core
         public Vector2Int GridPos;
         public DiceOrientation Orientation;
         public DiceStackTier Tier;
+        public DiceKind Kind;
 
-        public DiceState(Vector2Int gridPos, DiceOrientation orientation, DiceStackTier tier = DiceStackTier.Bottom) {
+        public DiceState(
+            Vector2Int gridPos,
+            DiceOrientation orientation,
+            DiceStackTier tier = DiceStackTier.Bottom,
+            DiceKind kind = DiceKind.Normal) {
             GridPos = gridPos;
             Orientation = orientation;
             Tier = tier;
+            Kind = kind;
         }
 
         public bool Equals(DiceState other) {
             return GridPos == other.GridPos
                 && Orientation.Equals(other.Orientation)
-                && Tier == other.Tier;
+                && Tier == other.Tier
+                && Kind == other.Kind;
         }
 
         public override bool Equals(object obj) {
@@ -27,11 +34,11 @@ namespace DiceGame.Core
         }
 
         public override int GetHashCode() {
-            return HashCode.Combine(GridPos, Orientation, Tier);
+            return HashCode.Combine(GridPos, Orientation, Tier, Kind);
         }
 
         public override string ToString() {
-            return $"({GridPos.x}, {GridPos.y}) {Tier} {Orientation}";
+            return $"({GridPos.x}, {GridPos.y}) {Tier} {Kind} {Orientation}";
         }
     }
 }

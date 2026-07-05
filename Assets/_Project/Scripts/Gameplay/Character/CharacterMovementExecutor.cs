@@ -124,6 +124,11 @@ namespace DiceGame.Gameplay.Character
             float halfExtent,
             JumpCoupledMoveCapability jumpCapability,
             System.Action<string> logJumpParallelRoll) {
+            if (plan.CoupledIntent == CoupledMoveIntent.GroundIceSlide) {
+                return plan.HasDiceSlidePlan
+                    && coupling.TryBeginGroundIceSlide(plan.DiceSlidePlan, nextXZ, halfExtent);
+            }
+
             if (!plan.HasDiceGridMovePlan) {
                 return false;
             }

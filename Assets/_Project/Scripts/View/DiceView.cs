@@ -42,6 +42,8 @@ namespace DiceGame.View
         readonly List<Texture> dissolveMaterialBaseEmissionMaps = new();
         readonly List<bool> dissolveMaterialHadEmission = new();
         bool dissolveMaterialsTransparent;
+        GameObject runtimeMeshPrefab;
+        Texture dissolveEmissionMapOverride;
 
         public bool IsAnimating => isAnimating;
         public float DissolveProgress => dissolveProgress;
@@ -58,6 +60,21 @@ namespace DiceGame.View
             physicsSettings = physics;
             animationSettings = animation;
             dissolveSettings = dissolve;
+        }
+
+        public void SetMeshPrefab(GameObject prefab) {
+            if (prefab == null) {
+                Debug.LogError("DiceView: SetMeshPrefab received null prefab.");
+                return;
+            }
+
+            runtimeMeshPrefab = prefab;
+            if (meshInstance != null) {
+                Destroy(meshInstance.gameObject);
+                meshInstance = null;
+            }
+
+            EnsureMesh();
         }
 
         void Awake() {
@@ -103,6 +120,7 @@ namespace DiceGame.View
             meshInstance = visual.transform;
             meshInstance.localPosition = Vector3.zero;
             meshInstance.localRotation = Quaternion.identity;
+            dissolveEmissionMapOverride = ResolveBaseMapFromPrefab(prefab);
             CacheDissolveMaterials();
         }
 
@@ -151,6 +169,10 @@ namespace DiceGame.View
         }
 
         GameObject ResolveMeshPrefab() {
+            if (runtimeMeshPrefab != null) {
+                return runtimeMeshPrefab;
+            }
+
             switch (diceMeshPrefab) {
                 case GameObject prefab:
                     return prefab;
@@ -301,7 +323,8 @@ namespace DiceGame.View
             DiceTransition transition,
             Board board,
             DiceRegistry registry,
-            Action onComplete) {
+            Action onComplete,
+            int slideCellDistance = 1) {
             if (dissolveCoroutine != null) {
                 return;
             }
@@ -310,7 +333,16 @@ namespace DiceGame.View
                 StopCoroutine(rollCoroutine);
             }
 
-            rollCoroutine = StartCoroutine(TransitionCoroutine(transition, board, registry, onComplete));
+            rollCoroutine = StartCoroutine(
+                TransitionCoroutine(transition, board, registry, onComplete, slideCellDistance));
+        }
+
+        public void PlayTransition(
+            DiceTransition transition,
+            Board board,
+            DiceRegistry registry,
+            Action onComplete) {
+            PlayTransition(transition, board, registry, onComplete, 1);
         }
 
         public void PlaySpawnAppear(
@@ -496,7 +528,7 @@ namespace DiceGame.View
 
         public float GetJumpParallelRollDuration(int distance) {
             return animationSettings != null
-                ? animationSettings.GetJumpParallelRollDuration(distance)
+                ? animationSettings.GetJumpParallelRollDuration(distance) * GetRollDurationMultiplier()
                 : 0f;
         }
 
@@ -520,7 +552,7 @@ namespace DiceGame.View
                 StopCoroutine(rollCoroutine);
             }
 
-            var duration = Mathf.Clamp01(cancelProgress) * animationSettings.RollAnimationDuration;
+            var duration = Mathf.Clamp01(cancelProgress) * animationSettings.RollAnimationDuration * GetRollDurationMultiplier();
             rollCoroutine = StartCoroutine(CancelGroundRollCoroutine(
                 snapshot,
                 toState,
@@ -581,7 +613,11 @@ namespace DiceGame.View
                 orientation = orientation.Roll(direction);
             }
 
-            return new DiceState(fromState.GridPos + direction.ToGridDelta() * step, orientation, fromState.Tier);
+            return new DiceState(
+                fromState.GridPos + direction.ToGridDelta() * step,
+                orientation,
+                fromState.Tier,
+                fromState.Kind);
         }
 
         void CommitGridPlacement(
@@ -891,7 +927,8 @@ namespace DiceGame.View
             DiceTransition transition,
             Board board,
             DiceRegistry registry,
-            Action onComplete) {
+            Action onComplete,
+            int slideCellDistance = 1) {
             isAnimating = true;
             EnsureMesh();
             if (positionRoot == null) {
@@ -974,7 +1011,8 @@ namespace DiceGame.View
                 positionRoot.position = fromWorld;
 
                 if (transition.Path == DiceTransitionPath.Direct) {
-                    yield return AnimatePositionLerp(fromWorld, toWorld, animationSettings.SlideDuration);
+                    var slideDuration = animationSettings.SlideDuration * Mathf.Max(1, slideCellDistance);
+                    yield return AnimatePositionLerp(fromWorld, toWorld, slideDuration);
                 } else {
                     var midWorld = new Vector3(toWorld.x, fromWorld.y, toWorld.z);
                     yield return AnimatePositionLerp(fromWorld, midWorld, animationSettings.FallHorizontalDuration);
@@ -1010,9 +1048,10 @@ namespace DiceGame.View
             positionRoot.SetParent(pivot, true);
 
             var elapsed = 0f;
-            while (elapsed < animationSettings.RollAnimationDuration) {
+            var rollDuration = animationSettings.RollAnimationDuration * GetRollDurationMultiplier();
+            while (elapsed < rollDuration) {
                 elapsed += Time.deltaTime;
-                var linearT = Mathf.Clamp01(elapsed / animationSettings.RollAnimationDuration);
+                var linearT = Mathf.Clamp01(elapsed / rollDuration);
                 groundRollProgress = linearT;
                 var t = Mathf.SmoothStep(0f, 1f, linearT);
                 pivot.rotation = Quaternion.AngleAxis(setup.Angle * t, setup.Axis);
@@ -1307,9 +1346,11 @@ namespace DiceGame.View
                 * (dissolveSettings.DissolveEmissionIntensity * pulseMultiplier);
 
             for (var i = 0; i < dissolveMaterials.Count; i++) {
-                var map = dissolveSettings.DissolveEmissionMap != null
-                    ? dissolveSettings.DissolveEmissionMap
-                    : dissolveMaterialBaseEmissionMaps[i];
+                var map = dissolveEmissionMapOverride != null
+                    ? dissolveEmissionMapOverride
+                    : dissolveSettings.DissolveEmissionMap != null
+                        ? dissolveSettings.DissolveEmissionMap
+                        : dissolveMaterialBaseEmissionMaps[i];
                 SetMaterialEmission(dissolveMaterials[i], emissionColor, map, true);
             }
         }
@@ -1333,6 +1374,48 @@ namespace DiceGame.View
                 var color = dissolveMaterialBaseColors[i];
                 color.a = alpha;
                 SetMaterialBaseColor(dissolveMaterials[i], color);
+                if (useTransparent && dissolveEmissionMapOverride != null) {
+                    SetMaterialBaseMap(dissolveMaterials[i], dissolveEmissionMapOverride);
+                }
+            }
+        }
+
+        float GetRollDurationMultiplier() {
+            EnsureDiceController();
+            return diceController != null
+                ? diceController.Capabilities.RollDurationMultiplier
+                : DiceBehaviorConstants.DefaultRollDurationMultiplier;
+        }
+
+        static Texture ResolveBaseMapFromPrefab(GameObject prefab) {
+            if (prefab == null) {
+                return null;
+            }
+
+            var renderer = prefab.GetComponentInChildren<Renderer>(true);
+            if (renderer == null) {
+                return null;
+            }
+
+            var material = renderer.sharedMaterial;
+            if (material == null || !material.HasProperty("_BaseMap")) {
+                return null;
+            }
+
+            return material.GetTexture("_BaseMap");
+        }
+
+        static void SetMaterialBaseMap(Material material, Texture texture) {
+            if (material == null || texture == null) {
+                return;
+            }
+
+            if (material.HasProperty("_BaseMap")) {
+                material.SetTexture("_BaseMap", texture);
+            }
+
+            if (material.HasProperty("_MainTex")) {
+                material.SetTexture("_MainTex", texture);
             }
         }
 

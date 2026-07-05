@@ -1,3 +1,5 @@
+using DiceGame.Config;
+using DiceGame.Core;
 using DiceGame.Grid;
 using DiceGame.Gameplay;
 using DiceGame.View;
@@ -9,9 +11,17 @@ namespace DiceGame.Editor
     public static class DiceEntityPrefabCreator
     {
         const string DiceVisualPrefabPath = "Assets/Packages/Dice_6/Prefabs/Dice_d6_Plastic Glossy Pure blue.prefab";
+        const string NormalDicePrefabPath = "Assets/_Project/Prefabs/Normal Dice.prefab";
         const string DiceEntityPrefabPath = "Assets/_Project/Prefabs/DiceEntity.prefab";
         const string CharacterPrefabPath = "Assets/_Project/Prefabs/Character.prefab";
         const string DiceSpawnSettingsPath = "Assets/_Project/Settings/Gameplay/DiceSpawnSettings.asset";
+        const string DiceCatalogPath = "Assets/_Project/Settings/Gameplay/DiceCatalog.asset";
+
+        const string WoodDicePrefabPath = "Assets/_Project/Prefabs/Wood Dice.prefab";
+        const string IronDicePrefabPath = "Assets/_Project/Prefabs/Iron Dice.prefab";
+        const string MagnetDicePrefabPath = "Assets/_Project/Prefabs/Magnet Dice.prefab";
+        const string IceDicePrefabPath = "Assets/_Project/Prefabs/Ice Dice.prefab";
+        const string StoneDicePrefabPath = "Assets/_Project/Prefabs/Stone Dice.prefab";
 
         [MenuItem("Dice/Create DiceEntity Prefab")]
         public static void CreateDiceEntityPrefab() {
@@ -60,9 +70,51 @@ namespace DiceGame.Editor
             Debug.Log($"Created {DiceEntityPrefabPath}");
         }
 
+        [MenuItem("Dice/Create Dice Catalog Asset")]
+        public static void CreateDiceCatalogAsset() {
+            EnsureSettingsFolder();
+            var existing = AssetDatabase.LoadAssetAtPath<DiceCatalog>(DiceCatalogPath);
+            if (existing != null) {
+                Selection.activeObject = existing;
+                Debug.Log($"DiceCatalog already exists at {DiceCatalogPath}");
+                return;
+            }
+
+            var catalog = ScriptableObject.CreateInstance<DiceCatalog>();
+            var serialized = new SerializedObject(catalog);
+            var entries = serialized.FindProperty("entries");
+            entries.arraySize = 6;
+            SetCatalogEntry(entries, 0, DiceKind.Normal, NormalDicePrefabPath, 5f);
+            SetCatalogEntry(entries, 1, DiceKind.Wood, WoodDicePrefabPath, 2f);
+            SetCatalogEntry(entries, 2, DiceKind.Iron, IronDicePrefabPath, 1f);
+            SetCatalogEntry(entries, 3, DiceKind.Magnet, MagnetDicePrefabPath, 1f);
+            SetCatalogEntry(entries, 4, DiceKind.Ice, IceDicePrefabPath, 1.5f);
+            SetCatalogEntry(entries, 5, DiceKind.Stone, StoneDicePrefabPath, 1.5f);
+            serialized.ApplyModifiedPropertiesWithoutUndo();
+
+            AssetDatabase.CreateAsset(catalog, DiceCatalogPath);
+            AssetDatabase.SaveAssets();
+            Selection.activeObject = catalog;
+            Debug.Log($"Created {DiceCatalogPath}");
+        }
+
+        static void SetCatalogEntry(
+            SerializedProperty entries,
+            int index,
+            DiceKind kind,
+            string prefabPath,
+            float spawnWeight) {
+            var entry = entries.GetArrayElementAtIndex(index);
+            entry.FindPropertyRelative("Kind").enumValueIndex = (int)kind;
+            entry.FindPropertyRelative("MeshPrefab").objectReferenceValue =
+                AssetDatabase.LoadAssetAtPath<GameObject>(prefabPath);
+            entry.FindPropertyRelative("SpawnWeight").floatValue = spawnWeight;
+        }
+
         [MenuItem("Dice/Setup Game Scene")]
         public static void SetupGameScene() {
             CreateDiceEntityPrefab();
+            CreateDiceCatalogAsset();
 
             var diceEntityPrefab = AssetDatabase.LoadAssetAtPath<GameObject>(DiceEntityPrefabPath);
             var characterPrefab = AssetDatabase.LoadAssetAtPath<GameObject>(CharacterPrefabPath);
@@ -107,6 +159,8 @@ namespace DiceGame.Editor
             serializedBootstrap.FindProperty("characterPrefab").objectReferenceValue = characterPrefab;
             serializedBootstrap.FindProperty("diceSpawnSettings").objectReferenceValue =
                 AssetDatabase.LoadAssetAtPath<DiceGame.Config.DiceSpawnSettings>(DiceSpawnSettingsPath);
+            serializedBootstrap.FindProperty("diceCatalog").objectReferenceValue =
+                AssetDatabase.LoadAssetAtPath<DiceCatalog>(DiceCatalogPath);
             serializedBootstrap.ApplyModifiedPropertiesWithoutUndo();
 
             bootstrap.ApplyCameraSetup();
@@ -162,6 +216,16 @@ namespace DiceGame.Editor
         static void EnsurePrefabFolder() {
             if (!AssetDatabase.IsValidFolder("Assets/_Project/Prefabs")) {
                 AssetDatabase.CreateFolder("Assets/_Project", "Prefabs");
+            }
+        }
+
+        static void EnsureSettingsFolder() {
+            if (!AssetDatabase.IsValidFolder("Assets/_Project/Settings")) {
+                AssetDatabase.CreateFolder("Assets/_Project", "Settings");
+            }
+
+            if (!AssetDatabase.IsValidFolder("Assets/_Project/Settings/Gameplay")) {
+                AssetDatabase.CreateFolder("Assets/_Project/Settings", "Gameplay");
             }
         }
 

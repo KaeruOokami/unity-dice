@@ -836,24 +836,18 @@ namespace DiceGame.Gameplay
 
             var pushed = false;
             foreach (var candidate in pushCandidates) {
-                if (DiceSlidePassability.TryEvaluate(
-                    candidate.Dice.CurrentState,
-                    candidate.Direction,
-                    registry,
-                    out var slidePlan,
-                    out _)
-                    && candidate.Dice.TryExecuteSlidePlan(slidePlan)) {
+                if (TryPushDice(candidate, out var pushedDice, out var pushDir)) {
                     LogPushDebug(
-                        "slide-ok",
-                        $"stage=slide dice={FormatMovementDice(candidate.Dice)} dir={candidate.Direction}");
-                    BeginPushFollow(candidate.Dice, candidate.Direction);
+                        "push-ok",
+                        $"stage=push dice={FormatMovementDice(pushedDice)} dir={pushDir}");
+                    BeginPushFollow(pushedDice, pushDir);
                     pushed = true;
                     break;
                 }
 
                 LogPushDebug(
-                    $"slide-fail-{FormatMovementDice(candidate.Dice)}-{candidate.Direction}",
-                    $"stage=slide dice={FormatMovementDice(candidate.Dice)} dir={candidate.Direction} slide-plan-failed");
+                    $"push-fail-{FormatMovementDice(candidate.Dice)}-{candidate.Direction}",
+                    $"stage=push dice={FormatMovementDice(candidate.Dice)} dir={candidate.Direction} push-failed");
             }
 
             if (!pushed) {
@@ -1176,6 +1170,41 @@ namespace DiceGame.Gameplay
                 Direction.South => Vector2.down,
                 _ => Vector2.zero
             };
+        }
+
+        bool TryPushDice(PushContactCandidate candidate, out DiceController pushedDice, out Direction pushDir) {
+            pushedDice = null;
+            pushDir = candidate.Direction;
+            var dice = candidate.Dice;
+
+            if (dice.Capabilities.PushUsesRoll) {
+                if (movementTransition.TryBuildGridMovePlan(
+                    dice.CurrentState,
+                    candidate.Direction,
+                    1,
+                    PassabilityContext.ForGround(GetPassabilityReachY()),
+                    out var rollPlan,
+                    out _)
+                    && dice.TryExecuteGroundMovePlan(rollPlan)) {
+                    pushedDice = dice;
+                    return true;
+                }
+
+                return false;
+            }
+
+            if (DiceSlidePassability.TryEvaluate(
+                dice.CurrentState,
+                candidate.Direction,
+                registry,
+                out var slidePlan,
+                out _)
+                && dice.TryExecuteSlidePlan(slidePlan)) {
+                pushedDice = dice;
+                return true;
+            }
+
+            return false;
         }
 
         bool CanPushDice(DiceController dice) {

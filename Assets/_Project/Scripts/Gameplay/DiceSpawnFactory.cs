@@ -17,6 +17,8 @@ namespace DiceGame.Gameplay
             Transform parent,
             Vector2Int gridPos,
             DiceStackTier tier,
+            DiceKind kind,
+            GameObject meshPrefab,
             PhysicsSettings physicsSettings,
             DiceAnimationSettings animationSettings,
             DiceDissolveSettings dissolveSettings) {
@@ -26,7 +28,7 @@ namespace DiceGame.Gameplay
 
             var diceEntity = UnityEngine.Object.Instantiate(prefab, parent);
             var tierLabel = tier == DiceStackTier.Top ? "Top" : "Bottom";
-            diceEntity.name = $"DiceEntity_{gridPos.x}_{gridPos.y}_{tierLabel}";
+            diceEntity.name = $"DiceEntity_{gridPos.x}_{gridPos.y}_{tierLabel}_{kind}";
 
             var diceView = diceEntity.GetComponent<DiceView>();
             if (diceView == null) {
@@ -36,6 +38,9 @@ namespace DiceGame.Gameplay
             }
 
             diceView.Configure(physicsSettings, animationSettings, dissolveSettings);
+            if (meshPrefab != null) {
+                diceView.SetMeshPrefab(meshPrefab);
+            }
 
             var diceController = diceEntity.GetComponent<DiceController>();
             if (diceController == null) {
@@ -65,6 +70,7 @@ namespace DiceGame.Gameplay
         Board board;
         DiceRegistry registry;
         GameObject diceEntityPrefab;
+        DiceCatalog diceCatalog;
         Transform spawnParent;
         PhysicsSettings physicsSettings;
         DiceAnimationSettings diceAnimationSettings;
@@ -78,6 +84,7 @@ namespace DiceGame.Gameplay
             Board targetBoard,
             DiceRegistry targetRegistry,
             GameObject prefab,
+            DiceCatalog catalog,
             Transform parent,
             PhysicsSettings physics,
             DiceAnimationSettings animationSettings,
@@ -87,6 +94,7 @@ namespace DiceGame.Gameplay
             board = targetBoard;
             registry = targetRegistry;
             diceEntityPrefab = prefab;
+            diceCatalog = catalog;
             spawnParent = parent;
             physicsSettings = physics;
             diceAnimationSettings = animationSettings;
@@ -114,9 +122,6 @@ namespace DiceGame.Gameplay
             }
         }
 
-        /// <summary>
-        /// Spawns initial dice at random empty Bottom / Top slots. Returns the first dice for character standing.
-        /// </summary>
         public DiceController SpawnInitialDice() {
             if (spawnSettings == null || board == null || registry == null) {
                 return null;
@@ -162,12 +167,29 @@ namespace DiceGame.Gameplay
             DiceStackTier tier,
             bool useSpawnAppear,
             Action onComplete = null) {
+            if (diceCatalog == null) {
+                Debug.LogError("DiceSpawnSystem: DiceCatalog is not assigned.");
+                return null;
+            }
+
+            if (!diceCatalog.TryPickRandomKind(random, out var kind)) {
+                Debug.LogError("DiceSpawnSystem: Failed to pick dice kind. Check DiceCatalog spawn weights.");
+                return null;
+            }
+
+            if (!diceCatalog.TryGetMeshPrefab(kind, out var meshPrefab)) {
+                Debug.LogError($"DiceSpawnSystem: Mesh prefab not found for kind={kind}.");
+                return null;
+            }
+
             var orientation = DiceSpawnFactory.CreateRandomOrientation();
             var diceController = DiceSpawnFactory.TryCreate(
                 diceEntityPrefab,
                 spawnParent,
                 gridPos,
                 tier,
+                kind,
+                meshPrefab,
                 physicsSettings,
                 diceAnimationSettings,
                 diceDissolveSettings);
@@ -186,9 +208,10 @@ namespace DiceGame.Gameplay
                     orientation,
                     spawnSettings,
                     tier,
+                    kind,
                     onComplete);
             } else {
-                diceController.Configure(board, diceView, registry, gridPos, orientation, tier);
+                diceController.Configure(board, diceView, registry, gridPos, orientation, tier, kind);
             }
 
             return diceController;
