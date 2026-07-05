@@ -111,7 +111,11 @@ namespace DiceGame.Placement
                 default);
         }
 
+        public bool IsDissolveDescentHold =>
+            Kind == MovementTransitionKind.BlockedStepOnly
+            && Route == MovementTransitionRoute.DissolveDescent;
+
         public bool IsDissolveDescentToFloor =>
-            Kind == MovementTransitionKind.BlockedStepOnly && TargetLayer == SurfaceLayer.Floor;
+            IsDissolveDescentHold && TargetLayer == SurfaceLayer.Floor;
     }
 }

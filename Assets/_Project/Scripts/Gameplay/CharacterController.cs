@@ -24,6 +24,7 @@ namespace DiceGame.Gameplay
         const float MovementBlockLogInterval = 0.25f;
         const float PushDebugLogInterval = 0.25f;
         const float JumpParallelRollLogInterval = 0.25f;
+        const float HeightTransferLogInterval = 0.25f;
 
         MovementTransitionEvaluator movementTransition;
         string debugLastMovementBlockKey;
@@ -32,6 +33,8 @@ namespace DiceGame.Gameplay
         float debugLastPushLogTime = -1f;
         string debugLastJumpParallelRollKey;
         float debugLastJumpParallelRollLogTime = -1f;
+        string debugLastHeightTransferKey;
+        float debugLastHeightTransferLogTime = -1f;
 
         enum LiftPhase {
             None,
@@ -159,6 +162,8 @@ namespace DiceGame.Gameplay
             movementTransition = placement.Passability;
             movementTransition.SetJumpParallelRollDebugLog(
                 movementSettings.DebugJumpParallelRoll ? LogJumpParallelRoll : null);
+            movementTransition.SetHeightTransferDebugLog(
+                movementSettings.DebugMovementBlock ? LogHeightTransfer : null);
 
             coupling.Configure(
                 board,
@@ -577,6 +582,21 @@ namespace DiceGame.Gameplay
             debugLastJumpParallelRollKey = message;
             debugLastJumpParallelRollLogTime = Time.time;
             Debug.Log($"[JumpParallelRoll] {message}");
+        }
+
+        void LogHeightTransfer(string message) {
+            if (!movementSettings.DebugMovementBlock) {
+                return;
+            }
+
+            if (message == debugLastHeightTransferKey
+                && Time.time - debugLastHeightTransferLogTime < HeightTransferLogInterval) {
+                return;
+            }
+
+            debugLastHeightTransferKey = message;
+            debugLastHeightTransferLogTime = Time.time;
+            Debug.Log($"[HeightTransfer] {message}");
         }
 
         static string FormatMovementVector2(Vector2 value) {

@@ -173,7 +173,7 @@ namespace DiceGame.Gameplay.Character
             MovementTransition transition,
             CharacterMovementSettings movementSettings,
             System.Action<MovementTransition, Vector2Int> applyStanding) {
-            if (!transition.IsDissolveDescentToFloor) {
+            if (!transition.IsDissolveDescentHold) {
                 Reset();
                 return false;
             }
@@ -193,8 +193,11 @@ namespace DiceGame.Gameplay.Character
                 return true;
             }
 
+            var route = transition.TargetLayer == SurfaceLayer.Floor
+                ? MovementTransitionRoute.FloorTransfer
+                : MovementTransitionRoute.HeightTransfer;
             applyStanding(
-                MovementTransition.Walkable(null, SurfaceLayer.Floor),
+                MovementTransition.Walkable(transition.TargetDice, transition.TargetLayer, route),
                 nextCell);
             Reset();
             return true;
