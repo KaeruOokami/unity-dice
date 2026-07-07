@@ -462,6 +462,17 @@ namespace DiceGame.Gameplay
                 return evaluated;
             }
 
+            var standingDice = standingController.ResolveStandingDiceForMovement();
+            if (standingDice != null && !standingDice.CanJumpCoupleWithPlayer) {
+                capability = new JumpCoupledMoveCapability(
+                    capability.IsJumping,
+                    capability.AllowCrossCellMove,
+                    allowDiceGridMove: false,
+                    maxDistance: 0,
+                    allowTierChange: false,
+                    capability.Timeline);
+            }
+
             if (coupling.JumpDiceGridMoved) {
                 LogJumpParallelRoll(
                     "JumpInputPolicy blocked reason=already-moved " +
@@ -1553,6 +1564,12 @@ namespace DiceGame.Gameplay
 
             jumpVisualDice = targetDice;
             if (targetDice == null) {
+                return;
+            }
+
+            if (!targetDice.CanJumpCoupleWithPlayer) {
+                ClearJumpVisualDice(targetDice);
+                jumpVisualDice = null;
                 return;
             }
 

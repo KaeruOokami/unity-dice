@@ -171,6 +171,10 @@ namespace DiceGame.Gameplay.Coupling
             Vector2 nextXZ,
             float halfExtent,
             Action<string> log) {
+            if (!CanJumpCoupleWithStandingDice()) {
+                return false;
+            }
+
             if (session.JumpDiceGridMoved) {
                 return false;
             }
@@ -184,6 +188,10 @@ namespace DiceGame.Gameplay.Coupling
         }
 
         public bool TryBeginJumpTopFallRoll(DiceGridMovePlan plan, Vector2 nextXZ, float halfExtent) {
+            if (!CanJumpCoupleWithStandingDice()) {
+                return false;
+            }
+
             if (session.JumpDiceGridMoved) {
                 return false;
             }
@@ -253,7 +261,7 @@ namespace DiceGame.Gameplay.Coupling
             }
 
             var dice = standing.CurrentDice;
-            if (dice == null) {
+            if (dice == null || !CanJumpCoupleWithStandingDice()) {
                 return false;
             }
 
@@ -434,6 +442,11 @@ namespace DiceGame.Gameplay.Coupling
 
         void ClearRollCancelSession() {
             rollCancelSession = default;
+        }
+
+        bool CanJumpCoupleWithStandingDice() {
+            return standing.CurrentDice == null
+                || standing.CurrentDice.CanJumpCoupleWithPlayer;
         }
 
         void BeginFollow(Vector3 characterAnchor, Vector3 diceCenterAnchor, bool jumpArc, JumpDiceMoveKind moveKind) {

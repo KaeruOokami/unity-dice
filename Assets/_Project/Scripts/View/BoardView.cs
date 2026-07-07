@@ -16,32 +16,31 @@ namespace DiceGame.View
             }
 
             if (generateFloorTiles) {
-                BuildFloorTiles();
+                BuildFloorPlane();
             }
         }
 
-        void BuildFloorTiles() {
-            var parent = new GameObject("FloorTiles").transform;
-            parent.SetParent(transform, false);
+        void BuildFloorPlane() {
+            var floor = GameObject.CreatePrimitive(PrimitiveType.Plane);
+            floor.name = "Floor";
+            floor.transform.SetParent(transform, false);
 
-            var tileHeight = 0.1f;
-            var tileScale = new Vector3(board.CellSize * 0.95f, tileHeight, board.CellSize * 0.95f);
+            var boardWidth = board.Width * board.CellSize;
+            var boardDepth = board.Height * board.CellSize;
+            var centerX = (board.Width - 1) * board.CellSize * 0.5f;
+            var centerZ = (board.Height - 1) * board.CellSize * 0.5f;
 
-            for (var x = 0; x < board.Width; x++) {
-                for (var z = 0; z < board.Height; z++) {
-                    var tile = GameObject.CreatePrimitive(PrimitiveType.Cube);
-                    tile.name = $"Floor_{x}_{z}";
-                    tile.transform.SetParent(parent, false);
-                    tile.transform.localScale = tileScale;
-                    tile.transform.localPosition = new Vector3(
-                        x * board.CellSize,
-                        -tileHeight * 0.5f,
-                        z * board.CellSize);
+            floor.transform.localPosition = new Vector3(
+                centerX,
+                board.FloorSurfaceWorldY,
+                centerZ);
+            floor.transform.localScale = new Vector3(
+                boardWidth / 10f,
+                1f,
+                boardDepth / 10f);
 
-                    if (floorMaterial != null) {
-                        tile.GetComponent<Renderer>().sharedMaterial = floorMaterial;
-                    }
-                }
+            if (floorMaterial != null) {
+                floor.GetComponent<Renderer>().sharedMaterial = floorMaterial;
             }
         }
     }

@@ -38,6 +38,8 @@ namespace DiceGame.Gameplay
         public DiceKind Kind => currentState.Kind;
         public DiceCapabilities Capabilities => DiceBehaviorResolver.GetCapabilities(Kind);
         public bool IsPlayerMovable => registry != null && IronAdjacencyBlock.IsPlayerMovable(this, registry);
+        public bool CanJumpCoupleWithPlayer =>
+            registry != null && IronAdjacencyBlock.CanJumpCoupleWithPlayer(this, registry);
         public DiceView View => diceView;
         public float GroundRollProgress => diceView != null ? diceView.GroundRollProgress : 0f;
 

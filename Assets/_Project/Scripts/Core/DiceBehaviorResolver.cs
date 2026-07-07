@@ -7,6 +7,7 @@ namespace DiceGame.Core
                 DiceKind.Wood => new DiceCapabilities(
                     canBePushedByPlayer: true,
                     canBeLiftedByPlayer: true,
+                    canJumpCoupleWithPlayer: true,
                     pushUsesRoll: true,
                     canGridRoll: true,
                     slideUntilBlocked: false,
@@ -16,6 +17,7 @@ namespace DiceGame.Core
                 DiceKind.Iron => new DiceCapabilities(
                     canBePushedByPlayer: false,
                     canBeLiftedByPlayer: false,
+                    canJumpCoupleWithPlayer: false,
                     pushUsesRoll: false,
                     canGridRoll: false,
                     slideUntilBlocked: false,
@@ -25,6 +27,7 @@ namespace DiceGame.Core
                 DiceKind.Magnet => new DiceCapabilities(
                     canBePushedByPlayer: true,
                     canBeLiftedByPlayer: true,
+                    canJumpCoupleWithPlayer: true,
                     pushUsesRoll: false,
                     canGridRoll: true,
                     slideUntilBlocked: false,
@@ -34,6 +37,7 @@ namespace DiceGame.Core
                 DiceKind.Ice => new DiceCapabilities(
                     canBePushedByPlayer: true,
                     canBeLiftedByPlayer: true,
+                    canJumpCoupleWithPlayer: true,
                     pushUsesRoll: false,
                     canGridRoll: false,
                     slideUntilBlocked: true,
@@ -43,6 +47,7 @@ namespace DiceGame.Core
                 DiceKind.Stone => new DiceCapabilities(
                     canBePushedByPlayer: false,
                     canBeLiftedByPlayer: false,
+                    canJumpCoupleWithPlayer: false,
                     pushUsesRoll: false,
                     canGridRoll: true,
                     slideUntilBlocked: false,
@@ -52,6 +57,7 @@ namespace DiceGame.Core
                 _ => new DiceCapabilities(
                     canBePushedByPlayer: true,
                     canBeLiftedByPlayer: true,
+                    canJumpCoupleWithPlayer: true,
                     pushUsesRoll: false,
                     canGridRoll: true,
                     slideUntilBlocked: false,

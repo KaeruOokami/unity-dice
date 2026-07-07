@@ -52,6 +52,8 @@
      <Compile Include="Assets\_Project\Scripts\Gameplay\Character\CharacterMovementExecutor.cs" />
      <Compile Include="Assets\_Project\Scripts\Placement\DiceSlidePassability.cs" />
      <Compile Include="Assets\_Project\Scripts\Core\DiceSlidePlan.cs" />
+     <Compile Include="Assets\_Project\Scripts\Core\DiceBehaviorConstants.cs" />
+     <Compile Include="Assets\_Project\Scripts\Placement\IceSlidePassability.cs" />
      <Compile Include="Assets\_Project\Scripts\Core\Direction.cs" />
      <Compile Include="Assets\_Project\Scripts\Placement\CharacterPlacement.cs" />
      <Compile Include="Assets\_Project\Scripts\View\DiceView.cs" />
@@ -61,6 +63,7 @@
      <Compile Include="Assets\_Project\Scripts\Placement\MovementTransition.cs" />
      <Compile Include="Assets\_Project\Scripts\Config\DiceDissolveSettings.cs" />
      <Compile Include="Assets\_Project\Scripts\Placement\CellOccupancyTier.cs" />
+     <Compile Include="Assets\_Project\Scripts\Placement\MagnetMoveExecutor.cs" />
      <Compile Include="Assets\_Project\Scripts\Gameplay\Character\CharacterMovePlanner.cs" />
      <Compile Include="Assets\_Project\Scripts\Gameplay\DiceController.cs" />
      <Compile Include="Assets\_Project\Scripts\Gameplay\DiceMoveVisualContext.cs" />
@@ -72,12 +75,15 @@
      <Compile Include="Assets\_Project\Scripts\Placement\TopFallPolicy.cs" />
      <Compile Include="Assets\_Project\Scripts\Board\IBoard.cs" />
      <Compile Include="Assets\_Project\Scripts\Gameplay\DiceMatchFinder.cs" />
+     <Compile Include="Assets\_Project\Scripts\Core\DiceKind.cs" />
      <Compile Include="Assets\_Project\Scripts\Placement\DiceRegistry.cs" />
      <Compile Include="Assets\_Project\Scripts\Gameplay\CharacterController.cs" />
+     <Compile Include="Assets\_Project\Scripts\Placement\IronAdjacencyBlock.cs" />
      <Compile Include="Assets\_Project\Scripts\Gameplay\Character\CharacterTransformDriver.cs" />
      <Compile Include="Assets\_Project\Scripts\Core\DiceOrientationMapper.cs" />
      <Compile Include="Assets\_Project\Scripts\Config\CharacterMovementSettings.cs" />
      <Compile Include="Assets\_Project\Scripts\Placement\PushPassability.cs" />
+     <Compile Include="Assets\_Project\Scripts\Placement\MagnetChainResolver.cs" />
      <Compile Include="Assets\_Project\Scripts\Placement\BoardSurface.cs" />
      <Compile Include="Assets\TutorialInfo\Scripts\Readme.cs" />
      <Compile Include="Assets\_Project\Scripts\Placement\LiftPassability.cs" />
@@ -97,20 +103,15 @@
      <Compile Include="Assets\_Project\Scripts\Placement\IDicePlacement.cs" />
      <Compile Include="Assets\_Project\Scripts\Board\Board.cs" />
      <Compile Include="Assets\_Project\Scripts\Gameplay\DiceSpawnFactory.cs" />
+     <Compile Include="Assets\_Project\Scripts\Core\DiceBehaviorResolver.cs" />
      <Compile Include="Assets\_Project\Scripts\Placement\GridMovePlanBuilder.cs" />
      <Compile Include="Assets\_Project\Scripts\Gameplay\GameBootstrap.cs" />
      <Compile Include="Assets\_Project\Scripts\Gameplay\DiceStackAdjacency.cs" />
+     <Compile Include="Assets\_Project\Scripts\Config\DiceCatalog.cs" />
      <Compile Include="Assets\_Project\Scripts\Placement\CellOccupancyQuery.cs" />
      <Compile Include="Assets\_Project\Scripts\Placement\SurfaceQuery.cs" />
-     <Compile Include="Assets\_Project\Scripts\Placement\IronAdjacencyBlock.cs" />
      <Compile Include="Assets\_Project\Scripts\Core\DiceCapabilities.cs" />
-     <Compile Include="Assets\_Project\Scripts\Core\DiceBehaviorConstants.cs" />
-     <Compile Include="Assets\_Project\Scripts\Placement\MagnetChainResolver.cs" />
-     <Compile Include="Assets\_Project\Scripts\Core\DiceBehaviorResolver.cs" />
-     <Compile Include="Assets\_Project\Scripts\Placement\MagnetMoveExecutor.cs" />
-     <Compile Include="Assets\_Project\Scripts\Placement\IceSlidePassability.cs" />
-     <Compile Include="Assets\_Project\Scripts\Core\DiceKind.cs" />
-     <Compile Include="Assets\_Project\Scripts\Config\DiceCatalog.cs" />
+     <Compile Include="Assets\_Project\Scripts\MirrorFloor.cs" />
      <None Include="Assets\Packages\Dice_6\Documentation\Readmy.txt" />
     <Reference Include="UnityEngine">
         <HintPath>D:\Program Files\Unity\Hub\Editor\2021.3.10f1\Editor\Data\Managed\UnityEngine\UnityEngine.dll</HintPath>

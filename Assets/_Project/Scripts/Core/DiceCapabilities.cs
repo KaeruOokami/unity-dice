@@ -4,6 +4,7 @@ namespace DiceGame.Core
     {
         public bool CanBePushedByPlayer { get; }
         public bool CanBeLiftedByPlayer { get; }
+        public bool CanJumpCoupleWithPlayer { get; }
         public bool PushUsesRoll { get; }
         public bool CanGridRoll { get; }
         public bool SlideUntilBlocked { get; }
@@ -14,6 +15,7 @@ namespace DiceGame.Core
         public DiceCapabilities(
             bool canBePushedByPlayer,
             bool canBeLiftedByPlayer,
+            bool canJumpCoupleWithPlayer,
             bool pushUsesRoll,
             bool canGridRoll,
             bool slideUntilBlocked,
@@ -22,6 +24,7 @@ namespace DiceGame.Core
             float rollDurationMultiplier) {
             CanBePushedByPlayer = canBePushedByPlayer;
             CanBeLiftedByPlayer = canBeLiftedByPlayer;
+            CanJumpCoupleWithPlayer = canJumpCoupleWithPlayer;
             PushUsesRoll = pushUsesRoll;
             CanGridRoll = canGridRoll;
             SlideUntilBlocked = slideUntilBlocked;

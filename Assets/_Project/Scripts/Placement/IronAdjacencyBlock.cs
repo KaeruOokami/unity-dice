@@ -27,6 +27,22 @@ namespace DiceGame.Placement
             return !HasAdjacentIron(dice, registry);
         }
 
+        public static bool CanJumpCoupleWithPlayer(DiceController dice, DiceRegistry registry) {
+            if (dice == null) {
+                return true;
+            }
+
+            if (!dice.Capabilities.CanJumpCoupleWithPlayer) {
+                return false;
+            }
+
+            if (dice.Capabilities.HasMagnetCoupling && HasAdjacentIron(dice, registry)) {
+                return false;
+            }
+
+            return true;
+        }
+
         static bool HasAdjacentIron(DiceController dice, DiceRegistry registry) {
             var tier = dice.CurrentState.Tier;
             var cell = dice.CurrentState.GridPos;

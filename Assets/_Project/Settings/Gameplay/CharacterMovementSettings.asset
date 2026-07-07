@@ -21,9 +21,9 @@ MonoBehaviour:
   dissolveDescentHoldDuration: 0.35
   rollCancelWindowProgress: 0.5
   pushInputAlignment: 0.7
-  liftKey: 113
+  liftKey: 107
   carryVerticalOffset: 1.05
-  jumpKey: 32
+  jumpKey: 106
   debugMovementBlock: 1
   debugPush: 0
   debugJumpParallelRoll: 0
