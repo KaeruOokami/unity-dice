@@ -42,6 +42,7 @@
      <Compile Include="Assets\_Project\Scripts\Gameplay\Coupling\RollCancelPolicy.cs" />
      <Compile Include="Assets\_Project\Scripts\Core\DiceOrientation.cs" />
      <Compile Include="Assets\_Project\Scripts\Placement\HeightReachPolicy.cs" />
+     <Compile Include="Assets\_Project\Scripts\MirrorFloor.cs" />
      <Compile Include="Assets\_Project\Scripts\Placement\TierLandingPolicy.cs" />
      <Compile Include="Assets\_Project\Scripts\Core\DiceGridRollLimits.cs" />
      <Compile Include="Assets\_Project\Scripts\Placement\WalkTransferPolicy.cs" />
@@ -111,7 +112,7 @@
      <Compile Include="Assets\_Project\Scripts\Placement\CellOccupancyQuery.cs" />
      <Compile Include="Assets\_Project\Scripts\Placement\SurfaceQuery.cs" />
      <Compile Include="Assets\_Project\Scripts\Core\DiceCapabilities.cs" />
-     <Compile Include="Assets\_Project\Scripts\MirrorFloor.cs" />
+     <Compile Include="Assets\_Project\Scripts\Placement\JumpPlayerTransferPolicy.cs" />
      <None Include="Assets\Packages\Dice_6\Documentation\Readmy.txt" />
     <Reference Include="UnityEngine">
         <HintPath>D:\Program Files\Unity\Hub\Editor\2021.3.10f1\Editor\Data\Managed\UnityEngine\UnityEngine.dll</HintPath>

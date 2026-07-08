@@ -80,6 +80,22 @@ namespace DiceGame.Placement
             return true;
         }
 
+        public static JumpCoupledMoveCapability ApplyPlayerOnlyJumpOverride(
+            JumpCoupledMoveCapability capability,
+            bool canJumpCoupleWithPlayer) {
+            if (!capability.IsJumping || canJumpCoupleWithPlayer) {
+                return capability;
+            }
+
+            return new JumpCoupledMoveCapability(
+                capability.IsJumping,
+                allowCrossCellMove: true,
+                allowDiceGridMove: false,
+                maxDistance: 0,
+                allowTierChange: true,
+                capability.Timeline);
+        }
+
         static bool TryGetAscentTimeline(
             PhysicsSettings physicsSettings,
             VerticalMotionState jumpMotion,

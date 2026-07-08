@@ -24,6 +24,7 @@ namespace DiceGame.Gameplay
         const float MovementBlockLogInterval = 0.25f;
         const float PushDebugLogInterval = 0.25f;
         const float JumpParallelRollLogInterval = 0.25f;
+        const float JumpLogInterval = 0.25f;
         const float HeightTransferLogInterval = 0.25f;
 
         MovementTransitionEvaluator movementTransition;
@@ -33,6 +34,8 @@ namespace DiceGame.Gameplay
         float debugLastPushLogTime = -1f;
         string debugLastJumpParallelRollKey;
         float debugLastJumpParallelRollLogTime = -1f;
+        string debugLastJumpKey;
+        float debugLastJumpLogTime = -1f;
         string debugLastHeightTransferKey;
         float debugLastHeightTransferLogTime = -1f;
 
@@ -290,6 +293,7 @@ namespace DiceGame.Gameplay
                 && !standingController.CurrentDice.IsRolling) {
                 var wasArcRoll = coupling.CompleteRollIfFinished(standingController.CurrentDice);
                 if (wasArcRoll && jumpPhase != JumpPhase.None) {
+                    LogJump($"EndJump reason=arc-roll-complete {FormatJumpContext()}");
                     EndJump();
                 }
             }
@@ -463,15 +467,8 @@ namespace DiceGame.Gameplay
             }
 
             var standingDice = standingController.ResolveStandingDiceForMovement();
-            if (standingDice != null && !standingDice.CanJumpCoupleWithPlayer) {
-                capability = new JumpCoupledMoveCapability(
-                    capability.IsJumping,
-                    capability.AllowCrossCellMove,
-                    allowDiceGridMove: false,
-                    maxDistance: 0,
-                    allowTierChange: false,
-                    capability.Timeline);
-            }
+            var canJumpCoupleWithPlayer = standingDice == null || standingDice.CanJumpCoupleWithPlayer;
+            capability = JumpInputPolicy.ApplyPlayerOnlyJumpOverride(capability, canJumpCoupleWithPlayer);
 
             if (coupling.JumpDiceGridMoved) {
                 LogJumpParallelRoll(
@@ -595,6 +592,51 @@ namespace DiceGame.Gameplay
             Debug.Log($"[JumpParallelRoll] {message}");
         }
 
+        void LogJump(string message, bool throttle = false) {
+            if (movementSettings == null || !movementSettings.DebugJump) {
+                return;
+            }
+
+            if (throttle
+                && message == debugLastJumpKey
+                && Time.time - debugLastJumpLogTime < JumpLogInterval) {
+                return;
+            }
+
+            debugLastJumpKey = message;
+            debugLastJumpLogTime = Time.time;
+            Debug.Log($"[Jump] {message}");
+        }
+
+        string FormatJumpContext() {
+            var standingDice = standingController != null
+                ? standingController.ResolveStandingDiceForMovement()
+                : null;
+            var diceLabel = standingDice != null
+                ? $"{standingDice.name} kind={standingDice.Kind} canCouple={standingDice.CanJumpCoupleWithPlayer}"
+                : "(none)";
+            var grid = standingController != null
+                ? FormatMovementGrid(standingController.GridCell)
+                : "(?,?)";
+            var layer = standingController != null ? standingController.Layer : SurfaceLayer.Floor;
+            var tier = standingController != null ? standingController.Tier : DiceStackTier.Bottom;
+            return
+                $"phase={jumpPhase} grid={grid} layer={layer} tier={tier} " +
+                $"onFloor={IsOnFloor} dice={diceLabel} yOffset={jumpYOffset:F3}";
+        }
+
+        void LogJumpYOffsetState() {
+            if (jumpPhase == JumpPhase.None) {
+                return;
+            }
+
+            var applyYOffset = ShouldApplyJumpYOffsetToCharacter();
+            LogJump(
+                $"JumpYOffset apply={applyYOffset} grounded={jumpMotion.IsGrounded} " +
+                $"velocityY={jumpMotion.VelocityY:F3} {FormatJumpContext()}",
+                throttle: true);
+        }
+
         void LogHeightTransfer(string message) {
             if (!movementSettings.DebugMovementBlock) {
                 return;
@@ -659,6 +701,7 @@ namespace DiceGame.Gameplay
             jumpPhase = JumpPhase.Airborne;
             jumpYOffset = 0f;
             coupling.ResetJumpSessionFlags();
+            LogJump($"TryBeginJump ok source=roll-cancel {FormatJumpContext()}");
         }
 
         void MoveToFloorAtCurrentWorldPosition() {
@@ -791,7 +834,15 @@ namespace DiceGame.Gameplay
                 return true;
             }
 
-            return standingController.TryGetStandingDice(out var standingDice) && standingDice.IsDissolving;
+            if (!standingController.TryGetStandingDice(out var standingDice)) {
+                return false;
+            }
+
+            if (!standingDice.CanJumpCoupleWithPlayer) {
+                return true;
+            }
+
+            return standingDice.IsDissolving;
         }
 
         float GetDiceJumpHeight() {
@@ -1503,15 +1554,35 @@ namespace DiceGame.Gameplay
         }
 
         bool TryBeginJump() {
-            if (jumpPhase != JumpPhase.None || liftPhase != LiftPhase.None || isPushFollowing) {
+            if (jumpPhase != JumpPhase.None) {
+                LogJump($"TryBeginJump rejected reason=already-jumping {FormatJumpContext()}");
+                return false;
+            }
+
+            if (liftPhase != LiftPhase.None) {
+                LogJump($"TryBeginJump rejected reason=lift-active liftPhase={liftPhase} {FormatJumpContext()}");
+                return false;
+            }
+
+            if (isPushFollowing) {
+                LogJump($"TryBeginJump rejected reason=push-following {FormatJumpContext()}");
                 return false;
             }
 
             if (!IsOnFloor && standingController.CurrentDice != null && standingController.CurrentDice.IsRolling) {
+                LogJump(
+                    $"TryBeginJump rejected reason=standing-dice-rolling " +
+                    $"dice={standingController.CurrentDice.name} {FormatJumpContext()}");
                 return false;
             }
 
-            if (registry != null && (registry.AnyRolling() || registry.AnyCarried())) {
+            if (registry != null && registry.AnyRolling()) {
+                LogJump($"TryBeginJump rejected reason=any-rolling {FormatJumpContext()}");
+                return false;
+            }
+
+            if (registry != null && registry.AnyCarried()) {
+                LogJump($"TryBeginJump rejected reason=any-carried {FormatJumpContext()}");
                 return false;
             }
 
@@ -1520,6 +1591,7 @@ namespace DiceGame.Gameplay
             jumpYOffset = 0f;
             coupling.ResetJumpSessionFlags();
             ResetPushState();
+            LogJump($"TryBeginJump ok source=key {FormatJumpContext()}");
             return true;
         }
 
@@ -1534,12 +1606,18 @@ namespace DiceGame.Gameplay
 
             jumpMotion = GravityMotion.Step(jumpMotion, physicsSettings.Gravity, Time.deltaTime);
             jumpYOffset = jumpMotion.Offset;
+            LogJumpYOffsetState();
 
             if (jumpMotion.IsGrounded) {
                 if (coupling.IsJumpArc && standingController.CurrentDice != null && standingController.CurrentDice.IsRolling) {
+                    LogJump(
+                        $"UpdateJump hold reason=jump-arc-dice-rolling dice={standingController.CurrentDice.name} " +
+                        $"{FormatJumpContext()}",
+                        throttle: true);
                     return;
                 }
 
+                LogJump($"EndJump reason=grounded {FormatJumpContext()}");
                 EndJump();
             }
         }

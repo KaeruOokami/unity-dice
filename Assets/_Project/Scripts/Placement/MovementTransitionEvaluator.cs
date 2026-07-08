@@ -330,8 +330,25 @@ namespace DiceGame.Placement
                 fromLayer,
                 standingDice,
                 standingTier);
+            var playerOnlyTransfer = JumpPlayerTransferPolicy.UsesPlayerOnlyReach(isJumping, standingDice);
+            var transferReachY = JumpPlayerTransferPolicy.GetTransferReachY(
+                reachY,
+                fromSurface,
+                isJumping,
+                standingDice);
 
             if (registry.CanPlaceBottomDiceAt(toCell)) {
+                if (playerOnlyTransfer
+                    && fromLayer != SurfaceLayer.Floor
+                    && standingDice != null) {
+                    return WalkTransferPolicy.EvaluateFloor(
+                        transferReachY,
+                        board.FloorSurfaceWorldY,
+                        maxStepHeight,
+                        fromSurface);
+                }
+
+                if (!playerOnlyTransfer) {
                 if (isJumping
                     && JumpGridRollPolicy.TryCreateCoupledTransition(
                         fromCell,
@@ -391,7 +408,12 @@ namespace DiceGame.Placement
                     return MovementTransition.IceSlide(iceSlidePlan);
                 }
 
-                if (isJumping && fromLayer != SurfaceLayer.Floor && standingDice != null) {
+                }
+
+                if (isJumping
+                    && fromLayer != SurfaceLayer.Floor
+                    && standingDice != null
+                    && standingDice.CanJumpCoupleWithPlayer) {
                     return MovementTransition.Blocked();
                 }
 
@@ -402,7 +424,7 @@ namespace DiceGame.Placement
             if (fromLayer == SurfaceLayer.Floor) {
                 if (registry.TryGetBottomAt(toCell, out target)
                     && WalkTransferPolicy.TryEvaluateFloorToBottom(
-                        reachY,
+                        transferReachY,
                         target,
                         maxStepHeight,
                         out var floorToBottomTransition)) {
@@ -420,11 +442,12 @@ namespace DiceGame.Placement
                 standingTier,
                 direction,
                 isJumping,
-                reachY,
+                transferReachY,
                 out var heightTransferTransition)) {
                 return heightTransferTransition;
             }
 
+            if (!playerOnlyTransfer) {
             if (isJumping
                 && JumpGridRollPolicy.TryCreateCoupledTransition(
                     fromCell,
@@ -474,6 +497,8 @@ namespace DiceGame.Placement
                 }
 
                 return MovementTransition.GridRoll(occupiedGridPlan);
+            }
+
             }
 
             if (!isJumping

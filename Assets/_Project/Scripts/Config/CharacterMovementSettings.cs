@@ -21,6 +21,7 @@ namespace DiceGame.Config
         [SerializeField] bool debugMovementBlock;
         [SerializeField] bool debugPush;
         [SerializeField] bool debugJumpParallelRoll;
+        [SerializeField] bool debugJump;
 
         public float CharacterHeightOffset => characterHeightOffset;
         public float MaxMoveSpeed => maxMoveSpeed;
@@ -37,5 +38,6 @@ namespace DiceGame.Config
         public bool DebugMovementBlock => debugMovementBlock;
         public bool DebugPush => debugPush;
         public bool DebugJumpParallelRoll => debugJumpParallelRoll;
+        public bool DebugJump => debugJump;
     }
 }
