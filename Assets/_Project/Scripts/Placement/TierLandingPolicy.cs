@@ -12,7 +12,6 @@ namespace DiceGame.Placement
             int fromLevel,
             BoardSurface fromSurface,
             DiceController standingDice,
-            DiceStackTier standingTier,
             PassabilityContext context,
             DiceRegistry registry,
             HeightReachEvaluation reach,
@@ -25,7 +24,6 @@ namespace DiceGame.Placement
 
             if (!context.IsJumping
                 || fromLevel != SurfaceHeightLevel.Bottom
-                || standingTier != DiceStackTier.Bottom
                 || standingDice == null
                 || !fromSurface.AllowsRoll) {
                 return false;

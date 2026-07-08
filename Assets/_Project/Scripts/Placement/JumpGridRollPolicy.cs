@@ -11,7 +11,6 @@ namespace DiceGame.Placement
             Vector2Int toCell,
             BoardSurface fromSurface,
             DiceController standingDice,
-            DiceStackTier standingTier,
             Direction direction,
             PassabilityContext context,
             GridMovePlanBuilder planBuilder,
@@ -22,7 +21,7 @@ namespace DiceGame.Placement
                 return false;
             }
 
-            if (standingTier != standingDice.CurrentState.Tier) {
+            if (SurfaceHeightLevel.ToDiceStackTier(fromSurface.Level) != standingDice.CurrentState.Tier) {
                 return false;
             }
 

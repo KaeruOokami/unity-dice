@@ -11,7 +11,6 @@ namespace DiceGame.Placement
             int fromLevel,
             BoardSurface fromSurface,
             DiceController standingDice,
-            DiceStackTier standingTier,
             bool isJumping,
             DiceRegistry registry,
             HeightReachEvaluation reach,
@@ -23,23 +22,14 @@ namespace DiceGame.Placement
                 return false;
             }
 
-            DiceController landingDice;
-            if (standingTier == DiceStackTier.Top) {
-                if (standingDice.CurrentState.Tier != DiceStackTier.Top) {
-                    return false;
-                }
+            if (standingDice.CurrentState.Tier != DiceStackTier.Top) {
+                return false;
+            }
 
-                if (!registry.TryGetBottomAt(fromCell, out landingDice)
-                    || landingDice == null
-                    || landingDice == standingDice) {
-                    return false;
-                }
-            } else {
-                if (standingDice.CurrentState.Tier != DiceStackTier.Bottom) {
-                    return false;
-                }
-
-                landingDice = standingDice;
+            if (!registry.TryGetBottomAt(fromCell, out var landingDice)
+                || landingDice == null
+                || landingDice == standingDice) {
+                return false;
             }
 
             var targetSurface = BoardSurface.FromDice(fromCell, SurfaceHeightLevel.Bottom, landingDice);

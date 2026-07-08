@@ -18,24 +18,13 @@ namespace DiceGame.Placement
         public BoardSurface GetStandingSurface(
             Vector2Int gridCell,
             int fromLevel,
-            DiceController standingDice,
-            DiceStackTier standingTier) {
+            DiceController standingDice) {
             if (SurfaceHeightLevel.IsFloor(fromLevel)) {
                 return BoardSurface.Floor(gridCell, board.FloorSurfaceWorldY);
             }
 
             if (standingDice == null) {
                 return BoardSurface.Floor(gridCell, board.FloorSurfaceWorldY);
-            }
-
-            if (SurfaceHeightLevel.IsAtOrAboveTop(fromLevel)
-                && standingTier == DiceStackTier.Bottom
-                && standingDice.CurrentState.Tier == DiceStackTier.Bottom
-                && !registry.HasTopAt(gridCell)) {
-                return BoardSurface.FromDiceAtStackTop(
-                    gridCell,
-                    standingDice,
-                    GetStackTopStandingSurfaceY(standingDice));
             }
 
             return BoardSurface.FromDice(gridCell, fromLevel, standingDice);

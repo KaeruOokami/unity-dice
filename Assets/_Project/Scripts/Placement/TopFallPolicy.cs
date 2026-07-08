@@ -9,7 +9,6 @@ namespace DiceGame.Placement
             int fromLevel,
             BoardSurface fromSurface,
             DiceController standingDice,
-            DiceStackTier standingTier,
             Direction direction,
             PassabilityContext context,
             GridMovePlanBuilder planBuilder,
@@ -17,7 +16,6 @@ namespace DiceGame.Placement
             transition = default;
 
             if (fromLevel != SurfaceHeightLevel.Top
-                || standingTier != DiceStackTier.Top
                 || standingDice == null
                 || !fromSurface.AllowsRoll
                 || standingDice.CurrentState.Tier != DiceStackTier.Top) {

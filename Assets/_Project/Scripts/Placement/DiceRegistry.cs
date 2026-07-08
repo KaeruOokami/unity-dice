@@ -214,13 +214,13 @@ namespace DiceGame.Placement
         public DiceController GetTransferTargetAt(
             DiceController fromDice,
             Direction direction,
-            DiceStackTier standingTier) {
+            int fromLevel) {
             if (fromDice == null) {
                 return null;
             }
 
             var neighborPos = fromDice.CurrentState.GridPos + direction.ToGridDelta();
-            if (standingTier == DiceStackTier.Top) {
+            if (SurfaceHeightLevel.IsAtOrAboveTop(fromLevel)) {
                 TryGetTopAt(neighborPos, out var top);
                 return top;
             }

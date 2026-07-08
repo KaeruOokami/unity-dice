@@ -47,6 +47,7 @@ namespace DiceGame.Gameplay.Character
 
             var nextCell = ResolveNextCell(
                 standingCell,
+                fromLevel,
                 currentXZ,
                 move,
                 halfExtent,
@@ -66,7 +67,6 @@ namespace DiceGame.Gameplay.Character
                         standingCell,
                         fromLevel,
                         standing.ResolveStandingDiceForMovement(),
-                        standing.Tier,
                         passabilityContext,
                         out var demoteTransition)) {
                     TryGetPrimaryDirection(move, out var demoteDirection);
@@ -105,14 +105,12 @@ namespace DiceGame.Gameplay.Character
                     nextCell,
                     fromLevel,
                     standingDice,
-                    standing.Tier,
                     passabilityContext)
                 : movementTransition.Evaluate(
                     standingCell,
                     fromLevel,
                     direction,
                     standingDice,
-                    standing.Tier,
                     passabilityContext);
 
             if (isJumping) {
@@ -246,6 +244,7 @@ namespace DiceGame.Gameplay.Character
 
         Vector2Int ResolveNextCell(
             Vector2Int standingCell,
+            int fromLevel,
             Vector2 currentXZ,
             Vector2 move,
             float halfExtent,
@@ -266,6 +265,7 @@ namespace DiceGame.Gameplay.Character
                         && jumpCapability.MaxDistance > 0
                         && TryResolveJumpParallelRollTarget(
                             standingCell,
+                            fromLevel,
                             moveDir,
                             jumpCapability.MaxDistance,
                             standing,
@@ -301,6 +301,7 @@ namespace DiceGame.Gameplay.Character
 
         bool TryResolveJumpParallelRollTarget(
             Vector2Int standingCell,
+            int fromLevel,
             Direction direction,
             int maxRollDistance,
             CharacterStandingController standing,
@@ -317,7 +318,7 @@ namespace DiceGame.Gameplay.Character
                     standingCell,
                     direction,
                     standingDice,
-                    standing.Tier,
+                    fromLevel,
                     distance,
                     passabilityContext,
                     out var candidate,

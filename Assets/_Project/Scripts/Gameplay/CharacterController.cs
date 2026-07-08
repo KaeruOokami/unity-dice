@@ -294,6 +294,18 @@ namespace DiceGame.Gameplay
                 return;
             }
 
+            // If the player state indicates Top-support, but the top dice doesn't exist anymore,
+            // fall under gravity instead of using any virtual-top height fallback.
+            if (!isFalling
+                && jumpPhase == JumpPhase.None
+                && liftPhase == LiftPhase.None
+                && standingController.Support.Kind == SupportKind.Dice
+                && standingController.Support.DiceSurfaceLevel == DiceSurfaceLevel.Top
+                && !registry.HasTopAt(standingController.GridCell)) {
+                MoveToFloorAtCurrentWorldPosition();
+                return;
+            }
+
             if (Input.GetKeyDown(movementSettings.LiftKey)) {
                 TryBeginLift();
             }
@@ -620,8 +632,7 @@ namespace DiceGame.Gameplay
                 nextCell,
                 fromLevel,
                 fromSurfaceY,
-                standingDice,
-                standingController.Tier)
+                standingDice)
                 ? DescribeWalkableTarget(standingCell, nextCell, fromLevel, fromSurfaceY)
                 : "(none)";
 
@@ -654,7 +665,6 @@ namespace DiceGame.Gameplay
                 fromLevel,
                 direction,
                 standingDice,
-                standingController.Tier,
                 PassabilityContext.ForGround(GetFootingWorldY()));
             if (transition.TargetLevel == SurfaceHeightLevel.Floor) {
                 return "Floor";
@@ -916,12 +926,6 @@ namespace DiceGame.Gameplay
             }
 
             if (standingController != null && standingController.TryGetStandingDice(out var standingDice)) {
-                if (standingController.Support.DiceSurfaceLevel == DiceSurfaceLevel.Top
-                    && standingDice.CurrentState.Tier == DiceStackTier.Bottom
-                    && !registry.HasTopAt(standingController.GridCell)) {
-                    return movementTransition.GetStackTopStandingSurfaceY(standingDice);
-                }
-
                 return standingDice.GetTopSurfaceWorldY();
             }
 
@@ -938,12 +942,6 @@ namespace DiceGame.Gameplay
             }
 
             if (standingController != null && standingController.TryGetStandingDice(out var standingDice)) {
-                if (standingController.Support.DiceSurfaceLevel == DiceSurfaceLevel.Top
-                    && standingDice.CurrentState.Tier == DiceStackTier.Bottom
-                    && !registry.HasTopAt(standingController.GridCell)) {
-                    return movementTransition.GetStackTopStandingSurfaceY(standingDice);
-                }
-
                 return standingDice.GetLogicalTopSurfaceWorldY();
             }
 

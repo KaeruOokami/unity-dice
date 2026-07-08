@@ -5,7 +5,7 @@ namespace DiceGame.Placement
 {
     public static class WalkTransferPolicy
     {
-        public static bool IsLandingTierAtOrBelowStandingTier(
+        static bool IsLandingTierAtOrBelowStandingTier(
             DiceStackTier standingTier,
             DiceStackTier landingTier) {
             if (standingTier == DiceStackTier.Bottom) {
@@ -71,7 +71,7 @@ namespace DiceGame.Placement
 
         public static bool TryEvaluateDiceToDice(
             DiceController target,
-            DiceStackTier standingTier,
+            int fromLevel,
             DiceRegistry registry,
             BoardSurface fromSurface,
             BoardSurface targetSurface,
@@ -83,6 +83,7 @@ namespace DiceGame.Placement
             out string rejectReason) {
             transition = default;
             rejectReason = null;
+            var standingTier = SurfaceHeightLevel.ToDiceStackTier(fromLevel);
             if (!TryValidateDiceToDiceTarget(
                 target,
                 standingTier,
@@ -131,7 +132,7 @@ namespace DiceGame.Placement
 
         public static bool TryEvaluateDissolveDescentHold(
             DiceController target,
-            DiceStackTier standingTier,
+            int fromLevel,
             DiceRegistry registry,
             BoardSurface fromSurface,
             BoardSurface targetSurface,
@@ -141,6 +142,7 @@ namespace DiceGame.Placement
             out string rejectReason) {
             transition = default;
             rejectReason = null;
+            var standingTier = SurfaceHeightLevel.ToDiceStackTier(fromLevel);
             if (!TryValidateDiceToDiceTarget(
                 target,
                 standingTier,
