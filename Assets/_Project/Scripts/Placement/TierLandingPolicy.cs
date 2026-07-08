@@ -15,7 +15,7 @@ namespace DiceGame.Placement
             DiceStackTier standingTier,
             PassabilityContext context,
             DiceRegistry registry,
-            float maxStepHeight,
+            HeightReachEvaluation reach,
             out MovementTransition transition) {
             transition = default;
 
@@ -35,10 +35,15 @@ namespace DiceGame.Placement
                 return false;
             }
 
-            var reachY = context.EffectiveReachY;
             if (!registry.TryGetTopAt(toCell, out var topDice)
                 || topDice == null
-                || !HeightReachPolicy.CanStepBetween(reachY, topDice.GetLogicalTopSurfaceWorldY(), maxStepHeight)) {
+                || !HeightReachPolicy.CanTransfer(
+                    fromSurface,
+                    topDice.GetLogicalTopSurfaceWorldY(),
+                    standingDice,
+                    registry,
+                    reach,
+                    allowDescentOnly: false)) {
                 return false;
             }
 

@@ -33,7 +33,7 @@ namespace DiceGame.Gameplay.Character
             Vector2 move,
             Vector2Int standingCell,
             SurfaceLayer fromLayer,
-            float passabilityReachY,
+            float footingWorldY,
             float halfExtent,
             CharacterStandingController standing,
             bool isJumping,
@@ -42,8 +42,8 @@ namespace DiceGame.Gameplay.Character
             var allowCrossCell = !isJumping || (hasJumpCapability && jumpCapability.AllowCrossCellMove);
             var allowDiceGridMove = hasJumpCapability && jumpCapability.AllowDiceGridMove;
             var passabilityContext = isJumping
-                ? PassabilityContext.Jump(allowDiceGridMove, jumpCapability.AllowTierChange, passabilityReachY)
-                : PassabilityContext.ForGround(passabilityReachY);
+                ? PassabilityContext.Jump(allowDiceGridMove, jumpCapability.AllowTierChange, footingWorldY)
+                : PassabilityContext.ForGround(footingWorldY);
 
             var nextCell = ResolveNextCell(
                 standingCell,
@@ -59,6 +59,26 @@ namespace DiceGame.Gameplay.Character
                 passabilityContext);
 
             if (nextCell == standingCell) {
+                if (isJumping
+                    && hasJumpCapability
+                    && jumpCapability.AllowTierChange
+                    && movementTransition.TryEvaluatePlayerOnlyTierDemote(
+                        standingCell,
+                        fromLayer,
+                        standing.ResolveStandingDiceForMovement(),
+                        standing.Tier,
+                        passabilityContext,
+                        out var demoteTransition)) {
+                    TryGetPrimaryDirection(move, out var demoteDirection);
+                    return new CharacterMovePlan {
+                        Kind = CharacterMoveKind.Transfer,
+                        FromCell = standingCell,
+                        ToCell = standingCell,
+                        Direction = demoteDirection,
+                        Transition = demoteTransition
+                    };
+                }
+
                 return CharacterMovePlan.FaceSlide(standingCell);
             }
 

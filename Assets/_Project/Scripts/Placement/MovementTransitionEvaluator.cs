@@ -12,7 +12,7 @@ namespace DiceGame.Placement
         readonly SurfaceQuery surfaceQuery;
         readonly CellOccupancyQuery occupancyQuery;
         readonly GridMovePlanBuilder gridPlanBuilder;
-        readonly float maxStepHeight;
+        readonly HeightStepLimits stepLimits;
         Action<string> jumpParallelRollDebugLog;
         Action<string> heightTransferDebugLog;
 
@@ -20,13 +20,21 @@ namespace DiceGame.Placement
             Board board,
             DiceRegistry registry,
             SurfaceQuery surfaceQuery,
-            float maxStepHeight) {
+            HeightStepLimits stepLimits) {
             this.board = board;
             this.registry = registry;
             this.surfaceQuery = surfaceQuery;
             occupancyQuery = new CellOccupancyQuery(board, registry);
             gridPlanBuilder = new GridMovePlanBuilder(registry, occupancyQuery);
-            this.maxStepHeight = maxStepHeight;
+            this.stepLimits = stepLimits;
+        }
+
+        HeightReachEvaluation CreateReachEvaluation(bool isJumping) {
+            return new HeightReachEvaluation(
+                board.FloorSurfaceWorldY,
+                board.CellSize,
+                stepLimits,
+                isJumping);
         }
 
         public void SetJumpParallelRollDebugLog(Action<string> log) {
@@ -71,11 +79,40 @@ namespace DiceGame.Placement
             return surfaceQuery.GetStackTopStandingSurfaceY(bottomDice);
         }
 
+        public bool TryEvaluatePlayerOnlyTierDemote(
+            Vector2Int fromCell,
+            SurfaceLayer fromLayer,
+            DiceController standingDice,
+            DiceStackTier standingTier,
+            PassabilityContext context,
+            out MovementTransition transition) {
+            transition = default;
+            if (!context.IsJumping || standingDice == null) {
+                return false;
+            }
+
+            var fromSurface = surfaceQuery.GetStandingSurface(
+                fromCell,
+                fromLayer,
+                standingDice,
+                standingTier);
+            return PlayerOnlyTierDemotePolicy.TryEvaluate(
+                fromCell,
+                fromLayer,
+                fromSurface,
+                standingDice,
+                standingTier,
+                context.IsJumping,
+                registry,
+                CreateReachEvaluation(context.IsJumping),
+                out transition);
+        }
+
         public bool IsDescentBlockedOnlyByStepHeight(
             Vector2Int fromCell,
             SurfaceLayer fromLayer,
             Direction direction,
-            float effectiveReachY,
+            float footingWorldY,
             DiceController standingDice,
             DiceStackTier standingTier) {
             var transition = Evaluate(
@@ -84,7 +121,7 @@ namespace DiceGame.Placement
                 direction,
                 standingDice,
                 standingTier,
-                PassabilityContext.ForGround(effectiveReachY));
+                PassabilityContext.ForGround(footingWorldY));
             return transition.IsDissolveDescentHold;
         }
 
@@ -92,7 +129,7 @@ namespace DiceGame.Placement
             Vector2Int fromCell,
             SurfaceLayer fromLayer,
             Direction direction,
-            float effectiveReachY,
+            float footingWorldY,
             DiceController standingDice,
             DiceStackTier standingTier) {
             return Evaluate(
@@ -101,7 +138,7 @@ namespace DiceGame.Placement
                 direction,
                 standingDice,
                 standingTier,
-                PassabilityContext.ForGround(effectiveReachY)).Kind
+                PassabilityContext.ForGround(footingWorldY)).Kind
                 == MovementTransitionKind.Walkable;
         }
 
@@ -109,14 +146,14 @@ namespace DiceGame.Placement
             Vector2Int fromCell,
             Vector2Int toCell,
             SurfaceLayer fromLayer,
-            float effectiveReachY,
+            float footingWorldY,
             DiceController standingDice,
             DiceStackTier standingTier) {
             return TryEvaluateBetween(
                 fromCell,
                 toCell,
                 fromLayer,
-                effectiveReachY,
+                footingWorldY,
                 standingDice,
                 standingTier,
                 out var transition)
@@ -127,7 +164,7 @@ namespace DiceGame.Placement
             Vector2Int fromCell,
             Vector2Int toCell,
             SurfaceLayer fromLayer,
-            float effectiveReachY,
+            float footingWorldY,
             DiceController standingDice,
             DiceStackTier standingTier,
             out MovementTransition transition) {
@@ -148,7 +185,7 @@ namespace DiceGame.Placement
                 standingDice,
                 standingTier,
                 direction,
-                PassabilityContext.ForGround(effectiveReachY));
+                PassabilityContext.ForGround(footingWorldY));
             return true;
         }
 
@@ -324,28 +361,24 @@ namespace DiceGame.Placement
             Direction direction,
             PassabilityContext context) {
             var isJumping = context.IsJumping;
-            var reachY = context.EffectiveReachY;
+            var reach = CreateReachEvaluation(isJumping);
             var fromSurface = surfaceQuery.GetStandingSurface(
                 fromCell,
                 fromLayer,
                 standingDice,
                 standingTier);
             var playerOnlyTransfer = JumpPlayerTransferPolicy.UsesPlayerOnlyReach(isJumping, standingDice);
-            var transferReachY = JumpPlayerTransferPolicy.GetTransferReachY(
-                reachY,
-                fromSurface,
-                isJumping,
-                standingDice);
 
             if (registry.CanPlaceBottomDiceAt(toCell)) {
                 if (playerOnlyTransfer
                     && fromLayer != SurfaceLayer.Floor
                     && standingDice != null) {
                     return WalkTransferPolicy.EvaluateFloor(
-                        transferReachY,
-                        board.FloorSurfaceWorldY,
-                        maxStepHeight,
-                        fromSurface);
+                        fromSurface,
+                        standingDice,
+                        registry,
+                        reach,
+                        allowDescentOnly: true);
                 }
 
                 if (!playerOnlyTransfer) {
@@ -417,16 +450,22 @@ namespace DiceGame.Placement
                     return MovementTransition.Blocked();
                 }
 
-                return WalkTransferPolicy.EvaluateFloor(reachY, board.FloorSurfaceWorldY, maxStepHeight, fromSurface);
+                return WalkTransferPolicy.EvaluateFloor(
+                    fromSurface,
+                    standingDice,
+                    registry,
+                    reach,
+                    allowDescentOnly: isJumping);
             }
 
             DiceController target;
             if (fromLayer == SurfaceLayer.Floor) {
                 if (registry.TryGetBottomAt(toCell, out target)
                     && WalkTransferPolicy.TryEvaluateFloorToBottom(
-                        transferReachY,
+                        fromSurface,
                         target,
-                        maxStepHeight,
+                        registry,
+                        reach,
                         out var floorToBottomTransition)) {
                     return floorToBottomTransition;
                 }
@@ -442,7 +481,8 @@ namespace DiceGame.Placement
                 standingTier,
                 direction,
                 isJumping,
-                transferReachY,
+                context.AllowJumpGridMove,
+                reach,
                 out var heightTransferTransition)) {
                 return heightTransferTransition;
             }
@@ -471,7 +511,7 @@ namespace DiceGame.Placement
                 standingTier,
                 context,
                 registry,
-                maxStepHeight,
+                reach,
                 out var jumpTopTransition)) {
                 return jumpTopTransition;
             }
@@ -559,7 +599,8 @@ namespace DiceGame.Placement
             DiceStackTier standingTier,
             Direction direction,
             bool isJumping,
-            float reachY,
+            bool allowJumpGridMove,
+            HeightReachEvaluation reach,
             out MovementTransition transition) {
             transition = default;
             if (fromLayer == SurfaceLayer.Floor || standingDice == null) {
@@ -571,7 +612,23 @@ namespace DiceGame.Placement
 
             var fromCell = standingDice.CurrentState.GridPos;
             var sameTierTarget = registry.GetTransferTargetAt(standingDice, direction, standingTier);
-            if (TryEvaluateHeightTransferToTarget(
+
+            // 連動可能ダイスのジャンプ中は、同 Tier の隣ダイスへの単純な高さ乗り移りより
+            // ダイスごとのグリッド回転（上 Tier へのスタック等）を優先させる。
+            // 移動不可ダイス（Iron/Stone/鉄隣接 Magnet）は AllowJumpGridMove が false のため
+            // ここではスキップされず、従来どおりプレイヤーのみの乗り移りが評価される。
+            var preferCoupledGridRoll = isJumping
+                && allowJumpGridMove
+                && standingDice.Capabilities.CanGridRoll
+                && standingDice.CanJumpCoupleWithPlayer;
+
+            string sameTierRejectReason = null;
+            if (preferCoupledGridRoll) {
+                sameTierRejectReason = "skipped-for-coupled-grid-roll";
+                LogHeightTransfer(
+                    $"skip same-tier-transfer for-coupled-grid-roll from={FormatGrid(fromCell)} " +
+                    $"to={FormatGrid(toCell)} dir={direction} standing={FormatDice(standingDice)}");
+            } else if (TryEvaluateHeightTransferToTarget(
                 fromCell,
                 toCell,
                 fromLayer,
@@ -580,10 +637,10 @@ namespace DiceGame.Placement
                 standingTier,
                 direction,
                 isJumping,
-                reachY,
+                reach,
                 sameTierTarget,
                 out transition,
-                out var sameTierRejectReason)) {
+                out sameTierRejectReason)) {
                 return true;
             }
 
@@ -603,9 +660,32 @@ namespace DiceGame.Placement
                     standingTier,
                     direction,
                     isJumping: false,
-                    reachY,
+                    reach,
                     lowerTierTarget,
                     dissolveDescentHoldOnly: true,
+                    out transition,
+                    out _)) {
+                return true;
+            }
+
+            if (JumpPlayerTransferPolicy.UsesPlayerOnlyReach(isJumping, standingDice)
+                && WalkTransferPolicy.IsLandingTierAtOrBelowStandingTier(standingTier, DiceStackTier.Bottom)
+                && (standingTier == DiceStackTier.Top || fromLayer == SurfaceLayer.Top)
+                && registry.TryGetBottomAt(toCell, out var playerOnlyLowerTarget)
+                && playerOnlyLowerTarget != null
+                && playerOnlyLowerTarget != sameTierTarget
+                && (sameTierTarget == null || IsStepHeightRejectReason(sameTierRejectReason))
+                && TryEvaluateHeightTransferToTarget(
+                    fromCell,
+                    toCell,
+                    fromLayer,
+                    fromSurface,
+                    standingDice,
+                    standingTier,
+                    direction,
+                    isJumping,
+                    reach,
+                    playerOnlyLowerTarget,
                     out transition,
                     out _)) {
                 return true;
@@ -628,7 +708,7 @@ namespace DiceGame.Placement
             DiceStackTier standingTier,
             Direction direction,
             bool isJumping,
-            float reachY,
+            HeightReachEvaluation reach,
             DiceController target,
             out MovementTransition transition,
             out string rejectReason) {
@@ -641,7 +721,7 @@ namespace DiceGame.Placement
                 standingTier,
                 direction,
                 isJumping,
-                reachY,
+                reach,
                 target,
                 dissolveDescentHoldOnly: false,
                 out transition,
@@ -657,7 +737,7 @@ namespace DiceGame.Placement
             DiceStackTier standingTier,
             Direction direction,
             bool isJumping,
-            float reachY,
+            HeightReachEvaluation reach,
             DiceController target,
             bool dissolveDescentHoldOnly,
             out MovementTransition transition,
@@ -680,39 +760,48 @@ namespace DiceGame.Placement
                 target.CurrentState.Tier == DiceStackTier.Top ? SurfaceLayer.Top : SurfaceLayer.Bottom,
                 target);
 
+            var allowDescentOnly = isJumping
+                && targetSurface.SurfaceWorldY < fromSurface.SurfaceWorldY - 0.001f;
+
             var evaluated = dissolveDescentHoldOnly
                 ? WalkTransferPolicy.TryEvaluateDissolveDescentHold(
-                    reachY,
                     target,
                     standingTier,
                     registry,
                     fromSurface,
                     targetSurface,
-                    maxStepHeight,
+                    standingDice,
+                    reach,
                     out transition,
                     out rejectReason)
                 : WalkTransferPolicy.TryEvaluateDiceToDice(
-                    reachY,
                     target,
                     standingTier,
                     registry,
                     fromSurface,
                     targetSurface,
+                    standingDice,
                     isJumping,
-                    maxStepHeight,
+                    reach,
+                    allowDescentOnly,
                     out transition,
                     out rejectReason);
             if (!evaluated) {
                 return false;
             }
 
+            var footingWorldY = TransferFootingPolicy.GetFootingWorldY(
+                fromSurface,
+                targetSurface.SurfaceWorldY,
+                standingDice,
+                registry);
             var resultKind = transition.Kind == MovementTransitionKind.BlockedStepOnly
                 ? "dissolve-hold"
                 : "ok";
             LogHeightTransfer(
                 $"{resultKind} from={FormatGrid(fromCell)} to={FormatGrid(toCell)} dir={direction} " +
                 $"layer={fromLayer} tier={standingTier} standing={FormatDice(standingDice)} " +
-                $"target={FormatDice(target)} reachY={reachY:F3} targetY={targetSurface.SurfaceWorldY:F3} " +
+                $"target={FormatDice(target)} footingY={footingWorldY:F3} targetY={targetSurface.SurfaceWorldY:F3} " +
                 $"standingDissolving={standingDice.IsDissolving} targetDissolving={target.IsDissolving}");
             return true;
         }

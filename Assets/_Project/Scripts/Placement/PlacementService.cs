@@ -12,10 +12,10 @@ namespace DiceGame.Placement
         readonly MovementTransitionEvaluator passability;
         CharacterPlacement character;
 
-        public PlacementService(DiceRegistry registry, Board board, float maxStepHeight) {
+        public PlacementService(DiceRegistry registry, Board board, HeightStepLimits stepLimits) {
             diceRegistry = registry;
             surfaceQuery = new SurfaceQuery(board, registry);
-            passability = new MovementTransitionEvaluator(board, registry, surfaceQuery, maxStepHeight);
+            passability = new MovementTransitionEvaluator(board, registry, surfaceQuery, stepLimits);
         }
 
         public DiceRegistry Dice => diceRegistry;

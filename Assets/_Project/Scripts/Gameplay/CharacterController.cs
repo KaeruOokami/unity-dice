@@ -362,7 +362,7 @@ namespace DiceGame.Gameplay
             var currentXZ = transformDriver.GetWorldXZ();
             var standingCell = standingController.GridCell;
             var fromLayer = standingController.Layer;
-            var passabilityReachY = GetPassabilityReachY();
+            var footingWorldY = GetFootingWorldY();
             var halfExtent = transformDriver.GetWalkHalfExtent();
             var nextXZ = currentXZ + move;
 
@@ -376,7 +376,7 @@ namespace DiceGame.Gameplay
                 move,
                 standingCell,
                 fromLayer,
-                passabilityReachY,
+                footingWorldY,
                 halfExtent)) {
                 return;
             }
@@ -391,7 +391,7 @@ namespace DiceGame.Gameplay
             Vector2 move,
             Vector2Int standingCell,
             SurfaceLayer fromLayer,
-            float passabilityReachY,
+            float footingWorldY,
             float halfExtent) {
             var isJumping = jumpPhase != JumpPhase.None;
             var hasJumpCapability = false;
@@ -405,7 +405,7 @@ namespace DiceGame.Gameplay
                 move,
                 standingCell,
                 fromLayer,
-                passabilityReachY,
+                footingWorldY,
                 halfExtent,
                 standingController,
                 isJumping,
@@ -420,7 +420,7 @@ namespace DiceGame.Gameplay
                     plan.FromCell,
                     plan.ToCell,
                     fromLayer,
-                    passabilityReachY,
+                    footingWorldY,
                     halfExtent,
                     currentXZ,
                     nextXZ,
@@ -435,7 +435,7 @@ namespace DiceGame.Gameplay
                 ref nextXZ,
                 move,
                 fromLayer,
-                passabilityReachY,
+                footingWorldY,
                 halfExtent,
                 isJumping,
                 hasJumpCapability,
@@ -553,7 +553,7 @@ namespace DiceGame.Gameplay
                 direction,
                 standingDice,
                 standingController.Tier,
-                PassabilityContext.ForGround(GetPassabilityReachY()));
+                PassabilityContext.ForGround(GetFootingWorldY()));
             if (transition.TargetLayer == SurfaceLayer.Floor) {
                 return "Floor";
             }
@@ -688,7 +688,7 @@ namespace DiceGame.Gameplay
             coupling.TryHandleRollCancel(
                 input,
                 jumpPressed,
-                GetPassabilityReachY(),
+                GetFootingWorldY(),
                 movementTransition,
                 transformDriver.GetWorldXZ(),
                 halfExtent,
@@ -807,13 +807,8 @@ namespace DiceGame.Gameplay
             return board.FloorSurfaceWorldY;
         }
 
-        float GetPassabilityReachY() {
-            var reachY = GetLogicalSurfaceWorldY();
-            if (jumpPhase != JumpPhase.None) {
-                reachY += jumpYOffset;
-            }
-
-            return reachY;
+        float GetFootingWorldY() {
+            return GetLogicalSurfaceWorldY();
         }
 
         float GetCharacterWorldY() {
@@ -1244,7 +1239,7 @@ namespace DiceGame.Gameplay
                     dice.CurrentState,
                     candidate.Direction,
                     1,
-                    PassabilityContext.ForGround(GetPassabilityReachY()),
+                    PassabilityContext.ForGround(GetFootingWorldY()),
                     out var rollPlan,
                     out _)
                     && dice.TryExecuteGroundMovePlan(rollPlan)) {

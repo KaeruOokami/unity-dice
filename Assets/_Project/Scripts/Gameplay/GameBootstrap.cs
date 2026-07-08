@@ -94,7 +94,12 @@ namespace DiceGame.Gameplay
             }
 
             registry.Configure(board);
-            placement = new PlacementService(registry, board, characterMovementSettings.MaxStepHeight);
+            placement = new PlacementService(
+                registry,
+                board,
+                new HeightStepLimits(
+                    characterMovementSettings.MaxWalkStep,
+                    characterMovementSettings.MaxJumpStep));
             spawnRandom = randomSeed != 0 ? new System.Random(randomSeed) : new System.Random();
 
             spawnSystem = GetComponent<DiceSpawnSystem>();

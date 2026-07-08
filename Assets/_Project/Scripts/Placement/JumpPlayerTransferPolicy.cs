@@ -9,17 +9,5 @@ namespace DiceGame.Placement
                 && standingDice != null
                 && !standingDice.CanJumpCoupleWithPlayer;
         }
-
-        public static float GetTransferReachY(
-            float arcReachY,
-            BoardSurface fromSurface,
-            bool isJumping,
-            DiceController standingDice) {
-            if (!UsesPlayerOnlyReach(isJumping, standingDice)) {
-                return arcReachY;
-            }
-
-            return fromSurface.SurfaceWorldY;
-        }
     }
 }

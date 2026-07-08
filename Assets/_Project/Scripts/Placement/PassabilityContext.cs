@@ -5,28 +5,28 @@ namespace DiceGame.Placement
         public bool IsJumping { get; }
         public bool AllowJumpGridMove { get; }
         public bool AllowJumpTierChange { get; }
-        public float EffectiveReachY { get; }
+        public float FootingWorldY { get; }
 
         PassabilityContext(
             bool isJumping,
             bool allowJumpGridMove,
             bool allowJumpTierChange,
-            float effectiveReachY) {
+            float footingWorldY) {
             IsJumping = isJumping;
             AllowJumpGridMove = allowJumpGridMove;
             AllowJumpTierChange = allowJumpTierChange;
-            EffectiveReachY = effectiveReachY;
+            FootingWorldY = footingWorldY;
         }
 
-        public static PassabilityContext ForGround(float effectiveReachY) {
-            return new PassabilityContext(false, false, false, effectiveReachY);
+        public static PassabilityContext ForGround(float footingWorldY) {
+            return new PassabilityContext(false, false, false, footingWorldY);
         }
 
         public static PassabilityContext Jump(
             bool allowJumpGridMove,
             bool allowJumpTierChange,
-            float effectiveReachY) {
-            return new PassabilityContext(true, allowJumpGridMove, allowJumpTierChange, effectiveReachY);
+            float footingWorldY) {
+            return new PassabilityContext(true, allowJumpGridMove, allowJumpTierChange, footingWorldY);
         }
     }
 }

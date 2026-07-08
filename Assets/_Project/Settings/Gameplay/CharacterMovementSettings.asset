@@ -16,7 +16,8 @@ MonoBehaviour:
   maxMoveSpeed: 8
   moveAcceleration: 200
   rollCenterPullSpeed: 0
-  maxStepHeight: 0.5
+  maxWalkStep: 0.5
+  maxJumpStep: 1
   pushHoldDuration: 0.25
   dissolveDescentHoldDuration: 0.35
   rollCancelWindowProgress: 0.5

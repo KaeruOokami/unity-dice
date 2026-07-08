@@ -85,7 +85,10 @@ namespace DiceGame.Gameplay.Character
                     }
 
                     if (plan.CoupledIntent == CoupledMoveIntent.GroundParallelRoll
-                        && Mathf.Abs(fromSurfaceY - board.FloorSurfaceWorldY) <= movementSettings.MaxStepHeight) {
+                        && NormalizedHeight.ToNormalized(
+                            fromSurfaceY,
+                            board.FloorSurfaceWorldY,
+                            board.CellSize) <= movementSettings.MaxWalkStep) {
                         standing.ApplyFromTransition(
                             MovementTransition.Walkable(null, SurfaceLayer.Floor),
                             plan.ToCell);

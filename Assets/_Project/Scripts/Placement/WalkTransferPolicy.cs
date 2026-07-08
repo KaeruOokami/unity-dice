@@ -16,11 +16,18 @@ namespace DiceGame.Placement
         }
 
         public static MovementTransition EvaluateFloor(
-            float effectiveReachY,
-            float floorSurfaceY,
-            float maxStepHeight,
-            BoardSurface fromSurface) {
-            if (HeightReachPolicy.CanStepBetween(effectiveReachY, floorSurfaceY, maxStepHeight)) {
+            BoardSurface fromSurface,
+            DiceController standingDice,
+            DiceRegistry registry,
+            HeightReachEvaluation reach,
+            bool allowDescentOnly = false) {
+            if (HeightReachPolicy.CanTransfer(
+                fromSurface,
+                reach.FloorWorldY,
+                standingDice,
+                registry,
+                reach,
+                allowDescentOnly)) {
                 return MovementTransition.Walkable(
                     null,
                     SurfaceLayer.Floor,
@@ -35,19 +42,23 @@ namespace DiceGame.Placement
         }
 
         public static bool TryEvaluateFloorToBottom(
-            float reachY,
+            BoardSurface fromSurface,
             DiceController bottomDice,
-            float maxStepHeight,
+            DiceRegistry registry,
+            HeightReachEvaluation reach,
             out MovementTransition transition) {
             transition = default;
             if (bottomDice == null) {
                 return false;
             }
 
-            if (!HeightReachPolicy.CanStepBetween(
-                reachY,
+            if (!HeightReachPolicy.CanTransfer(
+                fromSurface,
                 bottomDice.GetLogicalTopSurfaceWorldY(),
-                maxStepHeight)) {
+                null,
+                registry,
+                reach,
+                allowDescentOnly: false)) {
                 return false;
             }
 
@@ -59,14 +70,15 @@ namespace DiceGame.Placement
         }
 
         public static bool TryEvaluateDiceToDice(
-            float reachY,
             DiceController target,
             DiceStackTier standingTier,
             DiceRegistry registry,
             BoardSurface fromSurface,
             BoardSurface targetSurface,
+            DiceController standingDice,
             bool isJumping,
-            float maxStepHeight,
+            HeightReachEvaluation reach,
+            bool allowDescentOnly,
             out MovementTransition transition,
             out string rejectReason) {
             transition = default;
@@ -82,38 +94,49 @@ namespace DiceGame.Placement
                 return false;
             }
 
-            var targetSurfaceY = targetSurface.SurfaceWorldY;
-            if (HeightReachPolicy.CanStepBetween(reachY, targetSurfaceY, maxStepHeight)) {
+            if (HeightReachPolicy.CanTransfer(
+                fromSurface,
+                targetSurface.SurfaceWorldY,
+                standingDice,
+                registry,
+                reach,
+                allowDescentOnly)) {
                 transition = CreateWalkableTransfer(target);
                 return true;
             }
 
             if (TryCreateDissolveDescentHold(
-                reachY,
                 target,
                 standingTier,
                 fromSurface,
                 targetSurface,
-                maxStepHeight,
+                standingDice,
+                registry,
+                reach,
                 out transition)) {
                 return true;
             }
 
-            var delta = UnityEngine.Mathf.Abs(reachY - targetSurfaceY);
+            var deltaNorm = HeightReachPolicy.GetTransferDeltaNorm(
+                fromSurface,
+                targetSurface.SurfaceWorldY,
+                standingDice,
+                registry,
+                reach);
             rejectReason =
-                $"step-height reachY={reachY:F3} targetY={targetSurfaceY:F3} " +
-                $"max={maxStepHeight:F3} delta={delta:F3}";
+                $"step-height targetY={targetSurface.SurfaceWorldY:F3} " +
+                $"maxNorm={reach.GetMaxStepNorm():F3} deltaNorm={deltaNorm:F3}";
             return false;
         }
 
         public static bool TryEvaluateDissolveDescentHold(
-            float reachY,
             DiceController target,
             DiceStackTier standingTier,
             DiceRegistry registry,
             BoardSurface fromSurface,
             BoardSurface targetSurface,
-            float maxStepHeight,
+            DiceController standingDice,
+            HeightReachEvaluation reach,
             out MovementTransition transition,
             out string rejectReason) {
             transition = default;
@@ -130,12 +153,13 @@ namespace DiceGame.Placement
             }
 
             if (TryCreateDissolveDescentHold(
-                reachY,
                 target,
                 standingTier,
                 fromSurface,
                 targetSurface,
-                maxStepHeight,
+                standingDice,
+                registry,
+                reach,
                 out transition)) {
                 return true;
             }
@@ -180,12 +204,13 @@ namespace DiceGame.Placement
         }
 
         static bool TryCreateDissolveDescentHold(
-            float reachY,
             DiceController target,
             DiceStackTier standingTier,
             BoardSurface fromSurface,
             BoardSurface targetSurface,
-            float maxStepHeight,
+            DiceController standingDice,
+            DiceRegistry registry,
+            HeightReachEvaluation reach,
             out MovementTransition transition) {
             transition = default;
             if (!fromSurface.IsDissolving) {
@@ -196,8 +221,13 @@ namespace DiceGame.Placement
                 return false;
             }
 
-            var targetSurfaceY = targetSurface.SurfaceWorldY;
-            if (HeightReachPolicy.CanStepBetween(reachY, targetSurfaceY, maxStepHeight)) {
+            if (HeightReachPolicy.CanTransfer(
+                fromSurface,
+                targetSurface.SurfaceWorldY,
+                standingDice,
+                registry,
+                reach,
+                allowDescentOnly: false)) {
                 return false;
             }
 
