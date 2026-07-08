@@ -20,20 +20,20 @@ MonoBehaviour:
   - Kind: 1
     MeshPrefab: {fileID: 6801955793903224657, guid: cb20d7cae6d40d94eae91e5db87cded7,
       type: 3}
-    SpawnWeight: 0
+    SpawnWeight: 1
   - Kind: 2
     MeshPrefab: {fileID: 6801955793903224657, guid: 208e625db47e8a34c9a066dddeee66b0,
       type: 3}
-    SpawnWeight: 0.2
+    SpawnWeight: 1
   - Kind: 3
     MeshPrefab: {fileID: 6801955793903224657, guid: e4c53abf3613ae64e8bc74314233bed2,
       type: 3}
-    SpawnWeight: 0.3
+    SpawnWeight: 1
   - Kind: 4
     MeshPrefab: {fileID: 6801955793903224657, guid: 1069bc79ac3d7d6489ddb58813c26b22,
       type: 3}
-    SpawnWeight: 0
+    SpawnWeight: 1
   - Kind: 5
     MeshPrefab: {fileID: 6801955793903224657, guid: 0ebdfa991b60094479d8df175d311bac,
       type: 3}
-    SpawnWeight: 0
+    SpawnWeight: 1

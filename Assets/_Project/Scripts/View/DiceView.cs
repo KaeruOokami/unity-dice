@@ -45,6 +45,12 @@ namespace DiceGame.View
         GameObject runtimeMeshPrefab;
         Texture dissolveEmissionMapOverride;
 
+        // Dice mesh is visual-only. Gameplay uses `Board.CellSize` as the "logical dice cube" size.
+        // So we measure the mesh's local bounds once, then scale/center it to match `Board.CellSize`.
+        float cachedMeshUnitMaxExtent = -1f;
+        Vector3 cachedMeshLocalBoundsCenter;
+        float appliedCellSize = float.NaN;
+
         public bool IsAnimating => isAnimating;
         public float DissolveProgress => dissolveProgress;
         public float GroundRollProgress => groundRollProgress;
@@ -73,6 +79,10 @@ namespace DiceGame.View
                 Destroy(meshInstance.gameObject);
                 meshInstance = null;
             }
+
+            cachedMeshUnitMaxExtent = -1f;
+            cachedMeshLocalBoundsCenter = Vector3.zero;
+            appliedCellSize = float.NaN;
 
             EnsureMesh();
         }
@@ -120,8 +130,82 @@ namespace DiceGame.View
             meshInstance = visual.transform;
             meshInstance.localPosition = Vector3.zero;
             meshInstance.localRotation = Quaternion.identity;
+            // Normalize first so our cached "unit" bounds are stable.
+            meshInstance.localScale = Vector3.one;
             dissolveEmissionMapOverride = ResolveBaseMapFromPrefab(prefab);
             CacheDissolveMaterials();
+            CacheMeshLocalBounds();
+        }
+
+        void CacheMeshLocalBounds() {
+            cachedMeshUnitMaxExtent = -1f;
+            cachedMeshLocalBoundsCenter = Vector3.zero;
+
+            if (meshInstance == null) {
+                return;
+            }
+
+            var renderers = meshInstance.GetComponentsInChildren<Renderer>(true);
+            if (renderers == null || renderers.Length == 0) {
+                Debug.LogError("DiceView: Dice mesh has no Renderer components to measure.");
+                return;
+            }
+
+            var min = new Vector3(float.PositiveInfinity, float.PositiveInfinity, float.PositiveInfinity);
+            var max = new Vector3(float.NegativeInfinity, float.NegativeInfinity, float.NegativeInfinity);
+
+            // Build a local-space AABB aligned to `meshInstance` axes from all renderer local bounds.
+            foreach (var renderer in renderers) {
+                var localBounds = renderer.localBounds;
+                var r = renderer.transform;
+
+                var corners = new Vector3[8] {
+                    new(localBounds.min.x, localBounds.min.y, localBounds.min.z),
+                    new(localBounds.min.x, localBounds.min.y, localBounds.max.z),
+                    new(localBounds.min.x, localBounds.max.y, localBounds.min.z),
+                    new(localBounds.min.x, localBounds.max.y, localBounds.max.z),
+                    new(localBounds.max.x, localBounds.min.y, localBounds.min.z),
+                    new(localBounds.max.x, localBounds.min.y, localBounds.max.z),
+                    new(localBounds.max.x, localBounds.max.y, localBounds.min.z),
+                    new(localBounds.max.x, localBounds.max.y, localBounds.max.z),
+                };
+
+                for (var i = 0; i < corners.Length; i++) {
+                    var world = r.TransformPoint(corners[i]);
+                    var local = meshInstance.InverseTransformPoint(world);
+                    min = Vector3.Min(min, local);
+                    max = Vector3.Max(max, local);
+                }
+            }
+
+            var size = max - min;
+            cachedMeshUnitMaxExtent = Mathf.Max(size.x, size.y, size.z);
+            cachedMeshLocalBoundsCenter = (min + max) * 0.5f;
+        }
+
+        void ApplyMeshVisualScale(Board board) {
+            if (meshInstance == null || board == null) {
+                return;
+            }
+
+            if (!float.IsNaN(appliedCellSize) && Mathf.Abs(appliedCellSize - board.CellSize) < 0.0001f) {
+                return;
+            }
+
+            if (cachedMeshUnitMaxExtent <= Mathf.Epsilon) {
+                CacheMeshLocalBounds();
+            }
+
+            if (cachedMeshUnitMaxExtent <= Mathf.Epsilon) {
+                // Can't scale reliably. Leave the mesh as-is.
+                return;
+            }
+
+            var scale = board.CellSize / cachedMeshUnitMaxExtent;
+            meshInstance.localScale = Vector3.one * scale;
+            // Center mesh geometry on the rotationRoot origin.
+            meshInstance.localPosition = -cachedMeshLocalBoundsCenter * scale;
+            appliedCellSize = board.CellSize;
         }
 
         void EnsurePushBody() {
@@ -236,6 +320,7 @@ namespace DiceGame.View
 
         public Vector3 GetAnchoredWorldPosition(DiceState state, Board board, DiceRegistry registry) {
             EnsureMesh();
+            ApplyMeshVisualScale(board);
             return ComputeAnchoredWorldPosition(state, board, registry, visualYOffset);
         }
 
@@ -1277,6 +1362,7 @@ namespace DiceGame.View
         }
 
         void ApplySurfaceLayout(Board board, float progress) {
+            ApplyMeshVisualScale(board);
             var squash = 1f - progress;
             dissolvePivot.localScale = GetDissolveLocalScale(currentTopFace, squash);
             ComputeVerticalExtents(board, currentTopFace, squash, out var minY, out _);
