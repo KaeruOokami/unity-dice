@@ -87,18 +87,15 @@ namespace DiceGame.Placement
                 }
 
                 var fromState = dice.CurrentState;
-                var expectedTo = new DiceState(
-                    fromState.GridPos + delta,
-                    fromState.Orientation,
-                    fromState.Tier,
-                    fromState.Kind);
+                var expectedGridPos = fromState.GridPos + delta;
 
                 if (!DiceSlidePassability.TryEvaluate(fromState, direction, registry, out var memberPlan, out var memberReject)) {
                     rejectReason = memberReject ?? $"chain-slide-failed dice={dice.name}";
                     return false;
                 }
 
-                if (memberPlan.To.GridPos != expectedTo.GridPos || memberPlan.To.Tier != expectedTo.Tier) {
+                // Tier may change per member (e.g. Top -> Bottom on empty floor); DiceSlidePassability is authoritative.
+                if (memberPlan.To.GridPos != expectedGridPos) {
                     rejectReason = $"chain-slide-target-mismatch dice={dice.name}";
                     return false;
                 }

@@ -2,6 +2,7 @@ using System;
 using DiceGame.Core;
 using DiceGame.Gameplay;
 using DiceGame.Placement;
+using DiceGame.Placement.Support;
 using UnityEngine;
 
 namespace DiceGame.Gameplay.Character
@@ -11,13 +12,19 @@ namespace DiceGame.Gameplay.Character
         PlacementService placement;
         Action endRollTracking;
         DiceController subscribedDice;
+        CharacterSupportState supportState;
 
-        public CharacterPlacement Current => placement.Character;
-        public DiceController CurrentDice => placement.Character.Dice;
-        public bool IsOnFloor => placement != null && placement.Character.IsOnFloor;
-        public Vector2Int GridCell => placement.Character.GridCell;
-        public DiceStackTier Tier => placement.Character.Tier;
-        public SurfaceLayer Layer => placement.Character.Layer;
+        public CharacterSupportState SupportState => supportState;
+        public SupportRef Support => supportState.Support;
+        public int Level => supportState.Level;
+        public bool IsAirborne => supportState.IsAirborne;
+        public Vector2Int GridCell => supportState.Cell;
+
+        public CharacterPlacement Current => CharacterPlacementConversion.ToLegacyPlacement(supportState);
+        public DiceController CurrentDice =>
+            supportState.Support.Kind == SupportKind.Dice ? supportState.Support.Dice : null;
+        public bool IsOnFloor => supportState.Support.Kind == SupportKind.Floor;
+        public DiceStackTier Tier => ResolveTier(supportState);
 
         public event Action<DiceState> StandingDiceStateChanged;
 
@@ -27,36 +34,50 @@ namespace DiceGame.Gameplay.Character
         }
 
         public void SetInitialStanding(CharacterPlacement standing) {
-            UnsubscribeDice();
+            ApplySupportState(CharacterPlacementConversion.ToSupportState(standing), syncPlacement: false);
             placement.SetInitialCharacterPlacement(standing);
-            SubscribeDice(standing.Dice);
+            SubscribeDice(CurrentDice);
         }
 
         public void ApplyFromTransition(MovementTransition transition, Vector2Int toCell) {
-            if (transition.TargetLayer == SurfaceLayer.Floor) {
-                SetOnFloor(toCell);
-                return;
-            }
-
-            if (transition.TargetDice != null) {
-                var tier = transition.TargetLayer == SurfaceLayer.Top
-                    ? DiceStackTier.Top
-                    : DiceStackTier.Bottom;
-                SetOnDice(toCell, tier, transition.TargetDice);
-            }
+            ApplySupportState(CharacterPlacementConversion.FromTransition(transition, toCell));
         }
 
         public void SetOnFloor(Vector2Int gridCell) {
-            endRollTracking?.Invoke();
-            UnsubscribeDice();
-            placement.SetCharacterOnFloor(gridCell);
+            ApplySupportState(CharacterSupportState.OnFloor(gridCell));
         }
 
         public void SetOnDice(Vector2Int gridCell, DiceStackTier tier, DiceController dice) {
+            var surfaceLevel = tier == DiceStackTier.Top
+                ? DiceSurfaceLevel.Top
+                : DiceSurfaceLevel.Bottom;
+            var level = tier == DiceStackTier.Top ? 2 : 1;
+            ApplySupportState(CharacterSupportState.OnDice(
+                gridCell,
+                level,
+                SupportRef.DiceSupport(dice, surfaceLevel)));
+        }
+
+        public void SetAirborne(Vector2Int gridCell) {
+            ApplySupportState(CharacterSupportState.Airborne(gridCell));
+        }
+
+        public void ApplySupportState(CharacterSupportState state, bool syncPlacement = true) {
             endRollTracking?.Invoke();
             UnsubscribeDice();
-            placement.SetCharacterOnDice(gridCell, tier, dice);
-            SubscribeDice(dice);
+            supportState = state;
+
+            if (state.IsAirborne) {
+                return;
+            }
+
+            if (syncPlacement) {
+                placement.ApplyCharacterSupportState(state);
+            }
+
+            if (state.Support.Kind == SupportKind.Dice) {
+                SubscribeDice(state.Support.Dice);
+            }
         }
 
         public void ApplyImmediateFromDiceState(DiceController dice) {
@@ -69,15 +90,35 @@ namespace DiceGame.Gameplay.Character
         }
 
         public bool TryGetStandingDice(out DiceController dice) {
-            return placement.TryGetCharacterStandingDice(out dice);
+            if (supportState.Support.Kind != SupportKind.Dice || supportState.Support.Dice == null) {
+                dice = null;
+                return false;
+            }
+
+            dice = supportState.Support.Dice;
+            return true;
         }
 
         public DiceController ResolveStandingDiceForMovement() {
-            return placement.Character.Dice;
+            return CurrentDice;
         }
 
         public void UnsubscribeAll() {
             UnsubscribeDice();
+        }
+
+        static DiceStackTier ResolveTier(CharacterSupportState state) {
+            if (state.Support.Kind == SupportKind.Floor) {
+                return DiceStackTier.Bottom;
+            }
+
+            if (state.Support.Kind == SupportKind.Dice) {
+                return state.Support.DiceSurfaceLevel == DiceSurfaceLevel.Top
+                    ? DiceStackTier.Top
+                    : DiceStackTier.Bottom;
+            }
+
+            return DiceStackTier.Bottom;
         }
 
         void SubscribeDice(DiceController dice) {
@@ -98,18 +139,30 @@ namespace DiceGame.Gameplay.Character
         void OnDiceStateChanged(DiceState state) {
             StandingDiceStateChanged?.Invoke(state);
 
-            var current = placement.Character;
-            if (current.IsOnFloor || current.Dice == null) {
+            if (supportState.Support.Kind != SupportKind.Dice || supportState.Support.Dice == null) {
                 return;
             }
 
-            if (current.Dice != subscribedDice) {
+            if (supportState.Support.Dice != subscribedDice) {
                 return;
             }
 
-            if (state.GridPos == current.GridCell && state.Tier != current.Tier) {
-                SetOnDice(state.GridPos, state.Tier, current.Dice);
+            if (state.GridPos != supportState.Cell) {
+                return;
             }
+
+            var surfaceLevel = state.Tier == DiceStackTier.Top
+                ? DiceSurfaceLevel.Top
+                : DiceSurfaceLevel.Bottom;
+            if (surfaceLevel == supportState.Support.DiceSurfaceLevel) {
+                return;
+            }
+
+            var level = surfaceLevel == DiceSurfaceLevel.Top ? 2 : 1;
+            ApplySupportState(CharacterSupportState.OnDice(
+                state.GridPos,
+                level,
+                SupportRef.DiceSupport(supportState.Support.Dice, surfaceLevel)));
         }
     }
 }

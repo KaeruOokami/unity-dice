@@ -55,7 +55,7 @@ namespace DiceGame.Placement
 
         public MovementTransition Evaluate(
             Vector2Int fromCell,
-            SurfaceLayer fromLayer,
+            int fromLevel,
             Direction direction,
             DiceController standingDice,
             DiceStackTier standingTier,
@@ -68,7 +68,7 @@ namespace DiceGame.Placement
             return EvaluateToCell(
                 fromCell,
                 toCell,
-                fromLayer,
+                fromLevel,
                 standingDice,
                 standingTier,
                 direction,
@@ -81,7 +81,7 @@ namespace DiceGame.Placement
 
         public bool TryEvaluatePlayerOnlyTierDemote(
             Vector2Int fromCell,
-            SurfaceLayer fromLayer,
+            int fromLevel,
             DiceController standingDice,
             DiceStackTier standingTier,
             PassabilityContext context,
@@ -93,12 +93,12 @@ namespace DiceGame.Placement
 
             var fromSurface = surfaceQuery.GetStandingSurface(
                 fromCell,
-                fromLayer,
+                fromLevel,
                 standingDice,
                 standingTier);
             return PlayerOnlyTierDemotePolicy.TryEvaluate(
                 fromCell,
-                fromLayer,
+                fromLevel,
                 fromSurface,
                 standingDice,
                 standingTier,
@@ -110,14 +110,14 @@ namespace DiceGame.Placement
 
         public bool IsDescentBlockedOnlyByStepHeight(
             Vector2Int fromCell,
-            SurfaceLayer fromLayer,
+            int fromLevel,
             Direction direction,
             float footingWorldY,
             DiceController standingDice,
             DiceStackTier standingTier) {
             var transition = Evaluate(
                 fromCell,
-                fromLayer,
+                fromLevel,
                 direction,
                 standingDice,
                 standingTier,
@@ -127,14 +127,14 @@ namespace DiceGame.Placement
 
         public bool IsWalkable(
             Vector2Int fromCell,
-            SurfaceLayer fromLayer,
+            int fromLevel,
             Direction direction,
             float footingWorldY,
             DiceController standingDice,
             DiceStackTier standingTier) {
             return Evaluate(
                 fromCell,
-                fromLayer,
+                fromLevel,
                 direction,
                 standingDice,
                 standingTier,
@@ -145,14 +145,14 @@ namespace DiceGame.Placement
         public bool IsWalkableBetween(
             Vector2Int fromCell,
             Vector2Int toCell,
-            SurfaceLayer fromLayer,
+            int fromLevel,
             float footingWorldY,
             DiceController standingDice,
             DiceStackTier standingTier) {
             return TryEvaluateBetween(
                 fromCell,
                 toCell,
-                fromLayer,
+                fromLevel,
                 footingWorldY,
                 standingDice,
                 standingTier,
@@ -163,7 +163,7 @@ namespace DiceGame.Placement
         public bool TryEvaluateBetween(
             Vector2Int fromCell,
             Vector2Int toCell,
-            SurfaceLayer fromLayer,
+            int fromLevel,
             float footingWorldY,
             DiceController standingDice,
             DiceStackTier standingTier,
@@ -181,7 +181,7 @@ namespace DiceGame.Placement
             transition = EvaluateToCell(
                 fromCell,
                 toCell,
-                fromLayer,
+                fromLevel,
                 standingDice,
                 standingTier,
                 direction,
@@ -262,10 +262,10 @@ namespace DiceGame.Placement
                 return false;
             }
 
-            var fromLayer = standingTier == DiceStackTier.Top ? SurfaceLayer.Top : SurfaceLayer.Bottom;
+            var fromLevel = standingTier == DiceStackTier.Top ? SurfaceHeightLevel.Top : SurfaceHeightLevel.Bottom;
             var fromSurface = surfaceQuery.GetStandingSurface(
                 fromCell,
-                fromLayer,
+                fromLevel,
                 standingDice,
                 standingTier);
 
@@ -297,7 +297,7 @@ namespace DiceGame.Placement
         public MovementTransition EvaluateToTargetCell(
             Vector2Int fromCell,
             Vector2Int toCell,
-            SurfaceLayer fromLayer,
+            int fromLevel,
             DiceController standingDice,
             DiceStackTier standingTier,
             PassabilityContext context) {
@@ -312,7 +312,7 @@ namespace DiceGame.Placement
             return EvaluateToCell(
                 fromCell,
                 toCell,
-                fromLayer,
+                fromLevel,
                 standingDice,
                 standingTier,
                 direction,
@@ -355,7 +355,7 @@ namespace DiceGame.Placement
         MovementTransition EvaluateToCell(
             Vector2Int fromCell,
             Vector2Int toCell,
-            SurfaceLayer fromLayer,
+            int fromLevel,
             DiceController standingDice,
             DiceStackTier standingTier,
             Direction direction,
@@ -364,15 +364,19 @@ namespace DiceGame.Placement
             var reach = CreateReachEvaluation(isJumping);
             var fromSurface = surfaceQuery.GetStandingSurface(
                 fromCell,
-                fromLayer,
+                fromLevel,
                 standingDice,
                 standingTier);
             var playerOnlyTransfer = JumpPlayerTransferPolicy.UsesPlayerOnlyReach(isJumping, standingDice);
 
-            if (registry.CanPlaceBottomDiceAt(toCell)) {
-                if (playerOnlyTransfer
-                    && fromLayer != SurfaceLayer.Floor
-                    && standingDice != null) {
+            // Player-only jump transfer (Iron/Stone/iron-adjacent Magnet):
+            // Resolve target surface at toCell first (top -> bottom -> floor),
+            // and evaluate transfer uniformly regardless of whether toCell is empty or occupied.
+            if (playerOnlyTransfer
+                && fromLevel != SurfaceHeightLevel.Floor
+                && standingDice != null
+                && TryResolveTargetSurfaceAtForPlayerOnlyJump(toCell, out var targetDice, out var targetLevel, out var targetSurfaceWorldY)) {
+                if (targetLevel == SurfaceHeightLevel.Floor) {
                     return WalkTransferPolicy.EvaluateFloor(
                         fromSurface,
                         standingDice,
@@ -381,6 +385,23 @@ namespace DiceGame.Placement
                         allowDescentOnly: true);
                 }
 
+                if (!HeightReachPolicy.CanTransfer(
+                    fromSurface,
+                    targetSurfaceWorldY,
+                    standingDice,
+                    registry,
+                    reach,
+                    allowDescentOnly: true)) {
+                    return MovementTransition.Blocked();
+                }
+
+                var route = targetLevel == SurfaceHeightLevel.Floor
+                    ? MovementTransitionRoute.FloorTransfer
+                    : MovementTransitionRoute.HeightTransfer;
+                return MovementTransition.Walkable(targetDice, targetLevel, route);
+            }
+
+            if (registry.CanPlaceBottomDiceAt(toCell)) {
                 if (!playerOnlyTransfer) {
                 if (isJumping
                     && JumpGridRollPolicy.TryCreateCoupledTransition(
@@ -397,7 +418,7 @@ namespace DiceGame.Placement
                 }
 
                 if (TopFallPolicy.TryEvaluate(
-                    fromLayer,
+                    fromLevel,
                     fromSurface,
                     standingDice,
                     standingTier,
@@ -444,7 +465,7 @@ namespace DiceGame.Placement
                 }
 
                 if (isJumping
-                    && fromLayer != SurfaceLayer.Floor
+                    && fromLevel != SurfaceHeightLevel.Floor
                     && standingDice != null
                     && standingDice.CanJumpCoupleWithPlayer) {
                     return MovementTransition.Blocked();
@@ -459,7 +480,7 @@ namespace DiceGame.Placement
             }
 
             DiceController target;
-            if (fromLayer == SurfaceLayer.Floor) {
+            if (fromLevel == SurfaceHeightLevel.Floor) {
                 if (registry.TryGetBottomAt(toCell, out target)
                     && WalkTransferPolicy.TryEvaluateFloorToBottom(
                         fromSurface,
@@ -475,7 +496,7 @@ namespace DiceGame.Placement
 
             if (TryEvaluateHeightTransfer(
                 toCell,
-                fromLayer,
+                fromLevel,
                 fromSurface,
                 standingDice,
                 standingTier,
@@ -505,7 +526,7 @@ namespace DiceGame.Placement
             if (TierLandingPolicy.TryEvaluate(
                 fromCell,
                 toCell,
-                fromLayer,
+                fromLevel,
                 fromSurface,
                 standingDice,
                 standingTier,
@@ -554,6 +575,33 @@ namespace DiceGame.Placement
             return MovementTransition.Blocked();
         }
 
+        bool TryResolveTargetSurfaceAtForPlayerOnlyJump(
+            Vector2Int toCell,
+            out DiceController targetDice,
+            out int targetLevel,
+            out float targetSurfaceWorldY) {
+            targetDice = null;
+            targetLevel = SurfaceHeightLevel.Floor;
+            targetSurfaceWorldY = board.FloorSurfaceWorldY;
+
+            if (registry.TryGetTopAt(toCell, out var top) && top != null) {
+                targetDice = top;
+                targetLevel = SurfaceHeightLevel.Top;
+                targetSurfaceWorldY = top.GetLogicalTopSurfaceWorldY();
+                return true;
+            }
+
+            if (registry.TryGetBottomAt(toCell, out var bottom) && bottom != null) {
+                targetDice = bottom;
+                targetLevel = SurfaceHeightLevel.Bottom;
+                targetSurfaceWorldY = bottom.GetLogicalTopSurfaceWorldY();
+                return true;
+            }
+
+            // Empty cell: floor
+            return true;
+        }
+
         bool TryEvaluateIceSlide(
             DiceController standingDice,
             DiceStackTier standingTier,
@@ -593,7 +641,7 @@ namespace DiceGame.Placement
 
         bool TryEvaluateHeightTransfer(
             Vector2Int toCell,
-            SurfaceLayer fromLayer,
+            int fromLevel,
             BoardSurface fromSurface,
             DiceController standingDice,
             DiceStackTier standingTier,
@@ -603,20 +651,18 @@ namespace DiceGame.Placement
             HeightReachEvaluation reach,
             out MovementTransition transition) {
             transition = default;
-            if (fromLayer == SurfaceLayer.Floor || standingDice == null) {
+            if (fromLevel == SurfaceHeightLevel.Floor || standingDice == null) {
                 LogHeightTransfer(
                     $"reject skip-height-transfer to={FormatGrid(toCell)} " +
-                    $"fromLayer={fromLayer} standingDice={(standingDice != null ? standingDice.name : "(none)")}");
+                    $"fromLevel={fromLevel} standingDice={(standingDice != null ? standingDice.name : "(none)")}");
                 return false;
             }
 
             var fromCell = standingDice.CurrentState.GridPos;
             var sameTierTarget = registry.GetTransferTargetAt(standingDice, direction, standingTier);
 
-            // 連動可能ダイスのジャンプ中は、同 Tier の隣ダイスへの単純な高さ乗り移りより
-            // ダイスごとのグリッド回転（上 Tier へのスタック等）を優先させる。
-            // 移動不可ダイス（Iron/Stone/鉄隣接 Magnet）は AllowJumpGridMove が false のため
-            // ここではスキップされず、従来どおりプレイヤーのみの乗り移りが評価される。
+            // During coupled jump, prefer per-dice grid roll over same-tier height transfer.
+            // Player-only dice skip this path because AllowJumpGridMove is false.
             var preferCoupledGridRoll = isJumping
                 && allowJumpGridMove
                 && standingDice.Capabilities.CanGridRoll
@@ -631,7 +677,7 @@ namespace DiceGame.Placement
             } else if (TryEvaluateHeightTransferToTarget(
                 fromCell,
                 toCell,
-                fromLayer,
+                fromLevel,
                 fromSurface,
                 standingDice,
                 standingTier,
@@ -654,7 +700,7 @@ namespace DiceGame.Placement
                 && TryEvaluateHeightTransferToTarget(
                     fromCell,
                     toCell,
-                    fromLayer,
+                    fromLevel,
                     fromSurface,
                     standingDice,
                     standingTier,
@@ -670,7 +716,7 @@ namespace DiceGame.Placement
 
             if (JumpPlayerTransferPolicy.UsesPlayerOnlyReach(isJumping, standingDice)
                 && WalkTransferPolicy.IsLandingTierAtOrBelowStandingTier(standingTier, DiceStackTier.Bottom)
-                && (standingTier == DiceStackTier.Top || fromLayer == SurfaceLayer.Top)
+                && (standingTier == DiceStackTier.Top || fromLevel == SurfaceHeightLevel.Top)
                 && registry.TryGetBottomAt(toCell, out var playerOnlyLowerTarget)
                 && playerOnlyLowerTarget != null
                 && playerOnlyLowerTarget != sameTierTarget
@@ -678,7 +724,7 @@ namespace DiceGame.Placement
                 && TryEvaluateHeightTransferToTarget(
                     fromCell,
                     toCell,
-                    fromLayer,
+                    fromLevel,
                     fromSurface,
                     standingDice,
                     standingTier,
@@ -693,7 +739,7 @@ namespace DiceGame.Placement
 
             LogHeightTransfer(
                 $"reject {sameTierRejectReason ?? "no-transfer-target"} from={FormatGrid(fromCell)} to={FormatGrid(toCell)} " +
-                $"dir={direction} layer={fromLayer} tier={standingTier} " +
+                $"dir={direction} layer={fromLevel} tier={standingTier} " +
                 $"standing={FormatDice(standingDice)} stack={FormatStack(toCell)} " +
                 $"standingDissolving={standingDice.IsDissolving}");
             return false;
@@ -702,7 +748,7 @@ namespace DiceGame.Placement
         bool TryEvaluateHeightTransferToTarget(
             Vector2Int fromCell,
             Vector2Int toCell,
-            SurfaceLayer fromLayer,
+            int fromLevel,
             BoardSurface fromSurface,
             DiceController standingDice,
             DiceStackTier standingTier,
@@ -715,7 +761,7 @@ namespace DiceGame.Placement
             return TryEvaluateHeightTransferToTarget(
                 fromCell,
                 toCell,
-                fromLayer,
+                fromLevel,
                 fromSurface,
                 standingDice,
                 standingTier,
@@ -731,7 +777,7 @@ namespace DiceGame.Placement
         bool TryEvaluateHeightTransferToTarget(
             Vector2Int fromCell,
             Vector2Int toCell,
-            SurfaceLayer fromLayer,
+            int fromLevel,
             BoardSurface fromSurface,
             DiceController standingDice,
             DiceStackTier standingTier,
@@ -757,7 +803,7 @@ namespace DiceGame.Placement
 
             var targetSurface = BoardSurface.FromDice(
                 toCell,
-                target.CurrentState.Tier == DiceStackTier.Top ? SurfaceLayer.Top : SurfaceLayer.Bottom,
+                target.CurrentState.Tier == DiceStackTier.Top ? SurfaceHeightLevel.Top : SurfaceHeightLevel.Bottom,
                 target);
 
             var allowDescentOnly = isJumping
@@ -800,7 +846,7 @@ namespace DiceGame.Placement
                 : "ok";
             LogHeightTransfer(
                 $"{resultKind} from={FormatGrid(fromCell)} to={FormatGrid(toCell)} dir={direction} " +
-                $"layer={fromLayer} tier={standingTier} standing={FormatDice(standingDice)} " +
+                $"layer={fromLevel} tier={standingTier} standing={FormatDice(standingDice)} " +
                 $"target={FormatDice(target)} footingY={footingWorldY:F3} targetY={targetSurface.SurfaceWorldY:F3} " +
                 $"standingDissolving={standingDice.IsDissolving} targetDissolving={target.IsDissolving}");
             return true;
@@ -813,10 +859,10 @@ namespace DiceGame.Placement
         static MovementTransition CreateCoupledGridMoveTransition(
             DiceController standingDice,
             DiceGridMovePlan plan) {
-            var layer = plan.To.Tier == DiceStackTier.Top ? SurfaceLayer.Top : SurfaceLayer.Bottom;
+            var targetLevel = SurfaceHeightLevel.FromDiceStackTier(plan.To.Tier);
             return MovementTransition.WalkableWithGridPlan(
                 standingDice,
-                layer,
+                targetLevel,
                 MovementTransitionRoute.CoupledGridMove,
                 plan);
         }

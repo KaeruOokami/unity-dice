@@ -45,10 +45,10 @@ namespace DiceGame.Placement
                 return false;
             }
 
-            var layer = plan.To.Tier == DiceStackTier.Top ? SurfaceLayer.Top : SurfaceLayer.Bottom;
+            var targetLevel = SurfaceHeightLevel.FromDiceStackTier(plan.To.Tier);
             transition = MovementTransition.WalkableWithGridPlan(
                 standingDice,
-                layer,
+                targetLevel,
                 MovementTransitionRoute.CoupledGridMove,
                 plan);
             return true;

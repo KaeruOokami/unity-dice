@@ -3,13 +3,6 @@ using DiceGame.Gameplay;
 
 namespace DiceGame.Placement
 {
-    public enum SurfaceLayer
-    {
-        Floor,
-        Bottom,
-        Top
-    }
-
     public enum MovementTransitionKind
     {
         Walkable,
@@ -37,7 +30,7 @@ namespace DiceGame.Placement
         public MovementTransitionKind Kind { get; }
         public MovementTransitionRoute Route { get; }
         public DiceController TargetDice { get; }
-        public SurfaceLayer TargetLayer { get; }
+        public int TargetLevel { get; }
         public bool HasDiceGridMovePlan { get; }
         public DiceGridMovePlan DiceGridMovePlan { get; }
         public bool HasDiceSlidePlan { get; }
@@ -47,7 +40,7 @@ namespace DiceGame.Placement
             MovementTransitionKind kind,
             MovementTransitionRoute route,
             DiceController targetDice,
-            SurfaceLayer targetLayer,
+            int targetLevel,
             bool hasDiceGridMovePlan,
             DiceGridMovePlan diceGridMovePlan,
             bool hasDiceSlidePlan,
@@ -55,7 +48,7 @@ namespace DiceGame.Placement
             Kind = kind;
             Route = route;
             TargetDice = targetDice;
-            TargetLayer = targetLayer;
+            TargetLevel = targetLevel;
             HasDiceGridMovePlan = hasDiceGridMovePlan;
             DiceGridMovePlan = diceGridMovePlan;
             HasDiceSlidePlan = hasDiceSlidePlan;
@@ -64,13 +57,13 @@ namespace DiceGame.Placement
 
         public static MovementTransition Walkable(
             DiceController dice,
-            SurfaceLayer layer,
+            int targetLevel,
             MovementTransitionRoute route = MovementTransitionRoute.HeightTransfer) {
             return new MovementTransition(
                 MovementTransitionKind.Walkable,
                 route,
                 dice,
-                layer,
+                targetLevel,
                 false,
                 default,
                 false,
@@ -79,14 +72,14 @@ namespace DiceGame.Placement
 
         public static MovementTransition WalkableWithGridPlan(
             DiceController dice,
-            SurfaceLayer layer,
+            int targetLevel,
             MovementTransitionRoute route,
             DiceGridMovePlan plan) {
             return new MovementTransition(
                 MovementTransitionKind.Walkable,
                 route,
                 dice,
-                layer,
+                targetLevel,
                 true,
                 plan,
                 false,
@@ -98,7 +91,7 @@ namespace DiceGame.Placement
                 MovementTransitionKind.Blocked,
                 MovementTransitionRoute.None,
                 null,
-                SurfaceLayer.Floor,
+                SurfaceHeightLevel.Floor,
                 false,
                 default,
                 false,
@@ -110,7 +103,7 @@ namespace DiceGame.Placement
                 MovementTransitionKind.CanRoll,
                 MovementTransitionRoute.DiceRoll,
                 null,
-                SurfaceLayer.Floor,
+                SurfaceHeightLevel.Floor,
                 true,
                 plan,
                 false,
@@ -122,19 +115,19 @@ namespace DiceGame.Placement
                 MovementTransitionKind.IceSlide,
                 MovementTransitionRoute.IceSlide,
                 null,
-                SurfaceLayer.Floor,
+                SurfaceHeightLevel.Floor,
                 false,
                 default,
                 true,
                 plan);
         }
 
-        public static MovementTransition BlockedStepOnly(DiceController targetDice, SurfaceLayer targetLayer) {
+        public static MovementTransition BlockedStepOnly(DiceController targetDice, int targetLevel) {
             return new MovementTransition(
                 MovementTransitionKind.BlockedStepOnly,
                 MovementTransitionRoute.DissolveDescent,
                 targetDice,
-                targetLayer,
+                targetLevel,
                 false,
                 default,
                 false,
@@ -146,6 +139,6 @@ namespace DiceGame.Placement
             && Route == MovementTransitionRoute.DissolveDescent;
 
         public bool IsDissolveDescentToFloor =>
-            IsDissolveDescentHold && TargetLayer == SurfaceLayer.Floor;
+            IsDissolveDescentHold && TargetLevel == SurfaceHeightLevel.Floor;
     }
 }

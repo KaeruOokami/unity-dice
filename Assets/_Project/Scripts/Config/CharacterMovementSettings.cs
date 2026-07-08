@@ -10,7 +10,7 @@ namespace DiceGame.Config
         [SerializeField] float moveAcceleration = 10f;
         [SerializeField] float rollCenterPullSpeed = 2.5f;
         [SerializeField] float maxWalkStep = 0.5f;
-        [SerializeField] float maxJumpStep = 1f;
+        [SerializeField] float maxJumpStep = 2f;
         [SerializeField] float pushHoldDuration = 0.25f;
         [SerializeField] float dissolveDescentHoldDuration = 0.35f;
         [Range(0f, 1f)]

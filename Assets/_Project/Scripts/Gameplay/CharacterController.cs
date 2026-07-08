@@ -6,6 +6,7 @@ using DiceGame.Gameplay.Character;
 using DiceGame.Gameplay.Coupling;
 using DiceGame.Grid;
 using DiceGame.Placement;
+using DiceGame.Placement.Support;
 using DiceGame.View;
 using UnityEngine;
 
@@ -77,9 +78,21 @@ namespace DiceGame.Gameplay
         Direction lastFacing;
         bool hasLastFacing;
         JumpPhase jumpPhase;
+        bool pendingEndJump;
+        bool isFalling;
+        VerticalMotionState fallMotion;
+        float fallGroundWorldY;
+        Vector2Int fallGridCell;
         VerticalMotionState jumpMotion;
         float jumpYOffset;
         DiceController jumpVisualDice;
+
+        // Phase2: airborne representation (Level=3) + continuous height for rendering/logic.
+        // When jumpPhase != None, support=None and Level=3, while playerHeightNorm tracks the
+        // current vertical position continuously (gravity-based jumpMotion.Offset).
+        public int PlayerLevel { get; private set; }
+        public float PlayerHeightNorm { get; private set; }
+        public SupportRef PlayerSupport { get; private set; } = SupportRef.None();
 
         struct PushContactCandidate {
             public DiceController Dice;
@@ -88,7 +101,9 @@ namespace DiceGame.Gameplay
             public float FaceDistance;
         }
 
-        public bool IsOnFloor => standingController != null && standingController.IsOnFloor;
+        public bool IsOnFloor => standingController != null
+            && standingController.IsOnFloor
+            && !standingController.IsAirborne;
         public bool IsBusy => standingController != null
             && !IsOnFloor
             && standingController.CurrentDice != null
@@ -158,7 +173,7 @@ namespace DiceGame.Gameplay
             transformDriver.Configure(
                 board,
                 characterTransform,
-                () => standingController.Current,
+                () => standingController.SupportState,
                 GetCharacterWorldY,
                 () => coupling.IsTrackingRoll);
 
@@ -298,11 +313,6 @@ namespace DiceGame.Gameplay
                 }
             }
 
-            if (jumpPhase != JumpPhase.None) {
-                UpdateJump();
-                ApplyStandingDiceJumpVisual();
-            }
-
             if (isPushFollowing) {
                 currentSpeed = 0f;
                 return;
@@ -314,6 +324,94 @@ namespace DiceGame.Gameplay
                 UpdateDuringRoll(input);
             } else {
                 UpdateSurfaceMovement(input);
+            }
+
+            // Update jump after movement evaluation so "jumping" state isn't lost
+            // on the same frame the player crosses a cell boundary.
+            if (jumpPhase != JumpPhase.None) {
+                UpdateJump();
+                ApplyStandingDiceJumpVisual();
+            }
+
+            if (pendingEndJump && jumpPhase != JumpPhase.None) {
+                EndJump();
+            }
+
+            UpdateFall();
+            UpdatePlayerSupportAndHeightState();
+        }
+
+        void UpdatePlayerSupportAndHeightState() {
+            if (board == null || standingController == null) {
+                return;
+            }
+
+            var floorY = board.FloorSurfaceWorldY;
+            var cellSize = board.CellSize;
+
+            if (isFalling) {
+                PlayerLevel = 3;
+                PlayerSupport = SupportRef.None();
+                PlayerHeightNorm = NormalizedHeight.ToNormalized(
+                    fallGroundWorldY + fallMotion.Offset,
+                    floorY,
+                    cellSize);
+                return;
+            }
+
+            if (jumpPhase != JumpPhase.None) {
+                PlayerLevel = 3;
+                PlayerSupport = SupportRef.None();
+
+                // Footing height used by the character position:
+                // - base is GetSurfaceWorldY (dice/stack/floor surface)
+                // - add jumpYOffset only when the character view/feet are lifted over the surface
+                var footWorldY = GetSurfaceWorldY();
+                if (ShouldApplyJumpYOffsetToCharacter()) {
+                    footWorldY += jumpYOffset;
+                }
+
+                PlayerHeightNorm = NormalizedHeight.ToNormalized(
+                    footWorldY,
+                    floorY,
+                    cellSize);
+                return;
+            }
+
+            if (IsOnFloor) {
+                PlayerLevel = 0;
+                PlayerSupport = SupportRef.Floor();
+                PlayerHeightNorm = 0f;
+                return;
+            }
+
+            if (standingController.IsAirborne) {
+                PlayerLevel = 3;
+                PlayerSupport = SupportRef.None();
+                PlayerHeightNorm = NormalizedHeight.ToNormalized(
+                    GetLogicalSurfaceWorldY(),
+                    floorY,
+                    cellSize);
+                return;
+            }
+
+            PlayerLevel = standingController.Level;
+            PlayerSupport = standingController.Support;
+
+            if (standingController.TryGetStandingDice(out _)) {
+                var footWorldY = GetLogicalSurfaceWorldY();
+                PlayerHeightNorm = NormalizedHeight.ToNormalized(
+                    footWorldY,
+                    floorY,
+                    cellSize);
+            } else {
+                // Defensive fallback: treat as airborne to avoid invalid support state.
+                PlayerLevel = 3;
+                PlayerSupport = SupportRef.None();
+                PlayerHeightNorm = NormalizedHeight.ToNormalized(
+                    GetLogicalSurfaceWorldY(),
+                    floorY,
+                    cellSize);
             }
         }
 
@@ -341,6 +439,10 @@ namespace DiceGame.Gameplay
         }
 
         void UpdateSurfaceMovement(Vector2 input) {
+            if (isFalling) {
+                currentSpeed = 0f;
+                return;
+            }
             if (input.sqrMagnitude <= 0f) {
                 currentSpeed = 0f;
                 ResetPushState();
@@ -361,7 +463,7 @@ namespace DiceGame.Gameplay
             var move = input * (currentSpeed * Time.deltaTime);
             var currentXZ = transformDriver.GetWorldXZ();
             var standingCell = standingController.GridCell;
-            var fromLayer = standingController.Layer;
+            var fromLevel = standingController.Level;
             var footingWorldY = GetFootingWorldY();
             var halfExtent = transformDriver.GetWalkHalfExtent();
             var nextXZ = currentXZ + move;
@@ -375,7 +477,7 @@ namespace DiceGame.Gameplay
                 ref nextXZ,
                 move,
                 standingCell,
-                fromLayer,
+                fromLevel,
                 footingWorldY,
                 halfExtent)) {
                 return;
@@ -390,7 +492,7 @@ namespace DiceGame.Gameplay
             ref Vector2 nextXZ,
             Vector2 move,
             Vector2Int standingCell,
-            SurfaceLayer fromLayer,
+            int fromLevel,
             float footingWorldY,
             float halfExtent) {
             var isJumping = jumpPhase != JumpPhase.None;
@@ -404,7 +506,7 @@ namespace DiceGame.Gameplay
                 currentXZ,
                 move,
                 standingCell,
-                fromLayer,
+                fromLevel,
                 footingWorldY,
                 halfExtent,
                 standingController,
@@ -419,7 +521,7 @@ namespace DiceGame.Gameplay
                         : "TransitionBlocked",
                     plan.FromCell,
                     plan.ToCell,
-                    fromLayer,
+                    fromLevel,
                     footingWorldY,
                     halfExtent,
                     currentXZ,
@@ -434,7 +536,7 @@ namespace DiceGame.Gameplay
                 currentXZ,
                 ref nextXZ,
                 move,
-                fromLayer,
+                fromLevel,
                 footingWorldY,
                 halfExtent,
                 isJumping,
@@ -496,7 +598,7 @@ namespace DiceGame.Gameplay
             string reason,
             Vector2Int standingCell,
             Vector2Int nextCell,
-            SurfaceLayer fromLayer,
+            int fromLevel,
             float fromSurfaceY,
             float halfExtent,
             Vector2 currentXZ,
@@ -516,17 +618,17 @@ namespace DiceGame.Gameplay
             var target = movementTransition.IsWalkableBetween(
                 standingCell,
                 nextCell,
-                fromLayer,
+                fromLevel,
                 fromSurfaceY,
                 standingDice,
                 standingController.Tier)
-                ? DescribeWalkableTarget(standingCell, nextCell, fromLayer, fromSurfaceY)
+                ? DescribeWalkableTarget(standingCell, nextCell, fromLevel, fromSurfaceY)
                 : "(none)";
 
             var detail =
                 $"from={FormatMovementGrid(standingCell)} to={FormatMovementGrid(nextCell)} " +
                 $"posCell={FormatMovementGrid(board.WorldToGrid(new Vector3(nextXZ.x, 0f, nextXZ.y)))} " +
-                $"layer={fromLayer} tier={standingController.Tier} dice={FormatMovementDice(standingDice)} " +
+                $"layer={fromLevel} tier={standingController.Tier} dice={FormatMovementDice(standingDice)} " +
                 $"target={target} stack={FormatMovementStack(nextCell)} " +
                 $"transition={transitionKind} surfaceY={fromSurfaceY:F3} halfExtent={halfExtent:F3} " +
                 $"pos={FormatMovementVector2(currentXZ)} final={FormatMovementVector2(nextXZ)} " +
@@ -540,7 +642,7 @@ namespace DiceGame.Gameplay
         string DescribeWalkableTarget(
             Vector2Int fromCell,
             Vector2Int toCell,
-            SurfaceLayer fromLayer,
+            int fromLevel,
             float fromSurfaceY) {
             if (!MovementTransitionEvaluator.TryGetDirectionBetween(fromCell, toCell, out var direction)) {
                 return "(none)";
@@ -549,12 +651,12 @@ namespace DiceGame.Gameplay
             var standingDice = standingController.ResolveStandingDiceForMovement();
             var transition = movementTransition.Evaluate(
                 fromCell,
-                fromLayer,
+                fromLevel,
                 direction,
                 standingDice,
                 standingController.Tier,
                 PassabilityContext.ForGround(GetFootingWorldY()));
-            if (transition.TargetLayer == SurfaceLayer.Floor) {
+            if (transition.TargetLevel == SurfaceHeightLevel.Floor) {
                 return "Floor";
             }
 
@@ -618,7 +720,7 @@ namespace DiceGame.Gameplay
             var grid = standingController != null
                 ? FormatMovementGrid(standingController.GridCell)
                 : "(?,?)";
-            var layer = standingController != null ? standingController.Layer : SurfaceLayer.Floor;
+            var layer = standingController != null ? standingController.Level : SurfaceHeightLevel.Floor;
             var tier = standingController != null ? standingController.Tier : DiceStackTier.Bottom;
             return
                 $"phase={jumpPhase} grid={grid} layer={layer} tier={tier} " +
@@ -705,12 +807,53 @@ namespace DiceGame.Gameplay
         }
 
         void MoveToFloorAtCurrentWorldPosition() {
-            coupling.EndRollTracking();
+            coupling?.EndRollTracking();
+
             var gridCell = characterTransform != null
                 ? board.WorldToGrid(characterTransform.position)
                 : standingController.GridCell;
-            standingController.SetOnFloor(gridCell);
-            transformDriver.SnapYToSurface();
+
+            standingController.SetAirborne(gridCell);
+
+            var targetY = ResolveFallTargetWorldY(gridCell);
+            var characterY = characterTransform != null
+                ? characterTransform.position.y
+                : GetCharacterWorldY();
+            var feetY = characterY - movementSettings.CharacterHeightOffset;
+
+            var startOffset = Mathf.Max(0f, feetY - targetY);
+            fallGroundWorldY = targetY;
+            fallGridCell = gridCell;
+            fallMotion = GravityMotion.CreateDrop(startOffset);
+
+            if (fallMotion.IsGrounded) {
+                isFalling = false;
+                LandFromFall(gridCell);
+                transformDriver?.SnapYToSurface();
+                return;
+            }
+
+            isFalling = true;
+        }
+
+        float ResolveFallTargetWorldY(Vector2Int cell) {
+            if (registry.TryGetBottomAt(cell, out var bottom)) {
+                return bottom.GetLogicalTopSurfaceWorldY();
+            }
+
+            return board.FloorSurfaceWorldY;
+        }
+
+        void LandFromFall(Vector2Int cell) {
+            if (registry.TryGetBottomAt(cell, out var bottom)) {
+                standingController.ApplySupportState(CharacterSupportState.OnDice(
+                    cell,
+                    1,
+                    SupportRef.DiceSupport(bottom, DiceSurfaceLevel.Bottom)));
+                return;
+            }
+
+            standingController.SetOnFloor(cell);
         }
         void EnsureCharacterInstance() {
             characterMount = transform;
@@ -773,7 +916,7 @@ namespace DiceGame.Gameplay
             }
 
             if (standingController != null && standingController.TryGetStandingDice(out var standingDice)) {
-                if (standingController.Tier == DiceStackTier.Top
+                if (standingController.Support.DiceSurfaceLevel == DiceSurfaceLevel.Top
                     && standingDice.CurrentState.Tier == DiceStackTier.Bottom
                     && !registry.HasTopAt(standingController.GridCell)) {
                     return movementTransition.GetStackTopStandingSurfaceY(standingDice);
@@ -795,13 +938,17 @@ namespace DiceGame.Gameplay
             }
 
             if (standingController != null && standingController.TryGetStandingDice(out var standingDice)) {
-                if (standingController.Tier == DiceStackTier.Top
+                if (standingController.Support.DiceSurfaceLevel == DiceSurfaceLevel.Top
                     && standingDice.CurrentState.Tier == DiceStackTier.Bottom
                     && !registry.HasTopAt(standingController.GridCell)) {
                     return movementTransition.GetStackTopStandingSurfaceY(standingDice);
                 }
 
                 return standingDice.GetLogicalTopSurfaceWorldY();
+            }
+
+            if (isFalling) {
+                return fallGroundWorldY + fallMotion.Offset;
             }
 
             return board.FloorSurfaceWorldY;
@@ -812,6 +959,10 @@ namespace DiceGame.Gameplay
         }
 
         float GetCharacterWorldY() {
+            if (isFalling) {
+                return fallGroundWorldY + movementSettings.CharacterHeightOffset + fallMotion.Offset;
+            }
+
             var y = GetSurfaceWorldY() + movementSettings.CharacterHeightOffset;
             if (ShouldApplyJumpYOffsetToCharacter()) {
                 y += jumpYOffset;
@@ -1014,7 +1165,7 @@ namespace DiceGame.Gameplay
         }
 
         void ApplyFloorStanding(Vector2Int gridCell) {
-            if (standingController.Layer == SurfaceLayer.Floor
+            if (standingController.Level == SurfaceHeightLevel.Floor
                 && standingController.GridCell == gridCell
                 && standingController.CurrentDice == null) {
                 return;
@@ -1024,8 +1175,7 @@ namespace DiceGame.Gameplay
         }
 
         void ApplyDiceStanding(Vector2Int gridCell, DiceStackTier tier, DiceController dice) {
-            var layer = tier == DiceStackTier.Top ? SurfaceLayer.Top : SurfaceLayer.Bottom;
-            if (standingController.Layer == layer
+            var level = SurfaceHeightLevel.FromDiceStackTier(tier); if (standingController.Level == level
                 && standingController.GridCell == gridCell
                 && standingController.Tier == tier
                 && standingController.CurrentDice == dice) {
@@ -1112,7 +1262,7 @@ namespace DiceGame.Gameplay
             LogPushDebugWhenInput(
                 input,
                 "overlap-summary",
-                $"stage=overlap standing={FormatMovementGrid(standingController.GridCell)} layer={standingController.Layer} " +
+                $"stage=overlap standing={FormatMovementGrid(standingController.GridCell)} layer={standingController.Level} " +
                 $"tier={standingController.Tier} charXZ=({characterXZ.x:F2},{characterXZ.y:F2}) input=({input.x:F2},{input.y:F2}) " +
                 $"hits={hits.Length} dice={overlapSummary} candidates={candidates.Count}");
         }
@@ -1613,7 +1763,21 @@ namespace DiceGame.Gameplay
                 }
 
                 LogJump($"EndJump reason=grounded {FormatJumpContext()}");
-                EndJump();
+                pendingEndJump = true;
+            }
+        }
+
+        void UpdateFall() {
+            if (!isFalling) {
+                return;
+            }
+
+            fallMotion = GravityMotion.Step(fallMotion, physicsSettings.Gravity, Time.deltaTime);
+            if (fallMotion.IsGrounded) {
+                isFalling = false;
+                coupling?.EndRollTracking();
+                LandFromFall(fallGridCell);
+                transformDriver?.SnapYToSurface();
             }
         }
 
@@ -1677,6 +1841,7 @@ namespace DiceGame.Gameplay
             }
 
             jumpPhase = JumpPhase.None;
+            pendingEndJump = false;
             jumpMotion = new VerticalMotionState {
                 Offset = 0f,
                 VelocityY = 0f,

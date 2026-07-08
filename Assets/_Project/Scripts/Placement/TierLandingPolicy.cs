@@ -9,7 +9,7 @@ namespace DiceGame.Placement
         public static bool TryEvaluate(
             Vector2Int fromCell,
             Vector2Int toCell,
-            SurfaceLayer fromLayer,
+            int fromLevel,
             BoardSurface fromSurface,
             DiceController standingDice,
             DiceStackTier standingTier,
@@ -24,7 +24,7 @@ namespace DiceGame.Placement
             }
 
             if (!context.IsJumping
-                || fromLayer != SurfaceLayer.Bottom
+                || fromLevel != SurfaceHeightLevel.Bottom
                 || standingTier != DiceStackTier.Bottom
                 || standingDice == null
                 || !fromSurface.AllowsRoll) {
@@ -49,7 +49,7 @@ namespace DiceGame.Placement
 
             transition = MovementTransition.Walkable(
                 topDice,
-                SurfaceLayer.Top,
+                SurfaceHeightLevel.Top,
                 MovementTransitionRoute.TierLanding);
             return true;
         }

@@ -30,12 +30,12 @@ namespace DiceGame.Placement
                 allowDescentOnly)) {
                 return MovementTransition.Walkable(
                     null,
-                    SurfaceLayer.Floor,
+                    SurfaceHeightLevel.Floor,
                     MovementTransitionRoute.FloorTransfer);
             }
 
-            if (fromSurface.IsDissolving && fromSurface.Layer == SurfaceLayer.Bottom) {
-                return MovementTransition.BlockedStepOnly(null, SurfaceLayer.Floor);
+            if (fromSurface.IsDissolving && fromSurface.Level == SurfaceHeightLevel.Bottom) {
+                return MovementTransition.BlockedStepOnly(null, SurfaceHeightLevel.Floor);
             }
 
             return MovementTransition.Blocked();
@@ -64,7 +64,7 @@ namespace DiceGame.Placement
 
             transition = MovementTransition.Walkable(
                 bottomDice,
-                SurfaceLayer.Bottom,
+                SurfaceHeightLevel.Bottom,
                 MovementTransitionRoute.HeightTransfer);
             return true;
         }
@@ -231,20 +231,16 @@ namespace DiceGame.Placement
                 return false;
             }
 
-            var targetLayer = target.CurrentState.Tier == DiceStackTier.Top
-                ? SurfaceLayer.Top
-                : SurfaceLayer.Bottom;
-            transition = MovementTransition.BlockedStepOnly(target, targetLayer);
+            var targetLevel = SurfaceHeightLevel.FromDiceStackTier(target.CurrentState.Tier);
+            transition = MovementTransition.BlockedStepOnly(target, targetLevel);
             return true;
         }
 
         static MovementTransition CreateWalkableTransfer(DiceController target) {
-            var targetLayer = target.CurrentState.Tier == DiceStackTier.Top
-                ? SurfaceLayer.Top
-                : SurfaceLayer.Bottom;
+            var targetLevel = SurfaceHeightLevel.FromDiceStackTier(target.CurrentState.Tier);
             return MovementTransition.Walkable(
                 target,
-                targetLayer,
+                targetLevel,
                 MovementTransitionRoute.HeightTransfer);
         }
     }

@@ -17,10 +17,10 @@ namespace DiceGame.Placement
 
         public BoardSurface GetStandingSurface(
             Vector2Int gridCell,
-            SurfaceLayer layer,
+            int fromLevel,
             DiceController standingDice,
             DiceStackTier standingTier) {
-            if (layer == SurfaceLayer.Floor) {
+            if (SurfaceHeightLevel.IsFloor(fromLevel)) {
                 return BoardSurface.Floor(gridCell, board.FloorSurfaceWorldY);
             }
 
@@ -28,38 +28,38 @@ namespace DiceGame.Placement
                 return BoardSurface.Floor(gridCell, board.FloorSurfaceWorldY);
             }
 
-            if (layer == SurfaceLayer.Top
+            if (SurfaceHeightLevel.IsAtOrAboveTop(fromLevel)
                 && standingTier == DiceStackTier.Bottom
                 && standingDice.CurrentState.Tier == DiceStackTier.Bottom
                 && !registry.HasTopAt(gridCell)) {
-                return BoardSurface.VirtualStackTop(
+                return BoardSurface.FromDiceAtStackTop(
                     gridCell,
                     standingDice,
                     GetStackTopStandingSurfaceY(standingDice));
             }
 
-            return BoardSurface.FromDice(gridCell, layer, standingDice);
+            return BoardSurface.FromDice(gridCell, fromLevel, standingDice);
         }
 
-        public bool TryGetSurfaceAt(Vector2Int gridCell, SurfaceLayer layer, out BoardSurface surface) {
+        public bool TryGetSurfaceAt(Vector2Int gridCell, int level, out BoardSurface surface) {
             if (!board.IsInside(gridCell) || board.GetCell(gridCell) == CellType.Wall) {
                 surface = default;
                 return false;
             }
 
-            if (layer == SurfaceLayer.Floor) {
+            if (SurfaceHeightLevel.IsFloor(level)) {
                 surface = BoardSurface.Floor(gridCell, board.FloorSurfaceWorldY);
                 return true;
             }
 
-            if (layer == SurfaceLayer.Top) {
+            if (SurfaceHeightLevel.IsAtOrAboveTop(level)) {
                 if (registry.TryGetTopAt(gridCell, out var topDice) && topDice != null) {
-                    surface = BoardSurface.FromDice(gridCell, SurfaceLayer.Top, topDice);
+                    surface = BoardSurface.FromDice(gridCell, SurfaceHeightLevel.Top, topDice);
                     return true;
                 }
 
                 if (registry.TryGetBottomAt(gridCell, out var bottomForTop) && bottomForTop != null) {
-                    surface = BoardSurface.VirtualStackTop(
+                    surface = BoardSurface.FromDiceAtStackTop(
                         gridCell,
                         bottomForTop,
                         GetStackTopStandingSurfaceY(bottomForTop));
@@ -71,7 +71,7 @@ namespace DiceGame.Placement
             }
 
             if (registry.TryGetBottomAt(gridCell, out var bottomDice) && bottomDice != null) {
-                surface = BoardSurface.FromDice(gridCell, SurfaceLayer.Bottom, bottomDice);
+                surface = BoardSurface.FromDice(gridCell, SurfaceHeightLevel.Bottom, bottomDice);
                 return true;
             }
 

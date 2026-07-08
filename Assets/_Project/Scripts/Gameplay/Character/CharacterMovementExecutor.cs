@@ -35,7 +35,7 @@ namespace DiceGame.Gameplay.Character
             Vector2 currentXZ,
             ref Vector2 nextXZ,
             Vector2 move,
-            SurfaceLayer fromLayer,
+            int fromLevel,
             float fromSurfaceY,
             float halfExtent,
             bool isJumping,
@@ -62,7 +62,7 @@ namespace DiceGame.Gameplay.Character
                     return false;
 
                 case CharacterMoveKind.StepToFloor:
-                    standing.ApplyFromTransition(MovementTransition.Walkable(null, SurfaceLayer.Floor), plan.ToCell);
+                    standing.ApplyFromTransition(MovementTransition.Walkable(null, SurfaceHeightLevel.Floor), plan.ToCell);
                     return false;
 
                 case CharacterMoveKind.CoupledDiceMove:
@@ -90,7 +90,7 @@ namespace DiceGame.Gameplay.Character
                             board.FloorSurfaceWorldY,
                             board.CellSize) <= movementSettings.MaxWalkStep) {
                         standing.ApplyFromTransition(
-                            MovementTransition.Walkable(null, SurfaceLayer.Floor),
+                            MovementTransition.Walkable(null, SurfaceHeightLevel.Floor),
                             plan.ToCell);
                         return false;
                     }
@@ -201,11 +201,11 @@ namespace DiceGame.Gameplay.Character
                 return true;
             }
 
-            var route = transition.TargetLayer == SurfaceLayer.Floor
+            var route = transition.TargetLevel == SurfaceHeightLevel.Floor
                 ? MovementTransitionRoute.FloorTransfer
                 : MovementTransitionRoute.HeightTransfer;
             applyStanding(
-                MovementTransition.Walkable(transition.TargetDice, transition.TargetLayer, route),
+                MovementTransition.Walkable(transition.TargetDice, transition.TargetLevel, route),
                 nextCell);
             Reset();
             return true;

@@ -3,6 +3,7 @@ using DiceGame.Core;
 using DiceGame.Gameplay;
 using DiceGame.Grid;
 using DiceGame.Placement;
+using DiceGame.Placement.Support;
 using UnityEngine;
 
 namespace DiceGame.Gameplay.Character
@@ -13,19 +14,19 @@ namespace DiceGame.Gameplay.Character
 
         Board board;
         Transform characterTransform;
-        Func<CharacterPlacement> getStanding;
+        Func<CharacterSupportState> getSupportState;
         Func<float> getCharacterWorldY;
         Func<bool> isTrackingDiceRoll;
 
         public void Configure(
             Board targetBoard,
             Transform transform,
-            Func<CharacterPlacement> standingProvider,
+            Func<CharacterSupportState> supportStateProvider,
             Func<float> characterWorldYProvider,
             Func<bool> trackingDiceRollProvider) {
             board = targetBoard;
             characterTransform = transform;
-            getStanding = standingProvider;
+            getSupportState = supportStateProvider;
             getCharacterWorldY = characterWorldYProvider;
             isTrackingDiceRoll = trackingDiceRollProvider;
         }
@@ -82,8 +83,8 @@ namespace DiceGame.Gameplay.Character
         }
 
         public Vector3 ClampToWalkBounds(Vector3 worldPos) {
-            var standing = getStanding();
-            if (standing.IsOnFloor) {
+            var supportState = getSupportState();
+            if (supportState.Support.Kind == SupportKind.Floor) {
                 var minX = 0f;
                 var minZ = 0f;
                 var maxX = (board.Width - 1) * board.CellSize;
@@ -93,7 +94,7 @@ namespace DiceGame.Gameplay.Character
                 return worldPos;
             }
 
-            var center = GetCellCenterXZ(standing.GridCell);
+            var center = GetCellCenterXZ(supportState.Cell);
             var limit = GetWalkHalfExtent();
             worldPos.x = Mathf.Clamp(worldPos.x, center.x - limit, center.x + limit);
             worldPos.z = Mathf.Clamp(worldPos.z, center.y - limit, center.y + limit);

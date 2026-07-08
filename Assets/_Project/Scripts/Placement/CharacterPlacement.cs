@@ -8,16 +8,16 @@ namespace DiceGame.Placement
     {
         public Vector2Int GridCell;
         public DiceStackTier Tier;
-        public SurfaceLayer Layer;
+        public int Level;
         public DiceController Dice;
 
-        public bool IsOnFloor => Layer == SurfaceLayer.Floor;
+        public bool IsOnFloor => Level == SurfaceHeightLevel.Floor;
 
         public static CharacterPlacement OnFloor(Vector2Int gridCell) {
             return new CharacterPlacement {
                 GridCell = gridCell,
                 Tier = DiceStackTier.Bottom,
-                Layer = SurfaceLayer.Floor,
+                Level = SurfaceHeightLevel.Floor,
                 Dice = null
             };
         }
@@ -29,7 +29,7 @@ namespace DiceGame.Placement
             return new CharacterPlacement {
                 GridCell = gridCell,
                 Tier = tier,
-                Layer = tier == DiceStackTier.Top ? SurfaceLayer.Top : SurfaceLayer.Bottom,
+                Level = SurfaceHeightLevel.FromDiceStackTier(tier),
                 Dice = dice
             };
         }

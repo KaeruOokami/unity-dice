@@ -32,7 +32,7 @@ namespace DiceGame.Gameplay.Character
             Vector2 currentXZ,
             Vector2 move,
             Vector2Int standingCell,
-            SurfaceLayer fromLayer,
+            int fromLevel,
             float footingWorldY,
             float halfExtent,
             CharacterStandingController standing,
@@ -64,7 +64,7 @@ namespace DiceGame.Gameplay.Character
                     && jumpCapability.AllowTierChange
                     && movementTransition.TryEvaluatePlayerOnlyTierDemote(
                         standingCell,
-                        fromLayer,
+                        fromLevel,
                         standing.ResolveStandingDiceForMovement(),
                         standing.Tier,
                         passabilityContext,
@@ -103,13 +103,13 @@ namespace DiceGame.Gameplay.Character
                 ? movementTransition.EvaluateToTargetCell(
                     standingCell,
                     nextCell,
-                    fromLayer,
+                    fromLevel,
                     standingDice,
                     standing.Tier,
                     passabilityContext)
                 : movementTransition.Evaluate(
                     standingCell,
-                    fromLayer,
+                    fromLevel,
                     direction,
                     standingDice,
                     standing.Tier,
@@ -119,7 +119,7 @@ namespace DiceGame.Gameplay.Character
                 logJumpParallelRoll?.Invoke(
                     $"Plan jump from=({standingCell.x},{standingCell.y}) " +
                     $"to=({nextCell.x},{nextCell.y}) dir={direction} cellDistance={cellDistance} " +
-                    $"transition={transition.Kind} targetLayer={transition.TargetLayer}");
+                    $"transition={transition.Kind} targetLevel={transition.TargetLevel}");
             }
 
             switch (transition.Kind) {

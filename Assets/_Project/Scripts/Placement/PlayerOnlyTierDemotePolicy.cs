@@ -8,7 +8,7 @@ namespace DiceGame.Placement
     {
         public static bool TryEvaluate(
             Vector2Int fromCell,
-            SurfaceLayer fromLayer,
+            int fromLevel,
             BoardSurface fromSurface,
             DiceController standingDice,
             DiceStackTier standingTier,
@@ -19,7 +19,7 @@ namespace DiceGame.Placement
             transition = default;
             if (!JumpPlayerTransferPolicy.UsesPlayerOnlyReach(isJumping, standingDice)
                 || standingDice == null
-                || fromLayer != SurfaceLayer.Top) {
+                || fromLevel != SurfaceHeightLevel.Top) {
                 return false;
             }
 
@@ -42,7 +42,7 @@ namespace DiceGame.Placement
                 landingDice = standingDice;
             }
 
-            var targetSurface = BoardSurface.FromDice(fromCell, SurfaceLayer.Bottom, landingDice);
+            var targetSurface = BoardSurface.FromDice(fromCell, SurfaceHeightLevel.Bottom, landingDice);
             if (!HeightReachPolicy.CanTransfer(
                 fromSurface,
                 targetSurface.SurfaceWorldY,
@@ -55,7 +55,7 @@ namespace DiceGame.Placement
 
             transition = MovementTransition.Walkable(
                 landingDice,
-                SurfaceLayer.Bottom,
+                SurfaceHeightLevel.Bottom,
                 MovementTransitionRoute.HeightTransfer);
             return true;
         }

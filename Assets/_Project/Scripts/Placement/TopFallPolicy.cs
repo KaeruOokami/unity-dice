@@ -6,7 +6,7 @@ namespace DiceGame.Placement
     public static class TopFallPolicy
     {
         public static bool TryEvaluate(
-            SurfaceLayer fromLayer,
+            int fromLevel,
             BoardSurface fromSurface,
             DiceController standingDice,
             DiceStackTier standingTier,
@@ -16,7 +16,7 @@ namespace DiceGame.Placement
             out MovementTransition transition) {
             transition = default;
 
-            if (fromLayer != SurfaceLayer.Top
+            if (fromLevel != SurfaceHeightLevel.Top
                 || standingTier != DiceStackTier.Top
                 || standingDice == null
                 || !fromSurface.AllowsRoll
@@ -37,7 +37,7 @@ namespace DiceGame.Placement
 
             transition = MovementTransition.WalkableWithGridPlan(
                 standingDice,
-                SurfaceLayer.Bottom,
+                SurfaceHeightLevel.Bottom,
                 MovementTransitionRoute.TopFall,
                 plan);
             return true;

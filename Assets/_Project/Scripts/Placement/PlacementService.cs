@@ -1,6 +1,7 @@
 using DiceGame.Core;
 using DiceGame.Gameplay;
 using DiceGame.Grid;
+using DiceGame.Placement.Support;
 using UnityEngine;
 
 namespace DiceGame.Placement
@@ -29,6 +30,14 @@ namespace DiceGame.Placement
 
         public void SetCharacterOnDice(Vector2Int gridCell, DiceStackTier tier, DiceController dice) {
             character = CharacterPlacement.OnDice(gridCell, tier, dice);
+        }
+
+        public void ApplyCharacterSupportState(CharacterSupportState state) {
+            if (state.IsAirborne) {
+                return;
+            }
+
+            character = CharacterPlacementConversion.ToLegacyPlacement(state);
         }
 
         public void SetInitialCharacterPlacement(CharacterPlacement placement) {
