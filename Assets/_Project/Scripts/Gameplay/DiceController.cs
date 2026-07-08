@@ -22,14 +22,16 @@ namespace DiceGame.Gameplay
         bool isRolling;
         bool isSpawning;
         bool isDissolving;
+        bool isVanishing;
         bool isCarried;
         bool isInitialized;
 
         public bool IsSpawning => isSpawning;
         public bool IsRolling =>
             !isSpawning
-            && (isRolling || (diceView != null && diceView.IsAnimating && !isDissolving && !isCarried));
+            && (isRolling || (diceView != null && diceView.IsAnimating && !isDissolving && !isVanishing && !isCarried));
         public bool IsDissolving => isDissolving;
+        public bool IsVanishing => isVanishing;
         public bool IsDissolveGhost =>
             isDissolving && diceView != null && diceView.IsDissolveGhost;
         public bool IsCarried => isCarried;
@@ -45,6 +47,7 @@ namespace DiceGame.Gameplay
 
         public event Action<DiceState> StateChanged;
         public event Action<DiceController> Dissolved;
+        public event Action<DiceController> DissolveStarted;
         public event Action<DiceController> BecameDissolveGhost;
 
         void Awake() {
@@ -225,7 +228,7 @@ namespace DiceGame.Gameplay
         }
 
         public bool TryExecuteSlidePlan(DiceSlidePlan plan) {
-            if (IsBusy || isDissolving || board == null || diceView == null || registry == null) {
+            if (IsBusy || isDissolving || isVanishing || board == null || diceView == null || registry == null) {
                 return false;
             }
 
@@ -237,7 +240,7 @@ namespace DiceGame.Gameplay
         }
 
         internal bool TryExecuteSlidePlanInternal(DiceSlidePlan plan) {
-            if (IsBusy || isDissolving || board == null || diceView == null || registry == null) {
+            if (IsBusy || isDissolving || isVanishing || board == null || diceView == null || registry == null) {
                 return false;
             }
 
@@ -245,7 +248,7 @@ namespace DiceGame.Gameplay
         }
 
         public bool TryExecuteGroundMovePlan(DiceGridMovePlan plan) {
-            if (isDissolving || isCarried || isRolling || board == null || diceView == null || registry == null) {
+            if (isDissolving || isVanishing || isCarried || isRolling || board == null || diceView == null || registry == null) {
                 return false;
             }
 
@@ -535,11 +538,12 @@ namespace DiceGame.Gameplay
         }
 
         public void BeginDissolve(Action onComplete) {
-            if (isDissolving || isCarried || board == null || diceView == null) {
+            if (isDissolving || isVanishing || isCarried || board == null || diceView == null) {
                 return;
             }
 
             isDissolving = true;
+            DissolveStarted?.Invoke(this);
             diceView.PlayDissolve(board, currentState.Orientation.Top, () => {
                 registry?.Unregister(this);
                 Dissolved?.Invoke(this);
@@ -554,6 +558,20 @@ namespace DiceGame.Gameplay
             }
 
             diceView.RetreatDissolve(amount);
+        }
+
+        public void BeginOneVanish(DiceOneVanishSettings settings, Action onComplete) {
+            if (isVanishing || isDissolving || isCarried || board == null || diceView == null || settings == null) {
+                return;
+            }
+
+            isVanishing = true;
+            diceView.PlayOneVanish(settings, () => {
+                registry?.Unregister(this);
+                Dissolved?.Invoke(this);
+                onComplete?.Invoke();
+                Destroy(gameObject);
+            });
         }
 
         public void OnBecameDissolveGhost() {
@@ -628,7 +646,7 @@ namespace DiceGame.Gameplay
         }
 
         public bool TryBeginCarry(Vector3 carryWorldTarget, Action onComplete) {
-            if (IsBusy || board == null || diceView == null || diceView.DiceTransform == null) {
+            if (IsBusy || isVanishing || board == null || diceView == null || diceView.DiceTransform == null) {
                 return false;
             }
 

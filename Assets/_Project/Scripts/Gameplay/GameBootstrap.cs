@@ -53,6 +53,7 @@ namespace DiceGame.Gameplay
         [SerializeField] CharacterMovementSettings characterMovementSettings;
         [SerializeField] DiceAnimationSettings diceAnimationSettings;
         [SerializeField] DiceDissolveSettings diceDissolveSettings;
+        [SerializeField] DiceOneVanishSettings diceOneVanishSettings;
         [SerializeField] DiceSpawnSettings diceSpawnSettings;
         [SerializeField] DiceCatalog diceCatalog;
         [SerializeField] CameraSetupSettings cameraSetup = new();
@@ -82,6 +83,7 @@ namespace DiceGame.Gameplay
                 || characterMovementSettings == null
                 || diceAnimationSettings == null
                 || diceDissolveSettings == null
+                || diceOneVanishSettings == null
                 || diceSpawnSettings == null
                 || diceCatalog == null) {
                 Debug.LogError("GameBootstrap: Gameplay settings assets are not assigned.");
@@ -148,6 +150,13 @@ namespace DiceGame.Gameplay
             }
 
             dissolveSystem.Configure(board, registry, characterController);
+
+            var oneVanishSystem = GetComponent<DiceOneVanishSystem>();
+            if (oneVanishSystem == null) {
+                oneVanishSystem = gameObject.AddComponent<DiceOneVanishSystem>();
+            }
+
+            oneVanishSystem.Configure(board, registry, characterController, diceOneVanishSettings);
 
             if (cameraSetup.Enabled) {
                 cameraSetup.Apply(board);

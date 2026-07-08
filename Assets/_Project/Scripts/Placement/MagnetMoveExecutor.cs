@@ -81,7 +81,7 @@ namespace DiceGame.Placement
                     return false;
                 }
 
-                if (dice.IsBusy || dice.IsDissolving) {
+                if (dice.IsBusy || dice.IsDissolving || dice.IsVanishing) {
                     rejectReason = $"chain-member-busy dice={dice.name}";
                     return false;
                 }
@@ -126,7 +126,7 @@ namespace DiceGame.Placement
                     return false;
                 }
 
-                if (dice.IsBusy || dice.IsDissolving) {
+                if (dice.IsBusy || dice.IsDissolving || dice.IsVanishing) {
                     rejectReason = $"chain-member-busy dice={dice.name}";
                     return false;
                 }

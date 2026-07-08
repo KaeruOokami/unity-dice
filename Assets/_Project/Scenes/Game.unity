@@ -604,6 +604,7 @@ MonoBehaviour:
     type: 2}
   diceDissolveSettings: {fileID: 11400000, guid: a1a2b3c4d5e6478899aabbccddeeff04,
     type: 2}
+  diceOneVanishSettings: {fileID: 11400000, guid: b1c2d3e4f5a6478899aabbccddeeff09, type: 2}
   diceSpawnSettings: {fileID: 11400000, guid: a1a2b3c4d5e6478899aabbccddeeff05, type: 2}
   diceCatalog: {fileID: 11400000, guid: f8a9b0c1d2e3f4a5b6c7d8e9f0a1b2c3, type: 2}
   cameraSetup:

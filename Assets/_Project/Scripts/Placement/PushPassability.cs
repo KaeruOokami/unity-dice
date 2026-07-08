@@ -23,6 +23,11 @@ namespace DiceGame.Placement
                 return false;
             }
 
+            if (dice.IsVanishing) {
+                rejectReason = "vanishing";
+                return false;
+            }
+
             if (!dice.Capabilities.CanBePushedByPlayer) {
                 rejectReason = "notPushable";
                 return false;

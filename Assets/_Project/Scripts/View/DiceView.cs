@@ -25,6 +25,7 @@ namespace DiceGame.View
         Transform meshInstance;
         Coroutine rollCoroutine;
         Coroutine dissolveCoroutine;
+        Coroutine oneVanishCoroutine;
         bool isAnimating;
         float dissolveProgress;
         float groundRollProgress;
@@ -556,6 +557,25 @@ namespace DiceGame.View
 
             isAnimating = false;
             dissolveBoard = null;
+        }
+
+        public void PlayOneVanish(DiceOneVanishSettings settings, Action onComplete) {
+            if (rollCoroutine != null) {
+                StopCoroutine(rollCoroutine);
+                rollCoroutine = null;
+            }
+
+            if (dissolveCoroutine != null) {
+                StopCoroutine(dissolveCoroutine);
+                dissolveCoroutine = null;
+            }
+
+            if (oneVanishCoroutine != null) {
+                StopCoroutine(oneVanishCoroutine);
+            }
+
+            EnsureMesh();
+            oneVanishCoroutine = StartCoroutine(OneVanishCoroutine(settings, onComplete));
         }
 
         public void InterruptRollAnimation() {
@@ -1308,6 +1328,74 @@ namespace DiceGame.View
             }
 
             positionRoot.position = toWorld;
+        }
+
+        IEnumerator OneVanishCoroutine(DiceOneVanishSettings settings, Action onComplete) {
+            isAnimating = true;
+            EnsureMesh();
+
+            var elapsed = 0f;
+            var vanishDuration = Mathf.Max(0.01f, settings.VanishDuration);
+            while (elapsed < vanishDuration) {
+                elapsed += Time.deltaTime;
+                ApplyOneVanishEmission(settings, GetOneVanishEmissionFactor(elapsed, settings));
+                yield return null;
+            }
+
+            ResetOneVanishVisuals();
+            isAnimating = false;
+            oneVanishCoroutine = null;
+            onComplete?.Invoke();
+        }
+
+        static float GetOneVanishEmissionFactor(float elapsed, DiceOneVanishSettings settings) {
+            var rampUpDuration = settings.RampUpDuration;
+            if (rampUpDuration <= 0f) {
+                return 1f;
+            }
+
+            if (elapsed < rampUpDuration) {
+                return Mathf.Clamp01(elapsed / rampUpDuration);
+            }
+
+            return 1f;
+        }
+
+        void ApplyOneVanishEmission(DiceOneVanishSettings settings, float factor) {
+            if (dissolveMaterials.Count == 0 || dissolveSettings == null) {
+                return;
+            }
+
+            if (factor <= 0f) {
+                ResetOneVanishVisuals();
+                return;
+            }
+
+            var emissionColor = dissolveSettings.DissolveEmissionColor
+                * (settings.EmissionIntensity * factor);
+
+            for (var i = 0; i < dissolveMaterials.Count; i++) {
+                var map = dissolveEmissionMapOverride != null
+                    ? dissolveEmissionMapOverride
+                    : dissolveSettings.DissolveEmissionMap != null
+                        ? dissolveSettings.DissolveEmissionMap
+                        : dissolveMaterialBaseEmissionMaps[i];
+                SetMaterialEmission(dissolveMaterials[i], emissionColor, map, true);
+            }
+        }
+
+        void ResetOneVanishVisuals() {
+            if (dissolveMaterials.Count == 0) {
+                return;
+            }
+
+            for (var i = 0; i < dissolveMaterials.Count; i++) {
+                RestoreMaterialEmission(
+                    dissolveMaterials[i],
+                    dissolveMaterialBaseEmissionColors[i],
+                    dissolveMaterialBaseEmissionMaps[i],
+                    dissolveMaterialHadEmission[i]);
+            }
         }
 
         IEnumerator DissolveCoroutine(Board board, Action onComplete) {

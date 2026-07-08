@@ -1263,7 +1263,7 @@ namespace DiceGame.Gameplay
                 }
 
                 var diceLabel = FormatMovementDice(pushBody.Dice);
-                if (pushBody.Dice.IsDissolving || pushBody.Dice.IsBusy) {
+                if (pushBody.Dice.IsDissolving || pushBody.Dice.IsVanishing || pushBody.Dice.IsBusy) {
                     overlapSummary.Append($" [{diceLabel}:busy]");
                     continue;
                 }
@@ -1733,6 +1733,7 @@ namespace DiceGame.Gameplay
 
             if (candidate == standingController.ResolveStandingDiceForMovement()
                 || candidate.IsDissolving
+                || candidate.IsVanishing
                 || candidate.IsBusy
                 || !CanLiftDice(candidate)) {
                 return false;
