@@ -71,6 +71,8 @@ namespace DiceGame.Gameplay
         DiceController pushFollowDice;
         Direction pushFollowDirection;
         bool isPushFollowing;
+        bool pushFollowLimitOneCell;
+        Vector3 pushFollowDiceStartWorld;
         bool isInitialized;
         readonly List<PushContactCandidate> pushCandidates = new();
         LiftPhase liftPhase;
@@ -433,9 +435,14 @@ namespace DiceGame.Gameplay
             }
 
             if (isPushFollowing) {
-                UpdatePushFollowPosition();
-                if (pushFollowDice == null || !pushFollowDice.IsRolling) {
+                if (pushFollowLimitOneCell && HasExceededPushFollowOneCellLimit()) {
                     EndPushFollow();
+                } else {
+                    UpdatePushFollowPosition();
+                    if (!pushFollowLimitOneCell
+                        && (pushFollowDice == null || !pushFollowDice.IsRolling)) {
+                        EndPushFollow();
+                    }
                 }
             }
 
@@ -583,6 +590,19 @@ namespace DiceGame.Gameplay
             var standingDice = standingController.ResolveStandingDiceForMovement();
             var canJumpCoupleWithPlayer = standingDice == null || standingDice.CanJumpCoupleWithPlayer;
             capability = JumpInputPolicy.ApplyPlayerOnlyJumpOverride(capability, canJumpCoupleWithPlayer);
+
+            // Ice dice should not climb up to the upper level during jump movement.
+            if (standingDice != null
+                && standingDice.Kind == DiceKind.Ice
+                && capability.AllowTierChange) {
+                capability = new JumpCoupledMoveCapability(
+                    capability.IsJumping,
+                    capability.AllowCrossCellMove,
+                    capability.AllowDiceGridMove,
+                    capability.MaxDistance,
+                    allowTierChange: false,
+                    capability.Timeline);
+            }
 
             if (coupling.JumpDiceGridMoved) {
                 LogJumpParallelRoll(
@@ -1068,6 +1088,10 @@ namespace DiceGame.Gameplay
             pushFollowDice = dice;
             pushFollowDirection = direction;
             isPushFollowing = true;
+            pushFollowLimitOneCell = dice != null && dice.Capabilities.SlideUntilBlocked;
+            pushFollowDiceStartWorld = dice?.View?.DiceTransform != null
+                ? dice.View.DiceTransform.position
+                : Vector3.zero;
             currentSpeed = 0f;
             pushFollowDice.StateChanged += OnPushFollowDiceStateChanged;
             UpdatePushFollowPosition();
@@ -1083,6 +1107,7 @@ namespace DiceGame.Gameplay
             }
 
             isPushFollowing = false;
+            pushFollowLimitOneCell = false;
             pushFollowDice = null;
         }
 
@@ -1092,6 +1117,25 @@ namespace DiceGame.Gameplay
             }
 
             EndPushFollow();
+        }
+
+        bool HasExceededPushFollowOneCellLimit() {
+            if (!pushFollowLimitOneCell
+                || pushFollowDice?.View?.DiceTransform == null
+                || board == null) {
+                return false;
+            }
+
+            var delta = pushFollowDice.View.DiceTransform.position - pushFollowDiceStartWorld;
+            var displacement = pushFollowDirection switch {
+                Direction.East => delta.x,
+                Direction.West => -delta.x,
+                Direction.North => delta.z,
+                Direction.South => -delta.z,
+                _ => 0f
+            };
+
+            return displacement >= board.CellSize - EdgeEpsilon;
         }
 
         void UpdatePushFollowPosition() {
@@ -1135,8 +1179,10 @@ namespace DiceGame.Gameplay
                 return;
             }
 
-            var contactCell = pushFollowDice.CurrentState.GridPos
-                + pushFollowDirection.Opposite().ToGridDelta();
+            var diceCell = pushFollowLimitOneCell && pushFollowDice.View?.DiceTransform != null
+                ? board.WorldToGrid(pushFollowDice.View.DiceTransform.position)
+                : pushFollowDice.CurrentState.GridPos;
+            var contactCell = diceCell + pushFollowDirection.Opposite().ToGridDelta();
             if (!board.IsInside(contactCell)) {
                 return;
             }
@@ -1398,13 +1444,28 @@ namespace DiceGame.Gameplay
                 return false;
             }
 
+            if (dice.Capabilities.SlideUntilBlocked) {
+                if (IceSlidePassability.TryBuildUntilBlocked(
+                    dice.CurrentState,
+                    candidate.Direction,
+                    registry,
+                    out var iceSlidePlan,
+                    out _)
+                    && dice.TryExecuteSlidePlan(iceSlidePlan)) {
+                    pushedDice = dice;
+                    return true;
+                }
+
+                return false;
+            }
+
             if (DiceSlidePassability.TryEvaluate(
                 dice.CurrentState,
                 candidate.Direction,
                 registry,
-                out var slidePlan,
+                out var normalSlidePlan,
                 out _)
-                && dice.TryExecuteSlidePlan(slidePlan)) {
+                && dice.TryExecuteSlidePlan(normalSlidePlan)) {
                 pushedDice = dice;
                 return true;
             }

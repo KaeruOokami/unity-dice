@@ -23,6 +23,10 @@ namespace DiceGame.Placement
                 return false;
             }
 
+            if (!IronAdjacencyBlock.IsPlayerMovable(dice, registry)) {
+                return false;
+            }
+
             if (!IsReachable(standing, dice)) {
                 return false;
             }

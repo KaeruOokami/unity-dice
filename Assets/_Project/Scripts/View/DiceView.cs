@@ -1100,7 +1100,8 @@ namespace DiceGame.View
                     yield return AnimatePositionLerp(fromWorld, toWorld, slideDuration);
                 } else {
                     var midWorld = new Vector3(toWorld.x, fromWorld.y, toWorld.z);
-                    yield return AnimatePositionLerp(fromWorld, midWorld, animationSettings.FallHorizontalDuration);
+                    var horizontalDuration = animationSettings.FallHorizontalDuration * Mathf.Max(1, slideCellDistance);
+                    yield return AnimatePositionLerp(fromWorld, midWorld, horizontalDuration);
                     positionRoot.position = midWorld;
                     yield return AnimateGravityFall(toWorld);
                     positionRoot.position = toWorld;

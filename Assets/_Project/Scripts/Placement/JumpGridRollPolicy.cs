@@ -30,6 +30,13 @@ namespace DiceGame.Placement
                 return false;
             }
 
+            // For Ice dice, forbid 2-cell jump movement (distance > 1).
+            // 1-cell jump is still allowed; orientation will remain unchanged via DiceGridMovePlanner.
+            if (standingDice.Kind == DiceKind.Ice
+                && distance > 1) {
+                return false;
+            }
+
             if (fromCell + direction.ToGridDelta() * distance != toCell) {
                 return false;
             }

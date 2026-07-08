@@ -766,6 +766,11 @@ namespace DiceGame.Placement
                 return false;
             }
 
+            if (JumpDiceTransferPolicy.ShouldBlockDiceToDiceTransfer(isJumping, standingDice, target)) {
+                rejectReason = "jump-ice-dice-to-dice-transfer-blocked";
+                return false;
+            }
+
             var targetSurface = BoardSurface.FromDice(
                 toCell,
                 target.CurrentState.Tier == DiceStackTier.Top ? SurfaceHeightLevel.Top : SurfaceHeightLevel.Bottom,

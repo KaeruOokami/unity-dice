@@ -20,6 +20,14 @@ namespace DiceGame.Placement
 
             while (DiceSlidePassability.TryEvaluate(current, direction, placement, out var stepPlan, out stepRejectReason)) {
                 steps++;
+                // If Ice falls to a lower tier, stop there.
+                // (Top -> Bottom is considered a "fall" to a lower level.)
+                if (current.Tier == DiceStackTier.Top
+                    && stepPlan.To.Tier == DiceStackTier.Bottom) {
+                    current = stepPlan.To;
+                    break;
+                }
+
                 current = stepPlan.To;
             }
 
