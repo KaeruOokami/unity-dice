@@ -19,6 +19,7 @@ MonoBehaviour:
     maxCountPerVolley: 2
   maxSendDiceCount: 3
   attackMultiplier: 1
+  faceGain: 0.15
   chainGain: 0.2
   sizeGain: 0.1
   snatchMultiplier: 1.5

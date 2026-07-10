@@ -33,11 +33,13 @@ namespace DiceGame.Config
 
         [Header("Power")]
         [Min(0f)]
-        [SerializeField] float attackMultiplier = 1f;
+        [SerializeField] float attackMultiplier = 0.1f;
         [Min(0f)]
-        [SerializeField] float chainGain = 0.2f;
+        [SerializeField] float faceGain = 0.4f;
         [Min(0f)]
-        [SerializeField] float sizeGain = 0.1f;
+        [SerializeField] float chainGain = 0.1f;
+        [Min(0f)]
+        [SerializeField] float sizeGain = 0.3f;
         [Min(0f)]
         [SerializeField] float snatchMultiplier = 1.5f;
 
@@ -51,6 +53,7 @@ namespace DiceGame.Config
         public SendableKindLimit[] SendableKinds => sendableKinds ?? Array.Empty<SendableKindLimit>();
         public int MaxSendDiceCount => Mathf.Max(1, maxSendDiceCount);
         public float AttackMultiplier => Mathf.Max(0f, attackMultiplier);
+        public float FaceGain => Mathf.Max(0f, faceGain);
         public float ChainGain => Mathf.Max(0f, chainGain);
         public float SizeGain => Mathf.Max(0f, sizeGain);
         public float SnatchMultiplier => Mathf.Max(0f, snatchMultiplier);
