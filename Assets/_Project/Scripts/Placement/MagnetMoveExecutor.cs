@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using DiceGame.Config;
 using DiceGame.Core;
 using DiceGame.Gameplay;
 using UnityEngine;
@@ -23,7 +24,8 @@ namespace DiceGame.Placement
             DiceController origin,
             DiceSlidePlan plan,
             DiceRegistry registry,
-            PlayerMatchActionContext actionContext) {
+            PlayerMatchActionContext actionContext,
+            PlayerSlot actionOwner) {
             if (origin == null || registry == null) {
                 return false;
             }
@@ -40,7 +42,7 @@ namespace DiceGame.Placement
                 return false;
             }
 
-            RegisterMovingDice(actionContext, executions, static e => e.Dice);
+            RegisterMovingDice(actionContext, executions, static e => e.Dice, actionOwner);
             return ExecuteSlides(executions);
         }
 
@@ -63,14 +65,20 @@ namespace DiceGame.Placement
                 return false;
             }
 
-            RegisterMovingDice(actionContext, executions, static e => e.Dice);
+            if (!context.MovementOwner.HasValue) {
+                Debug.LogError("MagnetMoveExecutor: ground roll requires PassabilityContext.MovementOwner.");
+                return false;
+            }
+
+            RegisterMovingDice(actionContext, executions, static e => e.Dice, context.MovementOwner.Value);
             return ExecuteRolls(executions);
         }
 
         static void RegisterMovingDice<T>(
             PlayerMatchActionContext actionContext,
             IReadOnlyList<T> executions,
-            System.Func<T, DiceController> getDice) {
+            System.Func<T, DiceController> getDice,
+            PlayerSlot actionOwner) {
             if (actionContext == null || executions == null) {
                 return;
             }
@@ -80,7 +88,7 @@ namespace DiceGame.Placement
                 movingDice.Add(getDice(executions[i]));
             }
 
-            actionContext.RegisterActionDice(movingDice);
+            actionContext.RegisterActionDice(movingDice, actionOwner);
         }
 
         static bool TryBuildSlideExecutions(

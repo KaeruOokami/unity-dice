@@ -57,10 +57,37 @@ namespace DiceGame.Gameplay
             subscribedDice.Clear();
         }
 
-        public void EvaluateForPlayerAction(IReadOnlyCollection<DiceController> actionDice) {
+        public void EvaluateForPlayerAction(MatchActionSnapshot action) {
             if (board == null
                 || registry == null
-                || oneVanishSettings == null) {
+                || oneVanishSettings == null
+                || action == null) {
+                return;
+            }
+
+            if (board.IsVersusArena && board.VersusLayout != null) {
+                foreach (var slot in action.GetParticipatingPlayers()) {
+                    EvaluateForPlayerSlot(action.GetDiceFor(slot), slot);
+                }
+
+                return;
+            }
+
+            EvaluateGlobal(action.AllDice);
+        }
+
+        void EvaluateGlobal(IReadOnlyCollection<DiceController> actionDice) {
+            if (!DiceOneVanishTrigger.ShouldTrigger(registry.AllDice, actionDice)) {
+                return;
+            }
+
+            VanishOnesMatching(
+                dice => true,
+                GetExcludedStandingDiceForAllPlayers());
+        }
+
+        void EvaluateForPlayerSlot(IReadOnlyList<DiceController> actionDice, PlayerSlot slot) {
+            if (actionDice == null || actionDice.Count == 0) {
                 return;
             }
 
@@ -68,14 +95,13 @@ namespace DiceGame.Gameplay
                 return;
             }
 
-            var excludedDice = new HashSet<DiceController>();
-            for (var i = 0; i < characters.Count; i++) {
-                var currentDice = characters[i] != null ? characters[i].CurrentDice : null;
-                if (currentDice != null) {
-                    excludedDice.Add(currentDice);
-                }
-            }
+            var layout = board.VersusLayout;
+            VanishOnesMatching(
+                dice => layout.IsInsidePlayerRegion(slot, dice.CurrentState.GridPos),
+                GetExcludedStandingDiceForPlayer(slot));
+        }
 
+        void VanishOnesMatching(System.Func<DiceController, bool> includeDice, HashSet<DiceController> excludedDice) {
             var targets = new List<DiceController>();
 
             foreach (var dice in registry.AllDice) {
@@ -84,6 +110,10 @@ namespace DiceGame.Gameplay
                     || dice.IsVanishing
                     || dice.IsDissolving
                     || dice.CurrentState.Orientation.Top != 1) {
+                    continue;
+                }
+
+                if (!includeDice(dice)) {
                     continue;
                 }
 
@@ -97,6 +127,39 @@ namespace DiceGame.Gameplay
             foreach (var dice in targets) {
                 dice.BeginOneVanish(oneVanishSettings, null);
             }
+        }
+
+        HashSet<DiceController> GetExcludedStandingDiceForAllPlayers() {
+            var excludedDice = new HashSet<DiceController>();
+            for (var i = 0; i < characters.Count; i++) {
+                var currentDice = characters[i] != null ? characters[i].CurrentDice : null;
+                if (currentDice != null) {
+                    excludedDice.Add(currentDice);
+                }
+            }
+
+            return excludedDice;
+        }
+
+        HashSet<DiceController> GetExcludedStandingDiceForPlayer(PlayerSlot slot) {
+            var excludedDice = new HashSet<DiceController>();
+            var character = FindCharacter(slot);
+            var currentDice = character != null ? character.CurrentDice : null;
+            if (currentDice != null) {
+                excludedDice.Add(currentDice);
+            }
+
+            return excludedDice;
+        }
+
+        CharacterController FindCharacter(PlayerSlot slot) {
+            for (var i = 0; i < characters.Count; i++) {
+                if (characters[i] != null && characters[i].PlayerSlot == slot) {
+                    return characters[i];
+                }
+            }
+
+            return null;
         }
     }
 }

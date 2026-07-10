@@ -35,6 +35,11 @@ namespace DiceGame.Placement
             rejectReason = null;
 
             var targetPos = fromState.GridPos + direction.ToGridDelta();
+            if (placement.BlocksTraversalBetween(fromState.GridPos, targetPos)) {
+                rejectReason = $"target={FormatGrid(targetPos)} blocked-by-partition";
+                return false;
+            }
+
             if (!placement.CanPlaceBottomDiceAt(targetPos)) {
                 rejectReason = $"target={FormatGrid(targetPos)} occupied";
                 return false;
@@ -56,6 +61,11 @@ namespace DiceGame.Placement
             rejectReason = null;
 
             var targetPos = fromState.GridPos + direction.ToGridDelta();
+            if (placement.BlocksTraversalBetween(fromState.GridPos, targetPos)) {
+                rejectReason = $"target={FormatGrid(targetPos)} blocked-by-partition";
+                return false;
+            }
+
             if (placement.CanPlaceTopDiceAt(targetPos)) {
                 plan = new DiceSlidePlan(
                     fromState,

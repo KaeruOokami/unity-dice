@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using DiceGame.Config;
 using DiceGame.Grid;
 using DiceGame.Placement;
+using DiceGame.View;
 using UnityEngine;
 
 namespace DiceGame.Gameplay
@@ -47,9 +48,11 @@ namespace DiceGame.Gameplay
     public class GameBootstrap : MonoBehaviour
     {
         [SerializeField] Board board;
+        [SerializeField] BoardView boardView;
         [SerializeField] GameObject diceEntityPrefab;
         [SerializeField] GameObject characterPrefab;
         [SerializeField] int randomSeed;
+        [SerializeField] GameSessionSettings gameSessionSettings;
         [SerializeField] PhysicsSettings physicsSettings;
         [SerializeField] CharacterMovementSettings characterMovementSettings;
         [SerializeField] PlayerInputSettings playerInputSettings;
@@ -73,30 +76,44 @@ namespace DiceGame.Gameplay
                 return;
             }
 
+            if (boardView == null) {
+                boardView = board.GetComponent<BoardView>();
+            }
+
             if (diceEntityPrefab == null) {
                 Debug.LogError("GameBootstrap: DiceEntity prefab is not assigned.");
                 return;
             }
 
             if (characterPrefab == null) {
-                Debug.LogError("GameBootstrap: Character prefab is not assigned.");
+                Debug.LogError("GameBootstrap: Character prefab must be assigned.");
                 return;
             }
 
-            if (physicsSettings == null
+            if (gameSessionSettings == null
+                || physicsSettings == null
                 || characterMovementSettings == null
                 || playerInputSettings == null
                 || diceAnimationSettings == null
                 || diceDissolveSettings == null
                 || diceOneVanishSettings == null
-                || diceSpawnSettings == null
                 || diceCatalog == null) {
                 Debug.LogError("GameBootstrap: Gameplay settings assets are not assigned.");
                 return;
             }
 
+            if (!gameSessionSettings.TryValidate(playerInputSettings, out var sessionError)) {
+                Debug.LogError($"GameBootstrap: {sessionError}");
+                return;
+            }
+
             if (!playerInputSettings.TryValidateStartup(out var inputError)) {
                 Debug.LogError($"GameBootstrap: {inputError}");
+                return;
+            }
+
+            if (!TryConfigureBoardForSession(out var boardError)) {
+                Debug.LogError($"GameBootstrap: {boardError}");
                 return;
             }
 
@@ -126,18 +143,10 @@ namespace DiceGame.Gameplay
                 spawnSystem = gameObject.AddComponent<DiceSpawnSystem>();
             }
 
-            spawnSystem.Configure(
-                board,
-                registry,
-                diceEntityPrefab,
-                diceCatalog,
-                transform,
-                physicsSettings,
-                diceAnimationSettings,
-                diceDissolveSettings,
-                matchActionContext,
-                diceSpawnSettings,
-                spawnRandom);
+            if (!TryConfigureSpawnSystem(out var spawnError)) {
+                Debug.LogError($"GameBootstrap: {spawnError}");
+                return;
+            }
 
             var playerCount = playerInputSettings.ActivePlayerCount;
             var startDice = spawnSystem.SpawnInitialPlayerDice(playerCount);
@@ -172,6 +181,67 @@ namespace DiceGame.Gameplay
             }
 
             spawnSystem.StartSpawning();
+        }
+
+        bool TryConfigureBoardForSession(out string errorMessage) {
+            errorMessage = null;
+
+            if (gameSessionSettings.GameMode == GameMode.Versus) {
+                var versusSettings = gameSessionSettings.VersusBoardSettings;
+                if (!versusSettings.TryValidate(out errorMessage)) {
+                    return false;
+                }
+
+                board.ConfigureVersusArena(versusSettings.CreateLayout());
+            } else {
+                board.ConfigureStandardArena();
+            }
+
+            boardView?.RebuildFloor();
+            return true;
+        }
+
+        bool TryConfigureSpawnSystem(out string errorMessage) {
+            errorMessage = null;
+
+            if (gameSessionSettings.GameMode == GameMode.Versus) {
+                var versusSettings = gameSessionSettings.VersusBoardSettings;
+                spawnSystem.Configure(
+                    board,
+                    registry,
+                    diceEntityPrefab,
+                    diceCatalog,
+                    transform,
+                    physicsSettings,
+                    diceAnimationSettings,
+                    diceDissolveSettings,
+                    matchActionContext,
+                    versusSettings.Player1.SpawnSettings,
+                    spawnRandom);
+                spawnSystem.ConfigureVersusSpawns(
+                    versusSettings.Player1.SpawnSettings,
+                    versusSettings.Player2.SpawnSettings);
+                return true;
+            }
+
+            if (diceSpawnSettings == null) {
+                errorMessage = "DiceSpawnSettings is not assigned for non-versus modes.";
+                return false;
+            }
+
+            spawnSystem.Configure(
+                board,
+                registry,
+                diceEntityPrefab,
+                diceCatalog,
+                transform,
+                physicsSettings,
+                diceAnimationSettings,
+                diceDissolveSettings,
+                matchActionContext,
+                diceSpawnSettings,
+                spawnRandom);
+            return true;
         }
 
         bool TrySpawnPlayers(IReadOnlyList<DiceController> startDice, out List<CharacterController> spawnedCharacters) {

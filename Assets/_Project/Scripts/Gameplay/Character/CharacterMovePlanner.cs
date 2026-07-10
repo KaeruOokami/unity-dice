@@ -1,4 +1,5 @@
 using System;
+using DiceGame.Config;
 using DiceGame.Core;
 using DiceGame.Gameplay;
 using DiceGame.Gameplay.Coupling;
@@ -38,12 +39,13 @@ namespace DiceGame.Gameplay.Character
             CharacterStandingController standing,
             bool isJumping,
             bool hasJumpCapability,
-            JumpCoupledMoveCapability jumpCapability) {
+            JumpCoupledMoveCapability jumpCapability,
+            PlayerSlot? movementOwner) {
             var allowCrossCell = !isJumping || (hasJumpCapability && jumpCapability.AllowCrossCellMove);
             var allowDiceGridMove = hasJumpCapability && jumpCapability.AllowDiceGridMove;
             var passabilityContext = isJumping
-                ? PassabilityContext.Jump(allowDiceGridMove, jumpCapability.AllowTierChange, footingWorldY)
-                : PassabilityContext.ForGround(footingWorldY);
+                ? PassabilityContext.Jump(allowDiceGridMove, jumpCapability.AllowTierChange, footingWorldY, movementOwner)
+                : PassabilityContext.ForGround(footingWorldY, movementOwner);
 
             var nextCell = ResolveNextCell(
                 standingCell,

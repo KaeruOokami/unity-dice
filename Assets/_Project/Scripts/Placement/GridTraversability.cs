@@ -46,6 +46,12 @@ namespace DiceGame.Placement
 
             for (var step = 1; step < distance; step++) {
                 var pathCell = fromCell + direction.ToGridDelta() * step;
+                var previousCell = fromCell + direction.ToGridDelta() * (step - 1);
+                if (query.BlocksRollBetween(previousCell, pathCell)) {
+                    rejectReason = $"traverse step={step}/{distance} blocked-by-partition cell={FormatGrid(pathCell)}";
+                    return false;
+                }
+
                 if (!CanTraverseCell(query, fromTier, pathCell, out rejectReason)) {
                     rejectReason = $"traverse step={step}/{distance} {rejectReason}";
                     return false;
@@ -53,6 +59,12 @@ namespace DiceGame.Placement
             }
 
             var landingCell = fromCell + direction.ToGridDelta() * distance;
+            var previousLandingCell = fromCell + direction.ToGridDelta() * (distance - 1);
+            if (query.BlocksRollBetween(previousLandingCell, landingCell)) {
+                rejectReason = $"land step={distance}/{distance} blocked-by-partition cell={FormatGrid(landingCell)}";
+                return false;
+            }
+
             if (!CanLandAt(query, fromTier, landingCell, allowUpwardTier, out landingTier, out rejectReason)) {
                 rejectReason = $"land step={distance}/{distance} {rejectReason}";
                 return false;

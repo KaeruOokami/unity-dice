@@ -232,13 +232,13 @@ namespace DiceGame.Gameplay
                 : board != null ? board.FloorSurfaceWorldY : 0f;
         }
 
-        public bool TryExecuteSlidePlan(DiceSlidePlan plan) {
+        public bool TryExecuteSlidePlan(DiceSlidePlan plan, PlayerSlot actionOwner) {
             if (IsBusy || isDissolving || isVanishing || board == null || diceView == null || registry == null) {
                 return false;
             }
 
             if (Capabilities.HasMagnetCoupling) {
-                return MagnetMoveExecutor.TryExecuteSlide(this, plan, registry, matchActionContext);
+                return MagnetMoveExecutor.TryExecuteSlide(this, plan, registry, matchActionContext, actionOwner);
             }
 
             return TryExecuteSlidePlanInternal(plan);
@@ -252,7 +252,7 @@ namespace DiceGame.Gameplay
             return BeginSlide(plan.From, plan.To);
         }
 
-        public bool TryExecuteGroundMovePlan(DiceGridMovePlan plan) {
+        public bool TryExecuteGroundMovePlan(DiceGridMovePlan plan, PassabilityContext context) {
             if (isDissolving || isVanishing || isCarried || isRolling || board == null || diceView == null || registry == null) {
                 return false;
             }
@@ -260,7 +260,6 @@ namespace DiceGame.Gameplay
             if (Capabilities.HasMagnetCoupling) {
                 var occupancyQuery = new CellOccupancyQuery(board, registry);
                 var gridPlanBuilder = new GridMovePlanBuilder(registry, occupancyQuery);
-                var context = PassabilityContext.ForGround(board.FloorSurfaceWorldY);
                 if (!MagnetMoveExecutor.TryExecuteGroundRoll(this, plan, registry, gridPlanBuilder, context, matchActionContext)) {
                     return false;
                 }

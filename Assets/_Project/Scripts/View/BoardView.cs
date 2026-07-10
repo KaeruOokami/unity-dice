@@ -6,6 +6,8 @@ namespace DiceGame.View
     [RequireComponent(typeof(Board))]
     public class BoardView : MonoBehaviour
     {
+        const string FloorObjectName = "Floor";
+
         [SerializeField] Board board;
         [SerializeField] Material floorMaterial;
         [SerializeField] bool generateFloorTiles = true;
@@ -16,13 +18,30 @@ namespace DiceGame.View
             }
 
             if (generateFloorTiles) {
-                BuildFloorPlane();
+                RebuildFloor();
             }
+        }
+
+        public void RebuildFloor() {
+            if (!generateFloorTiles || board == null) {
+                return;
+            }
+
+            var existingFloor = transform.Find(FloorObjectName);
+            if (existingFloor != null) {
+                if (Application.isPlaying) {
+                    Destroy(existingFloor.gameObject);
+                } else {
+                    DestroyImmediate(existingFloor.gameObject);
+                }
+            }
+
+            BuildFloorPlane();
         }
 
         void BuildFloorPlane() {
             var floor = GameObject.CreatePrimitive(PrimitiveType.Plane);
-            floor.name = "Floor";
+            floor.name = FloorObjectName;
             floor.transform.SetParent(transform, false);
 
             var boardWidth = board.Width * board.CellSize;

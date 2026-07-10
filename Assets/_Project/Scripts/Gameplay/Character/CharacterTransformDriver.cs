@@ -1,4 +1,5 @@
 using System;
+using DiceGame.Config;
 using DiceGame.Core;
 using DiceGame.Gameplay;
 using DiceGame.Grid;
@@ -17,18 +18,21 @@ namespace DiceGame.Gameplay.Character
         Func<CharacterSupportState> getSupportState;
         Func<float> getCharacterWorldY;
         Func<bool> isTrackingDiceRoll;
+        PlayerSlot? movementOwner;
 
         public void Configure(
             Board targetBoard,
             Transform transform,
             Func<CharacterSupportState> supportStateProvider,
             Func<float> characterWorldYProvider,
-            Func<bool> trackingDiceRollProvider) {
+            Func<bool> trackingDiceRollProvider,
+            PlayerSlot owner) {
             board = targetBoard;
             characterTransform = transform;
             getSupportState = supportStateProvider;
             getCharacterWorldY = characterWorldYProvider;
             isTrackingDiceRoll = trackingDiceRollProvider;
+            movementOwner = owner;
         }
 
         public float GetWalkHalfExtent() {
@@ -85,12 +89,23 @@ namespace DiceGame.Gameplay.Character
         public Vector3 ClampToWalkBounds(Vector3 worldPos) {
             var supportState = getSupportState();
             if (supportState.Support.Kind == SupportKind.Floor) {
-                var minX = 0f;
-                var minZ = 0f;
-                var maxX = (board.Width - 1) * board.CellSize;
-                var maxZ = (board.Height - 1) * board.CellSize;
-                worldPos.x = Mathf.Clamp(worldPos.x, minX, maxX);
-                worldPos.z = Mathf.Clamp(worldPos.z, minZ, maxZ);
+                if (board != null && board.IsVersusArena && board.VersusLayout != null && movementOwner.HasValue) {
+                    board.VersusLayout.GetPlayerGridBounds(movementOwner.Value, out var minCell, out var maxCell);
+                    var minX = minCell.x * board.CellSize;
+                    var minZ = minCell.y * board.CellSize;
+                    var maxX = maxCell.x * board.CellSize;
+                    var maxZ = maxCell.y * board.CellSize;
+                    worldPos.x = Mathf.Clamp(worldPos.x, minX, maxX);
+                    worldPos.z = Mathf.Clamp(worldPos.z, minZ, maxZ);
+                    return worldPos;
+                }
+
+                var minXBoard = 0f;
+                var minZBoard = 0f;
+                var maxXBoard = (board.Width - 1) * board.CellSize;
+                var maxZBoard = (board.Height - 1) * board.CellSize;
+                worldPos.x = Mathf.Clamp(worldPos.x, minXBoard, maxXBoard);
+                worldPos.z = Mathf.Clamp(worldPos.z, minZBoard, maxZBoard);
                 return worldPos;
             }
 

@@ -592,11 +592,13 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   board: {fileID: 1900000003}
+  boardView: {fileID: 1900000004}
   diceEntityPrefab: {fileID: 2097092927246924327, guid: 76711374a81ea554db52b4125687fd0e,
     type: 3}
   characterPrefab: {fileID: 5551003257859862670, guid: b2c3d4e5f6a7890123456789abcdef01,
     type: 3}
   randomSeed: 0
+  gameSessionSettings: {fileID: 11400000, guid: e1f2a3b4c5d6478899aabbccddeeff26, type: 2}
   physicsSettings: {fileID: 11400000, guid: a1a2b3c4d5e6478899aabbccddeeff01, type: 2}
   characterMovementSettings: {fileID: 11400000, guid: a1a2b3c4d5e6478899aabbccddeeff02,
     type: 2}

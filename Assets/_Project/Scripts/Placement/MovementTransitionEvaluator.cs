@@ -64,6 +64,10 @@ namespace DiceGame.Placement
                 return MovementTransition.Blocked();
             }
 
+            if (board.BlocksMovement(fromCell, toCell, context.MovementOwner)) {
+                return MovementTransition.Blocked();
+            }
+
             return EvaluateToCell(
                 fromCell,
                 toCell,
@@ -285,6 +289,10 @@ namespace DiceGame.Placement
             DiceController standingDice,
             PassabilityContext context) {
             if (!board.IsInside(toCell) || board.GetCell(toCell) == CellType.Wall) {
+                return MovementTransition.Blocked();
+            }
+
+            if (board.BlocksMovement(fromCell, toCell, context.MovementOwner)) {
                 return MovementTransition.Blocked();
             }
 

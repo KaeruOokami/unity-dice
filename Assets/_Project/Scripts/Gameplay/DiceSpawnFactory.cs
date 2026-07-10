@@ -68,6 +68,13 @@ namespace DiceGame.Gameplay
 
     public sealed class DiceSpawnSystem : MonoBehaviour
     {
+        sealed class PlayerSpawnChannel
+        {
+            public PlayerSlot Slot;
+            public DiceSpawnSettings Settings;
+            public Coroutine SpawnCoroutine;
+        }
+
         Board board;
         DiceRegistry registry;
         GameObject diceEntityPrefab;
@@ -79,6 +86,7 @@ namespace DiceGame.Gameplay
         PlayerMatchActionContext matchActionContext;
         DiceSpawnSettings spawnSettings;
         System.Random random;
+        readonly List<PlayerSpawnChannel> versusChannels = new();
 
         Coroutine spawnCoroutine;
 
@@ -105,24 +113,58 @@ namespace DiceGame.Gameplay
             matchActionContext = actionContext;
             spawnSettings = settings;
             random = spawnRandom;
+            versusChannels.Clear();
+        }
+
+        public void ConfigureVersusSpawns(
+            DiceSpawnSettings player1Settings,
+            DiceSpawnSettings player2Settings) {
+            versusChannels.Clear();
+            versusChannels.Add(new PlayerSpawnChannel {
+                Slot = PlayerSlot.Player1,
+                Settings = player1Settings
+            });
+            versusChannels.Add(new PlayerSpawnChannel {
+                Slot = PlayerSlot.Player2,
+                Settings = player2Settings
+            });
         }
 
         public void StartSpawning() {
+            StopSpawning();
+
+            if (versusChannels.Count > 0) {
+                for (var i = 0; i < versusChannels.Count; i++) {
+                    var channel = versusChannels[i];
+                    if (channel.Settings == null || !channel.Settings.ContinuousSpawnEnabled) {
+                        continue;
+                    }
+
+                    channel.SpawnCoroutine = StartCoroutine(SpawnLoop(channel.Settings, channel.Slot));
+                }
+
+                return;
+            }
+
             if (spawnSettings == null || !spawnSettings.ContinuousSpawnEnabled) {
                 return;
             }
 
-            if (spawnCoroutine != null) {
-                StopCoroutine(spawnCoroutine);
-            }
-
-            spawnCoroutine = StartCoroutine(SpawnLoop());
+            spawnCoroutine = StartCoroutine(SpawnLoop(spawnSettings, null));
         }
 
         public void StopSpawning() {
             if (spawnCoroutine != null) {
                 StopCoroutine(spawnCoroutine);
                 spawnCoroutine = null;
+            }
+
+            for (var i = 0; i < versusChannels.Count; i++) {
+                var channel = versusChannels[i];
+                if (channel.SpawnCoroutine != null) {
+                    StopCoroutine(channel.SpawnCoroutine);
+                    channel.SpawnCoroutine = null;
+                }
             }
         }
 
@@ -132,6 +174,10 @@ namespace DiceGame.Gameplay
         }
 
         public List<DiceController> SpawnInitialPlayerDice(int playerCount) {
+            if (versusChannels.Count > 0) {
+                return SpawnInitialVersusPlayers(playerCount);
+            }
+
             var results = new List<DiceController>();
             if (spawnSettings == null || board == null || registry == null) {
                 return results;
@@ -156,7 +202,8 @@ namespace DiceGame.Gameplay
                 var diceController = SpawnDiceAt(
                     slot.Cell,
                     slot.Tier,
-                    useSpawnAppear: ShouldAnimateInitialDice(i));
+                    spawnSettings,
+                    useSpawnAppear: ShouldAnimateInitialDice(spawnSettings, i));
                 if (diceController == null) {
                     continue;
                 }
@@ -176,13 +223,59 @@ namespace DiceGame.Gameplay
             return results;
         }
 
-        bool ShouldAnimateInitialDice(int index) {
-            return spawnSettings.AnimateInitialDiceSpawn && index > 0;
+        List<DiceController> SpawnInitialVersusPlayers(int playerCount) {
+            var results = new List<DiceController>(playerCount);
+            if (board == null || registry == null) {
+                return results;
+            }
+
+            var requiredCount = Mathf.Min(playerCount, versusChannels.Count);
+            for (var i = 0; i < requiredCount; i++) {
+                var channel = versusChannels[i];
+                if (channel.Settings == null) {
+                    Debug.LogError($"DiceSpawnSystem: Spawn settings for {channel.Slot} are not assigned.");
+                    results.Clear();
+                    return results;
+                }
+
+                var slots = DiceSpawnCellPicker.PickRandomSpawnSlots(
+                    board,
+                    registry,
+                    channel.Slot,
+                    1,
+                    channel.Settings.BottomSpawnWeight,
+                    random);
+                if (slots.Count == 0) {
+                    Debug.LogError($"DiceSpawnSystem: No valid spawn slot for {channel.Slot}.");
+                    results.Clear();
+                    return results;
+                }
+
+                var diceController = SpawnDiceAt(
+                    slots[0].Cell,
+                    slots[0].Tier,
+                    channel.Settings,
+                    useSpawnAppear: channel.Settings.AnimateInitialDiceSpawn);
+                if (diceController == null) {
+                    Debug.LogError($"DiceSpawnSystem: Failed to spawn initial dice for {channel.Slot}.");
+                    results.Clear();
+                    return results;
+                }
+
+                results.Add(diceController);
+            }
+
+            return results;
+        }
+
+        static bool ShouldAnimateInitialDice(DiceSpawnSettings settings, int index) {
+            return settings.AnimateInitialDiceSpawn && index > 0;
         }
 
         DiceController SpawnDiceAt(
             Vector2Int gridPos,
             DiceStackTier tier,
+            DiceSpawnSettings activeSpawnSettings,
             bool useSpawnAppear,
             Action onComplete = null) {
             if (diceCatalog == null) {
@@ -226,7 +319,7 @@ namespace DiceGame.Gameplay
                     registry,
                     gridPos,
                     orientation,
-                    spawnSettings,
+                    activeSpawnSettings,
                     tier,
                     kind,
                     onComplete);
@@ -237,30 +330,31 @@ namespace DiceGame.Gameplay
             return diceController;
         }
 
-        public DiceController SpawnDiceWithAppear(DiceSpawnSlot slot, Action onComplete = null) {
-            if (spawnSettings == null || board == null || registry == null) {
+        public DiceController SpawnDiceWithAppear(DiceSpawnSlot slot, DiceSpawnSettings activeSpawnSettings, Action onComplete = null) {
+            if (activeSpawnSettings == null || board == null || registry == null) {
                 return null;
             }
 
-            return SpawnDiceAt(slot.Cell, slot.Tier, useSpawnAppear: true, onComplete);
+            return SpawnDiceAt(slot.Cell, slot.Tier, activeSpawnSettings, useSpawnAppear: true, onComplete);
         }
 
-        IEnumerator SpawnLoop() {
+        IEnumerator SpawnLoop(DiceSpawnSettings activeSpawnSettings, PlayerSlot? ownerSlot) {
             while (enabled) {
-                var delay = spawnSettings.SpawnInterval
-                    + Random.Range(-spawnSettings.SpawnIntervalJitter, spawnSettings.SpawnIntervalJitter);
+                var delay = activeSpawnSettings.SpawnInterval
+                    + Random.Range(-activeSpawnSettings.SpawnIntervalJitter, activeSpawnSettings.SpawnIntervalJitter);
                 yield return new WaitForSeconds(Mathf.Max(0.01f, delay));
 
                 if (!DiceSpawnCellPicker.TryPickRandomSpawnSlot(
                         board,
                         registry,
-                        spawnSettings.BottomSpawnWeight,
+                        ownerSlot,
+                        activeSpawnSettings.BottomSpawnWeight,
                         random,
                         out var slot)) {
                     yield break;
                 }
 
-                SpawnDiceWithAppear(slot);
+                SpawnDiceWithAppear(slot, activeSpawnSettings);
             }
         }
 

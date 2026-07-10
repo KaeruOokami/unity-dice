@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using DiceGame.Config;
 using DiceGame.Core;
 using DiceGame.Grid;
 using UnityEngine;
@@ -29,7 +30,7 @@ namespace DiceGame.Placement
     public static class DiceSpawnCellPicker
     {
         public static bool HasAnySpawnSlot(Board board, DiceRegistry registry) {
-            return CollectSpawnBuckets(board, registry).HasAny;
+            return CollectSpawnBuckets(board, registry, null).HasAny;
         }
 
         public static List<DiceSpawnSlot> PickRandomSpawnSlots(
@@ -38,7 +39,17 @@ namespace DiceGame.Placement
             int count,
             float bottomSpawnWeight,
             System.Random random) {
-            var buckets = CollectSpawnBuckets(board, registry);
+            return PickRandomSpawnSlots(board, registry, null, count, bottomSpawnWeight, random);
+        }
+
+        public static List<DiceSpawnSlot> PickRandomSpawnSlots(
+            Board board,
+            DiceRegistry registry,
+            PlayerSlot? ownerSlot,
+            int count,
+            float bottomSpawnWeight,
+            System.Random random) {
+            var buckets = CollectSpawnBuckets(board, registry, ownerSlot);
             var results = new List<DiceSpawnSlot>();
             if (board == null || registry == null || count <= 0 || !buckets.HasAny) {
                 return results;
@@ -63,7 +74,17 @@ namespace DiceGame.Placement
             float bottomSpawnWeight,
             System.Random random,
             out DiceSpawnSlot slot) {
-            var slots = PickRandomSpawnSlots(board, registry, 1, bottomSpawnWeight, random);
+            return TryPickRandomSpawnSlot(board, registry, null, bottomSpawnWeight, random, out slot);
+        }
+
+        public static bool TryPickRandomSpawnSlot(
+            Board board,
+            DiceRegistry registry,
+            PlayerSlot? ownerSlot,
+            float bottomSpawnWeight,
+            System.Random random,
+            out DiceSpawnSlot slot) {
+            var slots = PickRandomSpawnSlots(board, registry, ownerSlot, 1, bottomSpawnWeight, random);
             if (slots.Count == 0) {
                 slot = default;
                 return false;
@@ -73,7 +94,7 @@ namespace DiceGame.Placement
             return true;
         }
 
-        static SpawnSlotBuckets CollectSpawnBuckets(Board board, DiceRegistry registry) {
+        static SpawnSlotBuckets CollectSpawnBuckets(Board board, DiceRegistry registry, PlayerSlot? ownerSlot) {
             var buckets = new SpawnSlotBuckets {
                 BottomCells = new List<Vector2Int>(),
                 TopCells = new List<Vector2Int>()
@@ -86,6 +107,12 @@ namespace DiceGame.Placement
             for (var x = 0; x < board.Width; x++) {
                 for (var z = 0; z < board.Height; z++) {
                     var cell = new Vector2Int(x, z);
+                    if (ownerSlot.HasValue
+                        && board.VersusLayout != null
+                        && !board.VersusLayout.IsInsidePlayerRegion(ownerSlot.Value, cell)) {
+                        continue;
+                    }
+
                     if (registry.HasDissolvingDiceAt(cell)) {
                         continue;
                     }

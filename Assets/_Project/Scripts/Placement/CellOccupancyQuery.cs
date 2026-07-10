@@ -28,6 +28,10 @@ namespace DiceGame.Placement
                 && board.GetCell(cell) == CellType.Floor;
         }
 
+        public bool BlocksRollBetween(Vector2Int fromCell, Vector2Int toCell) {
+            return board != null && board.BlocksMovement(fromCell, toCell, null);
+        }
+
         public bool TryGetOccupancyTier(Vector2Int cell, out CellOccupancyTier tier) {
             tier = CellOccupancyTier.Invalid;
             if (!IsPassableCell(cell)) {

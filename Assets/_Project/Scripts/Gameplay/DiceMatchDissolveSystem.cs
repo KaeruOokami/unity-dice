@@ -81,15 +81,19 @@ namespace DiceGame.Gameplay
             subscribedDice.Clear();
         }
 
-        void OnActionCompleted(IReadOnlyCollection<DiceController> actionDice) {
+        void OnActionCompleted(MatchActionSnapshot action) {
             if (registry != null) {
                 foreach (var dice in registry.AllDice) {
                     SubscribeDice(dice);
                 }
             }
 
-            EvaluateMatchesForAction(actionDice);
-            oneVanishSystem?.EvaluateForPlayerAction(actionDice);
+            if (action == null) {
+                return;
+            }
+
+            EvaluateMatchesForAction(action.AllDice);
+            oneVanishSystem?.EvaluateForPlayerAction(action);
         }
 
         void OnDiceDissolved(DiceController dice) {

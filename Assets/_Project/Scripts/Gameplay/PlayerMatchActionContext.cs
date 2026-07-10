@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using DiceGame.Config;
 using DiceGame.Core;
 using DiceGame.Placement;
 using UnityEngine;
@@ -9,30 +10,32 @@ namespace DiceGame.Gameplay
     public class PlayerMatchActionContext : MonoBehaviour
     {
         readonly HashSet<DiceController> actionDice = new();
+        readonly Dictionary<DiceController, PlayerSlot> actionDiceOwners = new();
 
         DiceRegistry registry;
 
-        public event Action<IReadOnlyCollection<DiceController>> ActionCompleted;
+        public event Action<MatchActionSnapshot> ActionCompleted;
 
         public void Configure(DiceRegistry targetRegistry) {
             registry = targetRegistry;
         }
 
-        public void RegisterActionDice(DiceController dice) {
+        public void RegisterActionDice(DiceController dice, PlayerSlot owner) {
             if (dice == null || dice.IsSpawning) {
                 return;
             }
 
             actionDice.Add(dice);
+            actionDiceOwners[dice] = owner;
         }
 
-        public void RegisterActionDice(IReadOnlyList<DiceController> diceList) {
+        public void RegisterActionDice(IReadOnlyList<DiceController> diceList, PlayerSlot owner) {
             if (diceList == null) {
                 return;
             }
 
             for (var i = 0; i < diceList.Count; i++) {
-                RegisterActionDice(diceList[i]);
+                RegisterActionDice(diceList[i], owner);
             }
         }
 
@@ -53,9 +56,25 @@ namespace DiceGame.Gameplay
                 return;
             }
 
-            var snapshot = new List<DiceController>(actionDice);
+            var allDice = new List<DiceController>(actionDice);
+            var diceByPlayer = new Dictionary<PlayerSlot, List<DiceController>>();
+
+            foreach (var dice in actionDice) {
+                if (!actionDiceOwners.TryGetValue(dice, out var owner)) {
+                    continue;
+                }
+
+                if (!diceByPlayer.TryGetValue(owner, out var ownedDice)) {
+                    ownedDice = new List<DiceController>();
+                    diceByPlayer[owner] = ownedDice;
+                }
+
+                ownedDice.Add(dice);
+            }
+
             actionDice.Clear();
-            ActionCompleted?.Invoke(snapshot);
+            actionDiceOwners.Clear();
+            ActionCompleted?.Invoke(new MatchActionSnapshot(allDice, diceByPlayer));
         }
 
         public static bool IsActionParticipationMove(DiceState from, DiceState to) {

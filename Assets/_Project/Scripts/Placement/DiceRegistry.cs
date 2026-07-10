@@ -181,6 +181,10 @@ namespace DiceGame.Placement
             return byGrid.TryGetValue(gridPos, out var stack) && stack.Bottom != null;
         }
 
+        public bool BlocksTraversalBetween(Vector2Int fromCell, Vector2Int toCell) {
+            return board != null && board.BlocksMovement(fromCell, toCell, null);
+        }
+
         public DiceController GetNeighbor(DiceController dice, Direction direction) {
             if (dice == null) {
                 return null;

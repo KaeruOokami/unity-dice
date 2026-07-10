@@ -206,7 +206,8 @@ namespace DiceGame.Gameplay
                 characterTransform,
                 () => standingController.SupportState,
                 GetCharacterWorldY,
-                () => coupling.IsTrackingRoll);
+                () => coupling.IsTrackingRoll,
+                PlayerSlot);
 
             movementTransition = placement.Passability;
             movementTransition.SetJumpParallelRollDebugLog(
@@ -222,7 +223,8 @@ namespace DiceGame.Gameplay
                 movementSettings,
                 () => jumpYOffset,
                 () => jumpMotion,
-                matchActionContext);
+                matchActionContext,
+                PlayerSlot);
 
             movePlanner = new CharacterMovePlanner(
                 board,
@@ -564,7 +566,8 @@ namespace DiceGame.Gameplay
                 standingController,
                 isJumping,
                 hasJumpCapability,
-                jumpCapability);
+                jumpCapability,
+                PlayerSlot);
 
             if (plan.Kind == CharacterMoveKind.Blocked) {
                 LogPositionMovementBlock(
@@ -718,7 +721,7 @@ namespace DiceGame.Gameplay
                 fromLevel,
                 direction,
                 standingDice,
-                PassabilityContext.ForGround(GetFootingWorldY()));
+                PassabilityContext.ForGround(GetFootingWorldY(), PlayerSlot));
             if (transition.TargetLevel == SurfaceHeightLevel.Floor) {
                 return "Floor";
             }
@@ -1097,7 +1100,7 @@ namespace DiceGame.Gameplay
             var pushed = false;
             foreach (var candidate in pushCandidates) {
                 if (TryPushDice(candidate, out var pushedDice, out var pushDir)) {
-                    matchActionContext?.RegisterActionDice(pushedDice);
+                    matchActionContext?.RegisterActionDice(pushedDice, PlayerSlot);
                     LogPushDebug(
                         "push-ok",
                         $"stage=push dice={FormatMovementDice(pushedDice)} dir={pushDir}");
@@ -1468,10 +1471,12 @@ namespace DiceGame.Gameplay
                     dice.CurrentState,
                     candidate.Direction,
                     1,
-                    PassabilityContext.ForGround(GetFootingWorldY()),
+                    PassabilityContext.ForGround(GetFootingWorldY(), PlayerSlot),
                     out var rollPlan,
                     out _)
-                    && dice.TryExecuteGroundMovePlan(rollPlan)) {
+                    && dice.TryExecuteGroundMovePlan(
+                        rollPlan,
+                        PassabilityContext.ForGround(GetFootingWorldY(), PlayerSlot))) {
                     pushedDice = dice;
                     return true;
                 }
@@ -1486,7 +1491,7 @@ namespace DiceGame.Gameplay
                     registry,
                     out var iceSlidePlan,
                     out _)
-                    && dice.TryExecuteSlidePlan(iceSlidePlan)) {
+                    && dice.TryExecuteSlidePlan(iceSlidePlan, PlayerSlot)) {
                     pushedDice = dice;
                     return true;
                 }
@@ -1500,7 +1505,7 @@ namespace DiceGame.Gameplay
                 registry,
                 out var normalSlidePlan,
                 out _)
-                && dice.TryExecuteSlidePlan(normalSlidePlan)) {
+                && dice.TryExecuteSlidePlan(normalSlidePlan, PlayerSlot)) {
                 pushedDice = dice;
                 return true;
             }
@@ -1683,7 +1688,7 @@ namespace DiceGame.Gameplay
 
             liftPhase = LiftPhase.Placing;
             var fromWorld = GetCarryWorldPosition();
-            matchActionContext?.RegisterActionDice(carriedDice);
+            matchActionContext?.RegisterActionDice(carriedDice, PlayerSlot);
 
             if (!carriedDice.TryPlaceAt(targetGrid, targetTier, fromWorld, OnPlaceComplete)) {
                 liftPhase = LiftPhase.Carrying;
@@ -1927,7 +1932,7 @@ namespace DiceGame.Gameplay
                 return;
             }
 
-            matchActionContext?.RegisterActionDice(landingDice);
+            matchActionContext?.RegisterActionDice(landingDice, PlayerSlot);
             matchActionContext?.NotifyParticipantMoveCompleted();
         }
     }

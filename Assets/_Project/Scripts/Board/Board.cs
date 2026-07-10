@@ -1,4 +1,5 @@
-using DiceGame.Core;
+using DiceGame.Config;
+using DiceGame.Grid;
 using UnityEngine;
 
 namespace DiceGame.Grid
@@ -12,14 +13,19 @@ namespace DiceGame.Grid
         [SerializeField] float floorSurfaceWorldY;
 
         CellType[,] cells;
+        VersusArenaLayout versusLayout;
 
-        public int Width => width;
-        public int Height => height;
+        public int Width => versusLayout != null ? versusLayout.GlobalWidth : width;
+        public int Height => versusLayout != null ? versusLayout.GlobalHeight : height;
         public float CellSize => cellSize;
         public float FloorSurfaceWorldY => floorSurfaceWorldY;
+        public VersusArenaLayout VersusLayout => versusLayout;
+        public bool IsVersusArena => versusLayout != null;
 
         void Awake() {
-            InitializeCells();
+            if (versusLayout == null) {
+                InitializeCells();
+            }
         }
 
         void OnValidate() {
@@ -28,21 +34,48 @@ namespace DiceGame.Grid
             cellSize = Mathf.Max(0.01f, cellSize);
         }
 
+        public void ConfigureStandardArena() {
+            versusLayout = null;
+            InitializeCells();
+        }
+
+        public void ConfigureVersusArena(VersusArenaLayout layout) {
+            versusLayout = layout;
+            InitializeCells();
+        }
+
         public void InitializeCells() {
-            cells = new CellType[width, height];
-            for (var x = 0; x < width; x++) {
-                for (var z = 0; z < height; z++) {
-                    cells[x, z] = CellType.Floor;
+            var arenaWidth = Width;
+            var arenaHeight = Height;
+            cells = new CellType[arenaWidth, arenaHeight];
+            for (var x = 0; x < arenaWidth; x++) {
+                for (var z = 0; z < arenaHeight; z++) {
+                    var gridPos = new Vector2Int(x, z);
+                    cells[x, z] = versusLayout != null
+                        ? versusLayout.GetCell(gridPos)
+                        : CellType.Floor;
                 }
             }
         }
 
         public bool IsInside(Vector2Int gridPos) {
+            if (versusLayout != null) {
+                return versusLayout.IsInsideGlobal(gridPos);
+            }
+
             return gridPos.x >= 0 && gridPos.x < width && gridPos.y >= 0 && gridPos.y < height;
         }
 
         public CellType GetCell(Vector2Int gridPos) {
+            if (versusLayout != null) {
+                return versusLayout.GetCell(gridPos);
+            }
+
             return IsInside(gridPos) ? cells[gridPos.x, gridPos.y] : CellType.Wall;
+        }
+
+        public bool BlocksMovement(Vector2Int fromCell, Vector2Int toCell, PlayerSlot? movementOwner) {
+            return PartitionBoundaryPolicy.BlocksMovement(versusLayout, fromCell, toCell, movementOwner);
         }
 
         public Vector2Int WorldToGrid(Vector3 worldPosition) {

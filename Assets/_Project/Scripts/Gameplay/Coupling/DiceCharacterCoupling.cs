@@ -43,6 +43,7 @@ namespace DiceGame.Gameplay.Coupling
         CharacterTransformDriver transformDriver;
         CharacterMovementSettings movementSettings;
         PlayerMatchActionContext actionContext;
+        PlayerSlot playerSlot;
         Func<float> getJumpYOffset;
         Func<VerticalMotionState> getJumpMotion;
 
@@ -63,7 +64,8 @@ namespace DiceGame.Gameplay.Coupling
             CharacterMovementSettings movement,
             Func<float> jumpYOffsetProvider,
             Func<VerticalMotionState> jumpMotionProvider,
-            PlayerMatchActionContext targetActionContext) {
+            PlayerMatchActionContext targetActionContext,
+            PlayerSlot owner) {
             board = targetBoard;
             registry = targetRegistry;
             standing = standingController;
@@ -72,6 +74,7 @@ namespace DiceGame.Gameplay.Coupling
             getJumpYOffset = jumpYOffsetProvider;
             getJumpMotion = jumpMotionProvider;
             actionContext = targetActionContext;
+            playerSlot = owner;
         }
 
         public void ResetJumpSessionFlags() {
@@ -211,7 +214,7 @@ namespace DiceGame.Gameplay.Coupling
         }
 
         void RegisterStandingDiceForAction() {
-            actionContext?.RegisterActionDice(standing.CurrentDice);
+            actionContext?.RegisterActionDice(standing.CurrentDice, playerSlot);
         }
 
         bool TryExecuteReverseRollCancel(
@@ -377,7 +380,7 @@ namespace DiceGame.Gameplay.Coupling
             }
 
             RegisterStandingDiceForAction();
-            if (!dice.TryExecuteSlidePlan(plan)) {
+            if (!dice.TryExecuteSlidePlan(plan, playerSlot)) {
                 Debug.LogError(
                     $"DiceCharacterCoupling: ice slide execution failed " +
                     $"from={plan.From.GridPos} to={plan.To.GridPos}");
@@ -415,7 +418,9 @@ namespace DiceGame.Gameplay.Coupling
                 }
 
                 session.JumpDiceGridMoved = true;
-            } else if (!dice.TryExecuteGroundMovePlan(plan)) {
+            } else if (!dice.TryExecuteGroundMovePlan(
+                plan,
+                PassabilityContext.ForGround(board.FloorSurfaceWorldY, playerSlot))) {
                 Debug.LogError(
                     $"DiceCharacterCoupling: ground grid move execution failed kind={plan.Kind} " +
                     $"from={plan.From.GridPos} to={plan.To.GridPos}");
