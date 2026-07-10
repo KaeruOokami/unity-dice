@@ -10,24 +10,28 @@ namespace DiceGame.Gameplay
     {
         [SerializeField] Board board;
         [SerializeField] DiceRegistry registry;
-        [SerializeField] CharacterController character;
         [SerializeField] PlayerMatchActionContext actionContext;
         [SerializeField] DiceOneVanishSystem oneVanishSystem;
         [SerializeField] float chainRollbackAmount = 0.15f;
 
         readonly HashSet<DiceController> subscribedDice = new();
+        readonly List<CharacterController> characters = new();
 
         public void Configure(
             Board targetBoard,
             DiceRegistry targetRegistry,
-            CharacterController targetCharacter,
+            IReadOnlyList<CharacterController> targetCharacters,
             PlayerMatchActionContext targetActionContext,
             DiceOneVanishSystem targetOneVanishSystem) {
             board = targetBoard;
             registry = targetRegistry;
-            character = targetCharacter;
             actionContext = targetActionContext;
             oneVanishSystem = targetOneVanishSystem;
+            characters.Clear();
+            if (targetCharacters != null) {
+                characters.AddRange(targetCharacters);
+            }
+
             if (actionContext != null) {
                 actionContext.ActionCompleted -= OnActionCompleted;
                 actionContext.ActionCompleted += OnActionCompleted;
@@ -95,11 +99,23 @@ namespace DiceGame.Gameplay
                 dice.BecameDissolveGhost -= OnDiceBecameDissolveGhost;
             }
 
-            character?.OnStandingDiceDissolved(dice);
+            NotifyCharactersStandingDiceDissolved(dice);
         }
 
         void OnDiceBecameDissolveGhost(DiceController dice) {
-            character?.OnStandingDiceBecameGhost(dice);
+            NotifyCharactersStandingDiceBecameGhost(dice);
+        }
+
+        void NotifyCharactersStandingDiceDissolved(DiceController dice) {
+            for (var i = 0; i < characters.Count; i++) {
+                characters[i]?.OnStandingDiceDissolved(dice);
+            }
+        }
+
+        void NotifyCharactersStandingDiceBecameGhost(DiceController dice) {
+            for (var i = 0; i < characters.Count; i++) {
+                characters[i]?.OnStandingDiceBecameGhost(dice);
+            }
         }
 
         void EvaluateMatchesForAction(IReadOnlyCollection<DiceController> actionDice) {

@@ -9,17 +9,19 @@ namespace DiceGame.Gameplay.Input
     {
         [SerializeField] PlayerInputSettings inputSettings;
 
+        PlayerSlot playerSlot;
         InputActionMap playerMap;
         InputAction moveAction;
         InputAction liftAction;
         InputAction jumpAction;
         bool isConfigured;
 
-        public void Configure(PlayerInputSettings settings)
+        public void Configure(PlayerSlot slot, PlayerInputSettings settings)
         {
+            playerSlot = slot;
             inputSettings = settings;
             BindActions();
-            ApplyControlScheme();
+            ApplySlotConfiguration();
             isConfigured = true;
 
             if (isActiveAndEnabled)
@@ -28,23 +30,8 @@ namespace DiceGame.Gameplay.Input
             }
         }
 
-        void Awake()
-        {
-            if (inputSettings != null)
-            {
-                BindActions();
-            }
-        }
-
         void OnEnable()
         {
-            if (!isConfigured && inputSettings != null)
-            {
-                BindActions();
-                ApplyControlScheme();
-                isConfigured = true;
-            }
-
             if (isConfigured)
             {
                 playerMap?.Enable();
@@ -63,20 +50,49 @@ namespace DiceGame.Gameplay.Input
                 return;
             }
 
-            playerMap = inputSettings.InputActions.FindActionMap("Player", throwIfNotFound: true);
+            var mapName = inputSettings.GetActionMapName(playerSlot);
+            playerMap = inputSettings.InputActions.FindActionMap(mapName, throwIfNotFound: true);
             moveAction = playerMap.FindAction("Move", throwIfNotFound: true);
             liftAction = playerMap.FindAction("Lift", throwIfNotFound: true);
             jumpAction = playerMap.FindAction("Jump", throwIfNotFound: true);
         }
 
-        void ApplyControlScheme()
+        void ApplySlotConfiguration()
         {
             if (playerMap == null || inputSettings == null)
             {
                 return;
             }
 
-            playerMap.bindingMask = InputBinding.MaskByGroup(inputSettings.ActiveControlScheme);
+            var slotConfig = inputSettings.GetSlotConfig(playerSlot);
+            playerMap.bindingMask = InputBinding.MaskByGroup(PlayerInputSettings.GetControlScheme(slotConfig));
+            ApplyDeviceFilter(slotConfig);
+        }
+
+        void ApplyDeviceFilter(PlayerSlotInputConfig slotConfig)
+        {
+            if (playerMap == null)
+            {
+                return;
+            }
+
+            if (slotConfig.DeviceKind == PlayerInputDeviceKind.Gamepad)
+            {
+                var gamepads = Gamepad.all;
+                if (slotConfig.GamepadIndex >= gamepads.Count)
+                {
+                    Debug.LogError(
+                        $"CharacterInputReader: {playerSlot} gamepad index {slotConfig.GamepadIndex} is not available.");
+                    playerMap.devices = null;
+                    return;
+                }
+
+                playerMap.devices = new InputDevice[] { gamepads[slotConfig.GamepadIndex] };
+                return;
+            }
+
+            var keyboard = Keyboard.current;
+            playerMap.devices = keyboard != null ? new InputDevice[] { keyboard } : null;
         }
 
         public Vector2 ReadMove()

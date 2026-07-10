@@ -1,5 +1,6 @@
 using System;
 using System.Collections;
+using System.Collections.Generic;
 using DiceGame.Config;
 using DiceGame.Core;
 using DiceGame.Grid;
@@ -126,11 +127,18 @@ namespace DiceGame.Gameplay
         }
 
         public DiceController SpawnInitialDice() {
+            var spawned = SpawnInitialPlayerDice(1);
+            return spawned.Count > 0 ? spawned[0] : null;
+        }
+
+        public List<DiceController> SpawnInitialPlayerDice(int playerCount) {
+            var results = new List<DiceController>();
             if (spawnSettings == null || board == null || registry == null) {
-                return null;
+                return results;
             }
 
-            var initialCount = Mathf.Max(1, spawnSettings.InitialDiceCount);
+            var requiredCount = Mathf.Max(1, playerCount);
+            var initialCount = Mathf.Max(spawnSettings.InitialDiceCount, requiredCount);
             var slots = DiceSpawnCellPicker.PickRandomSpawnSlots(
                 board,
                 registry,
@@ -140,10 +148,8 @@ namespace DiceGame.Gameplay
 
             if (slots.Count == 0) {
                 Debug.LogError("DiceSpawnSystem: No valid Bottom / Top slots for initial dice.");
-                return null;
+                return results;
             }
-
-            DiceController firstDice = null;
 
             for (var i = 0; i < slots.Count; i++) {
                 var slot = slots[i];
@@ -155,10 +161,19 @@ namespace DiceGame.Gameplay
                     continue;
                 }
 
-                firstDice ??= diceController;
+                results.Add(diceController);
+                if (results.Count >= requiredCount) {
+                    break;
+                }
             }
 
-            return firstDice;
+            if (results.Count < requiredCount) {
+                Debug.LogError(
+                    $"DiceSpawnSystem: Failed to spawn {requiredCount} initial dice for players. Spawned {results.Count}.");
+                results.Clear();
+            }
+
+            return results;
         }
 
         bool ShouldAnimateInitialDice(int index) {

@@ -122,6 +122,7 @@ namespace DiceGame.Gameplay
             ? CharacterTransformDriver.GetOffsetFromDiceCenter(standingDice, characterTransform != null ? characterTransform.position : Vector3.zero)
             : Vector2.zero;
         public DiceController CurrentDice => standingController?.CurrentDice;
+        public PlayerSlot PlayerSlot { get; private set; }
 
         public void Configure(
             Board targetBoard,
@@ -129,7 +130,8 @@ namespace DiceGame.Gameplay
             DiceController startDice,
             CharacterMovementSettings movement,
             PhysicsSettings physics,
-            PlayerInputSettings inputSettings = null,
+            PlayerSlot slot,
+            PlayerInputSettings inputSettings,
             PlayerMatchActionContext actionContext = null) {
             board = targetBoard;
             placement = targetPlacement;
@@ -137,13 +139,14 @@ namespace DiceGame.Gameplay
             matchActionContext = actionContext;
             movementSettings = movement;
             physicsSettings = physics;
+            PlayerSlot = slot;
 
             if (inputReader == null) {
                 inputReader = GetComponent<CharacterInputReader>();
             }
 
             if (inputSettings != null && inputReader != null) {
-                inputReader.Configure(inputSettings);
+                inputReader.Configure(slot, inputSettings);
             }
             standingController = new CharacterStandingController();
             coupling = new DiceCharacterCoupling();

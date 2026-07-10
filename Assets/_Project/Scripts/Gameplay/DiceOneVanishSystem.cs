@@ -10,20 +10,23 @@ namespace DiceGame.Gameplay
     {
         [SerializeField] Board board;
         [SerializeField] DiceRegistry registry;
-        [SerializeField] CharacterController character;
         [SerializeField] DiceOneVanishSettings oneVanishSettings;
 
         readonly HashSet<DiceController> subscribedDice = new();
+        readonly List<CharacterController> characters = new();
 
         public void Configure(
             Board targetBoard,
             DiceRegistry targetRegistry,
-            CharacterController targetCharacter,
+            IReadOnlyList<CharacterController> targetCharacters,
             DiceOneVanishSettings settings) {
             board = targetBoard;
             registry = targetRegistry;
-            character = targetCharacter;
             oneVanishSettings = settings;
+            characters.Clear();
+            if (targetCharacters != null) {
+                characters.AddRange(targetCharacters);
+            }
 
             SubscribeAllDice();
         }
@@ -65,7 +68,14 @@ namespace DiceGame.Gameplay
                 return;
             }
 
-            var excludedDice = character != null ? character.CurrentDice : null;
+            var excludedDice = new HashSet<DiceController>();
+            for (var i = 0; i < characters.Count; i++) {
+                var currentDice = characters[i] != null ? characters[i].CurrentDice : null;
+                if (currentDice != null) {
+                    excludedDice.Add(currentDice);
+                }
+            }
+
             var targets = new List<DiceController>();
 
             foreach (var dice in registry.AllDice) {
@@ -77,7 +87,7 @@ namespace DiceGame.Gameplay
                     continue;
                 }
 
-                if (dice == excludedDice) {
+                if (excludedDice.Contains(dice)) {
                     continue;
                 }
 
