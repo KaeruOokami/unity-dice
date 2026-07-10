@@ -4,6 +4,7 @@ using DiceGame.Config;
 using DiceGame.Grid;
 using DiceGame.Placement;
 using DiceGame.View;
+using DiceGame.Versus;
 using UnityEngine;
 
 namespace DiceGame.Gameplay
@@ -175,6 +176,25 @@ namespace DiceGame.Gameplay
             }
 
             dissolveSystem.Configure(board, registry, characters, matchActionContext, oneVanishSystem);
+
+            if (gameSessionSettings.GameMode == GameMode.Versus) {
+                var versusSettings = gameSessionSettings.VersusBoardSettings;
+                dissolveSystem.ConfigureVersusAttack(versusSettings);
+
+                var attackController = GetComponent<VersusAttackController>();
+                if (attackController == null) {
+                    attackController = gameObject.AddComponent<VersusAttackController>();
+                }
+
+                attackController.Configure(
+                    versusSettings,
+                    board,
+                    diceCatalog,
+                    spawnSystem,
+                    dissolveSystem,
+                    spawnRandom,
+                    transform);
+            }
 
             if (cameraSetup.Enabled) {
                 cameraSetup.Apply(board);

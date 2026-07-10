@@ -167,7 +167,33 @@ namespace DiceGame.Gameplay
             startOrientation = orientation;
             startTier = tier;
             startKind = kind;
-            BeginSpawnAppear(gridPos, orientation, tier, kind, spawnSettings, onComplete);
+            BeginSpawnAppear(gridPos, orientation, tier, kind, spawnSettings, false, onComplete);
+        }
+
+        public void ConfigureWithSpawnAppear(
+            Board targetBoard,
+            DiceView view,
+            DiceRegistry targetRegistry,
+            Vector2Int gridPos,
+            DiceOrientation orientation,
+            DiceSpawnSettings spawnSettings,
+            DiceStackTier tier,
+            DiceKind kind,
+            bool forceFallFromAbove,
+            Action onComplete = null) {
+            if (spawnSettings == null) {
+                Debug.LogError("DiceController: DiceSpawnSettings is required for spawn appear.");
+                return;
+            }
+
+            board = targetBoard;
+            diceView = view;
+            registry = targetRegistry;
+            startGridPos = gridPos;
+            startOrientation = orientation;
+            startTier = tier;
+            startKind = kind;
+            BeginSpawnAppear(gridPos, orientation, tier, kind, spawnSettings, forceFallFromAbove, onComplete);
         }
 
         void BeginSpawnAppear(
@@ -176,6 +202,7 @@ namespace DiceGame.Gameplay
             DiceStackTier tier,
             DiceKind kind,
             DiceSpawnSettings spawnSettings,
+            bool forceFallFromAbove,
             Action onComplete) {
             isInitialized = true;
             isSpawning = true;
@@ -189,14 +216,7 @@ namespace DiceGame.Gameplay
                 onComplete?.Invoke();
             }
 
-            if (tier == DiceStackTier.Bottom) {
-                diceView.PlayBottomEmergenceAppear(
-                    currentState,
-                    board,
-                    registry,
-                    spawnSettings.BottomEmergenceDuration,
-                    OnSpawnComplete);
-            } else {
+            if (forceFallFromAbove || tier == DiceStackTier.Top) {
                 var bounceRestitution = Capabilities.HasSpawnBounce
                     ? spawnSettings.BounceRestitution
                     : 0f;
@@ -211,6 +231,13 @@ namespace DiceGame.Gameplay
                     bounceRestitution,
                     maxBounceCount,
                     spawnSettings.MinBounceVelocity,
+                    OnSpawnComplete);
+            } else {
+                diceView.PlayBottomEmergenceAppear(
+                    currentState,
+                    board,
+                    registry,
+                    spawnSettings.BottomEmergenceDuration,
                     OnSpawnComplete);
             }
         }
@@ -556,18 +583,26 @@ namespace DiceGame.Gameplay
         }
 
         public void BeginDissolve(Action onComplete) {
+            BeginDissolve(null, onComplete);
+        }
+
+        public void BeginDissolve(Color? emissionColor, Action onComplete) {
             if (isDissolving || isVanishing || isCarried || board == null || diceView == null) {
                 return;
             }
 
             isDissolving = true;
             DissolveStarted?.Invoke(this);
-            diceView.PlayDissolve(board, currentState.Orientation.Top, () => {
+            diceView.PlayDissolve(board, currentState.Orientation.Top, emissionColor, () => {
                 registry?.Unregister(this);
                 Dissolved?.Invoke(this);
                 onComplete?.Invoke();
                 Destroy(gameObject);
             });
+        }
+
+        public void SetDissolveEmissionColor(Color emissionColor) {
+            diceView?.SetDissolveEmissionColor(emissionColor);
         }
 
         public void RetreatDissolve(float amount) {

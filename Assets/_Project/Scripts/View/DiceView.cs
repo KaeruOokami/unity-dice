@@ -45,6 +45,7 @@ namespace DiceGame.View
         bool dissolveMaterialsTransparent;
         GameObject runtimeMeshPrefab;
         Texture dissolveEmissionMapOverride;
+        Color? dissolveEmissionColorOverride;
 
         // Dice mesh is visual-only. Gameplay uses `Board.CellSize` as the "logical dice cube" size.
         // So we measure the mesh's local bounds once, then scale/center it to match `Board.CellSize`.
@@ -526,6 +527,10 @@ namespace DiceGame.View
         }
 
         public void PlayDissolve(Board board, int topFace, Action onComplete) {
+            PlayDissolve(board, topFace, null, onComplete);
+        }
+
+        public void PlayDissolve(Board board, int topFace, Color? emissionColorOverride, Action onComplete) {
             if (rollCoroutine != null) {
                 StopCoroutine(rollCoroutine);
                 rollCoroutine = null;
@@ -535,9 +540,17 @@ namespace DiceGame.View
                 StopCoroutine(dissolveCoroutine);
             }
 
+            dissolveEmissionColorOverride = emissionColorOverride;
             currentTopFace = topFace;
             dissolveBoard = board;
             dissolveCoroutine = StartCoroutine(DissolveCoroutine(board, onComplete));
+        }
+
+        public void SetDissolveEmissionColor(Color emissionColor) {
+            dissolveEmissionColorOverride = emissionColor;
+            if (dissolveProgress > 0f) {
+                ApplyDissolveEmission(dissolveProgress);
+            }
         }
 
         public void RetreatDissolve(float amount) {
@@ -1490,6 +1503,7 @@ namespace DiceGame.View
         void ResetDissolveVisuals() {
             ApplyDissolveAlpha(0f);
             ApplyDissolveEmission(0f);
+            dissolveEmissionColorOverride = null;
             EnsurePushBody();
             pushBody?.SetCollisionEnabled(true);
             wasDissolveGhost = false;
@@ -1517,7 +1531,8 @@ namespace DiceGame.View
                 dissolveSettings.DissolveEmissionPulseMin,
                 dissolveSettings.DissolveEmissionPulseMax,
                 pulse);
-            var emissionColor = dissolveSettings.DissolveEmissionColor
+            var baseColor = dissolveEmissionColorOverride ?? dissolveSettings.DissolveEmissionColor;
+            var emissionColor = baseColor
                 * (dissolveSettings.DissolveEmissionIntensity * pulseMultiplier);
 
             for (var i = 0; i < dissolveMaterials.Count; i++) {

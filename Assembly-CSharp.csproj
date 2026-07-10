@@ -136,6 +136,20 @@
      <Compile Include="Assets\_Project\Scripts\Config\GameSessionSettings.cs" />
      <Compile Include="Assets\_Project\Scripts\Board\PartitionBoundaryPolicy.cs" />
      <Compile Include="Assets\_Project\Scripts\Gameplay\MatchActionSnapshot.cs" />
+     <Compile Include="Assets\_Project\Scripts\Versus\Core\SinkingChainResolver.cs" />
+     <Compile Include="Assets\_Project\Scripts\Versus\SinkingGroupTracker.cs" />
+     <Compile Include="Assets\_Project\Scripts\Versus\Core\AttackPowerCalculator.cs" />
+     <Compile Include="Assets\_Project\Scripts\Versus\Core\AttackVolleyBuilder.cs" />
+     <Compile Include="Assets\_Project\Scripts\Versus\Core\AttackKindBreakdown.cs" />
+     <Compile Include="Assets\_Project\Scripts\Versus\AttackQueue.cs" />
+     <Compile Include="Assets\_Project\Scripts\Versus\Core\AttackFaceRoller.cs" />
+     <Compile Include="Assets\_Project\Scripts\Versus\Core\AttackDieSpec.cs" />
+     <Compile Include="Assets\_Project\Scripts\View\AttackQueueView.cs" />
+     <Compile Include="Assets\_Project\Scripts\Versus\Core\AttackVolley.cs" />
+     <Compile Include="Assets\_Project\Scripts\Versus\VersusAttackController.cs" />
+     <Compile Include="Assets\_Project\Scripts\Versus\ErasureResolvedEvent.cs" />
+     <Compile Include="Assets\_Project\Scripts\Config\PlayerAttackSettings.cs" />
+     <Compile Include="Assets\_Project\Scripts\Versus\Core\AttackVolumeResolver.cs" />
      <None Include="Assets\Packages\Dice_6\Documentation\Readmy.txt" />
     <Reference Include="UnityEngine">
         <HintPath>D:\Program Files\Unity\Hub\Editor\2021.3.10f1\Editor\Data\Managed\UnityEngine\UnityEngine.dll</HintPath>

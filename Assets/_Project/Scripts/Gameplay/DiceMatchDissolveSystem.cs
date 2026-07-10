@@ -1,7 +1,11 @@
+using System;
 using System.Collections.Generic;
+using DiceGame.Config;
 using DiceGame.Core;
 using DiceGame.Grid;
 using DiceGame.Placement;
+using DiceGame.Versus;
+using DiceGame.Versus.Core;
 using UnityEngine;
 
 namespace DiceGame.Gameplay
@@ -16,6 +20,13 @@ namespace DiceGame.Gameplay
 
         readonly HashSet<DiceController> subscribedDice = new();
         readonly List<CharacterController> characters = new();
+
+        VersusBoardSettings versusSettings;
+        SinkingGroupTracker sinkingGroups;
+        MatchActionSnapshot currentAction;
+        bool versusAttackEnabled;
+
+        public event Action<ErasureResolvedEvent> ErasureResolved;
 
         public void Configure(
             Board targetBoard,
@@ -38,6 +49,12 @@ namespace DiceGame.Gameplay
             }
 
             SubscribeAllDice();
+        }
+
+        public void ConfigureVersusAttack(VersusBoardSettings settings) {
+            versusSettings = settings;
+            versusAttackEnabled = settings != null && board != null && board.IsVersusArena;
+            sinkingGroups = versusAttackEnabled ? new SinkingGroupTracker() : null;
         }
 
         void OnDisable() {
@@ -82,6 +99,8 @@ namespace DiceGame.Gameplay
         }
 
         void OnActionCompleted(MatchActionSnapshot action) {
+            currentAction = action;
+
             if (registry != null) {
                 foreach (var dice in registry.AllDice) {
                     SubscribeDice(dice);
@@ -92,11 +111,13 @@ namespace DiceGame.Gameplay
                 return;
             }
 
-            EvaluateMatchesForAction(action.AllDice);
+            EvaluateMatchesForAction(action);
             oneVanishSystem?.EvaluateForPlayerAction(action);
         }
 
         void OnDiceDissolved(DiceController dice) {
+            sinkingGroups?.RemoveDice(dice);
+
             if (dice != null) {
                 subscribedDice.Remove(dice);
                 dice.Dissolved -= OnDiceDissolved;
@@ -122,21 +143,21 @@ namespace DiceGame.Gameplay
             }
         }
 
-        void EvaluateMatchesForAction(IReadOnlyCollection<DiceController> actionDice) {
-            if (actionDice == null
-                || actionDice.Count == 0
+        void EvaluateMatchesForAction(MatchActionSnapshot action) {
+            if (action.AllDice == null
+                || action.AllDice.Count == 0
                 || board == null
                 || registry == null) {
                 return;
             }
 
-            var clusters = DiceMatchFinder.FindMatchingClusters(registry.AllDice, actionDice);
+            var clusters = DiceMatchFinder.FindMatchingClusters(registry.AllDice, action.AllDice);
             foreach (var cluster in clusters) {
-                ProcessCluster(cluster);
+                ProcessCluster(cluster, action);
             }
         }
 
-        void ProcessCluster(List<DiceController> cluster) {
+        void ProcessCluster(List<DiceController> cluster, MatchActionSnapshot action) {
             var newMembers = new List<DiceController>();
             var dissolvingMembers = new List<DiceController>();
 
@@ -156,6 +177,18 @@ namespace DiceGame.Gameplay
                 return;
             }
 
+            var face = newMembers[0].CurrentState.Orientation.Top;
+
+            if (versusAttackEnabled && versusSettings != null && action != null) {
+                ProcessVersusCluster(
+                    action,
+                    cluster,
+                    newMembers,
+                    dissolvingMembers,
+                    face);
+                return;
+            }
+
             foreach (var dice in dissolvingMembers) {
                 dice.RetreatDissolve(chainRollbackAmount);
             }
@@ -163,6 +196,70 @@ namespace DiceGame.Gameplay
             foreach (var dice in newMembers) {
                 dice.BeginDissolve(null);
             }
+        }
+
+        void ProcessVersusCluster(
+            MatchActionSnapshot action,
+            List<DiceController> cluster,
+            List<DiceController> newMembers,
+            List<DiceController> dissolvingMembers,
+            int face) {
+            var attacker = ResolveAttacker(action, cluster);
+            var attackSettings = versusSettings.GetAttackSettings(attacker);
+            if (attackSettings == null) {
+                Debug.LogError($"DiceMatchDissolveSystem: Attack settings missing for {attacker}.");
+                return;
+            }
+
+            var emissionColor = attackSettings.DissolveEmissionColor;
+            var chainResult = sinkingGroups.RegisterCluster(
+                dissolvingMembers,
+                newMembers,
+                face,
+                attacker,
+                out var clusterSize);
+
+            foreach (var dice in dissolvingMembers) {
+                dice.RetreatDissolve(chainRollbackAmount);
+                dice.SetDissolveEmissionColor(emissionColor);
+            }
+
+            foreach (var dice in newMembers) {
+                dice.BeginDissolve(emissionColor, null);
+            }
+
+            var target = SinkingChainResolver.GetOpponent(attacker);
+            ErasureResolved?.Invoke(new ErasureResolvedEvent(
+                attacker,
+                target,
+                face,
+                chainResult.ChainCount,
+                clusterSize,
+                chainResult.IsSnatch));
+        }
+
+        static PlayerSlot ResolveAttacker(MatchActionSnapshot action, List<DiceController> cluster) {
+            foreach (var slot in action.GetParticipatingPlayers()) {
+                var actionDice = action.GetDiceFor(slot);
+                for (var i = 0; i < actionDice.Count; i++) {
+                    var dice = actionDice[i];
+                    if (dice == null) {
+                        continue;
+                    }
+
+                    for (var j = 0; j < cluster.Count; j++) {
+                        if (cluster[j] == dice) {
+                            return slot;
+                        }
+                    }
+                }
+            }
+
+            foreach (var slot in action.GetParticipatingPlayers()) {
+                return slot;
+            }
+
+            return PlayerSlot.Player1;
         }
     }
 }

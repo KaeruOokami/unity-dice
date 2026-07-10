@@ -17,6 +17,35 @@ namespace DiceGame.Core
 
         public static DiceOrientation Default => new(1, 2, 3);
 
+        public static DiceOrientation CreateWithTopFace(int topFace) {
+            if (topFace is < 1 or > 6) {
+                return Default;
+            }
+
+            var directions = new[] { Direction.East, Direction.West, Direction.North, Direction.South };
+            var visited = new System.Collections.Generic.HashSet<(int, int, int)>();
+            var queue = new System.Collections.Generic.Queue<DiceOrientation>();
+            queue.Enqueue(Default);
+
+            while (queue.Count > 0) {
+                var current = queue.Dequeue();
+                var key = (current.Top, current.North, current.East);
+                if (!visited.Add(key)) {
+                    continue;
+                }
+
+                if (current.Top == topFace) {
+                    return current;
+                }
+
+                for (var i = 0; i < directions.Length; i++) {
+                    queue.Enqueue(current.Roll(directions[i]));
+                }
+            }
+
+            return Default;
+        }
+
         public int South => OppositeFace(North);
         public int West => OppositeFace(East);
         public int Down => OppositeFace(Top);

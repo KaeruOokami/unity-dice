@@ -338,6 +338,63 @@ namespace DiceGame.Gameplay
             return SpawnDiceAt(slot.Cell, slot.Tier, activeSpawnSettings, useSpawnAppear: true, onComplete);
         }
 
+        public DiceController SpawnAttackDice(
+            PlayerSlot targetSlot,
+            DiceKind kind,
+            int pip,
+            DiceSpawnSettings spawnSettings) {
+            if (spawnSettings == null || board == null || registry == null || diceCatalog == null) {
+                return null;
+            }
+
+            if (!DiceSpawnCellPicker.TryPickRandomSpawnSlot(
+                    board,
+                    registry,
+                    targetSlot,
+                    0f,
+                    random,
+                    out var slot)) {
+                Debug.LogError($"DiceSpawnSystem: No valid spawn slot for attack dice on {targetSlot}.");
+                return null;
+            }
+
+            if (!diceCatalog.TryGetMeshPrefab(kind, out var meshPrefab)) {
+                Debug.LogError($"DiceSpawnSystem: Mesh prefab not found for attack kind={kind}.");
+                return null;
+            }
+
+            var orientation = DiceOrientation.CreateWithTopFace(pip);
+            var diceController = DiceSpawnFactory.TryCreate(
+                diceEntityPrefab,
+                spawnParent,
+                slot.Cell,
+                slot.Tier,
+                kind,
+                meshPrefab,
+                physicsSettings,
+                diceAnimationSettings,
+                diceDissolveSettings);
+
+            if (diceController == null) {
+                return null;
+            }
+
+            diceController.ConfigureMatchActionContext(matchActionContext);
+            var diceView = diceController.View;
+            diceController.ConfigureWithSpawnAppear(
+                board,
+                diceView,
+                registry,
+                slot.Cell,
+                orientation,
+                spawnSettings,
+                slot.Tier,
+                kind,
+                forceFallFromAbove: true);
+
+            return diceController;
+        }
+
         IEnumerator SpawnLoop(DiceSpawnSettings activeSpawnSettings, PlayerSlot? ownerSlot) {
             while (enabled) {
                 var delay = activeSpawnSettings.SpawnInterval
