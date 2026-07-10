@@ -20,43 +20,36 @@ namespace DiceGame.Placement
 
             var chain = new List<DiceController> { origin };
             var tier = origin.CurrentState.Tier;
-            var perpendicularDirections = GetPerpendicularDirections(moveDirection);
-
-            foreach (var direction in perpendicularDirections) {
-                CollectInDirection(origin.CurrentState.GridPos, direction, tier, registry, chain);
+            var arm = new List<DiceController>();
+            foreach (var direction in GetPerpendicularDirections(moveDirection)) {
+                CollectArm(origin, direction, tier, registry, arm);
+                chain.AddRange(arm);
             }
 
             return chain;
         }
 
-        static void CollectInDirection(
-            UnityEngine.Vector2Int startCell,
-            Direction direction,
+        public static void CollectArm(
+            DiceController origin,
+            Direction armDirection,
             DiceStackTier tier,
             DiceRegistry registry,
-            List<DiceController> chain) {
-            var cell = startCell + direction.ToGridDelta();
+            List<DiceController> arm) {
+            arm.Clear();
+            if (origin == null || registry == null) {
+                return;
+            }
 
+            var cell = origin.CurrentState.GridPos + armDirection.ToGridDelta();
             while (registry.TryGetDiceAt(cell, tier, out var dice)
                 && dice != null
-                && dice.Capabilities.HasMagnetCoupling
-                && !ContainsDice(chain, dice)) {
-                chain.Add(dice);
-                cell += direction.ToGridDelta();
+                && dice.Capabilities.HasMagnetCoupling) {
+                arm.Add(dice);
+                cell += armDirection.ToGridDelta();
             }
         }
 
-        static bool ContainsDice(List<DiceController> chain, DiceController dice) {
-            for (var i = 0; i < chain.Count; i++) {
-                if (chain[i] == dice) {
-                    return true;
-                }
-            }
-
-            return false;
-        }
-
-        static Direction[] GetPerpendicularDirections(Direction moveDirection) {
+        public static Direction[] GetPerpendicularDirections(Direction moveDirection) {
             return moveDirection switch {
                 Direction.East or Direction.West => new[] { Direction.North, Direction.South },
                 _ => new[] { Direction.East, Direction.West }

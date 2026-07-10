@@ -53,7 +53,9 @@ namespace DiceGame.Placement
                     continue;
                 }
 
-                if (neighborDice.Kind == DiceKind.Iron) {
+                if (neighborDice.Kind == DiceKind.Iron
+                    && !neighborDice.IsDissolving
+                    && !neighborDice.IsVanishing) {
                     return true;
                 }
             }
