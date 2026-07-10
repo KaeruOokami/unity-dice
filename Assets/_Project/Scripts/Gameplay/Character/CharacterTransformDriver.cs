@@ -131,18 +131,18 @@ namespace DiceGame.Gameplay.Character
             ApplyWorldPosition(new Vector3(diceCenter.x + clamped.x, 0f, diceCenter.z + clamped.y));
         }
 
-        public bool IsAtOrPastFaceEdge(Vector2 xz, Vector2Int cell, Direction direction, float halfExtent) {
+        public bool IsAtOrPastRollTrigger(Vector2 xz, Vector2Int cell, Direction direction, float triggerHalfExtent) {
             var center = GetCellCenterXZ(cell);
 
             switch (direction) {
                 case Direction.East:
-                    return xz.x >= center.x + halfExtent - EdgeEpsilon;
+                    return xz.x >= center.x + triggerHalfExtent - EdgeEpsilon;
                 case Direction.West:
-                    return xz.x <= center.x - halfExtent + EdgeEpsilon;
+                    return xz.x <= center.x - triggerHalfExtent + EdgeEpsilon;
                 case Direction.North:
-                    return xz.y >= center.y + halfExtent - EdgeEpsilon;
+                    return xz.y >= center.y + triggerHalfExtent - EdgeEpsilon;
                 case Direction.South:
-                    return xz.y <= center.y - halfExtent + EdgeEpsilon;
+                    return xz.y <= center.y - triggerHalfExtent + EdgeEpsilon;
                 default:
                     return false;
             }

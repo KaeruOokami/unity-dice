@@ -15,7 +15,7 @@ MonoBehaviour:
   characterHeightOffset: 0.5
   maxMoveSpeed: 8
   moveAcceleration: 200
-  rollCenterPullSpeed: 0
+  rollTriggerExtentRatio: 0.35
   maxWalkStep: 0.5
   maxJumpStep: 2
   pushHoldDuration: 0.25

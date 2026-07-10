@@ -511,7 +511,8 @@ namespace DiceGame.Gameplay
             var standingCell = standingController.GridCell;
             var fromLevel = standingController.Level;
             var footingWorldY = GetFootingWorldY();
-            var halfExtent = transformDriver.GetWalkHalfExtent();
+            var walkHalfExtent = transformDriver.GetWalkHalfExtent();
+            var rollTriggerHalfExtent = movementSettings.GetRollTriggerHalfExtent(walkHalfExtent);
             var nextXZ = currentXZ + move;
 
             if (IsOnFloor) {
@@ -525,7 +526,8 @@ namespace DiceGame.Gameplay
                 standingCell,
                 fromLevel,
                 footingWorldY,
-                halfExtent)) {
+                walkHalfExtent,
+                rollTriggerHalfExtent)) {
                 return;
             }
 
@@ -540,7 +542,8 @@ namespace DiceGame.Gameplay
             Vector2Int standingCell,
             int fromLevel,
             float footingWorldY,
-            float halfExtent) {
+            float walkHalfExtent,
+            float rollTriggerHalfExtent) {
             var isJumping = jumpPhase != JumpPhase.None;
             var hasJumpCapability = false;
             JumpCoupledMoveCapability jumpCapability = default;
@@ -554,7 +557,7 @@ namespace DiceGame.Gameplay
                 standingCell,
                 fromLevel,
                 footingWorldY,
-                halfExtent,
+                rollTriggerHalfExtent,
                 standingController,
                 isJumping,
                 hasJumpCapability,
@@ -569,7 +572,7 @@ namespace DiceGame.Gameplay
                     plan.ToCell,
                     fromLevel,
                     footingWorldY,
-                    halfExtent,
+                    walkHalfExtent,
                     currentXZ,
                     nextXZ,
                     move,
@@ -584,7 +587,7 @@ namespace DiceGame.Gameplay
                 move,
                 fromLevel,
                 footingWorldY,
-                halfExtent,
+                walkHalfExtent,
                 isJumping,
                 hasJumpCapability,
                 jumpCapability,

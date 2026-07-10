@@ -34,7 +34,7 @@ namespace DiceGame.Gameplay.Character
             Vector2Int standingCell,
             int fromLevel,
             float footingWorldY,
-            float halfExtent,
+            float rollTriggerHalfExtent,
             CharacterStandingController standing,
             bool isJumping,
             bool hasJumpCapability,
@@ -50,7 +50,7 @@ namespace DiceGame.Gameplay.Character
                 fromLevel,
                 currentXZ,
                 move,
-                halfExtent,
+                rollTriggerHalfExtent,
                 standing,
                 isJumping,
                 hasJumpCapability,
@@ -247,7 +247,7 @@ namespace DiceGame.Gameplay.Character
             int fromLevel,
             Vector2 currentXZ,
             Vector2 move,
-            float halfExtent,
+            float rollTriggerHalfExtent,
             CharacterStandingController standing,
             bool isJumping,
             bool hasJumpCapability,
@@ -256,7 +256,7 @@ namespace DiceGame.Gameplay.Character
             bool allowDiceGridMove,
             PassabilityContext passabilityContext) {
             if (TryGetPrimaryDirection(move, out var moveDir)) {
-                if (transformDriver.IsAtOrPastFaceEdge(currentXZ, standingCell, moveDir, halfExtent)) {
+                if (transformDriver.IsAtOrPastRollTrigger(currentXZ, standingCell, moveDir, rollTriggerHalfExtent)) {
                     if (!allowCrossCell) {
                         return standingCell;
                     }
