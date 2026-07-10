@@ -1,4 +1,3 @@
-using System;
 using System.Collections.Generic;
 using DiceGame.Core;
 using DiceGame.Grid;
@@ -12,19 +11,36 @@ namespace DiceGame.Gameplay
         [SerializeField] Board board;
         [SerializeField] DiceRegistry registry;
         [SerializeField] CharacterController character;
+        [SerializeField] PlayerMatchActionContext actionContext;
+        [SerializeField] DiceOneVanishSystem oneVanishSystem;
         [SerializeField] float chainRollbackAmount = 0.15f;
 
         readonly HashSet<DiceController> subscribedDice = new();
-        readonly Dictionary<DiceController, Action<DiceState>> diceStateHandlers = new();
 
-        public void Configure(Board targetBoard, DiceRegistry targetRegistry, CharacterController targetCharacter) {
+        public void Configure(
+            Board targetBoard,
+            DiceRegistry targetRegistry,
+            CharacterController targetCharacter,
+            PlayerMatchActionContext targetActionContext,
+            DiceOneVanishSystem targetOneVanishSystem) {
             board = targetBoard;
             registry = targetRegistry;
             character = targetCharacter;
+            actionContext = targetActionContext;
+            oneVanishSystem = targetOneVanishSystem;
+            if (actionContext != null) {
+                actionContext.ActionCompleted -= OnActionCompleted;
+                actionContext.ActionCompleted += OnActionCompleted;
+            }
+
             SubscribeAllDice();
         }
 
         void OnDisable() {
+            if (actionContext != null) {
+                actionContext.ActionCompleted -= OnActionCompleted;
+            }
+
             UnsubscribeAllDice();
         }
 
@@ -44,9 +60,6 @@ namespace DiceGame.Gameplay
             }
 
             subscribedDice.Add(dice);
-            Action<DiceState> handler = _ => OnDiceStateChanged(dice);
-            diceStateHandlers[dice] = handler;
-            dice.StateChanged += handler;
             dice.Dissolved += OnDiceDissolved;
             dice.BecameDissolveGhost += OnDiceBecameDissolveGhost;
         }
@@ -57,32 +70,28 @@ namespace DiceGame.Gameplay
                     continue;
                 }
 
-                if (diceStateHandlers.TryGetValue(dice, out var handler)) {
-                    dice.StateChanged -= handler;
-                }
-
                 dice.Dissolved -= OnDiceDissolved;
                 dice.BecameDissolveGhost -= OnDiceBecameDissolveGhost;
             }
 
             subscribedDice.Clear();
-            diceStateHandlers.Clear();
         }
 
-        void OnDiceStateChanged(DiceController triggerDice) {
+        void OnActionCompleted(IReadOnlyCollection<DiceController> actionDice) {
             if (registry != null) {
                 foreach (var dice in registry.AllDice) {
                     SubscribeDice(dice);
                 }
             }
 
-            EvaluateMatches(triggerDice);
+            EvaluateMatchesForAction(actionDice);
+            oneVanishSystem?.EvaluateForPlayerAction(actionDice);
         }
 
         void OnDiceDissolved(DiceController dice) {
             if (dice != null) {
                 subscribedDice.Remove(dice);
-                diceStateHandlers.Remove(dice);
+                dice.Dissolved -= OnDiceDissolved;
                 dice.BecameDissolveGhost -= OnDiceBecameDissolveGhost;
             }
 
@@ -93,12 +102,15 @@ namespace DiceGame.Gameplay
             character?.OnStandingDiceBecameGhost(dice);
         }
 
-        void EvaluateMatches(DiceController triggerDice) {
-            if (triggerDice == null || board == null || registry == null || registry.AnyRolling()) {
+        void EvaluateMatchesForAction(IReadOnlyCollection<DiceController> actionDice) {
+            if (actionDice == null
+                || actionDice.Count == 0
+                || board == null
+                || registry == null) {
                 return;
             }
 
-            var clusters = DiceMatchFinder.FindMatchingClusters(registry.AllDice);
+            var clusters = DiceMatchFinder.FindMatchingClusters(registry.AllDice, actionDice);
             foreach (var cluster in clusters) {
                 ProcessCluster(cluster);
             }

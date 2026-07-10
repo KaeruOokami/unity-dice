@@ -75,6 +75,7 @@ namespace DiceGame.Gameplay
         PhysicsSettings physicsSettings;
         DiceAnimationSettings diceAnimationSettings;
         DiceDissolveSettings diceDissolveSettings;
+        PlayerMatchActionContext matchActionContext;
         DiceSpawnSettings spawnSettings;
         System.Random random;
 
@@ -89,6 +90,7 @@ namespace DiceGame.Gameplay
             PhysicsSettings physics,
             DiceAnimationSettings animationSettings,
             DiceDissolveSettings dissolveSettings,
+            PlayerMatchActionContext actionContext,
             DiceSpawnSettings settings,
             System.Random spawnRandom) {
             board = targetBoard;
@@ -99,6 +101,7 @@ namespace DiceGame.Gameplay
             physicsSettings = physics;
             diceAnimationSettings = animationSettings;
             diceDissolveSettings = dissolveSettings;
+            matchActionContext = actionContext;
             spawnSettings = settings;
             random = spawnRandom;
         }
@@ -197,6 +200,8 @@ namespace DiceGame.Gameplay
             if (diceController == null) {
                 return null;
             }
+
+            diceController.ConfigureMatchActionContext(matchActionContext);
 
             var diceView = diceController.View;
             if (useSpawnAppear) {

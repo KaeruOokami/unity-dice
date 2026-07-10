@@ -21,7 +21,8 @@ namespace DiceGame.Placement
         public static bool TryExecuteSlide(
             DiceController origin,
             DiceSlidePlan plan,
-            DiceRegistry registry) {
+            DiceRegistry registry,
+            PlayerMatchActionContext actionContext) {
             if (origin == null || registry == null) {
                 return false;
             }
@@ -39,6 +40,7 @@ namespace DiceGame.Placement
                 return false;
             }
 
+            actionContext?.RegisterActionDice(chain);
             return ExecuteSlides(executions);
         }
 
@@ -47,7 +49,8 @@ namespace DiceGame.Placement
             DiceGridMovePlan plan,
             DiceRegistry registry,
             GridMovePlanBuilder gridPlanBuilder,
-            PassabilityContext context) {
+            PassabilityContext context,
+            PlayerMatchActionContext actionContext) {
             if (origin == null || registry == null || gridPlanBuilder == null) {
                 return false;
             }
@@ -61,6 +64,7 @@ namespace DiceGame.Placement
                 return false;
             }
 
+            actionContext?.RegisterActionDice(chain);
             return ExecuteRolls(executions);
         }
 

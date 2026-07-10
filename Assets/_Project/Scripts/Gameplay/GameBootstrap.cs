@@ -59,6 +59,7 @@ namespace DiceGame.Gameplay
         [SerializeField] CameraSetupSettings cameraSetup = new();
 
         DiceRegistry registry;
+        PlayerMatchActionContext matchActionContext;
         PlacementService placement;
         DiceSpawnSystem spawnSystem;
         System.Random spawnRandom;
@@ -96,6 +97,13 @@ namespace DiceGame.Gameplay
             }
 
             registry.Configure(board);
+            matchActionContext = GetComponent<PlayerMatchActionContext>();
+            if (matchActionContext == null) {
+                matchActionContext = gameObject.AddComponent<PlayerMatchActionContext>();
+            }
+
+            matchActionContext.Configure(registry);
+
             placement = new PlacementService(
                 registry,
                 board,
@@ -118,6 +126,7 @@ namespace DiceGame.Gameplay
                 physicsSettings,
                 diceAnimationSettings,
                 diceDissolveSettings,
+                matchActionContext,
                 diceSpawnSettings,
                 spawnRandom);
 
@@ -142,14 +151,8 @@ namespace DiceGame.Gameplay
                 placement,
                 firstDice,
                 characterMovementSettings,
-                physicsSettings);
-
-            var dissolveSystem = GetComponent<DiceMatchDissolveSystem>();
-            if (dissolveSystem == null) {
-                dissolveSystem = gameObject.AddComponent<DiceMatchDissolveSystem>();
-            }
-
-            dissolveSystem.Configure(board, registry, characterController);
+                physicsSettings,
+                matchActionContext);
 
             var oneVanishSystem = GetComponent<DiceOneVanishSystem>();
             if (oneVanishSystem == null) {
@@ -157,6 +160,13 @@ namespace DiceGame.Gameplay
             }
 
             oneVanishSystem.Configure(board, registry, characterController, diceOneVanishSettings);
+
+            var dissolveSystem = GetComponent<DiceMatchDissolveSystem>();
+            if (dissolveSystem == null) {
+                dissolveSystem = gameObject.AddComponent<DiceMatchDissolveSystem>();
+            }
+
+            dissolveSystem.Configure(board, registry, characterController, matchActionContext, oneVanishSystem);
 
             if (cameraSetup.Enabled) {
                 cameraSetup.Apply(board);

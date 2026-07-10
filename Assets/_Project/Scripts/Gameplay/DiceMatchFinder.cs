@@ -10,7 +10,9 @@ namespace DiceGame.Gameplay
             Direction.East, Direction.West, Direction.North, Direction.South
         };
 
-        public static List<List<DiceController>> FindMatchingClusters(IReadOnlyList<DiceController> allDice) {
+        public static List<List<DiceController>> FindMatchingClusters(
+            IReadOnlyList<DiceController> allDice,
+            IReadOnlyCollection<DiceController> actionDice) {
             var results = new List<List<DiceController>>();
             var consumed = new HashSet<DiceController>();
 
@@ -28,6 +30,10 @@ namespace DiceGame.Gameplay
                         continue;
                     }
 
+                    if (!HasActionParticipant(cluster, actionDice)) {
+                        continue;
+                    }
+
                     results.Add(cluster);
                     foreach (var dice in cluster) {
                         consumed.Add(dice);
@@ -36,6 +42,24 @@ namespace DiceGame.Gameplay
             }
 
             return results;
+        }
+
+        static bool HasActionParticipant(
+            IReadOnlyList<DiceController> cluster,
+            IReadOnlyCollection<DiceController> actionDice) {
+            if (actionDice == null || actionDice.Count == 0) {
+                return false;
+            }
+
+            foreach (var dice in cluster) {
+                foreach (var participant in actionDice) {
+                    if (dice == participant) {
+                        return true;
+                    }
+                }
+            }
+
+            return false;
         }
 
         static Dictionary<(Vector2Int, DiceStackTier), DiceController> BuildLookup(

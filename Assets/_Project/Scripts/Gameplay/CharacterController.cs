@@ -54,6 +54,7 @@ namespace DiceGame.Gameplay
 
         PlacementService placement;
         DiceRegistry registry;
+        PlayerMatchActionContext matchActionContext;
         CharacterStandingController standingController;
         CharacterTransformDriver transformDriver;
         DiceCharacterCoupling coupling;
@@ -88,6 +89,9 @@ namespace DiceGame.Gameplay
         VerticalMotionState jumpMotion;
         float jumpYOffset;
         DiceController jumpVisualDice;
+        bool hasJumpStartPlacement;
+        Vector2Int jumpStartGridCell;
+        DiceController jumpStartDice;
 
         // Phase2: airborne representation (Level=3) + continuous height for rendering/logic.
         // When jumpPhase != None, support=None and Level=3, while playerHeightNorm tracks the
@@ -122,10 +126,12 @@ namespace DiceGame.Gameplay
             PlacementService targetPlacement,
             DiceController startDice,
             CharacterMovementSettings movement,
-            PhysicsSettings physics) {
+            PhysicsSettings physics,
+            PlayerMatchActionContext actionContext = null) {
             board = targetBoard;
             placement = targetPlacement;
             registry = targetPlacement.Dice;
+            matchActionContext = actionContext;
             movementSettings = movement;
             physicsSettings = physics;
             standingController = new CharacterStandingController();
@@ -192,7 +198,8 @@ namespace DiceGame.Gameplay
                 transformDriver,
                 movementSettings,
                 () => jumpYOffset,
-                () => jumpMotion);
+                () => jumpMotion,
+                matchActionContext);
 
             movePlanner = new CharacterMovePlanner(
                 board,
@@ -829,6 +836,7 @@ namespace DiceGame.Gameplay
         }
 
         void BeginJumpFromRollCancel() {
+            CaptureJumpStartPlacement();
             jumpMotion = GravityMotion.CreateLaunch(GetDiceJumpHeight(), physicsSettings.Gravity);
             jumpPhase = JumpPhase.Airborne;
             jumpYOffset = 0f;
@@ -1063,6 +1071,7 @@ namespace DiceGame.Gameplay
             var pushed = false;
             foreach (var candidate in pushCandidates) {
                 if (TryPushDice(candidate, out var pushedDice, out var pushDir)) {
+                    matchActionContext?.RegisterActionDice(pushedDice);
                     LogPushDebug(
                         "push-ok",
                         $"stage=push dice={FormatMovementDice(pushedDice)} dir={pushDir}");
@@ -1695,6 +1704,7 @@ namespace DiceGame.Gameplay
 
             liftPhase = LiftPhase.Placing;
             var fromWorld = GetCarryWorldPosition();
+            matchActionContext?.RegisterActionDice(carriedDice);
 
             if (!carriedDice.TryPlaceAt(targetGrid, targetTier, fromWorld, OnPlaceComplete)) {
                 liftPhase = LiftPhase.Carrying;
@@ -1794,10 +1804,19 @@ namespace DiceGame.Gameplay
             jumpMotion = GravityMotion.CreateLaunch(GetDiceJumpHeight(), physicsSettings.Gravity);
             jumpPhase = JumpPhase.Airborne;
             jumpYOffset = 0f;
+            CaptureJumpStartPlacement();
             coupling.ResetJumpSessionFlags();
             ResetPushState();
             LogJump($"TryBeginJump ok source=key {FormatJumpContext()}");
             return true;
+        }
+
+        void CaptureJumpStartPlacement() {
+            hasJumpStartPlacement = standingController != null
+                && standingController.TryGetStandingDice(out jumpStartDice);
+            jumpStartGridCell = standingController != null
+                ? standingController.GridCell
+                : default;
         }
 
         void UpdateJump() {
@@ -1895,6 +1914,8 @@ namespace DiceGame.Gameplay
         }
 
         void EndJump() {
+            MarkSameCellJumpPlacement();
+
             if (jumpVisualDice != null) {
                 ClearJumpVisualDice(jumpVisualDice);
                 jumpVisualDice = null;
@@ -1908,8 +1929,27 @@ namespace DiceGame.Gameplay
                 IsGrounded = true
             };
             jumpYOffset = 0f;
+            hasJumpStartPlacement = false;
+            jumpStartDice = null;
             coupling?.ResetJumpSessionFlags();
             transformDriver?.SnapYToSurface();
+        }
+
+        void MarkSameCellJumpPlacement() {
+            if (!hasJumpStartPlacement || standingController == null) {
+                return;
+            }
+
+            if (standingController.GridCell != jumpStartGridCell) {
+                return;
+            }
+
+            if (!standingController.TryGetStandingDice(out var landingDice) || landingDice != jumpStartDice) {
+                return;
+            }
+
+            matchActionContext?.RegisterActionDice(landingDice);
+            matchActionContext?.NotifyParticipantMoveCompleted();
         }
     }
 }

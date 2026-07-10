@@ -42,6 +42,7 @@ namespace DiceGame.Gameplay.Coupling
         CharacterStandingController standing;
         CharacterTransformDriver transformDriver;
         CharacterMovementSettings movementSettings;
+        PlayerMatchActionContext actionContext;
         Func<float> getJumpYOffset;
         Func<VerticalMotionState> getJumpMotion;
 
@@ -61,7 +62,8 @@ namespace DiceGame.Gameplay.Coupling
             CharacterTransformDriver driver,
             CharacterMovementSettings movement,
             Func<float> jumpYOffsetProvider,
-            Func<VerticalMotionState> jumpMotionProvider) {
+            Func<VerticalMotionState> jumpMotionProvider,
+            PlayerMatchActionContext targetActionContext) {
             board = targetBoard;
             registry = targetRegistry;
             standing = standingController;
@@ -69,6 +71,7 @@ namespace DiceGame.Gameplay.Coupling
             movementSettings = movement;
             getJumpYOffset = jumpYOffsetProvider;
             getJumpMotion = jumpMotionProvider;
+            actionContext = targetActionContext;
         }
 
         public void ResetJumpSessionFlags() {
@@ -207,6 +210,10 @@ namespace DiceGame.Gameplay.Coupling
             return TryBeginJumpGridMove(plan, nextXZ, halfExtent, log);
         }
 
+        void RegisterStandingDiceForAction() {
+            actionContext?.RegisterActionDice(standing.CurrentDice);
+        }
+
         bool TryExecuteReverseRollCancel(
             float cancelProgress,
             MovementTransitionEvaluator movementTransition,
@@ -237,6 +244,7 @@ namespace DiceGame.Gameplay.Coupling
 
             ClearRollCancelSession();
 
+            RegisterStandingDiceForAction();
             if (!dice.TryExecuteCancelReverseGroundMovePlan(reversePlan, snapshot, cancelProgress)) {
                 Debug.LogError(
                     $"DiceCharacterCoupling: reverse roll cancel execution failed " +
@@ -293,6 +301,7 @@ namespace DiceGame.Gameplay.Coupling
             ClearRollCancelSession();
 
             session.IsJumpArc = true;
+            RegisterStandingDiceForAction();
             if (!dice.TryExecuteCancelJumpMovePlan(
                 jumpPlan,
                 snapshot,
@@ -367,6 +376,7 @@ namespace DiceGame.Gameplay.Coupling
                 return false;
             }
 
+            RegisterStandingDiceForAction();
             if (!dice.TryExecuteSlidePlan(plan)) {
                 Debug.LogError(
                     $"DiceCharacterCoupling: ice slide execution failed " +
@@ -393,6 +403,7 @@ namespace DiceGame.Gameplay.Coupling
                 return false;
             }
 
+            RegisterStandingDiceForAction();
             if (jumpArc) {
                 session.IsJumpArc = true;
                 if (!dice.TryExecuteJumpMovePlan(plan, getJumpYOffset(), getJumpMotion)) {

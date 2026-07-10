@@ -5,29 +5,34 @@ namespace DiceGame.Gameplay
 {
     public static class DiceOneVanishTrigger
     {
-        public static bool ShouldTrigger(IReadOnlyList<DiceController> allDice) {
-            if (allDice == null) {
+        public static bool ShouldTrigger(
+            IReadOnlyList<DiceController> allDice,
+            IReadOnlyCollection<DiceController> actionDice) {
+            if (allDice == null || actionDice == null || actionDice.Count == 0) {
                 return false;
             }
 
-            foreach (var dissolving in allDice) {
-                if (dissolving == null || !dissolving.IsDissolving) {
+            foreach (var one in actionDice) {
+                if (one == null || one.IsSpawning) {
                     continue;
                 }
 
-                var dissolvingSlot = DiceSlot.FromDice(dissolving);
-                foreach (var candidate in allDice) {
-                    if (candidate == null || candidate.IsSpawning) {
+                if (one.CurrentState.Orientation.Top != 1) {
+                    continue;
+                }
+
+                var oneSlot = DiceSlot.FromDice(one);
+
+                foreach (var dissolving in allDice) {
+                    if (dissolving == null || !dissolving.IsDissolving) {
                         continue;
                     }
 
-                    if (candidate.CurrentState.Orientation.Top != 1) {
+                    if (!DiceStackAdjacency.IsAdjacentForMatch(DiceSlot.FromDice(dissolving), oneSlot)) {
                         continue;
                     }
 
-                    if (DiceStackAdjacency.IsAdjacentForMatch(dissolvingSlot, DiceSlot.FromDice(candidate))) {
-                        return true;
-                    }
+                    return true;
                 }
             }
 

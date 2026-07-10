@@ -1,7 +1,5 @@
-using System;
 using System.Collections.Generic;
 using DiceGame.Config;
-using DiceGame.Core;
 using DiceGame.Grid;
 using DiceGame.Placement;
 using UnityEngine;
@@ -16,7 +14,6 @@ namespace DiceGame.Gameplay
         [SerializeField] DiceOneVanishSettings oneVanishSettings;
 
         readonly HashSet<DiceController> subscribedDice = new();
-        readonly Dictionary<DiceController, Action<DiceState>> diceStateHandlers = new();
 
         public void Configure(
             Board targetBoard,
@@ -27,6 +24,7 @@ namespace DiceGame.Gameplay
             registry = targetRegistry;
             character = targetCharacter;
             oneVanishSettings = settings;
+
             SubscribeAllDice();
         }
 
@@ -50,63 +48,20 @@ namespace DiceGame.Gameplay
             }
 
             subscribedDice.Add(dice);
-            Action<DiceState> stateHandler = _ => OnDiceStateChanged();
-            diceStateHandlers[dice] = stateHandler;
-            dice.StateChanged += stateHandler;
-            dice.DissolveStarted += OnDissolveStarted;
-            dice.Dissolved += OnDiceDissolved;
         }
 
         void UnsubscribeAllDice() {
-            foreach (var dice in subscribedDice) {
-                if (dice == null) {
-                    continue;
-                }
-
-                if (diceStateHandlers.TryGetValue(dice, out var stateHandler)) {
-                    dice.StateChanged -= stateHandler;
-                }
-
-                dice.DissolveStarted -= OnDissolveStarted;
-                dice.Dissolved -= OnDiceDissolved;
-            }
-
             subscribedDice.Clear();
-            diceStateHandlers.Clear();
         }
 
-        void OnDiceStateChanged() {
-            if (registry != null) {
-                foreach (var dice in registry.AllDice) {
-                    SubscribeDice(dice);
-                }
-            }
-
-            EvaluateOneVanish();
-        }
-
-        void OnDissolveStarted(DiceController _) {
-            EvaluateOneVanish();
-        }
-
-        void OnDiceDissolved(DiceController dice) {
-            if (dice != null) {
-                subscribedDice.Remove(dice);
-                diceStateHandlers.Remove(dice);
-            }
-
-            character?.OnStandingDiceDissolved(dice);
-        }
-
-        void EvaluateOneVanish() {
+        public void EvaluateForPlayerAction(IReadOnlyCollection<DiceController> actionDice) {
             if (board == null
                 || registry == null
-                || oneVanishSettings == null
-                || registry.AnyRolling()) {
+                || oneVanishSettings == null) {
                 return;
             }
 
-            if (!DiceOneVanishTrigger.ShouldTrigger(registry.AllDice)) {
+            if (!DiceOneVanishTrigger.ShouldTrigger(registry.AllDice, actionDice)) {
                 return;
             }
 

@@ -41,6 +41,7 @@
      <Compile Include="Assets\_Project\Scripts\Config\DiceAnimationSettings.cs" />
      <Compile Include="Assets\_Project\Scripts\Gameplay\Coupling\RollCancelPolicy.cs" />
      <Compile Include="Assets\_Project\Scripts\Core\DiceOrientation.cs" />
+     <Compile Include="Assets\_Project\Scripts\Config\DiceOneVanishSettings.cs" />
      <Compile Include="Assets\_Project\Scripts\Placement\HeightReachPolicy.cs" />
      <Compile Include="Assets\_Project\Scripts\MirrorFloor.cs" />
      <Compile Include="Assets\_Project\Scripts\Placement\HeightReachEvaluation.cs" />
@@ -63,6 +64,7 @@
      <Compile Include="Assets\_Project\Scripts\Placement\CharacterPlacement.cs" />
      <Compile Include="Assets\_Project\Scripts\View\DiceView.cs" />
      <Compile Include="Assets\_Project\Scripts\Placement\SurfaceState.cs" />
+     <Compile Include="Assets\_Project\Scripts\Gameplay\DiceOneVanishTrigger.cs" />
      <Compile Include="Assets\_Project\Scripts\Placement\PlacementService.cs" />
      <Compile Include="Assets\_Project\Scripts\Gameplay\Character\CharacterMovePlan.cs" />
      <Compile Include="Assets\_Project\Scripts\Placement\SurfaceHeightLevel.cs" />
@@ -74,6 +76,7 @@
      <Compile Include="Assets\_Project\Scripts\Gameplay\Character\CharacterMovePlanner.cs" />
      <Compile Include="Assets\_Project\Scripts\Gameplay\DiceController.cs" />
      <Compile Include="Assets\_Project\Scripts\Gameplay\DiceMoveVisualContext.cs" />
+     <Compile Include="Assets\_Project\Scripts\Gameplay\DiceOneVanishSystem.cs" />
      <Compile Include="Assets\_Project\Scripts\Placement\Support\CharacterSupportState.cs" />
      <Compile Include="Assets\_Project\Scripts\Core\DiceStackTier.cs" />
      <Compile Include="Assets\_Project\Scripts\Gameplay\Character\CharacterStandingController.cs" />
@@ -98,6 +101,7 @@
      <Compile Include="Assets\TutorialInfo\Scripts\Readme.cs" />
      <Compile Include="Assets\_Project\Scripts\Placement\LiftPassability.cs" />
      <Compile Include="Assets\_Project\Scripts\Gameplay\DicePushBody.cs" />
+     <Compile Include="Assets\_Project\Scripts\Gameplay\PlayerMatchActionContext.cs" />
      <Compile Include="Assets\_Project\Scripts\Placement\NormalizedHeight.cs" />
      <Compile Include="Assets\_Project\Scripts\Placement\JumpGridRollPolicy.cs" />
      <Compile Include="Assets\_Project\Scripts\Core\DiceGridMovePlanner.cs" />
@@ -117,6 +121,7 @@
      <Compile Include="Assets\_Project\Scripts\Gameplay\DiceSpawnFactory.cs" />
      <Compile Include="Assets\_Project\Scripts\Core\DiceBehaviorResolver.cs" />
      <Compile Include="Assets\_Project\Scripts\Placement\GridMovePlanBuilder.cs" />
+     <Compile Include="Assets\_Project\Scripts\Placement\JumpDiceTransferPolicy.cs" />
      <Compile Include="Assets\_Project\Scripts\Gameplay\GameBootstrap.cs" />
      <Compile Include="Assets\_Project\Scripts\Gameplay\DiceStackAdjacency.cs" />
      <Compile Include="Assets\_Project\Scripts\Config\DiceCatalog.cs" />
@@ -124,10 +129,6 @@
      <Compile Include="Assets\_Project\Scripts\Placement\JumpPlayerTransferPolicy.cs" />
      <Compile Include="Assets\_Project\Scripts\Placement\SurfaceQuery.cs" />
      <Compile Include="Assets\_Project\Scripts\Core\DiceCapabilities.cs" />
-     <Compile Include="Assets\_Project\Scripts\Placement\JumpDiceTransferPolicy.cs" />
-     <Compile Include="Assets\_Project\Scripts\Gameplay\DiceOneVanishTrigger.cs" />
-     <Compile Include="Assets\_Project\Scripts\Config\DiceOneVanishSettings.cs" />
-     <Compile Include="Assets\_Project\Scripts\Gameplay\DiceOneVanishSystem.cs" />
      <None Include="Assets\Packages\Dice_6\Documentation\Readmy.txt" />
     <Reference Include="UnityEngine">
         <HintPath>D:\Program Files\Unity\Hub\Editor\2021.3.10f1\Editor\Data\Managed\UnityEngine\UnityEngine.dll</HintPath>

@@ -18,6 +18,7 @@ namespace DiceGame.Gameplay
         [SerializeField] DiceKind startKind = DiceKind.Normal;
 
         DiceRegistry registry;
+        PlayerMatchActionContext matchActionContext;
         DiceState currentState;
         bool isRolling;
         bool isSpawning;
@@ -78,6 +79,10 @@ namespace DiceGame.Gameplay
             startTier = tier;
             startKind = kind;
             Initialize(gridPos, orientation, tier, kind);
+        }
+
+        public void ConfigureMatchActionContext(PlayerMatchActionContext actionContext) {
+            matchActionContext = actionContext;
         }
 
         public void Initialize(
@@ -233,7 +238,7 @@ namespace DiceGame.Gameplay
             }
 
             if (Capabilities.HasMagnetCoupling) {
-                return MagnetMoveExecutor.TryExecuteSlide(this, plan, registry);
+                return MagnetMoveExecutor.TryExecuteSlide(this, plan, registry, matchActionContext);
             }
 
             return TryExecuteSlidePlanInternal(plan);
@@ -256,7 +261,7 @@ namespace DiceGame.Gameplay
                 var occupancyQuery = new CellOccupancyQuery(board, registry);
                 var gridPlanBuilder = new GridMovePlanBuilder(registry, occupancyQuery);
                 var context = PassabilityContext.ForGround(board.FloorSurfaceWorldY);
-                if (!MagnetMoveExecutor.TryExecuteGroundRoll(this, plan, registry, gridPlanBuilder, context)) {
+                if (!MagnetMoveExecutor.TryExecuteGroundRoll(this, plan, registry, gridPlanBuilder, context, matchActionContext)) {
                     return false;
                 }
 
@@ -373,6 +378,7 @@ namespace DiceGame.Gameplay
                 registry,
                 () => {
                     isRolling = false;
+                    NotifyActionMoveCompleted();
                     StateChanged?.Invoke(currentState);
                 });
 
@@ -400,6 +406,7 @@ namespace DiceGame.Gameplay
                 registry,
                 () => {
                     isRolling = false;
+                    NotifyActionMoveCompleted(plan.From, plan.To);
                     StateChanged?.Invoke(currentState);
                 },
                 jumpMotionProvider);
@@ -417,6 +424,16 @@ namespace DiceGame.Gameplay
                 toState.Tier);
         }
 
+        void NotifyActionMoveCompleted(DiceState fromState, DiceState toState) {
+            if (PlayerMatchActionContext.IsActionParticipationMove(fromState, toState)) {
+                matchActionContext?.NotifyParticipantMoveCompleted();
+            }
+        }
+
+        void NotifyActionMoveCompleted() {
+            matchActionContext?.NotifyParticipantMoveCompleted();
+        }
+
         bool TryExecuteMovePlan(DiceGridMovePlan plan, DiceMoveVisualContext context) {
             if (isDissolving || isCarried || isRolling || board == null || diceView == null || registry == null) {
                 return false;
@@ -429,6 +446,7 @@ namespace DiceGame.Gameplay
                 context,
                 () => {
                     isRolling = false;
+                    NotifyActionMoveCompleted(plan.From, plan.To);
                     StateChanged?.Invoke(currentState);
                 });
 
@@ -531,6 +549,7 @@ namespace DiceGame.Gameplay
             isRolling = true;
             PlaySlideVisual(fromState, nextState, () => {
                 isRolling = false;
+                NotifyActionMoveCompleted(fromState, nextState);
                 StateChanged?.Invoke(currentState);
             });
 
@@ -667,6 +686,7 @@ namespace DiceGame.Gameplay
                 return false;
             }
 
+            var fromState = currentState;
             var toState = new DiceState(targetGrid, currentState.Orientation, targetTier, currentState.Kind);
             var toWorld = diceView.GetAnchoredWorldPosition(toState, board, registry);
             var transition = DiceTransition.FreeMove(fromWorld, toWorld, snapToGridOnComplete: true, toState);
@@ -676,6 +696,7 @@ namespace DiceGame.Gameplay
                 isCarried = false;
                 registry.Place(this, targetGrid, targetTier);
                 ConfigurePushBody();
+                NotifyActionMoveCompleted(fromState, toState);
                 StateChanged?.Invoke(currentState);
                 onComplete?.Invoke();
             });
