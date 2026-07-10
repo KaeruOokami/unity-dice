@@ -97,9 +97,18 @@ namespace DiceGame.Gameplay
                 || playerInputSettings == null
                 || diceAnimationSettings == null
                 || diceDissolveSettings == null
-                || diceOneVanishSettings == null
-                || diceCatalog == null) {
+                || diceOneVanishSettings == null) {
                 Debug.LogError("GameBootstrap: Gameplay settings assets are not assigned.");
+                return;
+            }
+
+            if (gameSessionSettings.GameMode == GameMode.Versus) {
+                if (gameSessionSettings.VersusBoardSettings == null) {
+                    Debug.LogError("GameBootstrap: VersusBoardSettings is not assigned.");
+                    return;
+                }
+            } else if (diceSpawnSettings == null || diceCatalog == null) {
+                Debug.LogError("GameBootstrap: Shared DiceSpawnSettings and DiceCatalog are required for Single/Coop.");
                 return;
             }
 
@@ -189,7 +198,6 @@ namespace DiceGame.Gameplay
                 attackController.Configure(
                     versusSettings,
                     board,
-                    diceCatalog,
                     spawnSystem,
                     dissolveSystem,
                     spawnRandom,
@@ -230,7 +238,7 @@ namespace DiceGame.Gameplay
                     board,
                     registry,
                     diceEntityPrefab,
-                    diceCatalog,
+                    versusSettings.Player1.DiceCatalog,
                     transform,
                     physicsSettings,
                     diceAnimationSettings,
@@ -240,7 +248,9 @@ namespace DiceGame.Gameplay
                     spawnRandom);
                 spawnSystem.ConfigureVersusSpawns(
                     versusSettings.Player1.SpawnSettings,
-                    versusSettings.Player2.SpawnSettings);
+                    versusSettings.Player1.DiceCatalog,
+                    versusSettings.Player2.SpawnSettings,
+                    versusSettings.Player2.DiceCatalog);
                 return true;
             }
 

@@ -94,6 +94,52 @@ namespace DiceGame.Placement
             return true;
         }
 
+        public static bool TryPickSequentialAttackSpawnSlot(
+            Board board,
+            DiceRegistry registry,
+            PlayerSlot ownerSlot,
+            ref int nextCellIndex,
+            out DiceSpawnSlot slot) {
+            slot = default;
+            if (board == null || registry == null || board.VersusLayout == null) {
+                return false;
+            }
+
+            board.VersusLayout.GetPlayerGridBounds(ownerSlot, out var minCell, out var maxCell);
+            var width = maxCell.x - minCell.x + 1;
+            var height = maxCell.y - minCell.y + 1;
+            var cellCount = width * height;
+            if (width <= 0 || height <= 0 || cellCount <= 0) {
+                return false;
+            }
+
+            nextCellIndex = WrapIndex(nextCellIndex, cellCount);
+            for (var checkedCount = 0; checkedCount < cellCount; checkedCount++) {
+                var index = (nextCellIndex + checkedCount) % cellCount;
+                var x = minCell.x + index % width;
+                var y = maxCell.y - index / width;
+                var cell = new Vector2Int(x, y);
+
+                if (registry.HasDissolvingDiceAt(cell)) {
+                    continue;
+                }
+
+                if (registry.CanPlaceBottomDiceAt(cell)) {
+                    slot = new DiceSpawnSlot(cell, DiceStackTier.Bottom);
+                    nextCellIndex = (index + 1) % cellCount;
+                    return true;
+                }
+
+                if (registry.CanPlaceTopDiceAt(cell)) {
+                    slot = new DiceSpawnSlot(cell, DiceStackTier.Top);
+                    nextCellIndex = (index + 1) % cellCount;
+                    return true;
+                }
+            }
+
+            return false;
+        }
+
         static SpawnSlotBuckets CollectSpawnBuckets(Board board, DiceRegistry registry, PlayerSlot? ownerSlot) {
             var buckets = new SpawnSlotBuckets {
                 BottomCells = new List<Vector2Int>(),
@@ -170,6 +216,15 @@ namespace DiceGame.Placement
                 cells.RemoveAt(i);
                 return;
             }
+        }
+
+        static int WrapIndex(int index, int count) {
+            if (count <= 0) {
+                return 0;
+            }
+
+            var wrapped = index % count;
+            return wrapped < 0 ? wrapped + count : wrapped;
         }
     }
 }

@@ -15,7 +15,7 @@ namespace DiceGame.Editor
         const string DiceEntityPrefabPath = "Assets/_Project/Prefabs/DiceEntity.prefab";
         const string CharacterPrefabPath = "Assets/_Project/Prefabs/Character.prefab";
         const string DiceSpawnSettingsPath = "Assets/_Project/Settings/Gameplay/DiceSpawnSettings.asset";
-        const string DiceCatalogPath = "Assets/_Project/Settings/Gameplay/DiceCatalog.asset";
+        const string DiceCatalogPath = "Assets/_Project/Settings/Gameplay/DiceCatalog/SharedDiceCatalog.asset";
 
         const string WoodDicePrefabPath = "Assets/_Project/Prefabs/Wood Dice.prefab";
         const string IronDicePrefabPath = "Assets/_Project/Prefabs/Iron Dice.prefab";

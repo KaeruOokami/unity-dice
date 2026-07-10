@@ -15,13 +15,19 @@ namespace DiceGame.View
         [SerializeField] float heightOffset = 3f;
 
         Board board;
-        DiceCatalog catalog;
+        DiceCatalog player1Catalog;
+        DiceCatalog player2Catalog;
         Transform player1Root;
         Transform player2Root;
 
-        public void Configure(Board targetBoard, DiceCatalog targetCatalog, Transform parent) {
+        public void Configure(
+            Board targetBoard,
+            DiceCatalog targetPlayer1Catalog,
+            DiceCatalog targetPlayer2Catalog,
+            Transform parent) {
             board = targetBoard;
-            catalog = targetCatalog;
+            player1Catalog = targetPlayer1Catalog;
+            player2Catalog = targetPlayer2Catalog;
             var parentTransform = parent != null ? parent : transform;
             player1Root = EnsureRoot(parentTransform, "AttackQueueIcons_P1");
             player2Root = EnsureRoot(parentTransform, "AttackQueueIcons_P2");
@@ -30,11 +36,15 @@ namespace DiceGame.View
         public void RenderAll(
             IReadOnlyList<AttackVolley> player1Volleys,
             IReadOnlyList<AttackVolley> player2Volleys) {
-            RenderForSlot(PlayerSlot.Player1, player1Volleys, player1Root);
-            RenderForSlot(PlayerSlot.Player2, player2Volleys, player2Root);
+            RenderForSlot(PlayerSlot.Player1, player1Volleys, player1Catalog, player1Root);
+            RenderForSlot(PlayerSlot.Player2, player2Volleys, player2Catalog, player2Root);
         }
 
-        void RenderForSlot(PlayerSlot defenderSlot, IReadOnlyList<AttackVolley> volleys, Transform root) {
+        void RenderForSlot(
+            PlayerSlot defenderSlot,
+            IReadOnlyList<AttackVolley> volleys,
+            DiceCatalog catalog,
+            Transform root) {
             ClearRoot(root);
             if (board == null || catalog == null || root == null || volleys == null || volleys.Count == 0) {
                 return;

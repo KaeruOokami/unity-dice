@@ -72,6 +72,7 @@ namespace DiceGame.Gameplay
         {
             public PlayerSlot Slot;
             public DiceSpawnSettings Settings;
+            public DiceCatalog Catalog;
             public Coroutine SpawnCoroutine;
         }
 
@@ -87,6 +88,7 @@ namespace DiceGame.Gameplay
         DiceSpawnSettings spawnSettings;
         System.Random random;
         readonly List<PlayerSpawnChannel> versusChannels = new();
+        readonly Dictionary<PlayerSlot, int> attackSpawnCellIndices = new();
 
         Coroutine spawnCoroutine;
 
@@ -114,20 +116,27 @@ namespace DiceGame.Gameplay
             spawnSettings = settings;
             random = spawnRandom;
             versusChannels.Clear();
+            attackSpawnCellIndices.Clear();
         }
 
         public void ConfigureVersusSpawns(
             DiceSpawnSettings player1Settings,
-            DiceSpawnSettings player2Settings) {
+            DiceCatalog player1Catalog,
+            DiceSpawnSettings player2Settings,
+            DiceCatalog player2Catalog) {
             versusChannels.Clear();
             versusChannels.Add(new PlayerSpawnChannel {
                 Slot = PlayerSlot.Player1,
-                Settings = player1Settings
+                Settings = player1Settings,
+                Catalog = player1Catalog
             });
+            attackSpawnCellIndices[PlayerSlot.Player1] = 0;
             versusChannels.Add(new PlayerSpawnChannel {
                 Slot = PlayerSlot.Player2,
-                Settings = player2Settings
+                Settings = player2Settings,
+                Catalog = player2Catalog
             });
+            attackSpawnCellIndices[PlayerSlot.Player2] = 0;
         }
 
         public void StartSpawning() {
@@ -197,26 +206,27 @@ namespace DiceGame.Gameplay
                 return results;
             }
 
+            DiceController standingDice = null;
             for (var i = 0; i < slots.Count; i++) {
                 var slot = slots[i];
                 var diceController = SpawnDiceAt(
                     slot.Cell,
                     slot.Tier,
                     spawnSettings,
-                    useSpawnAppear: ShouldAnimateInitialDice(spawnSettings, i));
+                    diceCatalog,
+                    useSpawnAppear: spawnSettings.AnimateInitialDiceSpawn);
                 if (diceController == null) {
                     continue;
                 }
 
-                results.Add(diceController);
-                if (results.Count >= requiredCount) {
-                    break;
+                if (results.Count < requiredCount) {
+                    results.Add(diceController);
                 }
             }
 
             if (results.Count < requiredCount) {
                 Debug.LogError(
-                    $"DiceSpawnSystem: Failed to spawn {requiredCount} initial dice for players. Spawned {results.Count}.");
+                    $"DiceSpawnSystem: Failed to spawn {requiredCount} standing dice for players. Spawned {results.Count}.");
                 results.Clear();
             }
 
@@ -238,57 +248,86 @@ namespace DiceGame.Gameplay
                     return results;
                 }
 
-                var slots = DiceSpawnCellPicker.PickRandomSpawnSlots(
-                    board,
-                    registry,
-                    channel.Slot,
-                    1,
-                    channel.Settings.BottomSpawnWeight,
-                    random);
-                if (slots.Count == 0) {
-                    Debug.LogError($"DiceSpawnSystem: No valid spawn slot for {channel.Slot}.");
+                if (channel.Catalog == null) {
+                    Debug.LogError($"DiceSpawnSystem: Dice catalog for {channel.Slot} is not assigned.");
                     results.Clear();
                     return results;
                 }
 
-                var diceController = SpawnDiceAt(
-                    slots[0].Cell,
-                    slots[0].Tier,
-                    channel.Settings,
-                    useSpawnAppear: channel.Settings.AnimateInitialDiceSpawn);
-                if (diceController == null) {
+                var initialCount = Mathf.Max(1, channel.Settings.InitialDiceCount);
+                var slots = DiceSpawnCellPicker.PickRandomSpawnSlots(
+                    board,
+                    registry,
+                    channel.Slot,
+                    initialCount,
+                    channel.Settings.BottomSpawnWeight,
+                    random);
+                if (slots.Count == 0) {
+                    Debug.LogError($"DiceSpawnSystem: No valid spawn slots for {channel.Slot}.");
+                    results.Clear();
+                    return results;
+                }
+
+                DiceController standingDice = null;
+                for (var j = 0; j < slots.Count; j++) {
+                    var diceController = SpawnDiceAt(
+                        slots[j].Cell,
+                        slots[j].Tier,
+                        channel.Settings,
+                        channel.Catalog,
+                        useSpawnAppear: channel.Settings.AnimateInitialDiceSpawn);
+                    if (diceController == null) {
+                        continue;
+                    }
+
+                    if (standingDice == null) {
+                        standingDice = diceController;
+                    }
+                }
+
+                if (standingDice == null) {
                     Debug.LogError($"DiceSpawnSystem: Failed to spawn initial dice for {channel.Slot}.");
                     results.Clear();
                     return results;
                 }
 
-                results.Add(diceController);
+                results.Add(standingDice);
             }
 
             return results;
         }
 
-        static bool ShouldAnimateInitialDice(DiceSpawnSettings settings, int index) {
-            return settings.AnimateInitialDiceSpawn && index > 0;
+        DiceCatalog ResolveCatalog(PlayerSlot? ownerSlot) {
+            if (ownerSlot.HasValue) {
+                for (var i = 0; i < versusChannels.Count; i++) {
+                    var channel = versusChannels[i];
+                    if (channel.Slot == ownerSlot.Value) {
+                        return channel.Catalog;
+                    }
+                }
+            }
+
+            return diceCatalog;
         }
 
         DiceController SpawnDiceAt(
             Vector2Int gridPos,
             DiceStackTier tier,
             DiceSpawnSettings activeSpawnSettings,
+            DiceCatalog catalog,
             bool useSpawnAppear,
             Action onComplete = null) {
-            if (diceCatalog == null) {
+            if (catalog == null) {
                 Debug.LogError("DiceSpawnSystem: DiceCatalog is not assigned.");
                 return null;
             }
 
-            if (!diceCatalog.TryPickRandomKind(random, out var kind)) {
+            if (!catalog.TryPickRandomKind(random, out var kind)) {
                 Debug.LogError("DiceSpawnSystem: Failed to pick dice kind. Check DiceCatalog spawn weights.");
                 return null;
             }
 
-            if (!diceCatalog.TryGetMeshPrefab(kind, out var meshPrefab)) {
+            if (!catalog.TryGetMeshPrefab(kind, out var meshPrefab)) {
                 Debug.LogError($"DiceSpawnSystem: Mesh prefab not found for kind={kind}.");
                 return null;
             }
@@ -330,12 +369,22 @@ namespace DiceGame.Gameplay
             return diceController;
         }
 
-        public DiceController SpawnDiceWithAppear(DiceSpawnSlot slot, DiceSpawnSettings activeSpawnSettings, Action onComplete = null) {
+        public DiceController SpawnDiceWithAppear(
+            DiceSpawnSlot slot,
+            PlayerSlot? ownerSlot,
+            DiceSpawnSettings activeSpawnSettings,
+            Action onComplete = null) {
             if (activeSpawnSettings == null || board == null || registry == null) {
                 return null;
             }
 
-            return SpawnDiceAt(slot.Cell, slot.Tier, activeSpawnSettings, useSpawnAppear: true, onComplete);
+            return SpawnDiceAt(
+                slot.Cell,
+                slot.Tier,
+                activeSpawnSettings,
+                ResolveCatalog(ownerSlot),
+                useSpawnAppear: true,
+                onComplete);
         }
 
         public DiceController SpawnAttackDice(
@@ -343,22 +392,17 @@ namespace DiceGame.Gameplay
             DiceKind kind,
             int pip,
             DiceSpawnSettings spawnSettings) {
-            if (spawnSettings == null || board == null || registry == null || diceCatalog == null) {
+            var catalog = ResolveCatalog(targetSlot);
+            if (spawnSettings == null || board == null || registry == null || catalog == null) {
                 return null;
             }
 
-            if (!DiceSpawnCellPicker.TryPickRandomSpawnSlot(
-                    board,
-                    registry,
-                    targetSlot,
-                    0f,
-                    random,
-                    out var slot)) {
+            if (!TryPickAttackSpawnSlot(targetSlot, out var slot)) {
                 Debug.LogError($"DiceSpawnSystem: No valid spawn slot for attack dice on {targetSlot}.");
                 return null;
             }
 
-            if (!diceCatalog.TryGetMeshPrefab(kind, out var meshPrefab)) {
+            if (!catalog.TryGetMeshPrefab(kind, out var meshPrefab)) {
                 Debug.LogError($"DiceSpawnSystem: Mesh prefab not found for attack kind={kind}.");
                 return null;
             }
@@ -395,6 +439,28 @@ namespace DiceGame.Gameplay
             return diceController;
         }
 
+        bool TryPickAttackSpawnSlot(PlayerSlot targetSlot, out DiceSpawnSlot slot) {
+            if (board != null && board.IsVersusArena) {
+                attackSpawnCellIndices.TryGetValue(targetSlot, out var nextCellIndex);
+                var result = DiceSpawnCellPicker.TryPickSequentialAttackSpawnSlot(
+                    board,
+                    registry,
+                    targetSlot,
+                    ref nextCellIndex,
+                    out slot);
+                attackSpawnCellIndices[targetSlot] = nextCellIndex;
+                return result;
+            }
+
+            return DiceSpawnCellPicker.TryPickRandomSpawnSlot(
+                board,
+                registry,
+                targetSlot,
+                0.5f,
+                random,
+                out slot);
+        }
+
         IEnumerator SpawnLoop(DiceSpawnSettings activeSpawnSettings, PlayerSlot? ownerSlot) {
             while (enabled) {
                 var delay = activeSpawnSettings.SpawnInterval
@@ -411,7 +477,7 @@ namespace DiceGame.Gameplay
                     yield break;
                 }
 
-                SpawnDiceWithAppear(slot, activeSpawnSettings);
+                SpawnDiceWithAppear(slot, ownerSlot, activeSpawnSettings);
             }
         }
 

@@ -22,7 +22,6 @@ namespace DiceGame.Versus
         public void Configure(
             VersusBoardSettings settings,
             Board board,
-            DiceCatalog catalog,
             DiceSpawnSystem targetSpawnSystem,
             DiceMatchDissolveSystem targetDissolveSystem,
             System.Random attackRandom,
@@ -38,7 +37,7 @@ namespace DiceGame.Versus
             }
 
             EnsureQueues();
-            EnsureQueueView(board, catalog, viewParent);
+            EnsureQueueView(board, viewParent);
         }
 
         void OnDisable() {
@@ -70,14 +69,22 @@ namespace DiceGame.Versus
             }
         }
 
-        void EnsureQueueView(Board board, DiceCatalog catalog, Transform viewParent) {
+        void EnsureQueueView(Board board, Transform viewParent) {
             if (queueView == null) {
                 var viewObject = new GameObject("AttackQueueView");
                 viewObject.transform.SetParent(viewParent != null ? viewParent : transform, false);
                 queueView = viewObject.AddComponent<AttackQueueView>();
             }
 
-            queueView.Configure(board, catalog, viewParent != null ? viewParent : transform);
+            if (versusSettings == null) {
+                return;
+            }
+
+            queueView.Configure(
+                board,
+                versusSettings.GetDiceCatalog(PlayerSlot.Player1),
+                versusSettings.GetDiceCatalog(PlayerSlot.Player2),
+                viewParent != null ? viewParent : transform);
             RefreshQueueView();
         }
 
