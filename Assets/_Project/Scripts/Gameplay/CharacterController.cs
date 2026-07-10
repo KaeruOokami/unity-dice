@@ -4,6 +4,7 @@ using DiceGame.Config;
 using DiceGame.Core;
 using DiceGame.Gameplay.Character;
 using DiceGame.Gameplay.Coupling;
+using DiceGame.Gameplay.Input;
 using DiceGame.Grid;
 using DiceGame.Placement;
 using DiceGame.Placement.Support;
@@ -18,6 +19,7 @@ namespace DiceGame.Gameplay
 
         [SerializeField] Board board;
         [SerializeField] GameObject characterObject;
+        [SerializeField] CharacterInputReader inputReader;
 
         CharacterMovementSettings movementSettings;
         PhysicsSettings physicsSettings;
@@ -127,6 +129,7 @@ namespace DiceGame.Gameplay
             DiceController startDice,
             CharacterMovementSettings movement,
             PhysicsSettings physics,
+            PlayerInputSettings inputSettings = null,
             PlayerMatchActionContext actionContext = null) {
             board = targetBoard;
             placement = targetPlacement;
@@ -134,6 +137,14 @@ namespace DiceGame.Gameplay
             matchActionContext = actionContext;
             movementSettings = movement;
             physicsSettings = physics;
+
+            if (inputReader == null) {
+                inputReader = GetComponent<CharacterInputReader>();
+            }
+
+            if (inputSettings != null && inputReader != null) {
+                inputReader.Configure(inputSettings);
+            }
             standingController = new CharacterStandingController();
             coupling = new DiceCharacterCoupling();
             standingController.Configure(placement, () => coupling.EndRollTracking());
@@ -163,6 +174,15 @@ namespace DiceGame.Gameplay
 
             if (movementSettings == null || physicsSettings == null) {
                 Debug.LogError("CharacterController: Movement or physics settings are not assigned.");
+                return;
+            }
+
+            if (inputReader == null) {
+                inputReader = GetComponent<CharacterInputReader>();
+            }
+
+            if (inputReader == null) {
+                Debug.LogError("CharacterController: CharacterInputReader is not assigned.");
                 return;
             }
 
@@ -286,7 +306,7 @@ namespace DiceGame.Gameplay
                 return;
             }
 
-            var input = GetInputDirection();
+            var input = inputReader.ReadMove();
             UpdateLastFacing(input);
 
             if (liftPhase == LiftPhase.Lifting || liftPhase == LiftPhase.Placing) {
@@ -296,7 +316,7 @@ namespace DiceGame.Gameplay
 
             if (liftPhase == LiftPhase.Carrying) {
                 currentSpeed = 0f;
-                if (TryGetDirectionKeyDown(out var placeDirection)) {
+                if (inputReader.TryGetDirectionPressedThisFrame(out var placeDirection)) {
                     TryPlaceCarriedDice(placeDirection);
                 }
 
@@ -315,11 +335,11 @@ namespace DiceGame.Gameplay
                 return;
             }
 
-            if (Input.GetKeyDown(movementSettings.LiftKey)) {
+            if (inputReader.WasLiftPressedThisFrame()) {
                 TryBeginLift();
             }
 
-            if (jumpPhase == JumpPhase.None && Input.GetKeyDown(movementSettings.JumpKey)) {
+            if (jumpPhase == JumpPhase.None && inputReader.WasJumpPressedThisFrame()) {
                 TryBeginJump();
             }
 
@@ -822,7 +842,7 @@ namespace DiceGame.Gameplay
             coupling.EnsureTrackingFromCurrentPose();
             currentSpeed = 0f;
 
-            var jumpPressed = Input.GetKeyDown(movementSettings.JumpKey);
+            var jumpPressed = inputReader.WasJumpPressedThisFrame();
             var halfExtent = transformDriver.GetWalkHalfExtent();
             coupling.TryHandleRollCancel(
                 input,
@@ -1561,27 +1581,6 @@ namespace DiceGame.Gameplay
                 Mathf.Clamp(offset.y, -edgeLimit, edgeLimit));
         }
 
-        static Vector2 GetInputDirection() {
-            var input = Vector2.zero;
-            if (Input.GetKey(KeyCode.RightArrow) || Input.GetKey(KeyCode.D)) {
-                input.x += 1f;
-            }
-
-            if (Input.GetKey(KeyCode.LeftArrow) || Input.GetKey(KeyCode.A)) {
-                input.x -= 1f;
-            }
-
-            if (Input.GetKey(KeyCode.UpArrow) || Input.GetKey(KeyCode.W)) {
-                input.y += 1f;
-            }
-
-            if (Input.GetKey(KeyCode.DownArrow) || Input.GetKey(KeyCode.S)) {
-                input.y -= 1f;
-            }
-
-            return input;
-        }
-
         void UpdateLastFacing(Vector2 input) {
             if (input.sqrMagnitude <= 0f) {
                 return;
@@ -1606,32 +1605,6 @@ namespace DiceGame.Gameplay
             }
 
             return true;
-        }
-
-        static bool TryGetDirectionKeyDown(out Direction direction) {
-            direction = default;
-
-            if (Input.GetKeyDown(KeyCode.D) || Input.GetKeyDown(KeyCode.RightArrow)) {
-                direction = Direction.East;
-                return true;
-            }
-
-            if (Input.GetKeyDown(KeyCode.A) || Input.GetKeyDown(KeyCode.LeftArrow)) {
-                direction = Direction.West;
-                return true;
-            }
-
-            if (Input.GetKeyDown(KeyCode.W) || Input.GetKeyDown(KeyCode.UpArrow)) {
-                direction = Direction.North;
-                return true;
-            }
-
-            if (Input.GetKeyDown(KeyCode.S) || Input.GetKeyDown(KeyCode.DownArrow)) {
-                direction = Direction.South;
-                return true;
-            }
-
-            return false;
         }
 
         void SnapToStandingCellCenter() {
@@ -1661,7 +1634,7 @@ namespace DiceGame.Gameplay
                 return false;
             }
 
-            var input = GetInputDirection();
+            var input = inputReader.ReadMove();
             if (input.sqrMagnitude > 0f) {
                 UpdateLastFacing(input);
             }

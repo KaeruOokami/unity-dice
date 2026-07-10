@@ -51,6 +51,7 @@ namespace DiceGame.Gameplay
         [SerializeField] int randomSeed;
         [SerializeField] PhysicsSettings physicsSettings;
         [SerializeField] CharacterMovementSettings characterMovementSettings;
+        [SerializeField] PlayerInputSettings playerInputSettings;
         [SerializeField] DiceAnimationSettings diceAnimationSettings;
         [SerializeField] DiceDissolveSettings diceDissolveSettings;
         [SerializeField] DiceOneVanishSettings diceOneVanishSettings;
@@ -82,6 +83,7 @@ namespace DiceGame.Gameplay
 
             if (physicsSettings == null
                 || characterMovementSettings == null
+                || playerInputSettings == null
                 || diceAnimationSettings == null
                 || diceDissolveSettings == null
                 || diceOneVanishSettings == null
@@ -152,6 +154,7 @@ namespace DiceGame.Gameplay
                 firstDice,
                 characterMovementSettings,
                 physicsSettings,
+                playerInputSettings,
                 matchActionContext);
 
             var oneVanishSystem = GetComponent<DiceOneVanishSystem>();
