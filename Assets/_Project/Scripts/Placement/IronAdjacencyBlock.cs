@@ -15,6 +15,10 @@ namespace DiceGame.Placement
                 return false;
             }
 
+            if (dice.IsRadianceErasing) {
+                return false;
+            }
+
             var capabilities = dice.Capabilities;
             if (!capabilities.CanBePushedByPlayer && !capabilities.CanGridRoll && !capabilities.SlideUntilBlocked) {
                 return false;
@@ -30,6 +34,10 @@ namespace DiceGame.Placement
         public static bool CanJumpCoupleWithPlayer(DiceController dice, DiceRegistry registry) {
             if (dice == null) {
                 return true;
+            }
+
+            if (dice.IsRadianceErasing) {
+                return false;
             }
 
             if (!dice.Capabilities.CanJumpCoupleWithPlayer) {
@@ -54,7 +62,7 @@ namespace DiceGame.Placement
                 }
 
                 if (neighborDice.Kind == DiceKind.Iron
-                    && !neighborDice.IsDissolving
+                    && !neighborDice.IsErasing
                     && !neighborDice.IsVanishing) {
                     return true;
                 }

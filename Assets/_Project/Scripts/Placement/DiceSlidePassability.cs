@@ -66,7 +66,7 @@ namespace DiceGame.Placement
                 return false;
             }
 
-            if (placement.CanPlaceTopDiceAt(targetPos)) {
+            if (placement.CanAcceptTopDiceAt(targetPos)) {
                 plan = new DiceSlidePlan(
                     fromState,
                     new DiceState(targetPos, fromState.Orientation, DiceStackTier.Top, fromState.Kind));

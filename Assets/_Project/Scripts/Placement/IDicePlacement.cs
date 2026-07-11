@@ -7,6 +7,7 @@ namespace DiceGame.Placement
     {
         bool CanPlaceBottomDiceAt(Vector2Int gridPos);
         bool CanPlaceTopDiceAt(Vector2Int gridPos);
+        bool CanAcceptTopDiceAt(Vector2Int gridPos);
         bool HasTopAt(Vector2Int gridPos);
         bool HasBottomAt(Vector2Int gridPos);
         bool BlocksTraversalBetween(Vector2Int fromCell, Vector2Int toCell);

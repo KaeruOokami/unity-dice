@@ -245,7 +245,7 @@ namespace DiceGame.Placement
         static bool CanParticipateInChainMove(DiceController dice, DiceRegistry registry) {
             return IronAdjacencyBlock.IsPlayerMovable(dice, registry)
                 && !dice.IsBusy
-                && !dice.IsDissolving
+                && !dice.IsErasing
                 && !dice.IsVanishing;
         }
 

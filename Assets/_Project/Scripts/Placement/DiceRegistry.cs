@@ -40,9 +40,19 @@ namespace DiceGame.Placement
             return HasBottomAt(gridPos) && !HasTopAt(gridPos);
         }
 
-        public bool HasDissolvingDiceAt(Vector2Int gridPos) {
+        public bool CanAcceptTopDiceAt(Vector2Int gridPos) {
+            if (CanPlaceTopDiceAt(gridPos)) {
+                return true;
+            }
+
+            return TryGetTopAt(gridPos, out var top)
+                && top != null
+                && top.IsRadianceErasing;
+        }
+
+        public bool HasErasingDiceAt(Vector2Int gridPos) {
             foreach (var dice in allDice) {
-                if (dice != null && dice.IsDissolving && dice.CurrentState.GridPos == gridPos) {
+                if (dice != null && dice.IsErasing && dice.CurrentState.GridPos == gridPos) {
                     return true;
                 }
             }
@@ -59,7 +69,7 @@ namespace DiceGame.Placement
         }
 
         public void RestoreToGrid(DiceController dice) {
-            if (dice == null || dice.IsDissolveGhost) {
+            if (dice == null || dice.IsErasureGhost) {
                 return;
             }
 
@@ -70,24 +80,40 @@ namespace DiceGame.Placement
             SetDiceAt(dice.CurrentState.GridPos, dice, dice.CurrentState.Tier);
         }
 
-        public void EvictGhostDiceAt(Vector2Int gridPos) {
-            DiceController topGhost = null;
+        public void EvictErasingDiceAt(Vector2Int gridPos) {
+            DiceController topErasing = null;
             DiceController bottomGhost = null;
+            DiceController topRadiance = null;
+            DiceController bottomRadiance = null;
 
             foreach (var dice in allDice) {
-                if (dice == null || !dice.IsDissolveGhost || dice.CurrentState.GridPos != gridPos) {
+                if (dice == null || !dice.IsErasing || dice.CurrentState.GridPos != gridPos) {
                     continue;
                 }
 
-                if (dice.CurrentState.Tier == DiceStackTier.Top) {
-                    topGhost = dice;
-                } else {
-                    bottomGhost = dice;
+                if (dice.IsErasureGhost) {
+                    if (dice.CurrentState.Tier == DiceStackTier.Top) {
+                        topErasing = dice;
+                    } else {
+                        bottomGhost = dice;
+                    }
+
+                    continue;
+                }
+
+                if (dice.IsRadianceErasing) {
+                    if (dice.CurrentState.Tier == DiceStackTier.Top) {
+                        topRadiance = dice;
+                    } else {
+                        bottomRadiance = dice;
+                    }
                 }
             }
 
-            topGhost?.CompleteDissolveFromCrush();
-            bottomGhost?.CompleteDissolveFromCrush();
+            topErasing?.CompleteErasureFromOverride();
+            bottomGhost?.CompleteErasureFromOverride();
+            topRadiance?.CompleteErasureFromOverride();
+            bottomRadiance?.CompleteErasureFromOverride();
         }
 
         public void Place(DiceController dice, Vector2Int gridPos, DiceStackTier tier) {
@@ -99,7 +125,7 @@ namespace DiceGame.Placement
                 allDice.Add(dice);
             }
 
-            EvictGhostDiceAt(gridPos);
+            EvictErasingDiceAt(gridPos);
             SetDiceAt(gridPos, dice, tier);
         }
 
@@ -126,7 +152,7 @@ namespace DiceGame.Placement
             Vector2Int to,
             DiceStackTier fromTier,
             DiceStackTier toTier) {
-            EvictGhostDiceAt(to);
+            EvictErasingDiceAt(to);
             ClearDiceAt(from, dice, fromTier);
             SetDiceAt(to, dice, toTier);
         }
@@ -274,7 +300,7 @@ namespace DiceGame.Placement
             if (tier == DiceStackTier.Bottom
                 && stack.Bottom != null
                 && stack.Bottom != dice
-                && !stack.Bottom.IsDissolveGhost) {
+                && !stack.Bottom.IsErasureGhost) {
                 Debug.LogError(
                     $"DiceRegistry: overwriting bottom at ({gridPos.x},{gridPos.y}) " +
                     $"existing={stack.Bottom.name} incoming={dice?.name}");

@@ -80,7 +80,7 @@
      <Compile Include="Assets\_Project\Scripts\Versus\Core\AttackDieSpec.cs" />
      <Compile Include="Assets\_Project\Scripts\Placement\SurfaceHeightLevel.cs" />
      <Compile Include="Assets\_Project\Scripts\Placement\MovementTransition.cs" />
-     <Compile Include="Assets\_Project\Scripts\Config\DiceDissolveSettings.cs" />
+     <Compile Include="Assets\_Project\Scripts\Config\DiceErasureSettings.cs" />
      <Compile Include="Assets\_Project\Scripts\Placement\CellOccupancyTier.cs" />
      <Compile Include="Assets\_Project\Scripts\Placement\MagnetMoveExecutor.cs" />
      <Compile Include="Assets\_Project\Scripts\Placement\Support\DiceSurfaceLevel.cs" />
@@ -122,7 +122,7 @@
      <Compile Include="Assets\_Project\Scripts\Core\DiceGridMovePlanner.cs" />
      <Compile Include="Assets\_Project\Scripts\Versus\Core\SinkingChainResolver.cs" />
      <Compile Include="Assets\_Project\Scripts\Placement\JumpInputPolicy.cs" />
-     <Compile Include="Assets\_Project\Scripts\Gameplay\DiceMatchDissolveSystem.cs" />
+     <Compile Include="Assets\_Project\Scripts\Gameplay\DiceMatchErasureSystem.cs" />
      <Compile Include="Assets\_Project\Scripts\Placement\PassabilityContext.cs" />
      <Compile Include="Assets\_Project\Scripts\Config\PhysicsSettings.cs" />
      <Compile Include="Assets\_Project\Scripts\View\BoardView.cs" />
@@ -156,6 +156,7 @@
      <Compile Include="Assets\_Project\Scripts\Gameplay\ITierFallMatchNotifier.cs" />
      <Compile Include="Assets\_Project\Scripts\Gameplay\DiceMatchOwnershipContext.cs" />
      <Compile Include="Assets\_Project\Scripts\Gameplay\DeferredMatchSnapshot.cs" />
+     <Compile Include="Assets\_Project\Scripts\Core\ErasureKind.cs" />
      <None Include="Assets\Packages\Dice_6\Documentation\Readmy.txt" />
     <Reference Include="UnityEngine">
         <HintPath>D:\Program Files\Unity\Hub\Editor\2021.3.10f1\Editor\Data\Managed\UnityEngine\UnityEngine.dll</HintPath>

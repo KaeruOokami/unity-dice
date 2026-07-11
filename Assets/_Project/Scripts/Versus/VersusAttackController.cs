@@ -15,7 +15,7 @@ namespace DiceGame.Versus
     {
         VersusBoardSettings versusSettings;
         DiceSpawnSystem spawnSystem;
-        DiceMatchDissolveSystem dissolveSystem;
+        DiceMatchErasureSystem erasureSystem;
         AttackQueueView queueView;
         System.Random random;
 
@@ -26,17 +26,17 @@ namespace DiceGame.Versus
             VersusBoardSettings settings,
             Board board,
             DiceSpawnSystem targetSpawnSystem,
-            DiceMatchDissolveSystem targetDissolveSystem,
+            DiceMatchErasureSystem targetErasureSystem,
             System.Random attackRandom,
             Transform viewParent) {
             versusSettings = settings;
             spawnSystem = targetSpawnSystem;
-            dissolveSystem = targetDissolveSystem;
+            erasureSystem = targetErasureSystem;
             random = attackRandom ?? new System.Random();
 
-            if (dissolveSystem != null) {
-                dissolveSystem.ErasureResolved -= OnErasureResolved;
-                dissolveSystem.ErasureResolved += OnErasureResolved;
+            if (erasureSystem != null) {
+                erasureSystem.ErasureResolved -= OnErasureResolved;
+                erasureSystem.ErasureResolved += OnErasureResolved;
             }
 
             EnsureQueues();
@@ -47,8 +47,8 @@ namespace DiceGame.Versus
         void OnDisable() {
             StopNaturalSendLoops();
 
-            if (dissolveSystem != null) {
-                dissolveSystem.ErasureResolved -= OnErasureResolved;
+            if (erasureSystem != null) {
+                erasureSystem.ErasureResolved -= OnErasureResolved;
             }
         }
 

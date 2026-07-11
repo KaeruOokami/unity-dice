@@ -23,6 +23,11 @@ namespace DiceGame.Placement
                 return true;
             }
 
+            if (placement.CanAcceptTopDiceAt(targetGrid)) {
+                targetTier = DiceStackTier.Top;
+                return true;
+            }
+
             rejectReason = $"target={FormatGrid(targetGrid)} occupied";
             return false;
         }
@@ -34,7 +39,8 @@ namespace DiceGame.Placement
             out string rejectReason) {
             rejectReason = null;
             if (targetTier == DiceStackTier.Top) {
-                if (!placement.CanPlaceTopDiceAt(targetGrid)) {
+                if (!placement.CanPlaceTopDiceAt(targetGrid)
+                    && !placement.CanAcceptTopDiceAt(targetGrid)) {
                     rejectReason = $"target={FormatGrid(targetGrid)} cannot-place-top";
                     return false;
                 }

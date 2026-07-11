@@ -20,23 +20,24 @@ namespace DiceGame.View
 
         PhysicsSettings physicsSettings;
         DiceAnimationSettings animationSettings;
-        DiceDissolveSettings dissolveSettings;
+        DiceErasureSettings erasureSettings;
 
         Transform meshInstance;
         Coroutine rollCoroutine;
-        Coroutine dissolveCoroutine;
+        Coroutine erasureCoroutine;
         Coroutine oneVanishCoroutine;
         bool isAnimating;
-        float dissolveProgress;
+        float erasureProgress;
+        ErasureKind activeErasureKind = ErasureKind.None;
         float groundRollProgress;
         int currentTopFace = 1;
         Vector3 gridWorldPosition;
         float surfaceBaseWorldY;
         float visualYOffset;
-        Board dissolveBoard;
+        Board erasureBoard;
         DicePushBody pushBody;
         DiceController diceController;
-        bool wasDissolveGhost;
+        bool wasErasureGhost;
         readonly List<Material> dissolveMaterials = new();
         readonly List<Color> dissolveMaterialBaseColors = new();
         readonly List<Color> dissolveMaterialBaseEmissionColors = new();
@@ -45,7 +46,7 @@ namespace DiceGame.View
         bool dissolveMaterialsTransparent;
         GameObject runtimeMeshPrefab;
         Texture dissolveEmissionMapOverride;
-        Color? dissolveEmissionColorOverride;
+        Color? erasureEmissionColorOverride;
 
         // Dice mesh is visual-only. Gameplay uses `Board.CellSize` as the "logical dice cube" size.
         // So we measure the mesh's local bounds once, then scale/center it to match `Board.CellSize`.
@@ -54,20 +55,22 @@ namespace DiceGame.View
         float appliedCellSize = float.NaN;
 
         public bool IsAnimating => isAnimating;
-        public float DissolveProgress => dissolveProgress;
+        public float ErasureProgress => erasureProgress;
         public float GroundRollProgress => groundRollProgress;
-        public bool IsDissolveGhost =>
-            dissolveSettings != null && dissolveProgress >= dissolveSettings.DissolveGhostThreshold;
+        public bool IsErasureGhost =>
+            activeErasureKind == ErasureKind.Sink
+            && erasureSettings != null
+            && erasureProgress >= erasureSettings.SinkGhostThreshold;
 
         public Transform DiceTransform => positionRoot;
 
         public void Configure(
             PhysicsSettings physics,
             DiceAnimationSettings animation,
-            DiceDissolveSettings dissolve) {
+            DiceErasureSettings erasure) {
             physicsSettings = physics;
             animationSettings = animation;
-            dissolveSettings = dissolve;
+            erasureSettings = erasure;
         }
 
         public void SetMeshPrefab(GameObject prefab) {
@@ -277,7 +280,7 @@ namespace DiceGame.View
                 return 0f;
             }
 
-            ComputeVerticalExtents(board, currentTopFace, 1f - dissolveProgress, out _, out var maxY);
+            ComputeVerticalExtents(board, currentTopFace, 1f - erasureProgress, out _, out var maxY);
             return positionRoot.position.y + maxY;
         }
 
@@ -286,7 +289,7 @@ namespace DiceGame.View
                 return 0f;
             }
 
-            var squash = 1f - dissolveProgress;
+            var squash = 1f - erasureProgress;
             ComputeVerticalExtents(board, currentTopFace, squash, out var minY, out var maxY);
             return surfaceBaseWorldY - minY + maxY;
         }
@@ -294,15 +297,16 @@ namespace DiceGame.View
         public void SnapTo(DiceState state, Board board, DiceRegistry registry = null) {
             InterruptRollAnimation();
 
-            if (dissolveCoroutine != null) {
-                StopCoroutine(dissolveCoroutine);
-                dissolveCoroutine = null;
+            if (erasureCoroutine != null) {
+                StopCoroutine(erasureCoroutine);
+                erasureCoroutine = null;
             }
 
             isAnimating = false;
-            dissolveProgress = 0f;
-            dissolveBoard = null;
-            wasDissolveGhost = false;
+            erasureProgress = 0f;
+            erasureBoard = null;
+            wasErasureGhost = false;
+            activeErasureKind = ErasureKind.None;
             visualYOffset = 0f;
             currentTopFace = state.Orientation.Top;
             EnsureMesh();
@@ -316,8 +320,8 @@ namespace DiceGame.View
             gridWorldPosition = board.GridToWorld(state.GridPos);
             rotationRoot.rotation = DiceOrientationMapper.ToRotation(state.Orientation);
             UpdateSurfaceBase(state, board, registry);
-            ResetDissolveVisuals();
-            ApplySurfaceVisual(board, 0f);
+            ResetErasureVisuals();
+            ApplyErasureVisual(board, 0f);
         }
 
         public Vector3 GetAnchoredWorldPosition(DiceState state, Board board, DiceRegistry registry) {
@@ -340,7 +344,7 @@ namespace DiceGame.View
             var savedFace = currentTopFace;
             rotationRoot.rotation = DiceOrientationMapper.ToRotation(state.Orientation);
             currentTopFace = state.Orientation.Top;
-            ComputeVerticalExtents(board, state.Orientation.Top, 1f - dissolveProgress, out var minY, out _);
+            ComputeVerticalExtents(board, state.Orientation.Top, 1f - erasureProgress, out var minY, out _);
             rotationRoot.rotation = savedRotation;
             currentTopFace = savedFace;
 
@@ -385,7 +389,7 @@ namespace DiceGame.View
                 return;
             }
 
-            if (dissolveCoroutine != null) {
+            if (erasureCoroutine != null) {
                 return;
             }
 
@@ -412,7 +416,7 @@ namespace DiceGame.View
             DiceRegistry registry,
             Action onComplete,
             int slideCellDistance = 1) {
-            if (dissolveCoroutine != null) {
+            if (erasureCoroutine != null) {
                 return;
             }
 
@@ -445,7 +449,7 @@ namespace DiceGame.View
                 return;
             }
 
-            if (dissolveCoroutine != null) {
+            if (erasureCoroutine != null) {
                 return;
             }
 
@@ -474,7 +478,7 @@ namespace DiceGame.View
                 return;
             }
 
-            if (dissolveCoroutine != null) {
+            if (erasureCoroutine != null) {
                 return;
             }
 
@@ -491,12 +495,12 @@ namespace DiceGame.View
         }
 
         public void SyncStackedSurface(DiceState state, Board board, DiceRegistry registry) {
-            if (isAnimating || dissolveProgress > 0f || board == null || registry == null) {
+            if (isAnimating || erasureProgress > 0f || board == null || registry == null) {
                 return;
             }
 
             UpdateSurfaceBase(state, board, registry);
-            ApplySurfaceVisual(board, 0f);
+            ApplyErasureVisual(board, 0f);
         }
 
         public void SetCarryWorldPosition(Vector3 worldPosition) {
@@ -510,8 +514,8 @@ namespace DiceGame.View
 
         public void ApplyVisualYOffset(Board board, float offset) {
             visualYOffset = offset;
-            if (board != null && !isAnimating && dissolveProgress <= 0f) {
-                ApplySurfaceVisual(board, 0f);
+            if (board != null && !isAnimating && erasureProgress <= 0f) {
+                ApplyErasureVisual(board, 0f);
             }
         }
 
@@ -521,55 +525,64 @@ namespace DiceGame.View
             }
 
             visualYOffset = 0f;
-            if (board != null && !isAnimating && dissolveProgress <= 0f) {
-                ApplySurfaceVisual(board, 0f);
+            if (board != null && !isAnimating && erasureProgress <= 0f) {
+                ApplyErasureVisual(board, 0f);
             }
         }
 
-        public void PlayDissolve(Board board, int topFace, Action onComplete) {
-            PlayDissolve(board, topFace, null, onComplete);
-        }
+        public void PlayErasure(
+            ErasureKind kind,
+            Board board,
+            int topFace,
+            Color? emissionColorOverride,
+            Action onComplete) {
+            if (kind == ErasureKind.None) {
+                Debug.LogError("DiceView: PlayErasure requires Sink or Radiance.");
+                onComplete?.Invoke();
+                return;
+            }
 
-        public void PlayDissolve(Board board, int topFace, Color? emissionColorOverride, Action onComplete) {
             if (rollCoroutine != null) {
                 StopCoroutine(rollCoroutine);
                 rollCoroutine = null;
             }
 
-            if (dissolveCoroutine != null) {
-                StopCoroutine(dissolveCoroutine);
+            if (erasureCoroutine != null) {
+                StopCoroutine(erasureCoroutine);
             }
 
-            dissolveEmissionColorOverride = emissionColorOverride;
+            activeErasureKind = kind;
+            erasureEmissionColorOverride = emissionColorOverride;
             currentTopFace = topFace;
-            dissolveBoard = board;
-            dissolveCoroutine = StartCoroutine(DissolveCoroutine(board, onComplete));
+            erasureBoard = board;
+            erasureCoroutine = StartCoroutine(ErasureCoroutine(board, kind, onComplete));
         }
 
-        public void SetDissolveEmissionColor(Color emissionColor) {
-            dissolveEmissionColorOverride = emissionColor;
-            if (dissolveProgress > 0f) {
-                ApplyDissolveEmission(dissolveProgress);
+        public void SetErasureEmissionColor(Color emissionColor) {
+            erasureEmissionColorOverride = emissionColor;
+            if (erasureProgress > 0f) {
+                ApplyErasureEmission(erasureProgress);
             }
         }
 
-        public void RetreatDissolve(float amount) {
-            if (dissolveBoard == null) {
+        public void RetreatErasure(float amount) {
+            if (erasureBoard == null || activeErasureKind == ErasureKind.None) {
                 return;
             }
 
-            dissolveProgress = Mathf.Max(0f, dissolveProgress - amount);
-            ApplySurfaceVisual(dissolveBoard, dissolveProgress);
+            erasureProgress = Mathf.Max(0f, erasureProgress - amount);
+            ApplyErasureVisual(erasureBoard, erasureProgress);
         }
 
-        public void CancelDissolve() {
-            if (dissolveCoroutine != null) {
-                StopCoroutine(dissolveCoroutine);
-                dissolveCoroutine = null;
+        public void CancelErasure() {
+            if (erasureCoroutine != null) {
+                StopCoroutine(erasureCoroutine);
+                erasureCoroutine = null;
             }
 
             isAnimating = false;
-            dissolveBoard = null;
+            activeErasureKind = ErasureKind.None;
+            erasureBoard = null;
         }
 
         public void PlayOneVanish(DiceOneVanishSettings settings, Action onComplete) {
@@ -578,9 +591,9 @@ namespace DiceGame.View
                 rollCoroutine = null;
             }
 
-            if (dissolveCoroutine != null) {
-                StopCoroutine(dissolveCoroutine);
-                dissolveCoroutine = null;
+            if (erasureCoroutine != null) {
+                StopCoroutine(erasureCoroutine);
+                erasureCoroutine = null;
             }
 
             if (oneVanishCoroutine != null) {
@@ -662,7 +675,7 @@ namespace DiceGame.View
                 return;
             }
 
-            if (dissolveCoroutine != null) {
+            if (erasureCoroutine != null) {
                 return;
             }
 
@@ -692,7 +705,7 @@ namespace DiceGame.View
                 return;
             }
 
-            if (dissolveCoroutine != null) {
+            if (erasureCoroutine != null) {
                 return;
             }
 
@@ -751,7 +764,7 @@ namespace DiceGame.View
             currentTopFace = state.Orientation.Top;
             rotationRoot.rotation = DiceOrientationMapper.ToRotation(state.Orientation);
             UpdateSurfaceBase(state, board, registry);
-            ApplySurfaceVisual(board, dissolveProgress);
+            ApplyErasureVisual(board, erasureProgress);
 
             if (preserveWorldY.HasValue) {
                 var position = positionRoot.position;
@@ -883,7 +896,7 @@ namespace DiceGame.View
             currentTopFace = toState.Orientation.Top;
             gridWorldPosition = endGrid;
             UpdateSurfaceBase(toState, board, registry);
-            ApplySurfaceVisual(board, dissolveProgress);
+            ApplyErasureVisual(board, erasureProgress);
 
             ComputeVerticalExtents(board, currentTopFace, 1f, out var landedMinY, out _);
             positionRoot.position = new Vector3(endGrid.x, toBaseY - landedMinY, endGrid.z);
@@ -1210,7 +1223,7 @@ namespace DiceGame.View
         }
 
         bool HasGameplaySettings() {
-            if (physicsSettings != null && animationSettings != null && dissolveSettings != null) {
+            if (physicsSettings != null && animationSettings != null && erasureSettings != null) {
                 return true;
             }
 
@@ -1252,9 +1265,10 @@ namespace DiceGame.View
                 yield break;
             }
 
-            dissolveProgress = 0f;
-            dissolveBoard = null;
-            wasDissolveGhost = false;
+            erasureProgress = 0f;
+            erasureBoard = null;
+            wasErasureGhost = false;
+            activeErasureKind = ErasureKind.None;
             visualYOffset = 0f;
             currentTopFace = state.Orientation.Top;
             positionRoot.SetParent(transform);
@@ -1262,7 +1276,7 @@ namespace DiceGame.View
             positionRoot.localScale = Vector3.one;
             rotationRoot.rotation = DiceOrientationMapper.ToRotation(state.Orientation);
             CommitGridPlacement(state, board, registry);
-            ApplySurfaceVisual(board, 0f);
+            ApplyErasureVisual(board, 0f);
 
             var landedWorld = positionRoot.position;
             var groundWorldY = landedWorld.y;
@@ -1301,7 +1315,7 @@ namespace DiceGame.View
                 yield break;
             }
 
-            wasDissolveGhost = false;
+            wasErasureGhost = false;
             visualYOffset = 0f;
             currentTopFace = state.Orientation.Top;
             positionRoot.SetParent(transform);
@@ -1375,7 +1389,7 @@ namespace DiceGame.View
         }
 
         void ApplyOneVanishEmission(DiceOneVanishSettings settings, float factor) {
-            if (dissolveMaterials.Count == 0 || dissolveSettings == null) {
+            if (dissolveMaterials.Count == 0 || erasureSettings == null) {
                 return;
             }
 
@@ -1384,14 +1398,14 @@ namespace DiceGame.View
                 return;
             }
 
-            var emissionColor = dissolveSettings.DissolveEmissionColor
+            var emissionColor = erasureSettings.ErasureEmissionColor
                 * (settings.EmissionIntensity * factor);
 
             for (var i = 0; i < dissolveMaterials.Count; i++) {
                 var map = dissolveEmissionMapOverride != null
                     ? dissolveEmissionMapOverride
-                    : dissolveSettings.DissolveEmissionMap != null
-                        ? dissolveSettings.DissolveEmissionMap
+                    : erasureSettings.ErasureEmissionMap != null
+                        ? erasureSettings.ErasureEmissionMap
                         : dissolveMaterialBaseEmissionMaps[i];
                 SetMaterialEmission(dissolveMaterials[i], emissionColor, map, true);
             }
@@ -1411,56 +1425,99 @@ namespace DiceGame.View
             }
         }
 
-        IEnumerator DissolveCoroutine(Board board, Action onComplete) {
+        IEnumerator ErasureCoroutine(Board board, ErasureKind kind, Action onComplete) {
             isAnimating = true;
             EnsureMesh();
-            if (dissolvePivot == null || positionRoot == null) {
+            if (dissolvePivot == null || positionRoot == null || erasureSettings == null) {
                 isAnimating = false;
+                activeErasureKind = ErasureKind.None;
                 onComplete?.Invoke();
                 yield break;
             }
 
             positionRoot.SetParent(transform);
 
-            while (dissolveProgress < 1f) {
-                dissolveProgress = Mathf.Min(1f, dissolveProgress + Time.deltaTime / dissolveSettings.DissolveDuration);
-                ApplySurfaceVisual(board, dissolveProgress);
+            var duration = kind == ErasureKind.Radiance
+                ? erasureSettings.RadianceDuration
+                : erasureSettings.SinkDuration;
+
+            while (erasureProgress < 1f) {
+                erasureProgress = Mathf.Min(1f, erasureProgress + Time.deltaTime / duration);
+                ApplyErasureVisual(board, erasureProgress);
                 yield return null;
             }
 
-            dissolveProgress = 1f;
-            ApplySurfaceVisual(board, dissolveProgress);
+            erasureProgress = 1f;
+            ApplyErasureVisual(board, erasureProgress);
             isAnimating = false;
-            dissolveCoroutine = null;
-            dissolveBoard = null;
+            erasureCoroutine = null;
+            erasureBoard = null;
+            activeErasureKind = ErasureKind.None;
             onComplete?.Invoke();
         }
 
-        void ApplySurfaceVisual(Board board, float progress) {
+        void ApplyErasureVisual(Board board, float progress) {
             if (dissolvePivot == null || positionRoot == null || rotationRoot == null || board == null) {
                 return;
             }
 
-            dissolveProgress = progress;
+            erasureProgress = progress;
+            if (activeErasureKind == ErasureKind.Radiance) {
+                ApplyRadianceLayout(board);
+                ApplyErasureEmission(GetRadianceEmissionFactor(progress));
+                EnsurePushBody();
+                pushBody?.SetCollisionEnabled(true);
+                return;
+            }
+
             ApplySurfaceLayout(board, progress);
-            ApplyDissolveGhostVisual(progress);
-            SyncStackedTopDuringDissolve();
+            ApplySinkGhostVisual(progress);
+            SyncStackedTopDuringErasure();
         }
 
         /// <summary>
-        /// Spawn emergence only. Applies dissolve visuals without ghost gameplay side effects.
+        /// Spawn emergence only. Applies sink visuals without ghost gameplay side effects.
         /// </summary>
         void ApplyEmergenceVisual(Board board, float progress) {
             if (dissolvePivot == null || positionRoot == null || rotationRoot == null || board == null) {
                 return;
             }
 
-            dissolveProgress = progress;
+            erasureProgress = progress;
             ApplySurfaceLayout(board, progress);
-            ApplyDissolveAlpha(progress);
-            ApplyDissolveEmission(progress);
+            ApplyErasureAlpha(progress, allowGhostAlpha: false);
+            ApplyErasureEmission(progress);
             EnsurePushBody();
-            pushBody?.SetCollisionEnabled(progress < dissolveSettings.DissolveGhostThreshold);
+            pushBody?.SetCollisionEnabled(progress < erasureSettings.SinkGhostThreshold);
+        }
+
+        void ApplyRadianceLayout(Board board) {
+            ApplyMeshVisualScale(board);
+            dissolvePivot.localScale = GetDissolveLocalScale(currentTopFace, 1f);
+            ComputeVerticalExtents(board, currentTopFace, 1f, out var minY, out _);
+            positionRoot.position = new Vector3(
+                gridWorldPosition.x,
+                surfaceBaseWorldY - minY + visualYOffset,
+                gridWorldPosition.z);
+        }
+
+        float GetRadianceEmissionFactor(float progress) {
+            if (erasureSettings == null) {
+                return Mathf.Clamp01(progress);
+            }
+
+            var rampDuration = erasureSettings.RadianceRampUpDuration;
+            var totalDuration = erasureSettings.RadianceDuration;
+            if (rampDuration <= 0f || totalDuration <= 0f) {
+                return 1f;
+            }
+
+            var elapsed = progress * totalDuration;
+            if (elapsed < rampDuration) {
+                return elapsed / rampDuration;
+            }
+
+            return 1f;
         }
 
         void ApplySurfaceLayout(Board board, float progress) {
@@ -1474,8 +1531,8 @@ namespace DiceGame.View
                 gridWorldPosition.z);
         }
 
-        void SyncStackedTopDuringDissolve() {
-            if (dissolveProgress <= 0f) {
+        void SyncStackedTopDuringErasure() {
+            if (erasureProgress <= 0f || activeErasureKind != ErasureKind.Sink) {
                 return;
             }
 
@@ -1483,34 +1540,35 @@ namespace DiceGame.View
             diceController?.NotifyStackedTopSync();
         }
 
-        void ApplyDissolveGhostVisual(float progress) {
-            ApplyDissolveAlpha(progress);
-            ApplyDissolveEmission(progress);
+        void ApplySinkGhostVisual(float progress) {
+            ApplyErasureAlpha(progress, allowGhostAlpha: true);
+            ApplyErasureEmission(progress);
             EnsurePushBody();
-            pushBody?.SetCollisionEnabled(!IsDissolveGhost);
+            pushBody?.SetCollisionEnabled(!IsErasureGhost);
 
-            if (IsDissolveGhost && !wasDissolveGhost) {
-                wasDissolveGhost = true;
+            if (IsErasureGhost && !wasErasureGhost) {
+                wasErasureGhost = true;
                 EnsureDiceController();
-                diceController?.OnBecameDissolveGhost();
-            } else if (!IsDissolveGhost && wasDissolveGhost) {
-                wasDissolveGhost = false;
+                diceController?.OnBecameErasureGhost();
+            } else if (!IsErasureGhost && wasErasureGhost) {
+                wasErasureGhost = false;
                 EnsureDiceController();
-                diceController?.OnCeasedDissolveGhost();
+                diceController?.OnCeasedErasureGhost();
             }
         }
 
-        void ResetDissolveVisuals() {
-            ApplyDissolveAlpha(0f);
-            ApplyDissolveEmission(0f);
-            dissolveEmissionColorOverride = null;
+        void ResetErasureVisuals() {
+            ApplyErasureAlpha(0f, allowGhostAlpha: true);
+            ApplyErasureEmission(0f);
+            erasureEmissionColorOverride = null;
             EnsurePushBody();
             pushBody?.SetCollisionEnabled(true);
-            wasDissolveGhost = false;
+            wasErasureGhost = false;
+            activeErasureKind = ErasureKind.None;
         }
 
-        void ApplyDissolveEmission(float progress) {
-            if (dissolveMaterials.Count == 0) {
+        void ApplyErasureEmission(float progress) {
+            if (dissolveMaterials.Count == 0 || erasureSettings == null) {
                 return;
             }
 
@@ -1526,31 +1584,31 @@ namespace DiceGame.View
                 return;
             }
 
-            var pulse = (Mathf.Sin(Time.time * dissolveSettings.DissolveEmissionPulseSpeed) + 1f) * 0.5f;
+            var pulse = (Mathf.Sin(Time.time * erasureSettings.ErasureEmissionPulseSpeed) + 1f) * 0.5f;
             var pulseMultiplier = Mathf.Lerp(
-                dissolveSettings.DissolveEmissionPulseMin,
-                dissolveSettings.DissolveEmissionPulseMax,
+                erasureSettings.ErasureEmissionPulseMin,
+                erasureSettings.ErasureEmissionPulseMax,
                 pulse);
-            var baseColor = dissolveEmissionColorOverride ?? dissolveSettings.DissolveEmissionColor;
+            var baseColor = erasureEmissionColorOverride ?? erasureSettings.ErasureEmissionColor;
             var emissionColor = baseColor
-                * (dissolveSettings.DissolveEmissionIntensity * pulseMultiplier);
+                * (erasureSettings.ErasureEmissionIntensity * pulseMultiplier);
 
             for (var i = 0; i < dissolveMaterials.Count; i++) {
                 var map = dissolveEmissionMapOverride != null
                     ? dissolveEmissionMapOverride
-                    : dissolveSettings.DissolveEmissionMap != null
-                        ? dissolveSettings.DissolveEmissionMap
+                    : erasureSettings.ErasureEmissionMap != null
+                        ? erasureSettings.ErasureEmissionMap
                         : dissolveMaterialBaseEmissionMaps[i];
                 SetMaterialEmission(dissolveMaterials[i], emissionColor, map, true);
             }
         }
 
-        void ApplyDissolveAlpha(float progress) {
-            if (dissolveMaterials.Count == 0) {
+        void ApplyErasureAlpha(float progress, bool allowGhostAlpha) {
+            if (dissolveMaterials.Count == 0 || erasureSettings == null) {
                 return;
             }
 
-            var useTransparent = progress >= dissolveSettings.DissolveGhostThreshold;
+            var useTransparent = allowGhostAlpha && progress >= erasureSettings.SinkGhostThreshold;
             if (useTransparent != dissolveMaterialsTransparent) {
                 dissolveMaterialsTransparent = useTransparent;
                 for (var i = 0; i < dissolveMaterials.Count; i++) {
@@ -1558,7 +1616,7 @@ namespace DiceGame.View
                 }
             }
 
-            var alpha = useTransparent ? dissolveSettings.DissolveGhostAlpha : 1f;
+            var alpha = useTransparent ? erasureSettings.SinkGhostAlpha : 1f;
 
             for (var i = 0; i < dissolveMaterials.Count; i++) {
                 var color = dissolveMaterialBaseColors[i];

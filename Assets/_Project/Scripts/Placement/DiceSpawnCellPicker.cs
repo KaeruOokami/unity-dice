@@ -120,7 +120,7 @@ namespace DiceGame.Placement
                 var y = maxCell.y - index / width;
                 var cell = new Vector2Int(x, y);
 
-                if (registry.HasDissolvingDiceAt(cell)) {
+                if (registry.HasErasingDiceAt(cell)) {
                     continue;
                 }
 
@@ -159,7 +159,7 @@ namespace DiceGame.Placement
                         continue;
                     }
 
-                    if (registry.HasDissolvingDiceAt(cell)) {
+                    if (registry.HasErasingDiceAt(cell)) {
                         continue;
                     }
 

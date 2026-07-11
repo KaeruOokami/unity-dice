@@ -23,12 +23,12 @@ namespace DiceGame.Gameplay
 
                 var oneSlot = DiceSlot.FromDice(one);
 
-                foreach (var dissolving in allDice) {
-                    if (dissolving == null || !dissolving.IsDissolving) {
+                foreach (var erasing in allDice) {
+                    if (erasing == null || !erasing.IsErasing) {
                         continue;
                     }
 
-                    if (!DiceStackAdjacency.IsAdjacentForMatch(DiceSlot.FromDice(dissolving), oneSlot)) {
+                    if (!DiceStackAdjacency.IsAdjacentForMatch(DiceSlot.FromDice(erasing), oneSlot)) {
                         continue;
                     }
 

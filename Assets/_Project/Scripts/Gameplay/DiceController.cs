@@ -23,7 +23,7 @@ namespace DiceGame.Gameplay
         DiceState currentState;
         bool isRolling;
         bool isSpawning;
-        bool isDissolving;
+        ErasureKind erasureKind = ErasureKind.None;
         bool isVanishing;
         bool isCarried;
         bool isInitialized;
@@ -31,13 +31,16 @@ namespace DiceGame.Gameplay
         public bool IsSpawning => isSpawning;
         public bool IsRolling =>
             !isSpawning
-            && (isRolling || (diceView != null && diceView.IsAnimating && !isDissolving && !isVanishing && !isCarried));
-        public bool IsDissolving => isDissolving;
+            && (isRolling || (diceView != null && diceView.IsAnimating && !IsErasing && !isVanishing && !isCarried));
+        public bool IsErasing => erasureKind != ErasureKind.None;
+        public bool IsSinkErasing => erasureKind == ErasureKind.Sink;
+        public bool IsRadianceErasing => erasureKind == ErasureKind.Radiance;
+        public ErasureKind ErasureKind => erasureKind;
         public bool IsVanishing => isVanishing;
-        public bool IsDissolveGhost =>
-            isDissolving && diceView != null && diceView.IsDissolveGhost;
+        public bool IsErasureGhost =>
+            IsSinkErasing && diceView != null && diceView.IsErasureGhost;
         public bool IsCarried => isCarried;
-        public bool IsBusy => IsRolling || isSpawning || isDissolving || isCarried;
+        public bool IsBusy => IsRolling || isSpawning || IsErasing || isCarried;
         public DiceState CurrentState => currentState;
         public DiceKind Kind => currentState.Kind;
         public DiceCapabilities Capabilities => DiceBehaviorResolver.GetCapabilities(Kind);
@@ -48,9 +51,9 @@ namespace DiceGame.Gameplay
         public float GroundRollProgress => diceView != null ? diceView.GroundRollProgress : 0f;
 
         public event Action<DiceState> StateChanged;
-        public event Action<DiceController> Dissolved;
-        public event Action<DiceController> DissolveStarted;
-        public event Action<DiceController> BecameDissolveGhost;
+        public event Action<DiceController> Erased;
+        public event Action<DiceController> ErasureStarted;
+        public event Action<DiceController> BecameErasureGhost;
 
         void Awake() {
             if (diceView == null) {
@@ -265,7 +268,7 @@ namespace DiceGame.Gameplay
         }
 
         public bool TryExecuteSlidePlan(DiceSlidePlan plan, PlayerSlot actionOwner) {
-            if (IsBusy || isDissolving || isVanishing || board == null || diceView == null || registry == null) {
+            if (IsBusy || IsErasing || isVanishing || board == null || diceView == null || registry == null) {
                 return false;
             }
 
@@ -277,7 +280,7 @@ namespace DiceGame.Gameplay
         }
 
         internal bool TryExecuteSlidePlanInternal(DiceSlidePlan plan) {
-            if (IsBusy || isDissolving || isVanishing || board == null || diceView == null || registry == null) {
+            if (IsBusy || IsErasing || isVanishing || board == null || diceView == null || registry == null) {
                 return false;
             }
 
@@ -285,7 +288,7 @@ namespace DiceGame.Gameplay
         }
 
         public bool TryExecuteGroundMovePlan(DiceGridMovePlan plan, PassabilityContext context) {
-            if (isDissolving || isVanishing || isCarried || isRolling || board == null || diceView == null || registry == null) {
+            if (IsErasing || isVanishing || isCarried || isRolling || board == null || diceView == null || registry == null) {
                 return false;
             }
 
@@ -391,7 +394,7 @@ namespace DiceGame.Gameplay
             DiceGridMovePlan plan,
             DiceRollVisualSnapshot snapshot,
             float cancelProgress) {
-            if (isDissolving || isCarried || isRolling || board == null || diceView == null || registry == null) {
+            if (IsErasing || isCarried || isRolling || board == null || diceView == null || registry == null) {
                 return false;
             }
 
@@ -420,7 +423,7 @@ namespace DiceGame.Gameplay
             DiceGridMovePlan plan,
             DiceRollVisualSnapshot snapshot,
             Func<VerticalMotionState> jumpMotionProvider) {
-            if (isDissolving || isCarried || isRolling || board == null || diceView == null || registry == null) {
+            if (IsErasing || isCarried || isRolling || board == null || diceView == null || registry == null) {
                 return false;
             }
 
@@ -466,7 +469,7 @@ namespace DiceGame.Gameplay
         }
 
         bool TryExecuteMovePlan(DiceGridMovePlan plan, DiceMoveVisualContext context) {
-            if (isDissolving || isCarried || isRolling || board == null || diceView == null || registry == null) {
+            if (IsErasing || isCarried || isRolling || board == null || diceView == null || registry == null) {
                 return false;
             }
 
@@ -587,53 +590,61 @@ namespace DiceGame.Gameplay
             return true;
         }
 
-        public void BeginDissolve(Action onComplete) {
-            BeginDissolve(null, onComplete);
+        public void BeginErasure(ErasureKind kind, Action onComplete) {
+            BeginErasure(kind, null, onComplete);
         }
 
-        public void BeginDissolve(Color? emissionColor, Action onComplete) {
-            if (isDissolving || isVanishing || isCarried || board == null || diceView == null) {
+        public void BeginErasure(ErasureKind kind, Color? emissionColor, Action onComplete) {
+            if (IsErasing || isVanishing || isCarried || board == null || diceView == null || kind == ErasureKind.None) {
                 return;
             }
 
-            isDissolving = true;
-            DissolveStarted?.Invoke(this);
-            diceView.PlayDissolve(board, currentState.Orientation.Top, emissionColor, () => {
+            erasureKind = kind;
+            ErasureStarted?.Invoke(this);
+            diceView.PlayErasure(kind, board, currentState.Orientation.Top, emissionColor, () => {
                 registry?.Unregister(this);
-                Dissolved?.Invoke(this);
+                erasureKind = ErasureKind.None;
+                Erased?.Invoke(this);
                 onComplete?.Invoke();
                 Destroy(gameObject);
             });
         }
 
-        public void SetDissolveEmissionColor(Color emissionColor) {
-            diceView?.SetDissolveEmissionColor(emissionColor);
+        public void BeginErasureForCurrentTier(Color? emissionColor, Action onComplete) {
+            var kind = currentState.Tier == DiceStackTier.Top
+                ? ErasureKind.Radiance
+                : ErasureKind.Sink;
+            BeginErasure(kind, emissionColor, onComplete);
         }
 
-        public void RetreatDissolve(float amount) {
-            if (!isDissolving || diceView == null) {
+        public void SetErasureEmissionColor(Color emissionColor) {
+            diceView?.SetErasureEmissionColor(emissionColor);
+        }
+
+        public void RetreatErasure(float amount) {
+            if (!IsErasing || diceView == null) {
                 return;
             }
 
-            diceView.RetreatDissolve(amount);
+            diceView.RetreatErasure(amount);
         }
 
         public void BeginOneVanish(DiceOneVanishSettings settings, Action onComplete) {
-            if (isVanishing || isDissolving || isCarried || board == null || diceView == null || settings == null) {
+            if (isVanishing || IsErasing || isCarried || board == null || diceView == null || settings == null) {
                 return;
             }
 
             isVanishing = true;
             diceView.PlayOneVanish(settings, () => {
                 registry?.Unregister(this);
-                Dissolved?.Invoke(this);
+                Erased?.Invoke(this);
                 onComplete?.Invoke();
                 Destroy(gameObject);
             });
         }
 
-        public void OnBecameDissolveGhost() {
-            if (!IsDissolveGhost) {
+        public void OnBecameErasureGhost() {
+            if (!IsErasureGhost) {
                 return;
             }
 
@@ -644,15 +655,15 @@ namespace DiceGame.Gameplay
                 && registry.TryGetTopAt(grid, out var top)
                 && top != null
                 && top != this) {
-                top.CrushDissolvingBottomAndDemote(this);
+                top.CrushSinkingBottomAndDemote(this);
             }
 
-            BecameDissolveGhost?.Invoke(this);
+            BecameErasureGhost?.Invoke(this);
         }
 
-        public void CrushDissolvingBottomAndDemote(DiceController ghostBottom) {
+        public void CrushSinkingBottomAndDemote(DiceController ghostBottom) {
             if (isCarried
-                || isDissolving
+                || IsErasing
                 || board == null
                 || diceView == null
                 || registry == null
@@ -660,12 +671,12 @@ namespace DiceGame.Gameplay
                 return;
             }
 
-            if (ghostBottom == null || !ghostBottom.IsDissolveGhost) {
+            if (ghostBottom == null || !ghostBottom.IsErasureGhost) {
                 return;
             }
 
             var fromWorld = diceView.DiceTransform.position;
-            ghostBottom.CompleteDissolveFromCrush();
+            ghostBottom.CompleteErasureFromOverride();
 
             var fromState = currentState;
             var toState = new DiceState(fromState.GridPos, fromState.Orientation, DiceStackTier.Bottom, fromState.Kind);
@@ -684,23 +695,23 @@ namespace DiceGame.Gameplay
             registry?.SyncStackedTopAt(currentState.GridPos, board);
         }
 
-        public void OnCeasedDissolveGhost() {
-            if (IsDissolveGhost || !isDissolving) {
+        public void OnCeasedErasureGhost() {
+            if (IsErasureGhost || !IsSinkErasing) {
                 return;
             }
 
             registry?.RestoreToGrid(this);
         }
 
-        public void CompleteDissolveFromCrush() {
-            if (!isDissolving) {
+        public void CompleteErasureFromOverride() {
+            if (!IsErasing) {
                 return;
             }
 
-            diceView?.CancelDissolve();
-            isDissolving = false;
+            diceView?.CancelErasure();
+            erasureKind = ErasureKind.None;
             registry?.Unregister(this);
-            Dissolved?.Invoke(this);
+            Erased?.Invoke(this);
             Destroy(gameObject);
         }
 

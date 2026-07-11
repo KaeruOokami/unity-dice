@@ -6,6 +6,7 @@ using DiceGame.Placement;
 using DiceGame.View;
 using DiceGame.Versus;
 using UnityEngine;
+using UnityEngine.Serialization;
 
 namespace DiceGame.Gameplay
 {
@@ -58,7 +59,8 @@ namespace DiceGame.Gameplay
         [SerializeField] CharacterMovementSettings characterMovementSettings;
         [SerializeField] PlayerInputSettings playerInputSettings;
         [SerializeField] DiceAnimationSettings diceAnimationSettings;
-        [SerializeField] DiceDissolveSettings diceDissolveSettings;
+        [FormerlySerializedAs("diceDissolveSettings")]
+        [SerializeField] DiceErasureSettings diceErasureSettings;
         [SerializeField] DiceOneVanishSettings diceOneVanishSettings;
         [SerializeField] DiceSpawnSettings diceSpawnSettings;
         [SerializeField] DiceCatalog diceCatalog;
@@ -96,7 +98,7 @@ namespace DiceGame.Gameplay
                 || characterMovementSettings == null
                 || playerInputSettings == null
                 || diceAnimationSettings == null
-                || diceDissolveSettings == null
+                || diceErasureSettings == null
                 || diceOneVanishSettings == null) {
                 Debug.LogError("GameBootstrap: Gameplay settings assets are not assigned.");
                 return;
@@ -190,23 +192,23 @@ namespace DiceGame.Gameplay
 
             oneVanishSystem.Configure(board, registry, characters, diceOneVanishSettings);
 
-            var dissolveSystem = GetComponent<DiceMatchDissolveSystem>();
-            if (dissolveSystem == null) {
-                dissolveSystem = gameObject.AddComponent<DiceMatchDissolveSystem>();
+            var erasureSystem = GetComponent<DiceMatchErasureSystem>();
+            if (erasureSystem == null) {
+                erasureSystem = gameObject.AddComponent<DiceMatchErasureSystem>();
             }
 
-            dissolveSystem.Configure(
+            erasureSystem.Configure(
                 board,
                 registry,
                 characters,
                 matchActionContext,
                 oneVanishSystem,
                 ownershipContext);
-            spawnSystem.ConfigureDissolveSystem(dissolveSystem);
+            spawnSystem.ConfigureErasureSystem(erasureSystem);
 
             if (gameSessionSettings.GameMode == GameMode.Versus) {
                 var versusSettings = gameSessionSettings.VersusBoardSettings;
-                dissolveSystem.ConfigureVersusAttack(versusSettings);
+                erasureSystem.ConfigureVersusAttack(versusSettings);
 
                 var attackController = GetComponent<VersusAttackController>();
                 if (attackController == null) {
@@ -217,7 +219,7 @@ namespace DiceGame.Gameplay
                     versusSettings,
                     board,
                     spawnSystem,
-                    dissolveSystem,
+                    erasureSystem,
                     spawnRandom,
                     transform);
             }
@@ -260,7 +262,7 @@ namespace DiceGame.Gameplay
                     transform,
                     physicsSettings,
                     diceAnimationSettings,
-                    diceDissolveSettings,
+                    diceErasureSettings,
                     matchActionContext,
                     versusSettings.Player1.SpawnSettings,
                     spawnRandom);
@@ -285,7 +287,7 @@ namespace DiceGame.Gameplay
                 transform,
                 physicsSettings,
                 diceAnimationSettings,
-                diceDissolveSettings,
+                diceErasureSettings,
                 matchActionContext,
                 diceSpawnSettings,
                 spawnRandom);

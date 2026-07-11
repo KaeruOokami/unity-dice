@@ -126,7 +126,7 @@ namespace DiceGame.Gameplay
                 if (dice == null
                     || dice.IsSpawning
                     || dice.IsVanishing
-                    || dice.IsDissolving
+                    || dice.IsErasing
                     || dice.CurrentState.Orientation.Top != 1) {
                     continue;
                 }

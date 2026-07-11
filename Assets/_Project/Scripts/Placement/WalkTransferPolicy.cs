@@ -34,7 +34,7 @@ namespace DiceGame.Placement
                     MovementTransitionRoute.FloorTransfer);
             }
 
-            if (fromSurface.IsDissolving && fromSurface.Level == SurfaceHeightLevel.Bottom) {
+            if (fromSurface.IsSinkErasing && fromSurface.Level == SurfaceHeightLevel.Bottom) {
                 return MovementTransition.BlockedStepOnly(null, SurfaceHeightLevel.Floor);
             }
 
@@ -215,7 +215,7 @@ namespace DiceGame.Placement
             HeightReachEvaluation reach,
             out MovementTransition transition) {
             transition = default;
-            if (!fromSurface.IsDissolving) {
+            if (!fromSurface.IsSinkErasing) {
                 return false;
             }
 

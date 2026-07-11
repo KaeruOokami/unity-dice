@@ -22,7 +22,7 @@ namespace DiceGame.Gameplay
             GameObject meshPrefab,
             PhysicsSettings physicsSettings,
             DiceAnimationSettings animationSettings,
-            DiceDissolveSettings dissolveSettings) {
+            DiceErasureSettings erasureSettings) {
             if (prefab == null) {
                 return null;
             }
@@ -38,7 +38,7 @@ namespace DiceGame.Gameplay
                 return null;
             }
 
-            diceView.Configure(physicsSettings, animationSettings, dissolveSettings);
+            diceView.Configure(physicsSettings, animationSettings, erasureSettings);
             if (meshPrefab != null) {
                 diceView.SetMeshPrefab(meshPrefab);
             }
@@ -83,9 +83,9 @@ namespace DiceGame.Gameplay
         Transform spawnParent;
         PhysicsSettings physicsSettings;
         DiceAnimationSettings diceAnimationSettings;
-        DiceDissolveSettings diceDissolveSettings;
+        DiceErasureSettings diceErasureSettings;
         PlayerMatchActionContext matchActionContext;
-        DiceMatchDissolveSystem dissolveSystem;
+        DiceMatchErasureSystem erasureSystem;
         DiceSpawnSettings spawnSettings;
         System.Random random;
         readonly List<PlayerSpawnChannel> versusChannels = new();
@@ -101,7 +101,7 @@ namespace DiceGame.Gameplay
             Transform parent,
             PhysicsSettings physics,
             DiceAnimationSettings animationSettings,
-            DiceDissolveSettings dissolveSettings,
+            DiceErasureSettings erasureSettings,
             PlayerMatchActionContext actionContext,
             DiceSpawnSettings settings,
             System.Random spawnRandom) {
@@ -112,7 +112,7 @@ namespace DiceGame.Gameplay
             spawnParent = parent;
             physicsSettings = physics;
             diceAnimationSettings = animationSettings;
-            diceDissolveSettings = dissolveSettings;
+            diceErasureSettings = erasureSettings;
             matchActionContext = actionContext;
             spawnSettings = settings;
             random = spawnRandom;
@@ -140,8 +140,8 @@ namespace DiceGame.Gameplay
             attackSpawnCellIndices[PlayerSlot.Player2] = 0;
         }
 
-        public void ConfigureDissolveSystem(DiceMatchDissolveSystem targetDissolveSystem) {
-            dissolveSystem = targetDissolveSystem;
+        public void ConfigureErasureSystem(DiceMatchErasureSystem targetErasureSystem) {
+            erasureSystem = targetErasureSystem;
         }
 
         public void StartSpawning() {
@@ -347,7 +347,7 @@ namespace DiceGame.Gameplay
                 meshPrefab,
                 physicsSettings,
                 diceAnimationSettings,
-                diceDissolveSettings);
+                diceErasureSettings);
 
             if (diceController == null) {
                 return null;
@@ -371,7 +371,7 @@ namespace DiceGame.Gameplay
                 diceController.Configure(board, diceView, registry, gridPos, orientation, tier, kind);
             }
 
-            dissolveSystem?.EnsureDiceSubscribed(diceController);
+            erasureSystem?.EnsureDiceSubscribed(diceController);
             return diceController;
         }
 
@@ -423,7 +423,7 @@ namespace DiceGame.Gameplay
                 meshPrefab,
                 physicsSettings,
                 diceAnimationSettings,
-                diceDissolveSettings);
+                diceErasureSettings);
 
             if (diceController == null) {
                 return null;
@@ -442,7 +442,7 @@ namespace DiceGame.Gameplay
                 kind,
                 forceFallFromAbove: true);
 
-            dissolveSystem?.EnsureDiceSubscribed(diceController);
+            erasureSystem?.EnsureDiceSubscribed(diceController);
             return diceController;
         }
 

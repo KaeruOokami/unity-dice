@@ -379,3 +379,5 @@ d:\Document\Unity\Project\Dice\Temp\bin\Debug\Unity.ShaderGraph.Utilities.pdb
 d:\Document\Unity\Project\Dice\obj\Debug\Assembly.44154EF1.Up2Date
 d:\Document\Unity\Project\Dice\obj\Debug\Assembly-CSharp.dll
 d:\Document\Unity\Project\Dice\obj\Debug\Assembly-CSharp.pdb
+D:\Document\Unity\Project\Dice\Temp\bin\Debug\Unity.InputSystem.dll
+D:\Document\Unity\Project\Dice\Temp\bin\Debug\Unity.InputSystem.pdb

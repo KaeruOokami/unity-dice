@@ -267,8 +267,8 @@ namespace DiceGame.Gameplay
             }
         }
 
-        public void OnStandingDiceDissolved(DiceController dissolvedDice) {
-            if (!isInitialized || !standingController.TryGetStandingDice(out var standingDice) || standingDice != dissolvedDice) {
+        public void OnStandingDiceErased(DiceController erasedDice) {
+            if (!isInitialized || !standingController.TryGetStandingDice(out var standingDice) || standingDice != erasedDice) {
                 return;
             }
 
@@ -288,7 +288,7 @@ namespace DiceGame.Gameplay
             MoveToFloorAtCurrentWorldPosition();
         }
 
-        public void OnStandingDiceBecameGhost(DiceController ghostDice) {
+        public void OnStandingDiceBecameErasureGhost(DiceController ghostDice) {
             if (!isInitialized || !standingController.TryGetStandingDice(out var standingDice) || standingDice != ghostDice) {
                 return;
             }
@@ -1043,7 +1043,7 @@ namespace DiceGame.Gameplay
                 return true;
             }
 
-            return standingDice.IsDissolving;
+            return standingDice.IsSinkErasing;
         }
 
         float GetDiceJumpHeight() {
@@ -1301,8 +1301,13 @@ namespace DiceGame.Gameplay
                 }
 
                 var diceLabel = FormatMovementDice(pushBody.Dice);
-                if (pushBody.Dice.IsDissolving || pushBody.Dice.IsVanishing || pushBody.Dice.IsBusy) {
+                if (pushBody.Dice.IsVanishing || pushBody.Dice.IsBusy) {
                     overlapSummary.Append($" [{diceLabel}:busy]");
+                    continue;
+                }
+
+                if (pushBody.Dice.IsSinkErasing) {
+                    overlapSummary.Append($" [{diceLabel}:sink-erasing]");
                     continue;
                 }
 
@@ -1688,12 +1693,12 @@ namespace DiceGame.Gameplay
 
             liftPhase = LiftPhase.Placing;
             var fromWorld = GetCarryWorldPosition();
-            var placesOnDissolvingBottom = targetTier == DiceStackTier.Top
+            var placesOnSinkErasingBottom = targetTier == DiceStackTier.Top
                 && registry.TryGetBottomAt(targetGrid, out var sinkingBottom)
                 && sinkingBottom != null
-                && sinkingBottom.IsDissolving;
+                && sinkingBottom.IsSinkErasing;
 
-            if (!placesOnDissolvingBottom) {
+            if (!placesOnSinkErasingBottom) {
                 matchActionContext?.RegisterActionDice(carriedDice, PlayerSlot);
             }
 
@@ -1733,7 +1738,7 @@ namespace DiceGame.Gameplay
             }
 
             if (candidate == standingController.ResolveStandingDiceForMovement()
-                || candidate.IsDissolving
+                || candidate.IsErasing
                 || candidate.IsVanishing
                 || candidate.IsBusy
                 || !CanLiftDice(candidate)) {
@@ -1861,7 +1866,7 @@ namespace DiceGame.Gameplay
             }
 
             DiceController targetDice = null;
-            if (standingController.TryGetStandingDice(out var standingDice) && !standingDice.IsDissolving) {
+            if (standingController.TryGetStandingDice(out var standingDice) && !standingDice.IsErasing) {
                 targetDice = standingDice;
             }
 

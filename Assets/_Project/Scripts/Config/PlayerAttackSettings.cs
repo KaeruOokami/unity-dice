@@ -1,6 +1,7 @@
 using System;
 using DiceGame.Core;
 using UnityEngine;
+using UnityEngine.Serialization;
 
 namespace DiceGame.Config
 {
@@ -105,8 +106,9 @@ namespace DiceGame.Config
         [Min(0f)]
         [SerializeField] float queueToBoardDelay = 1.5f;
 
-        [Header("Dissolve Visual")]
-        [SerializeField] Color dissolveEmissionColor = new(0.4f, 0.8f, 1f, 1f);
+        [Header("Erasure Visual")]
+        [FormerlySerializedAs("dissolveEmissionColor")]
+        [SerializeField] Color erasureEmissionColor = new(0.4f, 0.8f, 1f, 1f);
 
         public FaceAttackSendProfile[] FaceSendProfiles => faceSendProfiles ?? Array.Empty<FaceAttackSendProfile>();
         public int MaxSendDiceCount => Mathf.Max(1, maxSendDiceCount);
@@ -116,7 +118,7 @@ namespace DiceGame.Config
         public float SizeGain => Mathf.Max(0f, sizeGain);
         public float SnatchMultiplier => Mathf.Max(0f, snatchMultiplier);
         public float QueueToBoardDelay => Mathf.Max(0f, queueToBoardDelay);
-        public Color DissolveEmissionColor => dissolveEmissionColor;
+        public Color ErasureEmissionColor => erasureEmissionColor;
 
         public float GetFaceWeight(int face) {
             return face switch {

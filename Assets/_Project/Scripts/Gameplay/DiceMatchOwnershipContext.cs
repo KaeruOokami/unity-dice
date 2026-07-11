@@ -51,7 +51,7 @@ namespace DiceGame.Gameplay
             if (!registry.TryGetBottomAt(grid, out var sinkingBottom)
                 || sinkingBottom == null
                 || sinkingBottom == topDice
-                || !sinkingBottom.IsDissolving) {
+                || !sinkingBottom.IsSinkErasing) {
                 UnregisterReservation(topDice);
                 return;
             }

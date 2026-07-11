@@ -669,7 +669,7 @@ namespace DiceGame.Placement
                 return true;
             }
 
-            if (fromSurface.IsDissolving
+            if (fromSurface.IsSinkErasing
                 && fromLevel == SurfaceHeightLevel.Top
                 && !registry.HasTopAt(toCell)
                 && registry.TryGetBottomAt(toCell, out var lowerTierTarget)
@@ -717,7 +717,7 @@ namespace DiceGame.Placement
                 $"reject {sameTierRejectReason ?? "no-transfer-target"} from={FormatGrid(fromCell)} to={FormatGrid(toCell)} " +
                 $"dir={direction} layer={fromLevel} " +
                 $"standing={FormatDice(standingDice)} stack={FormatStack(toCell)} " +
-                $"standingDissolving={standingDice.IsDissolving}");
+                $"standingErasing={standingDice.IsErasing}");
             return false;
         }
 
@@ -826,7 +826,7 @@ namespace DiceGame.Placement
                 $"{resultKind} from={FormatGrid(fromCell)} to={FormatGrid(toCell)} dir={direction} " +
                 $"layer={fromLevel} standing={FormatDice(standingDice)} " +
                 $"target={FormatDice(target)} footingY={footingWorldY:F3} targetY={targetSurface.SurfaceWorldY:F3} " +
-                $"standingDissolving={standingDice.IsDissolving} targetDissolving={target.IsDissolving}");
+                $"standingErasing={standingDice.IsErasing} targetErasing={target.IsErasing}");
             return true;
         }
 

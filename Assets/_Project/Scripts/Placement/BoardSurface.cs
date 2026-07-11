@@ -24,7 +24,8 @@ namespace DiceGame.Placement
             SurfaceWorldY = surfaceWorldY;
         }
 
-        public bool IsDissolving => State == SurfaceState.Dissolving;
+        public bool IsErasing => State == SurfaceState.Erasing;
+        public bool IsSinkErasing => IsErasing && Dice != null && Dice.IsSinkErasing;
 
         public bool AllowsRoll => Dice != null && State == SurfaceState.Normal;
 
@@ -42,8 +43,8 @@ namespace DiceGame.Placement
         }
 
         public static BoardSurface FromDice(Vector2Int gridCell, int level, DiceController dice) {
-            var state = dice != null && dice.IsDissolving
-                ? SurfaceState.Dissolving
+            var state = dice != null && dice.IsSinkErasing
+                ? SurfaceState.Erasing
                 : SurfaceState.Normal;
             var surfaceY = dice != null
                 ? dice.GetLogicalTopSurfaceWorldY()
@@ -61,8 +62,8 @@ namespace DiceGame.Placement
             return new BoardSurface(
                 gridCell,
                 SurfaceHeightLevel.Top,
-                bottomDice != null && bottomDice.IsDissolving
-                    ? SurfaceState.Dissolving
+                bottomDice != null && bottomDice.IsSinkErasing
+                    ? SurfaceState.Erasing
                     : SurfaceState.Normal,
                 bottomDice,
                 stackTopSurfaceWorldY);
