@@ -107,7 +107,7 @@ namespace DiceGame.Gameplay.Coupling
         }
 
         public bool CompleteRollIfFinished(DiceController dice) {
-            if (!session.IsTracking || dice == null || dice.IsRolling) {
+            if (!session.IsTracking || dice == null || dice.IsMotionFollowActive) {
                 return false;
             }
 
@@ -117,6 +117,27 @@ namespace DiceGame.Gameplay.Coupling
             session.IsJumpArc = false;
             ClearRollCancelSession();
             return wasJumpArc;
+        }
+
+        /// <summary>
+        /// Start visual follow for a newly mounted standing dice (spawn/emergence/roll).
+        /// Reuses the same anchor tracking as roll coupling.
+        /// </summary>
+        public void BeginMountFollow() {
+            if (standing.CurrentDice?.View.DiceTransform == null) {
+                Debug.LogError("DiceCharacterCoupling: BeginMountFollow requires a standing dice with a visual.");
+                return;
+            }
+
+            ClearRollCancelSession();
+            session.JumpDiceGridMoved = false;
+            var diceCenter = standing.CurrentDice.View.DiceTransform.position;
+            var charPos = transformDriver.GetWorldXZ();
+            BeginFollow(
+                new Vector3(charPos.x, 0f, charPos.y),
+                diceCenter,
+                jumpArc: false,
+                JumpDiceMoveKind.None);
         }
 
         public bool TryHandleRollCancel(

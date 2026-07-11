@@ -115,7 +115,7 @@ namespace DiceGame.Gameplay
         public bool IsBusy => standingController != null
             && !IsOnFloor
             && standingController.CurrentDice != null
-            && standingController.CurrentDice.IsRolling;
+            && standingController.CurrentDice.IsMotionFollowActive;
         public bool IsCarrying => liftPhase != LiftPhase.None;
         public Vector2 FacePosition => standingController != null
             && standingController.TryGetStandingDice(out var standingDice)
@@ -340,6 +340,8 @@ namespace DiceGame.Gameplay
                 return;
             }
 
+            TryMountOntoCoveringDiceIfNeeded();
+
             if (inputReader.WasLiftPressedThisFrame()) {
                 TryBeginLift();
             }
@@ -351,7 +353,7 @@ namespace DiceGame.Gameplay
             if (!IsOnFloor
                 && standingController.CurrentDice != null
                 && coupling.IsTrackingRoll
-                && !standingController.CurrentDice.IsRolling) {
+                && !standingController.CurrentDice.IsMotionFollowActive) {
                 var wasArcRoll = coupling.CompleteRollIfFinished(standingController.CurrentDice);
                 if (wasArcRoll && jumpPhase != JumpPhase.None) {
                     LogJump($"EndJump reason=arc-roll-complete {FormatJumpContext()}");
@@ -364,10 +366,17 @@ namespace DiceGame.Gameplay
                 return;
             }
 
-            var isRolling = !IsOnFloor && standingController.CurrentDice != null && standingController.CurrentDice.IsRolling;
+            var isFollowingDiceMotion = !IsOnFloor
+                && standingController.CurrentDice != null
+                && coupling.IsTrackingRoll
+                && standingController.CurrentDice.IsMotionFollowActive;
 
-            if (isRolling) {
-                UpdateDuringRoll(input);
+            if (isFollowingDiceMotion) {
+                if (standingController.CurrentDice.IsRolling) {
+                    UpdateDuringRoll(input);
+                } else {
+                    currentSpeed = 0f;
+                }
             } else {
                 UpdateSurfaceMovement(input);
             }
@@ -482,7 +491,9 @@ namespace DiceGame.Gameplay
                 carriedDice.View.SetCarryWorldPosition(GetCarryWorldPosition());
             }
 
-            if (!IsOnFloor && standingController.CurrentDice != null && standingController.CurrentDice.IsRolling) {
+            if (!IsOnFloor
+                && standingController.CurrentDice != null
+                && coupling.IsTrackingRoll) {
                 coupling.SyncVisual();
             } else if (!IsOnFloor || jumpPhase != JumpPhase.None) {
                 transformDriver.SnapYToSurface();
@@ -901,6 +912,74 @@ namespace DiceGame.Gameplay
             }
 
             isFalling = true;
+        }
+
+        /// <summary>
+        /// If a dice occupies the level directly above the player on the same cell,
+        /// mount onto that dice. Visual follow reuses DiceCharacterCoupling.
+        /// </summary>
+        void TryMountOntoCoveringDiceIfNeeded() {
+            if (registry == null
+                || standingController == null
+                || isFalling
+                || jumpPhase != JumpPhase.None
+                || liftPhase != LiftPhase.None
+                || isPushFollowing) {
+                return;
+            }
+
+            if (!TryGetCoveringDice(out var coveringDice)) {
+                return;
+            }
+
+            MountOntoCoveringDice(coveringDice);
+        }
+
+        bool TryGetCoveringDice(out DiceController coveringDice) {
+            coveringDice = null;
+            var cell = standingController.GridCell;
+            var level = standingController.Level;
+
+            if (SurfaceHeightLevel.IsFloor(level)) {
+                if (!registry.TryGetBottomAt(cell, out var bottom)
+                    || bottom == null
+                    || bottom == standingController.CurrentDice) {
+                    return false;
+                }
+
+                coveringDice = bottom;
+                return true;
+            }
+
+            if (level == SurfaceHeightLevel.Bottom) {
+                if (!registry.TryGetTopAt(cell, out var top)
+                    || top == null
+                    || top == standingController.CurrentDice) {
+                    return false;
+                }
+
+                coveringDice = top;
+                return true;
+            }
+
+            return false;
+        }
+
+        void MountOntoCoveringDice(DiceController coveringDice) {
+            if (coveringDice == null) {
+                Debug.LogError("CharacterController: MountOntoCoveringDice received null dice.");
+                return;
+            }
+
+            var state = coveringDice.CurrentState;
+            standingController.SetOnDice(state.GridPos, state.Tier, coveringDice);
+            currentSpeed = 0f;
+
+            if (coveringDice.IsMotionFollowActive) {
+                coupling.BeginMountFollow();
+            } else {
+                transformDriver.SnapYToSurface();
+            }
         }
 
         float ResolveFallTargetWorldY(Vector2Int cell) {

@@ -32,6 +32,11 @@ namespace DiceGame.Gameplay
         public bool IsRolling =>
             !isSpawning
             && (isRolling || (diceView != null && diceView.IsAnimating && !IsErasing && !isVanishing && !isCarried));
+        /// <summary>
+        /// True while the dice visual is moving in a way the standing player should follow
+        /// (spawn appear / roll / slide), including spawn where <see cref="IsRolling"/> is false.
+        /// </summary>
+        public bool IsMotionFollowActive => IsSpawning || IsRolling;
         public bool IsErasing => erasureKind != ErasureKind.None;
         public bool IsSinkErasing => erasureKind == ErasureKind.Sink;
         public bool IsRadianceErasing => erasureKind == ErasureKind.Radiance;
