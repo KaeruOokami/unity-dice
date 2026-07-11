@@ -14,18 +14,21 @@ namespace DiceGame.Config
         [SerializeField] DiceSpawnSettings spawnSettings;
         [SerializeField] DiceCatalog diceCatalog;
         [SerializeField] PlayerAttackSettings attackSettings;
+        [SerializeField] PlayerNaturalSendSettings naturalSendSettings;
 
         public PlayerBoardDefinition(
             int boardWidth,
             int boardHeight,
             DiceSpawnSettings spawn,
             DiceCatalog catalog,
-            PlayerAttackSettings attack) {
+            PlayerAttackSettings attack,
+            PlayerNaturalSendSettings naturalSend) {
             width = boardWidth;
             height = boardHeight;
             spawnSettings = spawn;
             diceCatalog = catalog;
             attackSettings = attack;
+            naturalSendSettings = naturalSend;
         }
 
         public int Width => Mathf.Max(1, width);
@@ -33,13 +36,14 @@ namespace DiceGame.Config
         public DiceSpawnSettings SpawnSettings => spawnSettings;
         public DiceCatalog DiceCatalog => diceCatalog;
         public PlayerAttackSettings AttackSettings => attackSettings;
+        public PlayerNaturalSendSettings NaturalSendSettings => naturalSendSettings;
     }
 
     [CreateAssetMenu(fileName = "VersusBoardSettings", menuName = "Dice/Versus Board Settings")]
     public sealed class VersusBoardSettings : ScriptableObject
     {
-        [SerializeField] PlayerBoardDefinition player1 = new(4, 6, null, null, null);
-        [SerializeField] PlayerBoardDefinition player2 = new(4, 6, null, null, null);
+        [SerializeField] PlayerBoardDefinition player1 = new(4, 6, null, null, null, null);
+        [SerializeField] PlayerBoardDefinition player2 = new(4, 6, null, null, null, null);
 
         public PlayerBoardDefinition Player1 => player1;
         public PlayerBoardDefinition Player2 => player2;
@@ -65,6 +69,12 @@ namespace DiceGame.Config
         {
             var definition = slot == PlayerSlot.Player1 ? player1 : player2;
             return definition.DiceCatalog;
+        }
+
+        public PlayerNaturalSendSettings GetNaturalSendSettings(PlayerSlot slot)
+        {
+            var definition = slot == PlayerSlot.Player1 ? player1 : player2;
+            return definition.NaturalSendSettings;
         }
 
         public bool TryValidate(out string errorMessage)
@@ -93,6 +103,18 @@ namespace DiceGame.Config
             }
 
             if (!player2.AttackSettings.TryValidate(out errorMessage))
+            {
+                return false;
+            }
+
+            if (player1.NaturalSendSettings != null
+                && !player1.NaturalSendSettings.TryValidate(out errorMessage))
+            {
+                return false;
+            }
+
+            if (player2.NaturalSendSettings != null
+                && !player2.NaturalSendSettings.TryValidate(out errorMessage))
             {
                 return false;
             }

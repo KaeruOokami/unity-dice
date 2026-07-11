@@ -18,13 +18,17 @@ namespace DiceGame.Versus.Core
                 return false;
             }
 
+            if (!settings.TryGetSendableKindsForFace(face, out var sendableKinds)) {
+                return false;
+            }
+
             var power = AttackPowerCalculator.Calculate(settings, face, chainCount, clusterSize, isSnatch);
             var diceCount = AttackVolumeResolver.ResolveDiceCount(settings, power);
             if (diceCount <= 0) {
                 return false;
             }
 
-            if (!AttackKindBreakdown.TryBuild(settings, diceCount, random, out var breakdown)) {
+            if (!AttackKindBreakdown.TryBuild(sendableKinds, diceCount, power, random, out var breakdown)) {
                 return false;
             }
 

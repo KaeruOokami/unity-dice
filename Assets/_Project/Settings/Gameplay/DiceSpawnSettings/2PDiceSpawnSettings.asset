@@ -12,7 +12,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: f1a2b3c4d5e6478899aabbccddeeff05, type: 3}
   m_Name: 2PDiceSpawnSettings
   m_EditorClassIdentifier: 
-  initialDiceCount: 20
+  initialDiceCount: 15
   animateInitialDiceSpawn: 1
   continuousSpawnEnabled: 1
   spawnInterval: 4

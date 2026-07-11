@@ -11,7 +11,7 @@ namespace DiceGame.Versus.Core
             }
 
             var count = Mathf.RoundToInt(power * settings.MaxSendDiceCount);
-            return Mathf.Clamp(count, 1, settings.MaxSendDiceCount);
+            return Mathf.Clamp(count, 0, settings.MaxSendDiceCount);
         }
     }
 }

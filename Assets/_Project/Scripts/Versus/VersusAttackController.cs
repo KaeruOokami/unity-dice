@@ -1,4 +1,5 @@
 using System;
+using System.Collections;
 using System.Collections.Generic;
 using DiceGame.Config;
 using DiceGame.Gameplay;
@@ -6,6 +7,7 @@ using DiceGame.Grid;
 using DiceGame.View;
 using DiceGame.Versus.Core;
 using UnityEngine;
+using Random = UnityEngine.Random;
 
 namespace DiceGame.Versus
 {
@@ -18,6 +20,7 @@ namespace DiceGame.Versus
         System.Random random;
 
         readonly Dictionary<PlayerSlot, AttackQueue> incomingQueues = new();
+        readonly Dictionary<PlayerSlot, Coroutine> naturalSendCoroutines = new();
 
         public void Configure(
             VersusBoardSettings settings,
@@ -38,9 +41,12 @@ namespace DiceGame.Versus
 
             EnsureQueues();
             EnsureQueueView(board, viewParent);
+            StartNaturalSendLoops();
         }
 
         void OnDisable() {
+            StopNaturalSendLoops();
+
             if (dissolveSystem != null) {
                 dissolveSystem.ErasureResolved -= OnErasureResolved;
             }
@@ -86,6 +92,61 @@ namespace DiceGame.Versus
                 versusSettings.GetDiceCatalog(PlayerSlot.Player2),
                 viewParent != null ? viewParent : transform);
             RefreshQueueView();
+        }
+
+        void StartNaturalSendLoops() {
+            StopNaturalSendLoops();
+            TryStartNaturalSendLoop(PlayerSlot.Player1);
+            TryStartNaturalSendLoop(PlayerSlot.Player2);
+        }
+
+        void StopNaturalSendLoops() {
+            foreach (var pair in naturalSendCoroutines) {
+                if (pair.Value != null) {
+                    StopCoroutine(pair.Value);
+                }
+            }
+
+            naturalSendCoroutines.Clear();
+        }
+
+        void TryStartNaturalSendLoop(PlayerSlot sender) {
+            if (versusSettings == null) {
+                return;
+            }
+
+            var naturalSendSettings = versusSettings.GetNaturalSendSettings(sender);
+            var spawnSettings = versusSettings.GetSpawnSettings(sender);
+            if (naturalSendSettings == null
+                || !naturalSendSettings.Enabled
+                || spawnSettings == null) {
+                return;
+            }
+
+            naturalSendCoroutines[sender] = StartCoroutine(
+                NaturalSendLoop(sender, spawnSettings, naturalSendSettings));
+        }
+
+        IEnumerator NaturalSendLoop(
+            PlayerSlot sender,
+            DiceSpawnSettings spawnSettings,
+            PlayerNaturalSendSettings naturalSendSettings) {
+            while (enabled) {
+                var delay = spawnSettings.SpawnInterval
+                    + Random.Range(-spawnSettings.SpawnIntervalJitter, spawnSettings.SpawnIntervalJitter);
+                yield return new WaitForSeconds(Mathf.Max(0.01f, delay));
+
+                if (!NaturalSendVolleyBuilder.TryBuild(naturalSendSettings, random, out var volley)) {
+                    continue;
+                }
+
+                var target = SinkingChainResolver.GetOpponent(sender);
+                var attackSettings = versusSettings.GetAttackSettings(sender);
+                var queueDelay = attackSettings != null
+                    ? attackSettings.QueueToBoardDelay
+                    : 0f;
+                incomingQueues[target].Enqueue(volley, queueDelay);
+            }
         }
 
         void OnErasureResolved(ErasureResolvedEvent e) {

@@ -4,7 +4,7 @@ using DiceGame.Core;
 
 namespace DiceGame.Versus.Core
 {
-    public static class AttackKindBreakdown
+    public static class NaturalSendKindBreakdown
     {
         struct KindSlot
         {
@@ -14,23 +14,25 @@ namespace DiceGame.Versus.Core
         }
 
         public static bool TryBuild(
-            SendableKindLimit[] sendableKinds,
+            PlayerNaturalSendSettings settings,
             int totalCount,
-            float power,
             System.Random random,
             out List<(DiceKind kind, int count)> breakdown) {
             breakdown = new List<(DiceKind, int)>();
-            if (sendableKinds == null || sendableKinds.Length == 0 || totalCount <= 0 || random == null) {
+            if (settings == null || !settings.Enabled || totalCount <= 0 || random == null) {
                 return false;
             }
 
-            var limits = sendableKinds;
+            var limits = settings.SendableKinds;
+            if (limits.Length == 0) {
+                return false;
+            }
 
             var slots = new List<KindSlot>();
             var capacity = 0;
             for (var i = 0; i < limits.Length; i++) {
                 var limit = limits[i];
-                if (!limit.IsEligibleAtPower(power)) {
+                if (!limit.IsEligible()) {
                     continue;
                 }
 
@@ -48,7 +50,7 @@ namespace DiceGame.Versus.Core
 
             if (capacity < totalCount) {
                 UnityEngine.Debug.LogError(
-                    $"AttackKindBreakdown: eligible sendable capacity ({capacity}) is less than requested count ({totalCount}).");
+                    $"NaturalSendKindBreakdown: sendable capacity ({capacity}) is less than requested count ({totalCount}).");
                 totalCount = capacity;
             }
 
