@@ -87,6 +87,7 @@ namespace DiceGame.Placement
             if (!TryValidateDiceToDiceTarget(
                 target,
                 standingTier,
+                standingDice,
                 registry,
                 fromSurface,
                 targetSurface,
@@ -146,6 +147,7 @@ namespace DiceGame.Placement
             if (!TryValidateDiceToDiceTarget(
                 target,
                 standingTier,
+                standingDice,
                 registry,
                 fromSurface,
                 targetSurface,
@@ -173,6 +175,7 @@ namespace DiceGame.Placement
         static bool TryValidateDiceToDiceTarget(
             DiceController target,
             DiceStackTier standingTier,
+            DiceController standingDice,
             DiceRegistry registry,
             BoardSurface fromSurface,
             BoardSurface targetSurface,
@@ -186,6 +189,12 @@ namespace DiceGame.Placement
 
             if (!targetSurface.AllowsWalkFrom(fromSurface, isJumping)) {
                 rejectReason = "allows-walk-from-false";
+                return false;
+            }
+
+            if (target.IsRadianceErasing
+                && (standingDice == null || !standingDice.IsRadianceErasing)) {
+                rejectReason = "radiance-top-transfer-blocked";
                 return false;
             }
 

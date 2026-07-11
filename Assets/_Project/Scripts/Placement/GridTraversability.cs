@@ -100,6 +100,12 @@ namespace DiceGame.Placement
                 return true;
             }
 
+            if (landingRank == fromRank
+                && fromTier == DiceStackTier.Top
+                && query.CanOverwriteTopAt(cell)) {
+                return true;
+            }
+
             if (!CanTraverseCell(query, fromTier, cell, out rejectReason)) {
                 rejectReason = $"cell={FormatGrid(cell)} land-occupancy {rejectReason}";
                 return false;

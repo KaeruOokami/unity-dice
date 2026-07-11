@@ -52,6 +52,12 @@ namespace DiceGame.Placement
             return true;
         }
 
+        public bool CanOverwriteTopAt(Vector2Int cell) {
+            return IsPassableCell(cell)
+                && placement.CanAcceptTopDiceAt(cell)
+                && !placement.CanPlaceTopDiceAt(cell);
+        }
+
         public bool TryResolveLandingTier(
             DiceStackTier fromTier,
             Vector2Int cell,
@@ -67,7 +73,7 @@ namespace DiceGame.Placement
                     return true;
                 }
 
-                if (placement.CanPlaceTopDiceAt(cell)) {
+                if (placement.CanPlaceTopDiceAt(cell) || CanOverwriteTopAt(cell)) {
                     landingTier = DiceStackTier.Top;
                     return true;
                 }
@@ -80,7 +86,7 @@ namespace DiceGame.Placement
                 return true;
             }
 
-            if (placement.CanPlaceTopDiceAt(cell)) {
+            if (placement.CanPlaceTopDiceAt(cell) || CanOverwriteTopAt(cell)) {
                 landingTier = DiceStackTier.Top;
                 return true;
             }

@@ -13,29 +13,12 @@ MonoBehaviour:
   m_Name: 2PAttackSettings
   m_EditorClassIdentifier: 
   faceSendProfiles:
-  - triggerFaces: 0200000001000000
+  - triggerFaces: 010000000200000003000000040000000500000006000000
     sendableKinds:
-    - kind: 2
-      maxCountPerVolley: 3
-      minimumPower: 0.601
-      selectionWeight: 1
-    - kind: 0
-      maxCountPerVolley: 2
-      minimumPower: 0
-      selectionWeight: 0.01
-  - triggerFaces: 0300000004000000
-    sendableKinds:
-    - kind: 0
-      maxCountPerVolley: 2
-      minimumPower: 0
-      selectionWeight: 1
-  - triggerFaces: 0500000006000000
-    sendableKinds:
-    - kind: 0
+    - kind: 4
       maxCountPerVolley: 3
       minimumPower: 0
       selectionWeight: 1
-  maxSendDiceCount: 3
   attackMultiplier: 0.1
   faceGain: 0.4
   chainGain: 0.1

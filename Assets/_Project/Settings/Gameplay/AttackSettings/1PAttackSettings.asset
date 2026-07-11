@@ -22,7 +22,7 @@ MonoBehaviour:
     - kind: 2
       maxCountPerVolley: 1
       minimumPower: 0.5
-      selectionWeight: 0.05
+      selectionWeight: 0.3
   - triggerFaces: 04000000
     sendableKinds:
     - kind: 3
@@ -32,7 +32,7 @@ MonoBehaviour:
     - kind: 2
       maxCountPerVolley: 2
       minimumPower: 0.5
-      selectionWeight: 0.1
+      selectionWeight: 0.4
   - triggerFaces: 05000000
     sendableKinds:
     - kind: 3
@@ -42,7 +42,7 @@ MonoBehaviour:
     - kind: 2
       maxCountPerVolley: 2
       minimumPower: 0.5
-      selectionWeight: 0.2
+      selectionWeight: 0.6
   - triggerFaces: 06000000
     sendableKinds:
     - kind: 3
@@ -52,8 +52,7 @@ MonoBehaviour:
     - kind: 2
       maxCountPerVolley: 3
       minimumPower: 0.5
-      selectionWeight: 0.3
-  maxSendDiceCount: 3
+      selectionWeight: 0.6
   attackMultiplier: 0.1
   faceGain: 0.4
   chainGain: 0.1

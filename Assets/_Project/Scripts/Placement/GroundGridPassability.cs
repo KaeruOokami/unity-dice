@@ -28,13 +28,16 @@ namespace DiceGame.Placement
                 return false;
             }
 
+            var landingCell = fromState.GridPos + direction.ToGridDelta() * distance;
+            var allowUpwardTier = occupancyQuery.CanOverwriteTopAt(landingCell);
+
             if (!GridTraversability.TryEvaluateRollPath(
                 occupancyQuery,
                 fromState.Tier,
                 fromState.GridPos,
                 direction,
                 distance,
-                allowUpwardTier: false,
+                allowUpwardTier,
                 out landingTier,
                 out rejectReason)) {
                 return false;
