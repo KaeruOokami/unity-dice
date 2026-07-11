@@ -145,7 +145,6 @@ namespace DiceGame.Gameplay
                 ownershipContext = gameObject.AddComponent<DiceMatchOwnershipContext>();
             }
 
-            ownershipContext.Configure(registry);
             matchActionContext.Configure(registry, ownershipContext);
 
             placement = new PlacementService(

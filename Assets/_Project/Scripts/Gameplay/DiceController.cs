@@ -653,22 +653,22 @@ namespace DiceGame.Gameplay
                 return;
             }
 
-            var grid = currentState.GridPos;
             registry?.RemoveFromGrid(this);
-
-            if (registry != null
-                && registry.TryGetTopAt(grid, out var top)
-                && top != null
-                && top != this) {
-                top.CrushSinkingBottomAndDemote(this);
-            }
-
             BecameErasureGhost?.Invoke(this);
         }
 
-        public void CrushSinkingBottomAndDemote(DiceController ghostBottom) {
+        public void OnBottomSupportLost(DiceController removedBottom) {
+            if (currentState.Tier != DiceStackTier.Top) {
+                return;
+            }
+
+            DemoteAfterSupportRemoved(removedBottom);
+        }
+
+        public void DemoteAfterSupportRemoved(DiceController removedBottom) {
             if (isCarried
                 || IsErasing
+                || isVanishing
                 || board == null
                 || diceView == null
                 || registry == null
@@ -676,13 +676,11 @@ namespace DiceGame.Gameplay
                 return;
             }
 
-            if (ghostBottom == null || !ghostBottom.IsErasureGhost) {
-                return;
+            if (removedBottom != null && removedBottom.IsErasureGhost) {
+                removedBottom.CompleteErasureFromOverride();
             }
 
             var fromWorld = diceView.DiceTransform.position;
-            ghostBottom.CompleteErasureFromOverride();
-
             var fromState = currentState;
             var toState = new DiceState(fromState.GridPos, fromState.Orientation, DiceStackTier.Bottom, fromState.Kind);
             ApplyLogicalMove(fromState, toState);

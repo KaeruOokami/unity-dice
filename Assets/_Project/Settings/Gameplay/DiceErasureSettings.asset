@@ -15,7 +15,7 @@ MonoBehaviour:
   sinkDuration: 10
   sinkGhostThreshold: 0.7
   sinkGhostAlpha: 0.4
-  radianceDuration: 0.4
+  radianceDuration: 4
   radianceRampUpDuration: 0.1
   erasureEmissionColor: {r: 1, g: 1, b: 1, a: 1}
   erasureEmissionIntensity: 5

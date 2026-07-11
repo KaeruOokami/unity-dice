@@ -19,7 +19,6 @@ namespace DiceGame.Gameplay
         [SerializeField] float chainRollbackAmount = 0.15f;
 
         readonly HashSet<DiceController> subscribedDice = new();
-        readonly Dictionary<DiceController, Action<DiceState>> diceStateHandlers = new();
         readonly List<CharacterController> characters = new();
         readonly List<DiceController> pendingTierFallMatches = new();
 
@@ -104,22 +103,41 @@ namespace DiceGame.Gameplay
         }
 
         void EvaluateTierFallMatch(DiceController fallenDice) {
-            if (ownershipContext == null || fallenDice == null) {
+            if (fallenDice == null || board == null || registry == null || ownershipContext == null) {
                 return;
             }
 
-            try {
-                if (!ownershipContext.ShouldEvaluateTierFall(fallenDice)
-                    || !ownershipContext.TryResolveTierFallAttacker(fallenDice, out var attacker)) {
-                    return;
+            var participants = new List<DiceController> { fallenDice };
+            var clusters = DiceMatchFinder.FindMatchingClusters(registry.AllDice, participants);
+            PlayerSlot? deferredAttacker = null;
+
+            foreach (var cluster in clusters) {
+                if (!MatchAttackerResolver.TryResolveAttacker(
+                    cluster,
+                    currentAction,
+                    participants,
+                    ownershipContext,
+                    board,
+                    fallenDice,
+                    out var attacker)) {
+                    continue;
                 }
 
-                var snapshot = new DeferredMatchSnapshot(fallenDice, attacker);
-                EvaluateMatchesForDeferred(snapshot);
-                oneVanishSystem?.EvaluateForDeferredAction(snapshot);
-            } finally {
-                ownershipContext.UnregisterReservation(fallenDice);
+                deferredAttacker ??= attacker;
+                ProcessCluster(cluster, attacker);
             }
+
+            if (!MatchAttackerResolver.TryResolveAttackerForDice(
+                fallenDice,
+                ownershipContext,
+                board,
+                out var vanishAttacker)) {
+                return;
+            }
+
+            deferredAttacker ??= vanishAttacker;
+            oneVanishSystem?.EvaluateForDeferredAction(
+                new DeferredMatchSnapshot(fallenDice, deferredAttacker.Value));
         }
 
         void SubscribeAllDice() {
@@ -139,17 +157,8 @@ namespace DiceGame.Gameplay
 
             subscribedDice.Add(dice);
             dice.Erased += OnDiceErased;
-            dice.ErasureStarted += OnDiceErasureStarted;
             dice.BecameErasureGhost += OnDiceBecameErasureGhost;
             dice.ConfigureTierFallMatchNotifier(this);
-
-            Action<DiceState> stateHandler = _ => OnDiceStateCommitted(dice);
-            diceStateHandlers[dice] = stateHandler;
-            dice.StateChanged += stateHandler;
-
-            if (dice.CurrentState.Tier == DiceStackTier.Top) {
-                ownershipContext?.SyncReservationForTop(dice);
-            }
         }
 
         void UnsubscribeDice(DiceController dice) {
@@ -158,13 +167,7 @@ namespace DiceGame.Gameplay
             }
 
             dice.Erased -= OnDiceErased;
-            dice.ErasureStarted -= OnDiceErasureStarted;
             dice.BecameErasureGhost -= OnDiceBecameErasureGhost;
-
-            if (diceStateHandlers.TryGetValue(dice, out var stateHandler)) {
-                dice.StateChanged -= stateHandler;
-                diceStateHandlers.Remove(dice);
-            }
         }
 
         void UnsubscribeAllDice() {
@@ -173,17 +176,6 @@ namespace DiceGame.Gameplay
             }
 
             subscribedDice.Clear();
-            diceStateHandlers.Clear();
-        }
-
-        void OnDiceStateCommitted(DiceController dice) {
-            if (dice == null || ownershipContext == null) {
-                return;
-            }
-
-            if (dice.CurrentState.Tier == DiceStackTier.Top) {
-                ownershipContext.SyncReservationForTop(dice);
-            }
         }
 
         void OnActionCompleted(MatchActionSnapshot action) {
@@ -215,21 +207,6 @@ namespace DiceGame.Gameplay
             NotifyCharactersStandingDiceErased(dice);
         }
 
-        void OnDiceErasureStarted(DiceController dice) {
-            if (dice == null
-                || ownershipContext == null
-                || registry == null
-                || !dice.IsSinkErasing) {
-                return;
-            }
-
-            if (registry.TryGetTopAt(dice.CurrentState.GridPos, out var top)
-                && top != null
-                && top != dice) {
-                ownershipContext.SyncReservationForTop(top);
-            }
-        }
-
         void OnDiceBecameErasureGhost(DiceController dice) {
             NotifyCharactersStandingDiceBecameGhost(dice);
         }
@@ -254,25 +231,34 @@ namespace DiceGame.Gameplay
                 return;
             }
 
-            var clusters = DiceMatchFinder.FindMatchingClusters(registry.AllDice, action.AllDice);
-            foreach (var cluster in clusters) {
-                var attacker = ResolveAttacker(action, cluster);
-                ProcessCluster(cluster, attacker);
-            }
+            EvaluateMatchClusters(action.AllDice, action);
         }
 
-        void EvaluateMatchesForDeferred(DeferredMatchSnapshot snapshot) {
-            if (snapshot == null
-                || snapshot.Participants == null
-                || snapshot.Participants.Count == 0
+        void EvaluateMatchClusters(
+            IReadOnlyCollection<DiceController> participants,
+            MatchActionSnapshot action) {
+            if (participants == null
+                || participants.Count == 0
                 || board == null
-                || registry == null) {
+                || registry == null
+                || ownershipContext == null) {
                 return;
             }
 
-            var clusters = DiceMatchFinder.FindMatchingClusters(registry.AllDice, snapshot.Participants);
+            var clusters = DiceMatchFinder.FindMatchingClusters(registry.AllDice, participants);
             foreach (var cluster in clusters) {
-                ProcessCluster(cluster, snapshot.Attacker);
+                if (!MatchAttackerResolver.TryResolveAttacker(
+                    cluster,
+                    action,
+                    participants,
+                    ownershipContext,
+                    board,
+                    referenceDice: null,
+                    out var attacker)) {
+                    continue;
+                }
+
+                ProcessCluster(cluster, attacker);
             }
         }
 
@@ -368,28 +354,5 @@ namespace DiceGame.Gameplay
             }
         }
 
-        static PlayerSlot ResolveAttacker(MatchActionSnapshot action, List<DiceController> cluster) {
-            foreach (var slot in action.GetParticipatingPlayers()) {
-                var actionDice = action.GetDiceFor(slot);
-                for (var i = 0; i < actionDice.Count; i++) {
-                    var dice = actionDice[i];
-                    if (dice == null) {
-                        continue;
-                    }
-
-                    for (var j = 0; j < cluster.Count; j++) {
-                        if (cluster[j] == dice) {
-                            return slot;
-                        }
-                    }
-                }
-            }
-
-            foreach (var slot in action.GetParticipatingPlayers()) {
-                return slot;
-            }
-
-            return PlayerSlot.Player1;
-        }
     }
 }

@@ -326,6 +326,7 @@ namespace DiceGame.Placement
                 }
             } else if (stack.Bottom == dice) {
                 stack.Bottom = null;
+                NotifyTopAfterBottomRemoved(gridPos, dice, stack.Top);
             }
 
             if (stack.Bottom == null && stack.Top == null) {
@@ -333,6 +334,22 @@ namespace DiceGame.Placement
             } else {
                 byGrid[gridPos] = stack;
             }
+        }
+
+        static void NotifyTopAfterBottomRemoved(
+            Vector2Int gridPos,
+            DiceController removedBottom,
+            DiceController topDice) {
+            if (topDice == null || topDice == removedBottom) {
+                return;
+            }
+
+            if (topDice.CurrentState.GridPos != gridPos
+                || topDice.CurrentState.Tier != DiceStackTier.Top) {
+                return;
+            }
+
+            topDice.OnBottomSupportLost(removedBottom);
         }
     }
 }
