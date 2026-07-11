@@ -27,7 +27,7 @@ namespace DiceGame.Versus.Core
             var limits = sendableKinds;
 
             var slots = new List<KindSlot>();
-            var capacity = 0;
+            var pickCapacity = 0;
             for (var i = 0; i < limits.Length; i++) {
                 var limit = limits[i];
                 if (!limit.IsEligibleAtPower(power)) {
@@ -39,17 +39,15 @@ namespace DiceGame.Versus.Core
                     Remaining = limit.MaxCountPerVolley,
                     Weight = limit.SelectionWeight
                 });
-                capacity += limit.MaxCountPerVolley;
+                pickCapacity += limit.MaxCountPerVolley;
             }
 
             if (slots.Count == 0) {
                 return false;
             }
 
-            if (capacity < totalCount) {
-                UnityEngine.Debug.LogError(
-                    $"AttackKindBreakdown: eligible sendable capacity ({capacity}) is less than requested count ({totalCount}).");
-                totalCount = capacity;
+            if (pickCapacity < totalCount) {
+                totalCount = pickCapacity;
             }
 
             var assigned = new Dictionary<DiceKind, int>();

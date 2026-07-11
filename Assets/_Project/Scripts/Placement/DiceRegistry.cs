@@ -320,19 +320,27 @@ namespace DiceGame.Placement
                 return;
             }
 
+            DiceController removedBottom = null;
+            DiceController topAfterBottomRemoved = null;
+
             if (tier == DiceStackTier.Top) {
                 if (stack.Top == dice) {
                     stack.Top = null;
                 }
             } else if (stack.Bottom == dice) {
                 stack.Bottom = null;
-                NotifyTopAfterBottomRemoved(gridPos, dice, stack.Top);
+                removedBottom = dice;
+                topAfterBottomRemoved = stack.Top;
             }
 
             if (stack.Bottom == null && stack.Top == null) {
                 byGrid.Remove(gridPos);
             } else {
                 byGrid[gridPos] = stack;
+            }
+
+            if (removedBottom != null) {
+                NotifyTopAfterBottomRemoved(gridPos, removedBottom, topAfterBottomRemoved);
             }
         }
 

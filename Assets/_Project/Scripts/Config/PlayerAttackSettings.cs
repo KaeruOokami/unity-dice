@@ -75,8 +75,6 @@ namespace DiceGame.Config
         [SerializeField] FaceAttackSendProfile[] faceSendProfiles = {
             new(new[] { 1, 2, 3, 4, 5, 6 }, new SendableKindLimit(DiceKind.Normal, 3), new SendableKindLimit(DiceKind.Wood, 2))
         };
-        [Min(1)]
-        [SerializeField] int maxSendDiceCount = 3;
 
         [Header("Power")]
         [Min(0f)]
@@ -111,7 +109,6 @@ namespace DiceGame.Config
         [SerializeField] Color erasureEmissionColor = new(0.4f, 0.8f, 1f, 1f);
 
         public FaceAttackSendProfile[] FaceSendProfiles => faceSendProfiles ?? Array.Empty<FaceAttackSendProfile>();
-        public int MaxSendDiceCount => Mathf.Max(1, maxSendDiceCount);
         public float AttackMultiplier => Mathf.Max(0f, attackMultiplier);
         public float FaceGain => Mathf.Max(0f, faceGain);
         public float ChainGain => Mathf.Max(0f, chainGain);

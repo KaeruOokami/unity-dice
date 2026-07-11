@@ -23,7 +23,7 @@ namespace DiceGame.Versus.Core
             }
 
             var power = AttackPowerCalculator.Calculate(settings, face, chainCount, clusterSize, isSnatch);
-            var diceCount = AttackVolumeResolver.ResolveDiceCount(settings, power);
+            var diceCount = AttackVolumeResolver.ResolveDiceCount(sendableKinds, power);
             if (diceCount <= 0) {
                 return false;
             }

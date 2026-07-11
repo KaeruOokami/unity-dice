@@ -350,8 +350,7 @@ namespace DiceGame.Gameplay
                 TryBeginJump();
             }
 
-            if (!IsOnFloor
-                && standingController.CurrentDice != null
+            if (standingController.CurrentDice != null
                 && coupling.IsTrackingRoll
                 && !standingController.CurrentDice.IsMotionFollowActive) {
                 var wasArcRoll = coupling.CompleteRollIfFinished(standingController.CurrentDice);
@@ -366,8 +365,7 @@ namespace DiceGame.Gameplay
                 return;
             }
 
-            var isFollowingDiceMotion = !IsOnFloor
-                && standingController.CurrentDice != null
+            var isFollowingDiceMotion = standingController.CurrentDice != null
                 && coupling.IsTrackingRoll
                 && standingController.CurrentDice.IsMotionFollowActive;
 
@@ -491,9 +489,7 @@ namespace DiceGame.Gameplay
                 carriedDice.View.SetCarryWorldPosition(GetCarryWorldPosition());
             }
 
-            if (!IsOnFloor
-                && standingController.CurrentDice != null
-                && coupling.IsTrackingRoll) {
+            if (standingController.CurrentDice != null && coupling.IsTrackingRoll) {
                 coupling.SyncVisual();
             } else if (!IsOnFloor || jumpPhase != JumpPhase.None) {
                 transformDriver.SnapYToSurface();
