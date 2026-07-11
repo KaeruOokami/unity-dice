@@ -76,6 +76,24 @@ namespace DiceGame.Gameplay
             EvaluateGlobal(action.AllDice);
         }
 
+        public void EvaluateForDeferredAction(DeferredMatchSnapshot snapshot) {
+            if (board == null
+                || registry == null
+                || oneVanishSettings == null
+                || snapshot == null
+                || snapshot.Participants == null
+                || snapshot.Participants.Count == 0) {
+                return;
+            }
+
+            if (board.IsVersusArena && board.VersusLayout != null) {
+                EvaluateForPlayerSlot(snapshot.Participants, snapshot.Attacker);
+                return;
+            }
+
+            EvaluateGlobal(snapshot.Participants);
+        }
+
         void EvaluateGlobal(IReadOnlyCollection<DiceController> actionDice) {
             if (!DiceOneVanishTrigger.ShouldTrigger(registry.AllDice, actionDice)) {
                 return;

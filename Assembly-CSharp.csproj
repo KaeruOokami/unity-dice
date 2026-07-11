@@ -153,6 +153,9 @@
      <Compile Include="Assets\_Project\Scripts\Versus\Core\NaturalSendKindBreakdown.cs" />
      <Compile Include="Assets\_Project\Scripts\Config\PlayerNaturalSendSettings.cs" />
      <Compile Include="Assets\_Project\Scripts\Versus\Core\NaturalSendVolleyBuilder.cs" />
+     <Compile Include="Assets\_Project\Scripts\Gameplay\ITierFallMatchNotifier.cs" />
+     <Compile Include="Assets\_Project\Scripts\Gameplay\DiceMatchOwnershipContext.cs" />
+     <Compile Include="Assets\_Project\Scripts\Gameplay\DeferredMatchSnapshot.cs" />
      <None Include="Assets\Packages\Dice_6\Documentation\Readmy.txt" />
     <Reference Include="UnityEngine">
         <HintPath>D:\Program Files\Unity\Hub\Editor\2021.3.10f1\Editor\Data\Managed\UnityEngine\UnityEngine.dll</HintPath>

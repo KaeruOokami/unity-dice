@@ -138,7 +138,13 @@ namespace DiceGame.Gameplay
                 matchActionContext = gameObject.AddComponent<PlayerMatchActionContext>();
             }
 
-            matchActionContext.Configure(registry);
+            var ownershipContext = GetComponent<DiceMatchOwnershipContext>();
+            if (ownershipContext == null) {
+                ownershipContext = gameObject.AddComponent<DiceMatchOwnershipContext>();
+            }
+
+            ownershipContext.Configure(registry);
+            matchActionContext.Configure(registry, ownershipContext);
 
             placement = new PlacementService(
                 registry,
@@ -165,6 +171,11 @@ namespace DiceGame.Gameplay
                 return;
             }
 
+            for (var i = 0; i < startDice.Count; i++) {
+                var slot = i == 0 ? PlayerSlot.Player1 : PlayerSlot.Player2;
+                ownershipContext.SetOwner(startDice[i], slot);
+            }
+
             if (!TrySpawnPlayers(startDice, out var spawnedCharacters)) {
                 return;
             }
@@ -184,7 +195,14 @@ namespace DiceGame.Gameplay
                 dissolveSystem = gameObject.AddComponent<DiceMatchDissolveSystem>();
             }
 
-            dissolveSystem.Configure(board, registry, characters, matchActionContext, oneVanishSystem);
+            dissolveSystem.Configure(
+                board,
+                registry,
+                characters,
+                matchActionContext,
+                oneVanishSystem,
+                ownershipContext);
+            spawnSystem.ConfigureDissolveSystem(dissolveSystem);
 
             if (gameSessionSettings.GameMode == GameMode.Versus) {
                 var versusSettings = gameSessionSettings.VersusBoardSettings;

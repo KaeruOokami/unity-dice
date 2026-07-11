@@ -1688,7 +1688,14 @@ namespace DiceGame.Gameplay
 
             liftPhase = LiftPhase.Placing;
             var fromWorld = GetCarryWorldPosition();
-            matchActionContext?.RegisterActionDice(carriedDice, PlayerSlot);
+            var placesOnDissolvingBottom = targetTier == DiceStackTier.Top
+                && registry.TryGetBottomAt(targetGrid, out var sinkingBottom)
+                && sinkingBottom != null
+                && sinkingBottom.IsDissolving;
+
+            if (!placesOnDissolvingBottom) {
+                matchActionContext?.RegisterActionDice(carriedDice, PlayerSlot);
+            }
 
             if (!carriedDice.TryPlaceAt(targetGrid, targetTier, fromWorld, OnPlaceComplete)) {
                 liftPhase = LiftPhase.Carrying;

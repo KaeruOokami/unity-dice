@@ -85,6 +85,7 @@ namespace DiceGame.Gameplay
         DiceAnimationSettings diceAnimationSettings;
         DiceDissolveSettings diceDissolveSettings;
         PlayerMatchActionContext matchActionContext;
+        DiceMatchDissolveSystem dissolveSystem;
         DiceSpawnSettings spawnSettings;
         System.Random random;
         readonly List<PlayerSpawnChannel> versusChannels = new();
@@ -137,6 +138,10 @@ namespace DiceGame.Gameplay
                 Catalog = player2Catalog
             });
             attackSpawnCellIndices[PlayerSlot.Player2] = 0;
+        }
+
+        public void ConfigureDissolveSystem(DiceMatchDissolveSystem targetDissolveSystem) {
+            dissolveSystem = targetDissolveSystem;
         }
 
         public void StartSpawning() {
@@ -366,6 +371,7 @@ namespace DiceGame.Gameplay
                 diceController.Configure(board, diceView, registry, gridPos, orientation, tier, kind);
             }
 
+            dissolveSystem?.EnsureDiceSubscribed(diceController);
             return diceController;
         }
 
@@ -436,6 +442,7 @@ namespace DiceGame.Gameplay
                 kind,
                 forceFallFromAbove: true);
 
+            dissolveSystem?.EnsureDiceSubscribed(diceController);
             return diceController;
         }
 

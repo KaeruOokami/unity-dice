@@ -19,6 +19,7 @@ namespace DiceGame.Gameplay
 
         DiceRegistry registry;
         PlayerMatchActionContext matchActionContext;
+        ITierFallMatchNotifier tierFallMatchNotifier;
         DiceState currentState;
         bool isRolling;
         bool isSpawning;
@@ -83,6 +84,10 @@ namespace DiceGame.Gameplay
 
         public void ConfigureMatchActionContext(PlayerMatchActionContext actionContext) {
             matchActionContext = actionContext;
+        }
+
+        public void ConfigureTierFallMatchNotifier(ITierFallMatchNotifier notifier) {
+            tierFallMatchNotifier = notifier;
         }
 
         public void Initialize(
@@ -670,6 +675,7 @@ namespace DiceGame.Gameplay
             var transition = DiceTransition.CrushDemote(fromState, toState, fromWorld);
             diceView.PlayTransition(transition, board, registry, () => {
                 isRolling = false;
+                tierFallMatchNotifier?.NotifyTierFallCompleted(this);
                 StateChanged?.Invoke(currentState);
             });
         }

@@ -16,5 +16,5 @@ MonoBehaviour:
   diceCountPerVolley: 1
   sendableKinds:
   - kind: 0
-    maxCountPerVolley: 1
+    maxCountPerVolley: 10
     selectionWeight: 1

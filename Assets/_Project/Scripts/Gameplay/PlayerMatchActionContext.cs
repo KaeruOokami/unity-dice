@@ -13,11 +13,13 @@ namespace DiceGame.Gameplay
         readonly Dictionary<DiceController, PlayerSlot> actionDiceOwners = new();
 
         DiceRegistry registry;
+        DiceMatchOwnershipContext ownershipContext;
 
         public event Action<MatchActionSnapshot> ActionCompleted;
 
-        public void Configure(DiceRegistry targetRegistry) {
+        public void Configure(DiceRegistry targetRegistry, DiceMatchOwnershipContext targetOwnershipContext) {
             registry = targetRegistry;
+            ownershipContext = targetOwnershipContext;
         }
 
         public void RegisterActionDice(DiceController dice, PlayerSlot owner) {
@@ -27,6 +29,7 @@ namespace DiceGame.Gameplay
 
             actionDice.Add(dice);
             actionDiceOwners[dice] = owner;
+            ownershipContext?.SetOwner(dice, owner);
         }
 
         public void RegisterActionDice(IReadOnlyList<DiceController> diceList, PlayerSlot owner) {

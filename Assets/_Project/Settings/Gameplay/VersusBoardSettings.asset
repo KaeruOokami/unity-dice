@@ -18,11 +18,13 @@ MonoBehaviour:
     spawnSettings: {fileID: 11400000, guid: a1a2b3c4d5e6478899aabbccddeeff05, type: 2}
     diceCatalog: {fileID: 11400000, guid: a7b8c9d0e1f24990aabbccddeeff4401, type: 2}
     attackSettings: {fileID: 11400000, guid: c3d4e5f6a7b84990aabbccddeeff3201, type: 2}
-    naturalSendSettings: {fileID: 11400000, guid: f6a7b8c9d0e14990aabbccddeeff4502, type: 2}
+    naturalSendSettings: {fileID: 11400000, guid: f6a7b8c9d0e14990aabbccddeeff4502,
+      type: 2}
   player2:
     width: 4
     height: 6
     spawnSettings: {fileID: 11400000, guid: e1f2a3b4c5d6478899aabbccddeeff24, type: 2}
     diceCatalog: {fileID: 11400000, guid: b8c9d0e1f2a34990aabbccddeeff4402, type: 2}
     attackSettings: {fileID: 11400000, guid: d4e5f6a7b8c94990aabbccddeeff3202, type: 2}
-    naturalSendSettings: {fileID: 11400000, guid: a7b8c9d0e1f24990aabbccddeeff4503, type: 2}
+    naturalSendSettings: {fileID: 11400000, guid: a7b8c9d0e1f24990aabbccddeeff4503,
+      type: 2}
