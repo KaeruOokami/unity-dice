@@ -28,6 +28,11 @@ namespace DiceGame.Placement
                 return false;
             }
 
+            if (dice.IsSpawning) {
+                rejectReason = "spawning";
+                return false;
+            }
+
             if (!dice.Capabilities.CanBePushedByPlayer) {
                 rejectReason = "notPushable";
                 return false;

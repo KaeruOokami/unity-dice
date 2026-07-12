@@ -293,7 +293,7 @@ namespace DiceGame.Gameplay
         }
 
         public bool TryExecuteGroundMovePlan(DiceGridMovePlan plan, PassabilityContext context) {
-            if (IsErasing || isVanishing || isCarried || isRolling || board == null || diceView == null || registry == null) {
+            if (IsErasing || isVanishing || isCarried || isSpawning || isRolling || board == null || diceView == null || registry == null) {
                 return false;
             }
 
@@ -474,7 +474,7 @@ namespace DiceGame.Gameplay
         }
 
         bool TryExecuteMovePlan(DiceGridMovePlan plan, DiceMoveVisualContext context) {
-            if (IsErasing || isCarried || isRolling || board == null || diceView == null || registry == null) {
+            if (IsErasing || isCarried || isSpawning || isRolling || board == null || diceView == null || registry == null) {
                 return false;
             }
 
@@ -755,7 +755,8 @@ namespace DiceGame.Gameplay
                 isCarried = false;
                 registry.Place(this, targetGrid, targetTier);
                 ConfigurePushBody();
-                NotifyActionMoveCompleted(fromState, toState);
+                // Carry placement always completes the player action, including same-cell drops.
+                NotifyActionMoveCompleted();
                 StateChanged?.Invoke(currentState);
                 onComplete?.Invoke();
             });

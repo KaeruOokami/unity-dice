@@ -19,6 +19,10 @@ namespace DiceGame.Placement
                 return false;
             }
 
+            if (dice.IsSpawning) {
+                return false;
+            }
+
             var capabilities = dice.Capabilities;
             if (!capabilities.CanBePushedByPlayer && !capabilities.CanGridRoll && !capabilities.SlideUntilBlocked) {
                 return false;
@@ -37,6 +41,10 @@ namespace DiceGame.Placement
             }
 
             if (dice.IsRadianceErasing) {
+                return false;
+            }
+
+            if (dice.IsSpawning) {
                 return false;
             }
 
