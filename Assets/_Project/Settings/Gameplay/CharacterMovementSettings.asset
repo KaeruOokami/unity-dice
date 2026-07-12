@@ -17,7 +17,8 @@ MonoBehaviour:
   moveAcceleration: 200
   rollTriggerExtentRatio: 0.35
   maxWalkStep: 0.5
-  maxJumpStep: 1
+  maxJumpStepPlayerOnly: 0.6
+  maxJumpStepCoupled: 1.1
   pushHoldDuration: 0.25
   dissolveDescentHoldDuration: 0.35
   rollCancelWindowProgress: 0.5

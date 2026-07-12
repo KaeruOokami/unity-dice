@@ -29,12 +29,16 @@ namespace DiceGame.Placement
             this.stepLimits = stepLimits;
         }
 
-        HeightReachEvaluation CreateReachEvaluation(bool isJumping) {
+        HeightReachEvaluation CreateReachEvaluation(
+            bool isJumping,
+            int fromLevel,
+            DiceController standingDice) {
             return new HeightReachEvaluation(
                 board.FloorSurfaceWorldY,
                 board.CellSize,
                 stepLimits,
-                isJumping);
+                isJumping,
+                JumpPlayerTransferPolicy.UsesPlayerOnlyJumpStep(isJumping, fromLevel, standingDice));
         }
 
         public void SetJumpParallelRollDebugLog(Action<string> log) {
@@ -103,7 +107,7 @@ namespace DiceGame.Placement
                 standingDice,
                 context.IsJumping,
                 registry,
-                CreateReachEvaluation(context.IsJumping),
+                CreateReachEvaluation(context.IsJumping, fromLevel, standingDice),
                 out transition);
         }
 
@@ -350,7 +354,7 @@ namespace DiceGame.Placement
             Direction direction,
             PassabilityContext context) {
             var isJumping = context.IsJumping;
-            var reach = CreateReachEvaluation(isJumping);
+            var reach = CreateReachEvaluation(isJumping, fromLevel, standingDice);
             var fromSurface = surfaceQuery.GetStandingSurface(
                 fromCell,
                 fromLevel,
@@ -360,7 +364,7 @@ namespace DiceGame.Placement
                 isJumping,
                 standingDice);
 
-            // L1 player-only transfer (Iron / Stone on jump / iron-adjacent Magnet / immovable on ground):
+            // L1 player-only transfer (Iron / Stone / iron-adjacent Magnet / sink-erasing dice / immovable on ground):
             // Resolve target surface at toCell first (top -> bottom -> floor),
             // and evaluate transfer uniformly regardless of whether toCell is empty or occupied.
             if (playerOnlyMovement

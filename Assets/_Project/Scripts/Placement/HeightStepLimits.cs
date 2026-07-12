@@ -3,15 +3,24 @@ namespace DiceGame.Placement
     public readonly struct HeightStepLimits
     {
         public float MaxWalkStep { get; }
-        public float MaxJumpStep { get; }
+        public float MaxJumpStepPlayerOnly { get; }
+        public float MaxJumpStepCoupled { get; }
 
-        public HeightStepLimits(float maxWalkStep, float maxJumpStep) {
+        public HeightStepLimits(
+            float maxWalkStep,
+            float maxJumpStepPlayerOnly,
+            float maxJumpStepCoupled) {
             MaxWalkStep = maxWalkStep;
-            MaxJumpStep = maxJumpStep;
+            MaxJumpStepPlayerOnly = maxJumpStepPlayerOnly;
+            MaxJumpStepCoupled = maxJumpStepCoupled;
         }
 
-        public float GetMaxStep(bool isJumping) {
-            return isJumping ? MaxJumpStep : MaxWalkStep;
+        public float GetMaxStep(bool isJumping, bool isPlayerOnlyJump) {
+            if (!isJumping) {
+                return MaxWalkStep;
+            }
+
+            return isPlayerOnlyJump ? MaxJumpStepPlayerOnly : MaxJumpStepCoupled;
         }
     }
 }

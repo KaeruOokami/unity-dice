@@ -6,20 +6,23 @@ namespace DiceGame.Placement
         public float CellSize { get; }
         public HeightStepLimits Limits { get; }
         public bool IsJumping { get; }
+        public bool IsPlayerOnlyJump { get; }
 
         public HeightReachEvaluation(
             float floorWorldY,
             float cellSize,
             HeightStepLimits limits,
-            bool isJumping) {
+            bool isJumping,
+            bool isPlayerOnlyJump) {
             FloorWorldY = floorWorldY;
             CellSize = cellSize;
             Limits = limits;
             IsJumping = isJumping;
+            IsPlayerOnlyJump = isPlayerOnlyJump;
         }
 
         public float GetMaxStepNorm() {
-            return Limits.GetMaxStep(IsJumping);
+            return Limits.GetMaxStep(IsJumping, IsPlayerOnlyJump);
         }
     }
 }

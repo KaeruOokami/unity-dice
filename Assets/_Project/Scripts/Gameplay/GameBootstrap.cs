@@ -152,7 +152,8 @@ namespace DiceGame.Gameplay
                 board,
                 new HeightStepLimits(
                     characterMovementSettings.MaxWalkStep,
-                    characterMovementSettings.MaxJumpStep));
+                    characterMovementSettings.MaxJumpStepPlayerOnly,
+                    characterMovementSettings.MaxJumpStepCoupled));
             spawnRandom = randomSeed != 0 ? new System.Random(randomSeed) : new System.Random();
 
             spawnSystem = GetComponent<DiceSpawnSystem>();

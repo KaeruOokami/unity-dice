@@ -11,7 +11,8 @@ namespace DiceGame.Config
         [Range(0.05f, 1f)]
         [SerializeField] float rollTriggerExtentRatio = 0.35f;
         [SerializeField] float maxWalkStep = 0.5f;
-        [SerializeField] float maxJumpStep = 2f;
+        [SerializeField] float maxJumpStepPlayerOnly = 0.5f;
+        [SerializeField] float maxJumpStepCoupled = 1f;
         [SerializeField] float pushHoldDuration = 0.25f;
         [SerializeField] float dissolveDescentHoldDuration = 0.35f;
         [Range(0f, 1f)]
@@ -32,7 +33,8 @@ namespace DiceGame.Config
         public float GetRollTriggerHalfExtent(float walkHalfExtent) {
             return walkHalfExtent * rollTriggerExtentRatio;
         }
-        public float MaxJumpStep => maxJumpStep;
+        public float MaxJumpStepPlayerOnly => maxJumpStepPlayerOnly;
+        public float MaxJumpStepCoupled => maxJumpStepCoupled;
         public float PushHoldDuration => pushHoldDuration;
         public float DissolveDescentHoldDuration => dissolveDescentHoldDuration;
         public float RollCancelWindowProgress => rollCancelWindowProgress;

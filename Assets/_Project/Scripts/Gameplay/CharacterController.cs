@@ -631,7 +631,8 @@ namespace DiceGame.Gameplay
             }
 
             var standingDice = standingController.ResolveStandingDiceForMovement();
-            var canJumpCoupleWithPlayer = standingDice == null || standingDice.CanJumpCoupleWithPlayer;
+            var canJumpCoupleWithPlayer = standingDice == null
+                || (standingDice.CanJumpCoupleWithPlayer && !standingDice.IsSinkErasing);
             capability = JumpInputPolicy.ApplyPlayerOnlyJumpOverride(capability, canJumpCoupleWithPlayer);
 
             // Ice dice should not climb up to the upper level during jump movement.

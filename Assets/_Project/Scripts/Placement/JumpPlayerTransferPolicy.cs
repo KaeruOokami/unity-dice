@@ -4,6 +4,10 @@ namespace DiceGame.Placement
 {
     public static class JumpPlayerTransferPolicy
     {
+        static bool IsNonCoupledJumpDice(DiceController standingDice) {
+            return standingDice.IsSinkErasing || !standingDice.CanJumpCoupleWithPlayer;
+        }
+
         /// <summary>
         /// L1: Player moves alone; standing dice must not enter dice-coupled (L2) policies.
         /// Jump uses jump-coupling capability; ground uses general player-movable capability.
@@ -14,7 +18,7 @@ namespace DiceGame.Placement
             }
 
             if (isJumping) {
-                return !standingDice.CanJumpCoupleWithPlayer;
+                return IsNonCoupledJumpDice(standingDice);
             }
 
             return !standingDice.IsPlayerMovable;
@@ -31,7 +35,27 @@ namespace DiceGame.Placement
         public static bool UsesPlayerOnlyReach(bool isJumping, DiceController standingDice) {
             return isJumping
                 && standingDice != null
-                && !standingDice.CanJumpCoupleWithPlayer;
+                && IsNonCoupledJumpDice(standingDice);
+        }
+
+        /// <summary>
+        /// Logical jump reach: player+dice coupled jump from Bottom/Top with a couple-capable dice.
+        /// </summary>
+        public static bool UsesCoupledJumpStep(bool isJumping, int fromLevel, DiceController standingDice) {
+            if (!isJumping || fromLevel == SurfaceHeightLevel.Floor) {
+                return false;
+            }
+
+            return standingDice != null
+                && standingDice.CanJumpCoupleWithPlayer
+                && !standingDice.IsSinkErasing;
+        }
+
+        /// <summary>
+        /// Logical jump reach: floor, sink-erasing dice, or non-couple dice (Iron / Stone / iron-adjacent Magnet, etc.).
+        /// </summary>
+        public static bool UsesPlayerOnlyJumpStep(bool isJumping, int fromLevel, DiceController standingDice) {
+            return isJumping && !UsesCoupledJumpStep(isJumping, fromLevel, standingDice);
         }
     }
 }
