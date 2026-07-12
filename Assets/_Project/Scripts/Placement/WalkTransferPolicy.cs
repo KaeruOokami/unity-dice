@@ -5,6 +5,13 @@ namespace DiceGame.Placement
 {
     public static class WalkTransferPolicy
     {
+        const float SurfaceYEpsilon = 0.001f;
+
+        static bool IsSinkErasingDescentTransfer(BoardSurface fromSurface, float targetSurfaceWorldY) {
+            return fromSurface.IsSinkErasing
+                && targetSurfaceWorldY < fromSurface.SurfaceWorldY - SurfaceYEpsilon;
+        }
+
         static bool IsLandingTierAtOrBelowStandingTier(
             DiceStackTier standingTier,
             DiceStackTier landingTier) {
@@ -107,7 +114,8 @@ namespace DiceGame.Placement
                 return true;
             }
 
-            if (TryCreateDissolveDescentHold(
+            if (!isJumping
+                && TryCreateDissolveDescentHold(
                 target,
                 standingTier,
                 fromSurface,
@@ -225,6 +233,10 @@ namespace DiceGame.Placement
             out MovementTransition transition) {
             transition = default;
             if (!fromSurface.IsSinkErasing) {
+                return false;
+            }
+
+            if (!IsSinkErasingDescentTransfer(fromSurface, targetSurface.SurfaceWorldY)) {
                 return false;
             }
 
