@@ -16,13 +16,13 @@ namespace DiceGame.Placement
             HeightReachEvaluation reach,
             out MovementTransition transition) {
             transition = default;
-            if (!JumpPlayerTransferPolicy.UsesPlayerOnlyReach(isJumping, standingDice)
+            if (!JumpPlayerTransferPolicy.CanUsePlayerOnlyLowerLevelJump(isJumping, standingDice)
                 || standingDice == null
-                || fromLevel != SurfaceHeightLevel.Top) {
+                || !JumpPlayerTransferPolicy.IsLowerLevelTransfer(fromLevel, SurfaceHeightLevel.Bottom)) {
                 return false;
             }
 
-            if (standingDice.CurrentState.Tier != DiceStackTier.Top) {
+            if (SurfaceHeightLevel.ToDiceStackTier(fromLevel) != standingDice.CurrentState.Tier) {
                 return false;
             }
 
@@ -32,17 +32,7 @@ namespace DiceGame.Placement
                 return false;
             }
 
-            var targetSurface = BoardSurface.FromDice(fromCell, SurfaceHeightLevel.Bottom, landingDice);
-            if (!HeightReachPolicy.CanTransfer(
-                fromSurface,
-                targetSurface.SurfaceWorldY,
-                standingDice,
-                registry,
-                reach,
-                allowDescentOnly: true)) {
-                return false;
-            }
-
+            // Player-only jump descent: no step-height check.
             transition = MovementTransition.Walkable(
                 landingDice,
                 SurfaceHeightLevel.Bottom,

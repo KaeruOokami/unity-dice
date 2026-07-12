@@ -365,35 +365,91 @@ namespace DiceGame.Placement
                 standingDice);
 
             // L1 player-only transfer (Iron / Stone / iron-adjacent Magnet / sink-erasing dice / immovable on ground):
-            // Resolve target surface at toCell first (top -> bottom -> floor),
-            // and evaluate transfer uniformly regardless of whether toCell is empty or occupied.
+            // Resolve target surface at toCell first (top -> bottom -> floor).
             if (playerOnlyMovement
                 && fromLevel != SurfaceHeightLevel.Floor
                 && standingDice != null
                 && TryResolveTargetSurfaceAtForPlayerOnlyJump(toCell, out var targetDice, out var targetLevel, out var targetSurfaceWorldY)) {
-                if (targetLevel == SurfaceHeightLevel.Floor) {
-                    return WalkTransferPolicy.EvaluateFloor(
+                if (JumpPlayerTransferPolicy.ShouldUseTierLandingPolicy(fromLevel, targetLevel)) {
+                    return TierLandingPolicy.TryEvaluate(
+                        fromCell,
+                        toCell,
+                        fromLevel,
                         fromSurface,
+                        standingDice,
+                        context,
+                        registry,
+                        reach,
+                        out var tierLandingTransition)
+                        ? tierLandingTransition
+                        : MovementTransition.Blocked();
+                }
+
+                if (JumpPlayerTransferPolicy.BlocksGroundLowerLevelTransfer(
+                    isJumping,
+                    fromLevel,
+                    targetLevel,
+                    standingDice)) {
+                    return MovementTransition.Blocked();
+                }
+
+                if (JumpPlayerTransferPolicy.IsLowerLevelTransfer(fromLevel, targetLevel)) {
+                    // Player-only jump descent (roll-incapable): no step-height check.
+                    if (JumpPlayerTransferPolicy.CanUsePlayerOnlyLowerLevelJump(isJumping, standingDice)) {
+                        var descentRoute = targetLevel == SurfaceHeightLevel.Floor
+                            ? MovementTransitionRoute.FloorTransfer
+                            : MovementTransitionRoute.HeightTransfer;
+                        return MovementTransition.Walkable(targetDice, targetLevel, descentRoute);
+                    }
+
+                    // Roll-capable player-only (Stone): jump descent is not allowed.
+                    if (JumpPlayerTransferPolicy.BlocksPlayerOnlyJumpLowerLevelTransfer(
+                        isJumping,
+                        fromLevel,
+                        targetLevel,
+                        standingDice)) {
+                        return MovementTransition.Blocked();
+                    }
+
+                    // Ground player-only descent (MaxWalkStep).
+                    if (targetLevel == SurfaceHeightLevel.Floor) {
+                        return WalkTransferPolicy.EvaluateFloor(
+                            fromSurface,
+                            standingDice,
+                            registry,
+                            reach,
+                            allowDescentOnly: true);
+                    }
+
+                    if (!HeightReachPolicy.CanTransfer(
+                        fromSurface,
+                        targetSurfaceWorldY,
                         standingDice,
                         registry,
                         reach,
-                        allowDescentOnly: true);
+                        allowDescentOnly: true)) {
+                        return MovementTransition.Blocked();
+                    }
+
+                    var lowerRoute = MovementTransitionRoute.HeightTransfer;
+                    return MovementTransition.Walkable(targetDice, targetLevel, lowerRoute);
                 }
 
+                // Ascent / same-level player-only transfer (MaxJumpStepPlayerOnly when jumping).
                 if (!HeightReachPolicy.CanTransfer(
                     fromSurface,
                     targetSurfaceWorldY,
                     standingDice,
                     registry,
                     reach,
-                    allowDescentOnly: true)) {
+                    allowDescentOnly: false)) {
                     return MovementTransition.Blocked();
                 }
 
-                var route = targetLevel == SurfaceHeightLevel.Floor
-                    ? MovementTransitionRoute.FloorTransfer
-                    : MovementTransitionRoute.HeightTransfer;
-                return MovementTransition.Walkable(targetDice, targetLevel, route);
+                return MovementTransition.Walkable(
+                    targetDice,
+                    targetLevel,
+                    MovementTransitionRoute.HeightTransfer);
             }
 
             if (registry.CanPlaceBottomDiceAt(toCell)) {
@@ -655,6 +711,25 @@ namespace DiceGame.Placement
             return true;
         }
 
+        bool TryResolveLowerLevelTargetAt(
+            int fromLevel,
+            Vector2Int toCell,
+            out DiceController targetDice,
+            out int targetLevel) {
+            targetDice = null;
+            targetLevel = SurfaceHeightLevel.Floor;
+
+            if (JumpPlayerTransferPolicy.IsLowerLevelTransfer(fromLevel, SurfaceHeightLevel.Bottom)
+                && registry.TryGetBottomAt(toCell, out var bottom)
+                && bottom != null) {
+                targetDice = bottom;
+                targetLevel = SurfaceHeightLevel.Bottom;
+                return true;
+            }
+
+            return false;
+        }
+
         bool TryEvaluateIceSlide(
             DiceController standingDice,
             int fromLevel,
@@ -741,48 +816,36 @@ namespace DiceGame.Placement
                 return true;
             }
 
-            if (fromSurface.IsSinkErasing
-                && fromLevel == SurfaceHeightLevel.Top
-                && !registry.HasTopAt(toCell)
-                && registry.TryGetBottomAt(toCell, out var lowerTierTarget)
-                && lowerTierTarget != null
-                && lowerTierTarget != sameTierTarget
-                && (sameTierTarget == null || IsStepHeightRejectReason(sameTierRejectReason))
-                && TryEvaluateHeightTransferToTarget(
-                    fromCell,
-                    toCell,
-                    fromLevel,
-                    fromSurface,
-                    standingDice,
-                    direction,
-                    isJumping: false,
-                    reach,
-                    lowerTierTarget,
-                    dissolveDescentHoldOnly: true,
-                    out transition,
-                    out _)) {
-                return true;
-            }
+            if (TryResolveLowerLevelTargetAt(fromLevel, toCell, out var lowerLevelTarget, out var lowerLevelTargetLevel)
+                && lowerLevelTarget != sameTierTarget
+                && (sameTierTarget == null || IsStepHeightRejectReason(sameTierRejectReason))) {
+                if (fromSurface.IsSinkErasing
+                    && !isJumping
+                    && TryEvaluateHeightTransferToTarget(
+                        fromCell,
+                        toCell,
+                        fromLevel,
+                        fromSurface,
+                        standingDice,
+                        direction,
+                        isJumping: false,
+                        reach,
+                        lowerLevelTarget,
+                        dissolveDescentHoldOnly: true,
+                        out transition,
+                        out _)) {
+                    return true;
+                }
 
-            if (JumpPlayerTransferPolicy.UsesPlayerOnlyMovement(isJumping, standingDice)
-                && fromLevel == SurfaceHeightLevel.Top
-                && registry.TryGetBottomAt(toCell, out var playerOnlyLowerTarget)
-                && playerOnlyLowerTarget != null
-                && playerOnlyLowerTarget != sameTierTarget
-                && (sameTierTarget == null || IsStepHeightRejectReason(sameTierRejectReason))
-                && TryEvaluateHeightTransferToTarget(
-                    fromCell,
-                    toCell,
-                    fromLevel,
-                    fromSurface,
-                    standingDice,
-                    direction,
-                    isJumping,
-                    reach,
-                    playerOnlyLowerTarget,
-                    out transition,
-                    out _)) {
-                return true;
+                // Player-only jump descent: no step-height check. The drop distance to the
+                // lower level is irrelevant when jumping off a roll-incapable dice.
+                if (JumpPlayerTransferPolicy.CanUsePlayerOnlyLowerLevelJump(isJumping, standingDice)) {
+                    transition = MovementTransition.Walkable(
+                        lowerLevelTarget,
+                        lowerLevelTargetLevel,
+                        MovementTransitionRoute.HeightTransfer);
+                    return true;
+                }
             }
 
             LogHeightTransfer(

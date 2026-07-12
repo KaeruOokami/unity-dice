@@ -38,6 +38,55 @@ namespace DiceGame.Placement
                 && IsNonCoupledJumpDice(standingDice);
         }
 
+        public static bool IsLowerLevelTransfer(int fromLevel, int targetLevel) {
+            return targetLevel < fromLevel;
+        }
+
+        /// <summary>
+        /// Sink-erasing dice, or non-couple dice that cannot grid-roll (Iron / iron-adjacent Magnet).
+        /// Stone is excluded because it can grid-roll.
+        /// </summary>
+        public static bool RequiresJumpForLowerLevelTransfer(DiceController standingDice) {
+            if (standingDice == null) {
+                return false;
+            }
+
+            return standingDice.IsSinkErasing
+                || (!standingDice.CanJumpCoupleWithPlayer && !standingDice.Capabilities.CanGridRoll);
+        }
+
+        public static bool BlocksGroundLowerLevelTransfer(
+            bool isJumping,
+            int fromLevel,
+            int targetLevel,
+            DiceController standingDice) {
+            return !isJumping
+                && IsLowerLevelTransfer(fromLevel, targetLevel)
+                && RequiresJumpForLowerLevelTransfer(standingDice);
+        }
+
+        public static bool CanUsePlayerOnlyLowerLevelJump(bool isJumping, DiceController standingDice) {
+            return isJumping && RequiresJumpForLowerLevelTransfer(standingDice);
+        }
+
+        /// <summary>
+        /// Roll-capable player-only dice (Stone): jump descent to a lower level is not allowed.
+        /// </summary>
+        public static bool BlocksPlayerOnlyJumpLowerLevelTransfer(
+            bool isJumping,
+            int fromLevel,
+            int targetLevel,
+            DiceController standingDice) {
+            return isJumping
+                && IsLowerLevelTransfer(fromLevel, targetLevel)
+                && UsesPlayerOnlyMovement(isJumping, standingDice)
+                && !CanUsePlayerOnlyLowerLevelJump(isJumping, standingDice);
+        }
+
+        public static bool ShouldUseTierLandingPolicy(int fromLevel, int targetLevel) {
+            return fromLevel == SurfaceHeightLevel.Bottom && targetLevel == SurfaceHeightLevel.Top;
+        }
+
         /// <summary>
         /// Logical jump reach: player+dice coupled jump from Bottom/Top with a couple-capable dice.
         /// </summary>
