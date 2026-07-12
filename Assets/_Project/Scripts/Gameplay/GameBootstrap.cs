@@ -206,11 +206,12 @@ namespace DiceGame.Gameplay
                 ownershipContext);
             spawnSystem.ConfigureErasureSystem(erasureSystem);
 
+            VersusAttackController attackController = null;
             if (gameSessionSettings.GameMode == GameMode.Versus) {
                 var versusSettings = gameSessionSettings.VersusBoardSettings;
                 erasureSystem.ConfigureVersusAttack(versusSettings);
 
-                var attackController = GetComponent<VersusAttackController>();
+                attackController = GetComponent<VersusAttackController>();
                 if (attackController == null) {
                     attackController = gameObject.AddComponent<VersusAttackController>();
                 }
@@ -228,6 +229,18 @@ namespace DiceGame.Gameplay
                 cameraSetup.Apply(board);
             }
 
+            var gameFlowController = GetComponent<GameFlowController>();
+            if (gameFlowController == null) {
+                gameFlowController = gameObject.AddComponent<GameFlowController>();
+            }
+
+            gameFlowController.Configure(
+                board,
+                registry,
+                spawnSystem,
+                attackController,
+                gameSessionSettings,
+                playerInputSettings);
             spawnSystem.StartSpawning();
         }
 

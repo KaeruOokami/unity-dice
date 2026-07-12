@@ -45,6 +45,9 @@ namespace DiceGame.Config
         public const string GamepadScheme = "Gamepad";
         public const string Player1ActionMap = "Player1";
         public const string Player2ActionMap = "Player2";
+        public const string GameFlowActionMap = "GameFlow";
+        public const string PauseAction = "Pause";
+        public const string ResetAction = "Reset";
 
         [SerializeField] PlayerCount playerCount = PlayerCount.One;
         [SerializeField] InputActionAsset inputActions;

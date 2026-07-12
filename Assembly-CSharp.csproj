@@ -80,6 +80,7 @@
      <Compile Include="Assets\_Project\Scripts\Placement\PlacementService.cs" />
      <Compile Include="Assets\_Project\Scripts\Versus\AttackQueue.cs" />
      <Compile Include="Assets\_Project\Scripts\Gameplay\Character\CharacterMovePlan.cs" />
+     <Compile Include="Assets\_Project\Scripts\Gameplay\Input\GameFlowInputReader.cs" />
      <Compile Include="Assets\_Project\Scripts\Config\GameSessionSettings.cs" />
      <Compile Include="Assets\_Project\Scripts\Versus\Core\AttackVolleyBuilder.cs" />
      <Compile Include="Assets\_Project\Scripts\Versus\Core\AttackDieSpec.cs" />
@@ -101,6 +102,7 @@
      <Compile Include="Assets\_Project\Scripts\Placement\CarryPlacementPassability.cs" />
      <Compile Include="Assets\_Project\Scripts\Versus\SinkingGroupTracker.cs" />
      <Compile Include="Assets\_Project\Scripts\Core\GravityMotion.cs" />
+     <Compile Include="Assets\_Project\Scripts\Gameplay\GameFlowController.cs" />
      <Compile Include="Assets\_Project\Scripts\Gameplay\Coupling\DiceCharacterCoupling.cs" />
      <Compile Include="Assets\_Project\Scripts\Placement\TopFallPolicy.cs" />
      <Compile Include="Assets\_Project\Scripts\Board\IBoard.cs" />
@@ -143,6 +145,7 @@
      <Compile Include="Assets\_Project\Scripts\Core\DiceRollVisualSnapshot.cs" />
      <Compile Include="Assets\_Project\Scripts\Placement\IDicePlacement.cs" />
      <Compile Include="Assets\_Project\Scripts\Board\Board.cs" />
+     <Compile Include="Assets\_Project\Scripts\Gameplay\BoardFillEvaluator.cs" />
      <Compile Include="Assets\_Project\Scripts\Gameplay\DiceSpawnFactory.cs" />
      <Compile Include="Assets\_Project\Scripts\Core\DiceBehaviorResolver.cs" />
      <Compile Include="Assets\_Project\Scripts\Placement\GridMovePlanBuilder.cs" />

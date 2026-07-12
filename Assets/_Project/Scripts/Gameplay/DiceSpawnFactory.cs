@@ -92,6 +92,7 @@ namespace DiceGame.Gameplay
         readonly Dictionary<PlayerSlot, int> attackSpawnCellIndices = new();
 
         Coroutine spawnCoroutine;
+        bool gameplayEnabled = true;
 
         public void Configure(
             Board targetBoard,
@@ -118,6 +119,7 @@ namespace DiceGame.Gameplay
             random = spawnRandom;
             versusChannels.Clear();
             attackSpawnCellIndices.Clear();
+            gameplayEnabled = true;
         }
 
         public void ConfigureVersusSpawns(
@@ -147,6 +149,10 @@ namespace DiceGame.Gameplay
         public void StartSpawning() {
             StopSpawning();
 
+            if (!gameplayEnabled) {
+                return;
+            }
+
             if (versusChannels.Count > 0) {
                 for (var i = 0; i < versusChannels.Count; i++) {
                     var channel = versusChannels[i];
@@ -165,6 +171,19 @@ namespace DiceGame.Gameplay
             }
 
             spawnCoroutine = StartCoroutine(SpawnLoop(spawnSettings, null));
+        }
+
+        public void SetGameplayEnabled(bool enabled) {
+            if (gameplayEnabled == enabled) {
+                return;
+            }
+
+            gameplayEnabled = enabled;
+            if (gameplayEnabled) {
+                StartSpawning();
+            } else {
+                StopSpawning();
+            }
         }
 
         public void StopSpawning() {
@@ -380,7 +399,10 @@ namespace DiceGame.Gameplay
             PlayerSlot? ownerSlot,
             DiceSpawnSettings activeSpawnSettings,
             Action onComplete = null) {
-            if (activeSpawnSettings == null || board == null || registry == null) {
+            if (!gameplayEnabled
+                || activeSpawnSettings == null
+                || board == null
+                || registry == null) {
                 return null;
             }
 
@@ -399,7 +421,11 @@ namespace DiceGame.Gameplay
             int pip,
             DiceSpawnSettings spawnSettings) {
             var catalog = ResolveCatalog(targetSlot);
-            if (spawnSettings == null || board == null || registry == null || catalog == null) {
+            if (!gameplayEnabled
+                || spawnSettings == null
+                || board == null
+                || registry == null
+                || catalog == null) {
                 return null;
             }
 
@@ -469,7 +495,7 @@ namespace DiceGame.Gameplay
         }
 
         IEnumerator SpawnLoop(DiceSpawnSettings activeSpawnSettings, PlayerSlot? ownerSlot) {
-            while (enabled) {
+            while (enabled && gameplayEnabled) {
                 var delay = activeSpawnSettings.SpawnInterval
                     + Random.Range(-activeSpawnSettings.SpawnIntervalJitter, activeSpawnSettings.SpawnIntervalJitter);
                 yield return new WaitForSeconds(Mathf.Max(0.01f, delay));

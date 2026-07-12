@@ -378,6 +378,54 @@
                     "isPartOfComposite": false
                 }
             ]
+        },
+        {
+            "name": "GameFlow",
+            "id": "22222222-3333-4444-8555-666666666661",
+            "actions": [
+                {
+                    "name": "Pause",
+                    "type": "Button",
+                    "id": "22222222-3333-4444-8555-666666666662",
+                    "expectedControlType": "Button",
+                    "processors": "",
+                    "interactions": "",
+                    "initialStateCheck": false
+                },
+                {
+                    "name": "Reset",
+                    "type": "Button",
+                    "id": "22222222-3333-4444-8555-666666666663",
+                    "expectedControlType": "Button",
+                    "processors": "",
+                    "interactions": "",
+                    "initialStateCheck": false
+                }
+            ],
+            "bindings": [
+                {
+                    "name": "",
+                    "id": "22222222-3333-4444-8555-666666666664",
+                    "path": "<Keyboard>/escape",
+                    "interactions": "",
+                    "processors": "",
+                    "groups": "Keyboard",
+                    "action": "Pause",
+                    "isComposite": false,
+                    "isPartOfComposite": false
+                },
+                {
+                    "name": "",
+                    "id": "22222222-3333-4444-8555-666666666665",
+                    "path": "<Keyboard>/backspace",
+                    "interactions": "",
+                    "processors": "",
+                    "groups": "Keyboard",
+                    "action": "Reset",
+                    "isComposite": false,
+                    "isPartOfComposite": false
+                }
+            ]
         }
     ],
     "controlSchemes": [

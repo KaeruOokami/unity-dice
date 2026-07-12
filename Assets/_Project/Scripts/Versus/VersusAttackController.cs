@@ -21,6 +21,7 @@ namespace DiceGame.Versus
 
         readonly Dictionary<PlayerSlot, AttackQueue> incomingQueues = new();
         readonly Dictionary<PlayerSlot, Coroutine> naturalSendCoroutines = new();
+        bool gameplayEnabled = true;
 
         public void Configure(
             VersusBoardSettings settings,
@@ -33,6 +34,7 @@ namespace DiceGame.Versus
             spawnSystem = targetSpawnSystem;
             erasureSystem = targetErasureSystem;
             random = attackRandom ?? new System.Random();
+            gameplayEnabled = true;
 
             if (erasureSystem != null) {
                 erasureSystem.ErasureResolved -= OnErasureResolved;
@@ -53,12 +55,25 @@ namespace DiceGame.Versus
         }
 
         void Update() {
-            if (versusSettings == null || spawnSystem == null) {
+            if (!gameplayEnabled || versusSettings == null || spawnSystem == null) {
                 return;
             }
 
             TickQueue(PlayerSlot.Player1);
             TickQueue(PlayerSlot.Player2);
+        }
+
+        public void SetGameplayEnabled(bool enabled) {
+            if (gameplayEnabled == enabled) {
+                return;
+            }
+
+            gameplayEnabled = enabled;
+            if (gameplayEnabled) {
+                StartNaturalSendLoops();
+            } else {
+                StopNaturalSendLoops();
+            }
         }
 
         void EnsureQueues() {
@@ -96,6 +111,10 @@ namespace DiceGame.Versus
 
         void StartNaturalSendLoops() {
             StopNaturalSendLoops();
+            if (!gameplayEnabled) {
+                return;
+            }
+
             TryStartNaturalSendLoop(PlayerSlot.Player1);
             TryStartNaturalSendLoop(PlayerSlot.Player2);
         }
@@ -131,7 +150,7 @@ namespace DiceGame.Versus
             PlayerSlot sender,
             DiceSpawnSettings spawnSettings,
             PlayerNaturalSendSettings naturalSendSettings) {
-            while (enabled) {
+            while (enabled && gameplayEnabled) {
                 var delay = spawnSettings.SpawnInterval
                     + Random.Range(-spawnSettings.SpawnIntervalJitter, spawnSettings.SpawnIntervalJitter);
                 yield return new WaitForSeconds(Mathf.Max(0.01f, delay));
@@ -150,7 +169,7 @@ namespace DiceGame.Versus
         }
 
         void OnErasureResolved(ErasureResolvedEvent e) {
-            if (versusSettings == null) {
+            if (!gameplayEnabled || versusSettings == null) {
                 return;
             }
 
