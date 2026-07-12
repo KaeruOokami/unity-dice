@@ -2011,6 +2011,11 @@ namespace DiceGame.Gameplay
                 return;
             }
 
+            // Iron / Stone / iron-adjacent Magnet: player-only jump is not a dice action.
+            if (JumpPlayerTransferPolicy.UsesPlayerOnlyReach(isJumping: true, jumpStartDice)) {
+                return;
+            }
+
             if (standingController.GridCell != jumpStartGridCell) {
                 return;
             }
