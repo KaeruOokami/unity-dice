@@ -40,21 +40,40 @@ namespace DiceGame.Versus
             Changed?.Invoke();
         }
 
-        public bool TryReleaseDue(float deltaTime, out AttackVolley released) {
-            released = null;
+        public bool IsHeadReady(float deltaTime) {
             if (pending.Count == 0) {
                 return false;
             }
 
             pending[0].RemainingDelay -= deltaTime;
-            if (pending[0].RemainingDelay > 0f) {
-                return false;
+            return pending[0].RemainingDelay <= 0f;
+        }
+
+        public AttackVolley PeekHead() {
+            return pending.Count == 0 ? null : pending[0].Volley;
+        }
+
+        public void DequeueHead() {
+            if (pending.Count == 0) {
+                return;
             }
 
-            released = pending[0].Volley;
             pending.RemoveAt(0);
             Changed?.Invoke();
-            return true;
+        }
+
+        public void ReplaceHead(AttackVolley volley) {
+            if (pending.Count == 0 || volley == null) {
+                return;
+            }
+
+            if (volley.Count == 0) {
+                DequeueHead();
+                return;
+            }
+
+            pending[0].Volley = volley;
+            Changed?.Invoke();
         }
     }
 }

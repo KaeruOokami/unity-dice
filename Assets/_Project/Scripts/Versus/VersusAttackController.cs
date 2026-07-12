@@ -197,21 +197,38 @@ namespace DiceGame.Versus
                 return;
             }
 
-            while (queue.TryReleaseDue(Time.deltaTime, out var released)) {
-                SpawnVolley(defenderSlot, released);
+            while (queue.Count > 0) {
+                if (!queue.IsHeadReady(Time.deltaTime)) {
+                    break;
+                }
+
+                var volley = queue.PeekHead();
+                var remaining = SpawnVolley(defenderSlot, volley);
+                if (remaining == null || remaining.Count == 0) {
+                    queue.DequeueHead();
+                    continue;
+                }
+
+                queue.ReplaceHead(remaining);
+                break;
             }
         }
 
-        void SpawnVolley(PlayerSlot defenderSlot, AttackVolley volley) {
+        AttackVolley SpawnVolley(PlayerSlot defenderSlot, AttackVolley volley) {
             var spawnSettings = versusSettings.GetSpawnSettings(defenderSlot);
             if (spawnSettings == null || volley == null) {
-                return;
+                return volley;
             }
 
+            var remaining = new List<AttackDieSpec>();
             for (var i = 0; i < volley.Count; i++) {
                 var spec = volley.Dice[i];
-                spawnSystem.SpawnAttackDice(defenderSlot, spec.Kind, spec.Pip, spawnSettings);
+                if (spawnSystem.SpawnAttackDice(defenderSlot, spec.Kind, spec.Pip, spawnSettings) == null) {
+                    remaining.Add(spec);
+                }
             }
+
+            return new AttackVolley(remaining);
         }
 
         void RefreshQueueView() {
