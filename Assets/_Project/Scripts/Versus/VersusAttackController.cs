@@ -42,7 +42,7 @@ namespace DiceGame.Versus
             }
 
             EnsureQueues();
-            EnsureQueueView(board, viewParent);
+            EnsureQueueView(viewParent);
             StartNaturalSendLoops();
         }
 
@@ -90,7 +90,7 @@ namespace DiceGame.Versus
             }
         }
 
-        void EnsureQueueView(Board board, Transform viewParent) {
+        void EnsureQueueView(Transform viewParent) {
             if (queueView == null) {
                 var viewObject = new GameObject("AttackQueueView");
                 viewObject.transform.SetParent(viewParent != null ? viewParent : transform, false);
@@ -102,10 +102,9 @@ namespace DiceGame.Versus
             }
 
             queueView.Configure(
-                board,
                 versusSettings.GetDiceCatalog(PlayerSlot.Player1),
                 versusSettings.GetDiceCatalog(PlayerSlot.Player2),
-                viewParent != null ? viewParent : transform);
+                versusSettings.AttackQueueUiSettings);
             RefreshQueueView();
         }
 

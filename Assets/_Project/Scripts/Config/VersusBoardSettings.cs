@@ -44,9 +44,11 @@ namespace DiceGame.Config
     {
         [SerializeField] PlayerBoardDefinition player1 = new(4, 6, null, null, null, null);
         [SerializeField] PlayerBoardDefinition player2 = new(4, 6, null, null, null, null);
+        [SerializeField] AttackQueueUiSettings attackQueueUiSettings;
 
         public PlayerBoardDefinition Player1 => player1;
         public PlayerBoardDefinition Player2 => player2;
+        public AttackQueueUiSettings AttackQueueUiSettings => attackQueueUiSettings;
 
         public VersusArenaLayout CreateLayout()
         {

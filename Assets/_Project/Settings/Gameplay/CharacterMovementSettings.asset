@@ -13,7 +13,7 @@ MonoBehaviour:
   m_Name: CharacterMovementSettings
   m_EditorClassIdentifier: 
   characterHeightOffset: 0.5
-  maxMoveSpeed: 8
+  maxMoveSpeed: 6
   moveAcceleration: 200
   rollTriggerExtentRatio: 0.35
   maxWalkStep: 0.5
