@@ -231,20 +231,25 @@ namespace DiceGame.Gameplay
                 return;
             }
 
-            EvaluateMatchClusters(action.AllDice, action);
+            for (var i = 0; i < action.AllDice.Count; i++) {
+                var triggerDice = action.AllDice[i];
+                if (triggerDice == null) {
+                    continue;
+                }
+
+                EvaluateMatchClustersForTrigger(triggerDice, action);
+            }
         }
 
-        void EvaluateMatchClusters(
-            IReadOnlyCollection<DiceController> participants,
-            MatchActionSnapshot action) {
-            if (participants == null
-                || participants.Count == 0
+        void EvaluateMatchClustersForTrigger(DiceController triggerDice, MatchActionSnapshot action) {
+            if (triggerDice == null
                 || board == null
                 || registry == null
                 || ownershipContext == null) {
                 return;
             }
 
+            var participants = new List<DiceController> { triggerDice };
             var clusters = DiceMatchFinder.FindMatchingClusters(registry.AllDice, participants);
             foreach (var cluster in clusters) {
                 if (!MatchAttackerResolver.TryResolveAttacker(
@@ -253,7 +258,7 @@ namespace DiceGame.Gameplay
                     participants,
                     ownershipContext,
                     board,
-                    referenceDice: null,
+                    triggerDice,
                     out var attacker)) {
                     continue;
                 }
@@ -263,8 +268,28 @@ namespace DiceGame.Gameplay
         }
 
         void ProcessCluster(List<DiceController> cluster, PlayerSlot attacker) {
-            var newMembers = new List<DiceController>();
-            var erasingMembers = new List<DiceController>();
+            PartitionClusterMembers(cluster, out var newMembers, out var erasingMembers);
+
+            if (newMembers.Count > 0) {
+                ApplyClusterErasure(cluster, newMembers, erasingMembers, attacker);
+                return;
+            }
+
+            if (erasingMembers.Count > 0) {
+                EmitVersusFollowUpAttack(cluster, attacker);
+            }
+        }
+
+        static void PartitionClusterMembers(
+            List<DiceController> cluster,
+            out List<DiceController> newMembers,
+            out List<DiceController> erasingMembers) {
+            newMembers = new List<DiceController>();
+            erasingMembers = new List<DiceController>();
+
+            if (cluster == null) {
+                return;
+            }
 
             foreach (var dice in cluster) {
                 if (dice == null) {
@@ -277,11 +302,13 @@ namespace DiceGame.Gameplay
                     newMembers.Add(dice);
                 }
             }
+        }
 
-            if (newMembers.Count == 0) {
-                return;
-            }
-
+        void ApplyClusterErasure(
+            List<DiceController> cluster,
+            List<DiceController> newMembers,
+            List<DiceController> erasingMembers,
+            PlayerSlot attacker) {
             var face = newMembers[0].CurrentState.Orientation.Top;
 
             if (versusAttackEnabled && versusSettings != null) {
@@ -302,6 +329,33 @@ namespace DiceGame.Gameplay
             foreach (var dice in newMembers) {
                 dice.BeginErasureForCurrentTier(null, null);
             }
+        }
+
+        void EmitVersusFollowUpAttack(List<DiceController> cluster, PlayerSlot attacker) {
+            if (!versusAttackEnabled || versusSettings == null || sinkingGroups == null) {
+                return;
+            }
+
+            var attackSettings = versusSettings.GetAttackSettings(attacker);
+            if (attackSettings == null) {
+                Debug.LogError($"DiceMatchErasureSystem: Attack settings missing for {attacker}.");
+                return;
+            }
+
+            var chainResult = sinkingGroups.RegisterFollowUpAttack(
+                cluster,
+                attacker,
+                out var face,
+                out var clusterSize);
+
+            var target = SinkingChainResolver.GetOpponent(attacker);
+            ErasureResolved?.Invoke(new ErasureResolvedEvent(
+                attacker,
+                target,
+                face,
+                chainResult.ChainCount,
+                clusterSize,
+                chainResult.IsSnatch));
         }
 
         void ProcessVersusCluster(
