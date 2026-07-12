@@ -639,6 +639,14 @@ namespace DiceGame.Gameplay
             diceView.RetreatErasure(amount);
         }
 
+        public void AdvanceErasure(float amount) {
+            if (!IsSinkErasing || diceView == null) {
+                return;
+            }
+
+            diceView.AdvanceErasure(amount);
+        }
+
         public void BeginOneVanish(DiceOneVanishSettings settings, Action onComplete) {
             if (isVanishing || IsErasing || isCarried || board == null || diceView == null || settings == null) {
                 return;

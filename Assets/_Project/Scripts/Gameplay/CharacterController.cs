@@ -2010,6 +2010,7 @@ namespace DiceGame.Gameplay
 
         void EndJump() {
             pendingJumpLandingState.TryCommit(standingController.ApplyFromTransition);
+            TryApplyJumpLandingSinkCompression();
             MarkSameCellJumpPlacement();
 
             if (jumpVisualDice != null) {
@@ -2030,6 +2031,40 @@ namespace DiceGame.Gameplay
             pendingJumpLandingState.Clear();
             coupling?.ResetJumpSessionFlags();
             transformDriver?.SnapYToSurface();
+        }
+
+        void TryApplyJumpLandingSinkCompression() {
+            if (!hasJumpStartPlacement
+                || jumpStartDice == null
+                || standingController == null
+                || registry == null
+                || movementSettings == null) {
+                return;
+            }
+
+            if (standingController.GridCell != jumpStartGridCell) {
+                return;
+            }
+
+            if (!standingController.TryGetStandingDice(out var landingDice)
+                || landingDice != jumpStartDice) {
+                return;
+            }
+
+            if (jumpStartDice.CurrentState.Tier != DiceStackTier.Top
+                || !registry.TryGetBottomAt(jumpStartGridCell, out var sinkBottom)
+                || sinkBottom == null
+                || sinkBottom == jumpStartDice
+                || !sinkBottom.IsSinkErasing) {
+                return;
+            }
+
+            var advance = movementSettings.JumpLandingSinkAdvance;
+            if (advance <= 0f) {
+                return;
+            }
+
+            sinkBottom.AdvanceErasure(advance);
         }
 
         void MarkSameCellJumpPlacement() {

@@ -574,6 +574,15 @@ namespace DiceGame.View
             ApplyErasureVisual(erasureBoard, erasureProgress);
         }
 
+        public void AdvanceErasure(float amount) {
+            if (erasureBoard == null || activeErasureKind == ErasureKind.None) {
+                return;
+            }
+
+            erasureProgress = Mathf.Min(1f, erasureProgress + amount);
+            ApplyErasureVisual(erasureBoard, erasureProgress);
+        }
+
         public void CancelErasure() {
             if (erasureCoroutine != null) {
                 StopCoroutine(erasureCoroutine);

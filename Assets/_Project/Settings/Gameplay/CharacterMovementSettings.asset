@@ -24,6 +24,7 @@ MonoBehaviour:
   rollCancelWindowProgress: 0.5
   pushInputAlignment: 0.7
   carryVerticalOffset: 1.05
+  jumpLandingSinkAdvance: 0.1
   debugMovementBlock: 0
   debugPush: 0
   debugJumpParallelRoll: 0
