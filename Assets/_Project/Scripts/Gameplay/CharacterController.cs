@@ -942,10 +942,10 @@ namespace DiceGame.Gameplay
             var level = standingController.Level;
 
             if (SurfaceHeightLevel.IsFloor(level)) {
-                if (!registry.TryGetBottomAt(cell, out var bottom)
+                if (!registry.TryGetBottomIncludingPending(cell, out var bottom)
                     || bottom == null
                     || bottom == standingController.CurrentDice
-                    || bottom.IsSpawning) {
+                    || (bottom.IsSpawning && !bottom.AllowsUnconditionalMount)) {
                     return false;
                 }
 

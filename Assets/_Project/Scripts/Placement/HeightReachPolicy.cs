@@ -22,7 +22,12 @@ namespace DiceGame.Placement
             DiceController standingDice,
             DiceRegistry registry,
             HeightReachEvaluation reach,
-            bool allowDescentOnly) {
+            bool allowDescentOnly,
+            DiceController transferTarget = null) {
+            if (transferTarget != null && transferTarget.AllowsUnconditionalMount) {
+                return true;
+            }
+
             var footingWorldY = TransferFootingPolicy.GetFootingWorldY(
                 fromSurface,
                 targetSurfaceWorldY,

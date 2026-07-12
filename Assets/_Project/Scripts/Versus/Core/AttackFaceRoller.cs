@@ -23,7 +23,15 @@ namespace DiceGame.Versus.Core
                 }
             }
 
+            Shuffle(results, random);
             return results;
+        }
+
+        static void Shuffle(List<AttackDieSpec> specs, System.Random random) {
+            for (var i = specs.Count - 1; i > 0; i--) {
+                var j = random.Next(i + 1);
+                (specs[i], specs[j]) = (specs[j], specs[i]);
+            }
         }
     }
 }

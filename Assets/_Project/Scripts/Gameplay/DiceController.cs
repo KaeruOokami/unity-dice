@@ -27,8 +27,12 @@ namespace DiceGame.Gameplay
         bool isVanishing;
         bool isCarried;
         bool isInitialized;
+        DiceSpawnAppearMode spawnAppearMode = DiceSpawnAppearMode.None;
 
         public bool IsSpawning => isSpawning;
+        public DiceSpawnAppearMode SpawnAppearMode => spawnAppearMode;
+        public bool AllowsUnconditionalMount =>
+            spawnAppearMode == DiceSpawnAppearMode.BottomEmergence;
         public bool IsRolling =>
             !isSpawning
             && (isRolling || (diceView != null && diceView.IsAnimating && !IsErasing && !isVanishing && !isCarried));
@@ -104,6 +108,7 @@ namespace DiceGame.Gameplay
             DiceStackTier tier = DiceStackTier.Bottom,
             DiceKind kind = DiceKind.Normal) {
             isInitialized = true;
+            spawnAppearMode = DiceSpawnAppearMode.None;
             currentState = new DiceState(gridPos, orientation, tier, kind);
             registry?.Place(this, gridPos, tier);
 
@@ -219,6 +224,9 @@ namespace DiceGame.Gameplay
             Action onComplete) {
             isInitialized = true;
             isSpawning = true;
+            spawnAppearMode = !forceFallFromAbove && tier == DiceStackTier.Bottom
+                ? DiceSpawnAppearMode.BottomEmergence
+                : DiceSpawnAppearMode.FallFromAbove;
             currentState = new DiceState(gridPos, orientation, tier, kind);
             registry?.RegisterPendingSpawn(this, gridPos, tier);
 

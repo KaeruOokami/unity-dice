@@ -42,7 +42,8 @@ namespace DiceGame.Placement
                     standingDice,
                     registry,
                     reach,
-                    allowDescentOnly: false)) {
+                    allowDescentOnly: false,
+                    topDice)) {
                 return false;
             }
 

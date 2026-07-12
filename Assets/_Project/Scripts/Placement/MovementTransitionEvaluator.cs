@@ -427,7 +427,8 @@ namespace DiceGame.Placement
                         standingDice,
                         registry,
                         reach,
-                        allowDescentOnly: true)) {
+                        allowDescentOnly: true,
+                        targetDice)) {
                         return MovementTransition.Blocked();
                     }
 
@@ -442,7 +443,8 @@ namespace DiceGame.Placement
                     standingDice,
                     registry,
                     reach,
-                    allowDescentOnly: false)) {
+                    allowDescentOnly: false,
+                    targetDice)) {
                     return MovementTransition.Blocked();
                 }
 
@@ -483,7 +485,7 @@ namespace DiceGame.Placement
 
             DiceController target;
             if (fromLevel == SurfaceHeightLevel.Floor) {
-                if (registry.TryGetBottomAt(toCell, out target)
+                if (registry.TryGetBottomIncludingPending(toCell, out target)
                     && WalkTransferPolicy.TryEvaluateFloorToBottom(
                         fromSurface,
                         target,
@@ -700,7 +702,7 @@ namespace DiceGame.Placement
                 return true;
             }
 
-            if (registry.TryGetBottomAt(toCell, out var bottom) && bottom != null) {
+            if (registry.TryGetBottomIncludingPending(toCell, out var bottom) && bottom != null) {
                 targetDice = bottom;
                 targetLevel = SurfaceHeightLevel.Bottom;
                 targetSurfaceWorldY = bottom.GetLogicalTopSurfaceWorldY();

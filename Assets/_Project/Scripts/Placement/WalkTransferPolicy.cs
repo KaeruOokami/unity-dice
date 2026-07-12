@@ -65,7 +65,8 @@ namespace DiceGame.Placement
                 null,
                 registry,
                 reach,
-                allowDescentOnly: false)) {
+                allowDescentOnly: false,
+                bottomDice)) {
                 return false;
             }
 
@@ -109,7 +110,8 @@ namespace DiceGame.Placement
                 standingDice,
                 registry,
                 reach,
-                allowDescentOnly)) {
+                allowDescentOnly,
+                target)) {
                 transition = CreateWalkableTransfer(target);
                 return true;
             }

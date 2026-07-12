@@ -163,6 +163,7 @@
      <Compile Include="Assets\_Project\Scripts\Versus\Core\AttackKindBreakdown.cs" />
      <Compile Include="Assets\_Project\Scripts\View\DiceIconGenerator.cs" />
      <Compile Include="Assets\_Project\Scripts\Config\AttackQueueUiSettings.cs" />
+     <Compile Include="Assets\_Project\Scripts\Core\DiceSpawnAppearMode.cs" />
      <None Include="Assets\Packages\Dice_6\Documentation\Readmy.txt" />
     <Reference Include="UnityEngine">
         <HintPath>D:\Program Files\Unity\Hub\Editor\2021.3.10f1\Editor\Data\Managed\UnityEngine\UnityEngine.dll</HintPath>

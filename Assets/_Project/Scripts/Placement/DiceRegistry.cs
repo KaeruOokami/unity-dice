@@ -208,6 +208,24 @@ namespace DiceGame.Placement
             return true;
         }
 
+        public bool TryGetPendingBottomAt(Vector2Int gridPos, out DiceController dice) {
+            dice = null;
+            if (!pendingSpawns.TryGetValue(gridPos, out var stack) || stack.Bottom == null) {
+                return false;
+            }
+
+            dice = stack.Bottom;
+            return true;
+        }
+
+        public bool TryGetBottomIncludingPending(Vector2Int gridPos, out DiceController dice) {
+            if (TryGetBottomAt(gridPos, out dice)) {
+                return true;
+            }
+
+            return TryGetPendingBottomAt(gridPos, out dice);
+        }
+
         public void SyncStackedTopAt(Vector2Int gridPos, Board board) {
             if (board == null || !TryGetTopAt(gridPos, out var top) || top == null) {
                 return;
@@ -335,7 +353,17 @@ namespace DiceGame.Placement
             }
 
             TryGetBottomAt(neighborPos, out var bottom);
-            return bottom;
+            if (bottom != null) {
+                return bottom;
+            }
+
+            if (TryGetPendingBottomAt(neighborPos, out var pendingBottom)
+                && pendingBottom != null
+                && pendingBottom.AllowsUnconditionalMount) {
+                return pendingBottom;
+            }
+
+            return null;
         }
 
         public DiceController ResolveSupportBottom(DiceController dice) {
