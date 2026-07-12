@@ -42,6 +42,7 @@
      <Compile Include="Assets\_Project\Scripts\Gameplay\Coupling\RollCancelPolicy.cs" />
      <Compile Include="Assets\_Project\Scripts\Core\DiceOrientation.cs" />
      <Compile Include="Assets\_Project\Scripts\Config\DiceOneVanishSettings.cs" />
+     <Compile Include="Assets\_Project\Scripts\Gameplay\DiceMatchOwnershipContext.cs" />
      <Compile Include="Assets\_Project\Scripts\Placement\HeightReachPolicy.cs" />
      <Compile Include="Assets\_Project\Scripts\MirrorFloor.cs" />
      <Compile Include="Assets\_Project\Scripts\View\AttackQueueView.cs" />
@@ -57,12 +58,16 @@
      <Compile Include="Assets\_Project\Scripts\Core\DiceGridMovePlan.cs" />
      <Compile Include="Assets\_Project\Scripts\Versus\Core\AttackVolumeResolver.cs" />
      <Compile Include="Assets\_Project\Scripts\Versus\Core\AttackVolley.cs" />
+     <Compile Include="Assets\_Project\Scripts\Core\ErasureKind.cs" />
      <Compile Include="Assets\_Project\Scripts\Core\DiceTransition.cs" />
      <Compile Include="Assets\_Project\Scripts\Board\CellType.cs" />
+     <Compile Include="Assets\_Project\Scripts\Gameplay\DeferredMatchSnapshot.cs" />
      <Compile Include="Assets\_Project\Scripts\Config\PlayerAttackSettings.cs" />
      <Compile Include="Assets\_Project\Scripts\Gameplay\Character\CharacterMovementExecutor.cs" />
      <Compile Include="Assets\_Project\Scripts\Placement\Support\SupportRef.cs" />
      <Compile Include="Assets\_Project\Scripts\Placement\DiceSlidePassability.cs" />
+     <Compile Include="Assets\_Project\Scripts\Versus\Core\NaturalSendKindBreakdown.cs" />
+     <Compile Include="Assets\_Project\Scripts\Config\PlayerNaturalSendSettings.cs" />
      <Compile Include="Assets\_Project\Scripts\Core\DiceSlidePlan.cs" />
      <Compile Include="Assets\_Project\Scripts\Core\DiceBehaviorConstants.cs" />
      <Compile Include="Assets\_Project\Scripts\Placement\IceSlidePassability.cs" />
@@ -111,6 +116,7 @@
      <Compile Include="Assets\_Project\Scripts\Config\CharacterMovementSettings.cs" />
      <Compile Include="Assets\_Project\Scripts\Placement\PushPassability.cs" />
      <Compile Include="Assets\_Project\Scripts\Placement\MagnetChainResolver.cs" />
+     <Compile Include="Assets\_Project\Scripts\Gameplay\ITierFallMatchNotifier.cs" />
      <Compile Include="Assets\_Project\Scripts\Placement\BoardSurface.cs" />
      <Compile Include="Assets\TutorialInfo\Scripts\Readme.cs" />
      <Compile Include="Assets\_Project\Scripts\Placement\LiftPassability.cs" />
@@ -122,6 +128,7 @@
      <Compile Include="Assets\_Project\Scripts\Core\DiceGridMovePlanner.cs" />
      <Compile Include="Assets\_Project\Scripts\Versus\Core\SinkingChainResolver.cs" />
      <Compile Include="Assets\_Project\Scripts\Placement\JumpInputPolicy.cs" />
+     <Compile Include="Assets\_Project\Scripts\Gameplay\MatchAttackerResolver.cs" />
      <Compile Include="Assets\_Project\Scripts\Gameplay\DiceMatchErasureSystem.cs" />
      <Compile Include="Assets\_Project\Scripts\Placement\PassabilityContext.cs" />
      <Compile Include="Assets\_Project\Scripts\Config\PhysicsSettings.cs" />
@@ -145,19 +152,12 @@
      <Compile Include="Assets\_Project\Scripts\Gameplay\Input\CharacterInputReader.cs" />
      <Compile Include="Assets\_Project\Scripts\Config\DiceCatalog.cs" />
      <Compile Include="Assets\_Project\Scripts\Placement\CellOccupancyQuery.cs" />
+     <Compile Include="Assets\_Project\Scripts\Versus\Core\NaturalSendVolleyBuilder.cs" />
      <Compile Include="Assets\_Project\Scripts\Versus\Core\AttackPowerCalculator.cs" />
      <Compile Include="Assets\_Project\Scripts\Placement\JumpPlayerTransferPolicy.cs" />
      <Compile Include="Assets\_Project\Scripts\Placement\SurfaceQuery.cs" />
      <Compile Include="Assets\_Project\Scripts\Core\DiceCapabilities.cs" />
      <Compile Include="Assets\_Project\Scripts\Versus\Core\AttackKindBreakdown.cs" />
-     <Compile Include="Assets\_Project\Scripts\Versus\Core\NaturalSendKindBreakdown.cs" />
-     <Compile Include="Assets\_Project\Scripts\Config\PlayerNaturalSendSettings.cs" />
-     <Compile Include="Assets\_Project\Scripts\Versus\Core\NaturalSendVolleyBuilder.cs" />
-     <Compile Include="Assets\_Project\Scripts\Gameplay\ITierFallMatchNotifier.cs" />
-     <Compile Include="Assets\_Project\Scripts\Gameplay\DiceMatchOwnershipContext.cs" />
-     <Compile Include="Assets\_Project\Scripts\Gameplay\DeferredMatchSnapshot.cs" />
-     <Compile Include="Assets\_Project\Scripts\Core\ErasureKind.cs" />
-     <Compile Include="Assets\_Project\Scripts\Gameplay\MatchAttackerResolver.cs" />
      <None Include="Assets\Packages\Dice_6\Documentation\Readmy.txt" />
     <Reference Include="UnityEngine">
         <HintPath>D:\Program Files\Unity\Hub\Editor\2021.3.10f1\Editor\Data\Managed\UnityEngine\UnityEngine.dll</HintPath>

@@ -1,0 +1,54 @@
+---
+description: キャラ移動 Policy の L1/L2 階層と dice capability 分岐
+globs: Assets/_Project/Scripts/Placement/**/*.cs
+alwaysApply: false
+---
+
+# Movement Policy Hierarchy
+
+`MovementTransitionEvaluator` および関連 Policy は **L1 → L2 → L3** の階層で評価する。各 Policy 内に capability チェックを散在させない。
+
+## L0: Capability 定義
+
+- 種別ごとの能力は `DiceBehaviorResolver` / `DiceCapabilities` に集約する。
+- 入口判定は `DiceController.IsPlayerMovable` / `CanJumpCoupleWithPlayer` を使う。
+
+## L1: Player-only（ダイス連携なし）
+
+- API: `JumpPlayerTransferPolicy.UsesPlayerOnlyMovement(isJumping, standingDice)`
+  - ジャンプ: `!CanJumpCoupleWithPlayer`（鉄・石・鉄隣接 Magnet 等）
+  - 地上: `!IsPlayerMovable`（鉄・動かせない Magnet 等）
+- L1 に該当したら **L2（dice-coupled）Policy は一切評価しない**。
+- プレイヤー単独の `WalkTransferPolicy` / `HeightReachPolicy` のみ。
+
+## L2: Dice-coupled（ダイス連携）
+
+- 入口: `JumpPlayerTransferPolicy.ShouldEvaluateDiceCoupledMovement`
+- **移動モードで分岐**（入口または最初の分岐で決定）:
+  - `SlideUntilBlocked`（氷）→ `IceSlide` / `IceSlidePassability` のみ
+  - `CanGridRoll` → `TopFallPolicy` / `TryEvaluateGridRoll` / `JumpGridRollPolicy`
+  - どちらも不可 → L2 評価しない
+
+### L2 評価順（空セル）
+
+1. IceSlide（地上）
+2. JumpGridRoll（ジャンプ）
+3. TopFall（`CanGridRoll` のみ）
+4. GridRoll
+
+### 禁止
+
+- L2 Policy（特に `TopFallPolicy`）内で `CanGridRoll` / `IsPlayerMovable` を個別に書かない。入口でスキップ済みにする。
+- Roll 系 Policy を Slide 系より先に置かない（氷が TopFall に入る原因になる）。
+- `AllowsRoll`（盤面状態）と `IsPlayerMovable`（ダイス capability）を混同しない。
+
+## L3: 実行・ビジュアル
+
+- 判定結果に応じ `DiceController` → `DiceView`。
+- Demote でも氷は `DiceTransition.GridMove`（HorizontalThenDrop）。`RollThenDemote` は使わない。
+
+## 新規 Policy 追加時
+
+1. L1 / L2 / L3 のどこに属するか決める。
+2. L2 なら `ShouldEvaluateDiceCoupledMovement` 通過後の helper（`TryEvaluateDiceCoupledMovementOn*Cell`）に追加する。
+3. capability 分岐は Policy 本体ではなく **L2 入口または評価順** で表現する。

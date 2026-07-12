@@ -503,6 +503,11 @@ namespace DiceGame.Gameplay
 
                     return;
                 case DiceGridMoveKind.Demote:
+                    if (plan.From.Kind == DiceKind.Ice) {
+                        PlaySlideVisual(plan.From, plan.To, onComplete);
+                        return;
+                    }
+
                     if (context.IsJump) {
                         PlayJumpTierChangeRollVisual(plan, context, onComplete);
                     } else {

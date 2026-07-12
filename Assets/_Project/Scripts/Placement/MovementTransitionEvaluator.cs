@@ -355,12 +355,15 @@ namespace DiceGame.Placement
                 fromCell,
                 fromLevel,
                 standingDice);
-            var playerOnlyTransfer = JumpPlayerTransferPolicy.UsesPlayerOnlyReach(isJumping, standingDice);
+            var playerOnlyMovement = JumpPlayerTransferPolicy.UsesPlayerOnlyMovement(isJumping, standingDice);
+            var evaluateDiceCoupledMovement = JumpPlayerTransferPolicy.ShouldEvaluateDiceCoupledMovement(
+                isJumping,
+                standingDice);
 
-            // Player-only jump transfer (Iron/Stone/iron-adjacent Magnet):
+            // L1 player-only transfer (Iron / Stone on jump / iron-adjacent Magnet / immovable on ground):
             // Resolve target surface at toCell first (top -> bottom -> floor),
             // and evaluate transfer uniformly regardless of whether toCell is empty or occupied.
-            if (playerOnlyTransfer
+            if (playerOnlyMovement
                 && fromLevel != SurfaceHeightLevel.Floor
                 && standingDice != null
                 && TryResolveTargetSurfaceAtForPlayerOnlyJump(toCell, out var targetDice, out var targetLevel, out var targetSurfaceWorldY)) {
@@ -390,63 +393,17 @@ namespace DiceGame.Placement
             }
 
             if (registry.CanPlaceBottomDiceAt(toCell)) {
-                if (!playerOnlyTransfer) {
-                if (isJumping
-                    && JumpGridRollPolicy.TryCreateCoupledTransition(
+                if (evaluateDiceCoupledMovement
+                    && TryEvaluateDiceCoupledMovementOnEmptyCell(
                         fromCell,
                         toCell,
+                        fromLevel,
                         fromSurface,
                         standingDice,
                         direction,
                         context,
-                        gridPlanBuilder,
-                        out var jumpDiceTransition)) {
-                    return jumpDiceTransition;
-                }
-
-                if (TopFallPolicy.TryEvaluate(
-                    fromLevel,
-                    fromSurface,
-                    standingDice,
-                    direction,
-                    context,
-                    gridPlanBuilder,
-                    out var topFallTransition)) {
-                    return topFallTransition;
-                }
-
-                if (TryEvaluateGridRoll(
-                    fromCell,
-                    toCell,
-                    fromSurface,
-                    standingDice,
-                    direction,
-                    GetOrthogonalDistance(fromCell, toCell),
-                    allowMultiCell: false,
-                    context,
-                    out var gridPlan,
-                    out _)) {
-                    if (isJumping) {
-                        if (!context.AllowJumpGridMove) {
-                            return MovementTransition.Blocked();
-                        }
-
-                        return CreateCoupledGridMoveTransition(standingDice, gridPlan);
-                    }
-
-                    return MovementTransition.GridRoll(gridPlan);
-                }
-
-                if (!isJumping
-                    && TryEvaluateIceSlide(
-                        standingDice,
-                        fromLevel,
-                        direction,
-                        out var iceSlidePlan,
-                        out _)) {
-                    return MovementTransition.IceSlide(iceSlidePlan);
-                }
-
+                        out var emptyCellDiceTransition)) {
+                    return emptyCellDiceTransition;
                 }
 
                 if (isJumping
@@ -492,7 +449,125 @@ namespace DiceGame.Placement
                 return heightTransferTransition;
             }
 
-            if (!playerOnlyTransfer) {
+            if (evaluateDiceCoupledMovement
+                && TryEvaluateDiceCoupledMovementOnOccupiedCell(
+                    fromCell,
+                    toCell,
+                    fromLevel,
+                    fromSurface,
+                    standingDice,
+                    direction,
+                    context,
+                    reach,
+                    out var occupiedCellDiceTransition)) {
+                return occupiedCellDiceTransition;
+            }
+
+            return MovementTransition.Blocked();
+        }
+
+        bool TryEvaluateDiceCoupledMovementOnEmptyCell(
+            Vector2Int fromCell,
+            Vector2Int toCell,
+            int fromLevel,
+            BoardSurface fromSurface,
+            DiceController standingDice,
+            Direction direction,
+            PassabilityContext context,
+            out MovementTransition transition) {
+            transition = default;
+            var isJumping = context.IsJumping;
+
+            if (!isJumping
+                && TryEvaluateIceSlide(
+                    standingDice,
+                    fromLevel,
+                    direction,
+                    out var iceSlidePlan,
+                    out _)) {
+                transition = MovementTransition.IceSlide(iceSlidePlan);
+                return true;
+            }
+
+            if (isJumping
+                && JumpGridRollPolicy.TryCreateCoupledTransition(
+                    fromCell,
+                    toCell,
+                    fromSurface,
+                    standingDice,
+                    direction,
+                    context,
+                    gridPlanBuilder,
+                    out var jumpDiceTransition)) {
+                transition = jumpDiceTransition;
+                return true;
+            }
+
+            if (standingDice.Capabilities.CanGridRoll
+                && TopFallPolicy.TryEvaluate(
+                    fromLevel,
+                    fromSurface,
+                    standingDice,
+                    direction,
+                    context,
+                    gridPlanBuilder,
+                    out var topFallTransition)) {
+                transition = topFallTransition;
+                return true;
+            }
+
+            if (!TryEvaluateGridRoll(
+                fromCell,
+                toCell,
+                fromSurface,
+                standingDice,
+                direction,
+                GetOrthogonalDistance(fromCell, toCell),
+                allowMultiCell: false,
+                context,
+                out var gridPlan,
+                out _)) {
+                return false;
+            }
+
+            if (isJumping) {
+                if (!context.AllowJumpGridMove) {
+                    transition = MovementTransition.Blocked();
+                    return true;
+                }
+
+                transition = CreateCoupledGridMoveTransition(standingDice, gridPlan);
+                return true;
+            }
+
+            transition = MovementTransition.GridRoll(gridPlan);
+            return true;
+        }
+
+        bool TryEvaluateDiceCoupledMovementOnOccupiedCell(
+            Vector2Int fromCell,
+            Vector2Int toCell,
+            int fromLevel,
+            BoardSurface fromSurface,
+            DiceController standingDice,
+            Direction direction,
+            PassabilityContext context,
+            HeightReachEvaluation reach,
+            out MovementTransition transition) {
+            transition = default;
+            var isJumping = context.IsJumping;
+
+            if (!isJumping
+                && TryEvaluateIceSlide(
+                    standingDice,
+                    fromLevel,
+                    direction,
+                    out var iceSlidePlan,
+                    out _)) {
+                transition = MovementTransition.IceSlide(iceSlidePlan);
+                return true;
+            }
+
             if (isJumping
                 && JumpGridRollPolicy.TryCreateCoupledTransition(
                     fromCell,
@@ -503,7 +578,8 @@ namespace DiceGame.Placement
                     context,
                     gridPlanBuilder,
                     out var occupiedJumpDiceTransition)) {
-                return occupiedJumpDiceTransition;
+                transition = occupiedJumpDiceTransition;
+                return true;
             }
 
             if (TierLandingPolicy.TryEvaluate(
@@ -516,10 +592,11 @@ namespace DiceGame.Placement
                 registry,
                 reach,
                 out var jumpTopTransition)) {
-                return jumpTopTransition;
+                transition = jumpTopTransition;
+                return true;
             }
 
-            if (TryEvaluateGridRoll(
+            if (!TryEvaluateGridRoll(
                 fromCell,
                 toCell,
                 fromSurface,
@@ -530,30 +607,21 @@ namespace DiceGame.Placement
                 context,
                 out var occupiedGridPlan,
                 out _)) {
-                if (isJumping) {
-                    if (!context.AllowJumpGridMove) {
-                        return MovementTransition.Blocked();
-                    }
+                return false;
+            }
 
-                    return CreateCoupledGridMoveTransition(standingDice, occupiedGridPlan);
+            if (isJumping) {
+                if (!context.AllowJumpGridMove) {
+                    transition = MovementTransition.Blocked();
+                    return true;
                 }
 
-                return MovementTransition.GridRoll(occupiedGridPlan);
+                transition = CreateCoupledGridMoveTransition(standingDice, occupiedGridPlan);
+                return true;
             }
 
-            }
-
-            if (!isJumping
-                && TryEvaluateIceSlide(
-                    standingDice,
-                    fromLevel,
-                    direction,
-                    out var occupiedIceSlidePlan,
-                    out _)) {
-                return MovementTransition.IceSlide(occupiedIceSlidePlan);
-            }
-
-            return MovementTransition.Blocked();
+            transition = MovementTransition.GridRoll(occupiedGridPlan);
+            return true;
         }
 
         bool TryResolveTargetSurfaceAtForPlayerOnlyJump(
@@ -692,7 +760,7 @@ namespace DiceGame.Placement
                 return true;
             }
 
-            if (JumpPlayerTransferPolicy.UsesPlayerOnlyReach(isJumping, standingDice)
+            if (JumpPlayerTransferPolicy.UsesPlayerOnlyMovement(isJumping, standingDice)
                 && fromLevel == SurfaceHeightLevel.Top
                 && registry.TryGetBottomAt(toCell, out var playerOnlyLowerTarget)
                 && playerOnlyLowerTarget != null
