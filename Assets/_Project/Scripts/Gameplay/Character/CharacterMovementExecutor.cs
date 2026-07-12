@@ -43,6 +43,7 @@ namespace DiceGame.Gameplay.Character
             JumpCoupledMoveCapability jumpCapability,
             System.Action<string> logJumpParallelRoll,
             DissolveDescentHoldState dissolveHold,
+            PendingJumpLandingState pendingJumpLanding,
             out bool consumedMovement) {
             consumedMovement = false;
 
@@ -58,11 +59,30 @@ namespace DiceGame.Gameplay.Character
                     return false;
 
                 case CharacterMoveKind.Transfer:
+                    if (TryDeferJumpLandingTransfer(
+                        isJumping,
+                        plan.Transition,
+                        plan.ToCell,
+                        pendingJumpLanding)) {
+                        standing.SetTraversalCellWithoutSupportChange(plan.ToCell);
+                        return false;
+                    }
+
                     standing.ApplyFromTransition(plan.Transition, plan.ToCell);
                     return false;
 
                 case CharacterMoveKind.StepToFloor:
-                    standing.ApplyFromTransition(MovementTransition.Walkable(null, SurfaceHeightLevel.Floor), plan.ToCell);
+                    var floorTransition = MovementTransition.Walkable(null, SurfaceHeightLevel.Floor);
+                    if (TryDeferJumpLandingTransfer(
+                        isJumping,
+                        floorTransition,
+                        plan.ToCell,
+                        pendingJumpLanding)) {
+                        standing.SetTraversalCellWithoutSupportChange(plan.ToCell);
+                        return false;
+                    }
+
+                    standing.ApplyFromTransition(floorTransition, plan.ToCell);
                     return false;
 
                 case CharacterMoveKind.CoupledDiceMove:
@@ -121,6 +141,16 @@ namespace DiceGame.Gameplay.Character
             }
         }
 
+        static bool TryDeferJumpLandingTransfer(
+            bool isJumping,
+            MovementTransition transition,
+            Vector2Int toCell,
+            PendingJumpLandingState pendingJumpLanding) {
+            return isJumping
+                && pendingJumpLanding != null
+                && pendingJumpLanding.TryDefer(transition, toCell);
+        }
+
         bool TryExecuteCoupledPlan(
             CharacterMovePlan plan,
             Vector2 nextXZ,
@@ -161,6 +191,42 @@ namespace DiceGame.Gameplay.Character
                 default:
                     return false;
             }
+        }
+    }
+
+    public sealed class PendingJumpLandingState
+    {
+        MovementTransition transition;
+        Vector2Int toCell;
+        bool hasPending;
+
+        public bool HasPending => hasPending;
+
+        public bool TryDefer(MovementTransition transition, Vector2Int toCell) {
+            if (transition.Kind != MovementTransitionKind.Walkable) {
+                return false;
+            }
+
+            this.transition = transition;
+            this.toCell = toCell;
+            hasPending = true;
+            return true;
+        }
+
+        public bool TryCommit(Action<MovementTransition, Vector2Int> applyStanding) {
+            if (!hasPending) {
+                return false;
+            }
+
+            applyStanding(transition, toCell);
+            Clear();
+            return true;
+        }
+
+        public void Clear() {
+            hasPending = false;
+            transition = default;
+            toCell = default;
         }
     }
 

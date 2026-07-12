@@ -62,6 +62,26 @@ namespace DiceGame.Gameplay.Character
             ApplySupportState(CharacterSupportState.Airborne(gridCell));
         }
 
+        /// <summary>
+        /// Updates passability cell during jump without changing dice/floor support (pending landing).
+        /// </summary>
+        public void SetTraversalCellWithoutSupportChange(Vector2Int gridCell) {
+            if (supportState.Support.Kind == SupportKind.Dice) {
+                supportState = CharacterSupportState.OnDice(
+                    gridCell,
+                    supportState.Level,
+                    supportState.Support);
+                return;
+            }
+
+            if (supportState.Support.Kind == SupportKind.Floor) {
+                supportState = CharacterSupportState.OnFloor(gridCell);
+                return;
+            }
+
+            supportState = CharacterSupportState.Airborne(gridCell);
+        }
+
         public void ApplySupportState(CharacterSupportState state, bool syncPlacement = true) {
             endRollTracking?.Invoke();
             UnsubscribeDice();

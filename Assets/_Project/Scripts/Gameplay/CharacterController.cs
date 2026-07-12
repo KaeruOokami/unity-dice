@@ -63,6 +63,7 @@ namespace DiceGame.Gameplay
         CharacterMovePlanner movePlanner;
         CharacterMovementExecutor movementExecutor;
         DissolveDescentHoldState dissolveHoldState;
+        PendingJumpLandingState pendingJumpLandingState;
         Transform characterMount;
         Transform characterTransform;
         CapsuleCollider characterPushCollider;
@@ -238,6 +239,7 @@ namespace DiceGame.Gameplay
                 transformDriver,
                 coupling);
             dissolveHoldState = new DissolveDescentHoldState();
+            pendingJumpLandingState = new PendingJumpLandingState();
             standingController.StandingDiceStateChanged += OnStandingDiceStateChanged;
 
             currentSpeed = 0f;
@@ -606,6 +608,7 @@ namespace DiceGame.Gameplay
                 jumpCapability,
                 LogJumpParallelRoll,
                 dissolveHoldState,
+                pendingJumpLandingState,
                 out var consumedMovement)) {
                 if (consumedMovement) {
                     UpdatePushContact(Vector2.zero);
@@ -874,6 +877,7 @@ namespace DiceGame.Gameplay
 
         void BeginJumpFromRollCancel() {
             CaptureJumpStartPlacement();
+            pendingJumpLandingState.Clear();
             jumpMotion = GravityMotion.CreateLaunch(GetDiceJumpHeight(), physicsSettings.Gravity);
             jumpPhase = JumpPhase.Airborne;
             jumpYOffset = 0f;
@@ -1876,6 +1880,7 @@ namespace DiceGame.Gameplay
             jumpMotion = GravityMotion.CreateLaunch(GetDiceJumpHeight(), physicsSettings.Gravity);
             jumpPhase = JumpPhase.Airborne;
             jumpYOffset = 0f;
+            pendingJumpLandingState.Clear();
             CaptureJumpStartPlacement();
             coupling.ResetJumpSessionFlags();
             ResetPushState();
@@ -1937,13 +1942,9 @@ namespace DiceGame.Gameplay
                 return;
             }
 
-            if (standingController.CurrentDice != null && standingController.CurrentDice.IsRolling) {
+            var targetDice = ResolveJumpVisualDice();
+            if (targetDice != null && targetDice.IsRolling) {
                 return;
-            }
-
-            DiceController targetDice = null;
-            if (standingController.TryGetStandingDice(out var standingDice) && !standingDice.IsErasing) {
-                targetDice = standingDice;
             }
 
             if (jumpVisualDice != null && jumpVisualDice != targetDice) {
@@ -1967,9 +1968,31 @@ namespace DiceGame.Gameplay
             }
 
             targetDice.View.ApplyVisualYOffset(board, jumpYOffset);
+            if (pendingJumpLandingState.HasPending) {
+                return;
+            }
+
             if (standingController.Tier == DiceStackTier.Bottom && registry.HasTopAt(standingController.GridCell)) {
                 registry.SyncStackedTopAt(standingController.GridCell, board);
             }
+        }
+
+        DiceController ResolveJumpVisualDice() {
+            if (coupling.JumpDiceGridMoved
+                && standingController.TryGetStandingDice(out var rollingDice)
+                && !rollingDice.IsErasing) {
+                return rollingDice;
+            }
+
+            if (jumpStartDice != null && !jumpStartDice.IsErasing) {
+                return jumpStartDice;
+            }
+
+            if (standingController.TryGetStandingDice(out var standingDice) && !standingDice.IsErasing) {
+                return standingDice;
+            }
+
+            return null;
         }
 
         void ClearJumpVisualDice(DiceController dice) {
@@ -1986,6 +2009,7 @@ namespace DiceGame.Gameplay
         }
 
         void EndJump() {
+            pendingJumpLandingState.TryCommit(standingController.ApplyFromTransition);
             MarkSameCellJumpPlacement();
 
             if (jumpVisualDice != null) {
@@ -2003,6 +2027,7 @@ namespace DiceGame.Gameplay
             jumpYOffset = 0f;
             hasJumpStartPlacement = false;
             jumpStartDice = null;
+            pendingJumpLandingState.Clear();
             coupling?.ResetJumpSessionFlags();
             transformDriver?.SnapYToSurface();
         }
