@@ -14,6 +14,7 @@ namespace DiceGame.Placement
         }
 
         readonly Dictionary<Vector2Int, GridStack> byGrid = new();
+        readonly Dictionary<Vector2Int, GridStack> pendingSpawns = new();
         readonly List<DiceController> allDice = new();
 
         Board board;
@@ -29,7 +30,7 @@ namespace DiceGame.Placement
                 return false;
             }
 
-            return !HasBottomAt(gridPos);
+            return !HasBottomAt(gridPos) && !HasPendingBottomAt(gridPos);
         }
 
         public bool CanPlaceTopDiceAt(Vector2Int gridPos) {
@@ -37,7 +38,7 @@ namespace DiceGame.Placement
                 return false;
             }
 
-            return HasBottomAt(gridPos) && !HasTopAt(gridPos);
+            return HasBottomAt(gridPos) && !HasTopAt(gridPos) && !HasPendingTopAt(gridPos);
         }
 
         public bool CanAcceptTopDiceAt(Vector2Int gridPos) {
@@ -116,6 +117,39 @@ namespace DiceGame.Placement
             bottomRadiance?.CompleteErasureFromOverride();
         }
 
+        public void RegisterPendingSpawn(DiceController dice, Vector2Int gridPos, DiceStackTier tier) {
+            if (dice == null) {
+                return;
+            }
+
+            ClearPendingSpawn(dice);
+
+            if (!allDice.Contains(dice)) {
+                allDice.Add(dice);
+            }
+
+            if (!pendingSpawns.TryGetValue(gridPos, out var stack)) {
+                stack = default;
+            }
+
+            if (tier == DiceStackTier.Top) {
+                stack.Top = dice;
+            } else {
+                stack.Bottom = dice;
+            }
+
+            pendingSpawns[gridPos] = stack;
+        }
+
+        public void CommitPendingSpawn(DiceController dice, Vector2Int gridPos, DiceStackTier tier) {
+            if (dice == null) {
+                return;
+            }
+
+            ClearPendingSpawn(dice);
+            Place(dice, gridPos, tier);
+        }
+
         public void Place(DiceController dice, Vector2Int gridPos, DiceStackTier tier) {
             if (dice == null) {
                 return;
@@ -142,6 +176,7 @@ namespace DiceGame.Placement
                 return;
             }
 
+            ClearPendingSpawn(dice);
             Remove(dice, dice.CurrentState.GridPos, dice.CurrentState.Tier);
             allDice.Remove(dice);
         }
@@ -205,6 +240,50 @@ namespace DiceGame.Placement
 
         public bool HasBottomAt(Vector2Int gridPos) {
             return byGrid.TryGetValue(gridPos, out var stack) && stack.Bottom != null;
+        }
+
+        bool HasPendingBottomAt(Vector2Int gridPos) {
+            return pendingSpawns.TryGetValue(gridPos, out var stack) && stack.Bottom != null;
+        }
+
+        bool HasPendingTopAt(Vector2Int gridPos) {
+            return pendingSpawns.TryGetValue(gridPos, out var stack) && stack.Top != null;
+        }
+
+        void ClearPendingSpawn(DiceController dice) {
+            if (dice == null || pendingSpawns.Count == 0) {
+                return;
+            }
+
+            var emptyCells = new List<Vector2Int>();
+            foreach (var pair in pendingSpawns) {
+                var stack = pair.Value;
+                var changed = false;
+
+                if (stack.Bottom == dice) {
+                    stack.Bottom = null;
+                    changed = true;
+                }
+
+                if (stack.Top == dice) {
+                    stack.Top = null;
+                    changed = true;
+                }
+
+                if (!changed) {
+                    continue;
+                }
+
+                if (stack.Bottom == null && stack.Top == null) {
+                    emptyCells.Add(pair.Key);
+                } else {
+                    pendingSpawns[pair.Key] = stack;
+                }
+            }
+
+            for (var i = 0; i < emptyCells.Count; i++) {
+                pendingSpawns.Remove(emptyCells[i]);
+            }
         }
 
         public bool BlocksTraversalBetween(Vector2Int fromCell, Vector2Int toCell) {

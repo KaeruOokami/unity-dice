@@ -220,9 +220,10 @@ namespace DiceGame.Gameplay
             isInitialized = true;
             isSpawning = true;
             currentState = new DiceState(gridPos, orientation, tier, kind);
-            registry?.Place(this, gridPos, tier);
+            registry?.RegisterPendingSpawn(this, gridPos, tier);
 
             void OnSpawnComplete() {
+                registry?.CommitPendingSpawn(this, currentState.GridPos, currentState.Tier);
                 isSpawning = false;
                 ConfigurePushBody();
                 StateChanged?.Invoke(currentState);

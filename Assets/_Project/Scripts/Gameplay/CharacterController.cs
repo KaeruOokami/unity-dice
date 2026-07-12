@@ -944,7 +944,8 @@ namespace DiceGame.Gameplay
             if (SurfaceHeightLevel.IsFloor(level)) {
                 if (!registry.TryGetBottomAt(cell, out var bottom)
                     || bottom == null
-                    || bottom == standingController.CurrentDice) {
+                    || bottom == standingController.CurrentDice
+                    || bottom.IsSpawning) {
                     return false;
                 }
 
@@ -955,7 +956,8 @@ namespace DiceGame.Gameplay
             if (level == SurfaceHeightLevel.Bottom) {
                 if (!registry.TryGetTopAt(cell, out var top)
                     || top == null
-                    || top == standingController.CurrentDice) {
+                    || top == standingController.CurrentDice
+                    || top.IsSpawning) {
                     return false;
                 }
 
