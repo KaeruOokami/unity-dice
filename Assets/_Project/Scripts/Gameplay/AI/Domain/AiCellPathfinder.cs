@@ -110,8 +110,8 @@ namespace DiceGame.Gameplay.AI.Domain
                         continue;
                     }
 
-                    if (!constraints.IsCellAllowed(neighborCell, goalCell)) {
-                        log += $" {neighborCell}:forbidden";
+                    if (!constraints.IsTransitionAllowed(transition, node.State)) {
+                        log += $" {neighborCell}:cluster-move-forbidden";
                         continue;
                     }
 
@@ -187,8 +187,8 @@ namespace DiceGame.Gameplay.AI.Domain
                     continue;
                 }
 
-                if (!constraints.IsCellAllowed(neighborCell, goalCell)) {
-                    log += $" {neighborCell}:forbidden";
+                if (!constraints.IsTransitionAllowed(transition, start)) {
+                    log += $" {neighborCell}:cluster-move-forbidden";
                     continue;
                 }
 

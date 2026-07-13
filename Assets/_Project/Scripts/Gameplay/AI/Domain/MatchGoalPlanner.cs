@@ -110,7 +110,7 @@ namespace DiceGame.Gameplay.AI.Domain
             }
 
             var constraints = avoidClusterCells
-                ? new AiNavigationConstraints(ClusterSelectionEvaluator.GetClusterCells(goal.ClusterDice))
+                ? AiNavigationConstraints.ForClusterProtection(goal.ClusterDice)
                 : AiNavigationConstraints.None;
             var preferJump = subGoal.Kind != AiSubGoalKind.ReachWorkDie;
 
