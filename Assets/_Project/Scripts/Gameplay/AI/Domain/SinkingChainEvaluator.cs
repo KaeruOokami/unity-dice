@@ -135,6 +135,7 @@ namespace DiceGame.Gameplay.AI.Domain
             }
 
             var sinkingCells = CollectSinkingCells(face, allDice);
+            var sinkingDice = GetSinkingDice(face, allDice);
             var bestScore = float.MinValue;
             var found = false;
 
@@ -144,6 +145,15 @@ namespace DiceGame.Gameplay.AI.Domain
                 }
 
                 if (!IsMatchAdjacentToSinkingGroup(cell, tier, face, allDice)) {
+                    continue;
+                }
+
+                if (!ClusterSelectionEvaluator.HasMovableExternalNeighbor(
+                    cell,
+                    tier,
+                    sinkingDice,
+                    allDice,
+                    workDie.Controller)) {
                     continue;
                 }
 

@@ -255,6 +255,7 @@ namespace DiceGame.Gameplay.AI.Domain
                 && WorkDieSlidePlanner.TrySelectJoinTargetCell(
                     cluster,
                     workDie,
+                    snapshot.AllDice,
                     registry,
                     out var joinCell,
                     out var joinTier)) {

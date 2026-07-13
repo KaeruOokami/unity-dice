@@ -154,7 +154,7 @@ namespace DiceGame.Gameplay.AI.Domain
             return found;
         }
 
-        public static bool ClusterContains(List<DiceSnapshot> cluster, DiceSnapshot candidate) {
+        public static bool ClusterContains(IReadOnlyList<DiceSnapshot> cluster, DiceSnapshot candidate) {
             for (var i = 0; i < cluster.Count; i++) {
                 if (cluster[i].Controller == candidate.Controller) {
                     return true;
@@ -189,6 +189,40 @@ namespace DiceGame.Gameplay.AI.Domain
             }
 
             return cells;
+        }
+
+        public static bool HasMovableExternalNeighbor(
+            Vector2Int cell,
+            DiceStackTier tier,
+            IReadOnlyList<DiceSnapshot> cluster,
+            IReadOnlyList<DiceSnapshot> allDice,
+            DiceController excludeDie = null) {
+            if (allDice == null) {
+                return false;
+            }
+
+            var targetSlot = new DiceSlot(cell, tier);
+            for (var i = 0; i < allDice.Count; i++) {
+                var snapshot = allDice[i];
+                if (!DiceBoardAnalyzer.IsMovable(snapshot)) {
+                    continue;
+                }
+
+                if (ClusterContains(cluster, snapshot)) {
+                    continue;
+                }
+
+                if (excludeDie != null && snapshot.Controller == excludeDie) {
+                    continue;
+                }
+
+                var dieSlot = new DiceSlot(snapshot.GridPos, snapshot.Tier);
+                if (DiceStackAdjacency.IsAdjacentForLift(targetSlot, dieSlot)) {
+                    return true;
+                }
+            }
+
+            return false;
         }
 
         static bool HasImmovableDice(List<DiceSnapshot> cluster) {

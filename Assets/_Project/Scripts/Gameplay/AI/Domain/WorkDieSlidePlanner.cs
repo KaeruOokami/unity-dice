@@ -28,6 +28,7 @@ namespace DiceGame.Gameplay.AI.Domain
         public static bool TrySelectJoinTargetCell(
             IReadOnlyList<DiceSnapshot> cluster,
             DiceSnapshot workDie,
+            IReadOnlyList<DiceSnapshot> allDice,
             DiceRegistry registry,
             out Vector2Int targetCell,
             out DiceStackTier targetTier) {
@@ -48,6 +49,15 @@ namespace DiceGame.Gameplay.AI.Domain
                 }
 
                 if (!CarryPlacementPassability.TryResolveTarget(cell, registry, out var tier, out _)) {
+                    continue;
+                }
+
+                if (!ClusterSelectionEvaluator.HasMovableExternalNeighbor(
+                    cell,
+                    tier,
+                    cluster,
+                    allDice,
+                    workDie.Controller)) {
                     continue;
                 }
 
