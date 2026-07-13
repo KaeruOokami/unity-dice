@@ -139,30 +139,66 @@ namespace DiceGame.Gameplay.AI.Domain
                 return null;
             }
 
-            var dieCell = die.CurrentState.GridPos;
-            if (!IsAdjacentToCell(snapshot, dieCell)) {
+            if (!IsStandingOnTarget(snapshot, die)) {
                 return SelectMovementAction(
-                    dieCell,
+                    die.CurrentState.GridPos,
                     snapshot,
                     character,
                     settings,
                     preferJump: false,
-                    standOnDie: null,
+                    standOnDie: die,
                     AiNavigationConstraints.None);
             }
 
-            if (DiceBoardAnalyzer.TryGetRollDirectionForTopFace(
-                die.CurrentState.Orientation,
-                subGoal.TargetFace,
-                out var rollDirection)) {
-                return new Application.Actions.MoveInDirectionAction(
-                    rollDirection,
-                    settings.MoveActionMaxFrames,
-                    dieCell,
-                    Application.Actions.MoveActionPurpose.RollAdjacentDie);
+            if (!character.TryGetAiNavigationQuery(out var passability, out var footingWorldY)) {
+                Application.AiDebugLog.Log("OrientPlan FAILED navigation-query-unavailable");
+                return null;
             }
 
-            return null;
+            var fromLevel = character.StandingPlacement.Level;
+            var allowJump = settings != null && settings.AllowJump;
+            if (!WorkDieOrientPlanner.TrySelectNextStep(
+                passability,
+                die,
+                fromLevel,
+                footingWorldY,
+                character.PlayerSlot,
+                subGoal.TargetFace,
+                allowJump,
+                out var orientStep)) {
+                Application.AiDebugLog.Log(
+                    $"OrientPlan FAILED die={die.name} cell={die.CurrentState.GridPos} " +
+                    $"currentTop={die.CurrentState.Orientation.Top} targetTop={subGoal.TargetFace}");
+                return null;
+            }
+
+            Application.AiDebugLog.Log(
+                $"OrientPlan die={die.name} currentTop={die.CurrentState.Orientation.Top} targetTop={subGoal.TargetFace} " +
+                $"step={orientStep.Direction} mode={orientStep.Mode} landing={orientStep.LandingCell} " +
+                $"landingTier={orientStep.LandingTier} remainingRolls={orientStep.RemainingRolls}");
+
+            var maxFrames = settings != null ? settings.MoveActionMaxFrames : 30;
+            if (orientStep.Mode == WorkDieOrientExecutionMode.GroundRoll) {
+                return new Application.Actions.MoveToAdjacentCellAction(
+                    orientStep.LandingCell,
+                    orientStep.LandingCell,
+                    maxFrames,
+                    Application.Actions.MoveActionPurpose.RollWorkDie,
+                    die,
+                    MovementTransitionKind.CanRoll);
+            }
+
+            if (!allowJump) {
+                return null;
+            }
+
+            return new Application.Actions.JumpThenMoveAction(
+                orientStep.Direction,
+                orientStep.LandingCell,
+                settings != null ? settings.JumpMoveMaxFrames : 48,
+                die,
+                releaseInputDuringRoll: false,
+                expectedLandingTier: orientStep.LandingTier);
         }
 
         static Application.AiDiscreteAction BuildJoinClusterAction(

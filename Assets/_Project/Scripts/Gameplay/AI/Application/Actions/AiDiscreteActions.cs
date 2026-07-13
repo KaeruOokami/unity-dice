@@ -9,7 +9,8 @@ namespace DiceGame.Gameplay.AI.Application.Actions
     {
         NavigateToCell,
         StandOnDie,
-        RollAdjacentDie
+        RollAdjacentDie,
+        RollWorkDie
     }
 
     public sealed class MoveInDirectionAction : AiDiscreteAction
@@ -268,23 +269,37 @@ namespace DiceGame.Gameplay.AI.Application.Actions
         readonly Vector2Int targetCell;
         readonly DiceController standOnDie;
         readonly int moveMaxFrames;
+        readonly bool releaseInputDuringRoll;
+        readonly DiceStackTier? expectedLandingTier;
         int phase;
         int moveFrames;
+        bool sawMotion;
 
         public JumpThenMoveAction(
             Direction jumpDirection,
             Vector2Int targetCell,
             int moveMaxFrames,
-            DiceController standOnDie = null) {
+            DiceController standOnDie = null,
+            bool releaseInputDuringRoll = false,
+            DiceStackTier? expectedLandingTier = null) {
             this.jumpDirection = jumpDirection;
             this.targetCell = targetCell;
             this.moveMaxFrames = moveMaxFrames;
             this.standOnDie = standOnDie;
+            this.releaseInputDuringRoll = releaseInputDuringRoll;
+            this.expectedLandingTier = expectedLandingTier;
         }
 
         public override void Begin(AiExecutionContext context) {
             phase = 0;
             moveFrames = 0;
+            sawMotion = false;
+
+            AiDebugLog.Log(
+                $"JumpMoveStart direction={jumpDirection} targetCell={targetCell} " +
+                $"standOn={(standOnDie != null ? standOnDie.name : "none")} releaseOnRoll={releaseInputDuringRoll} " +
+                $"expectedTier={(expectedLandingTier.HasValue ? expectedLandingTier.Value.ToString() : "any")} " +
+                $"playerCell={context.Character.StandingGridCell}");
         }
 
         public override void Tick(AiExecutionContext context) {
@@ -296,7 +311,16 @@ namespace DiceGame.Gameplay.AI.Application.Actions
             }
 
             moveFrames++;
-            context.InputSource.SetMove(CharacterController.DirectionToMoveVector(jumpDirection));
+            if (releaseInputDuringRoll
+                && (context.Character.IsBusy || context.Character.IsJumping)) {
+                sawMotion = true;
+            }
+
+            var shouldHoldDirection = !releaseInputDuringRoll || !sawMotion;
+            context.InputSource.SetMove(
+                shouldHoldDirection
+                    ? CharacterController.DirectionToMoveVector(jumpDirection)
+                    : Vector2.zero);
         }
 
         public override bool IsComplete(AiExecutionContext context) {
@@ -304,27 +328,76 @@ namespace DiceGame.Gameplay.AI.Application.Actions
                 return false;
             }
 
-            if (standOnDie != null && context.Character.CurrentDice == standOnDie && context.IsWorldIdle()) {
+            if (!context.IsWorldIdle()) {
+                if (moveFrames >= moveMaxFrames) {
+                    context.InputSource.SetMove(Vector2.zero);
+                    LogComplete(context, "Timeout");
+                    return true;
+                }
+
+                return false;
+            }
+
+            if (standOnDie != null
+                && context.IsWorldIdle()
+                && context.Character.CurrentDice == standOnDie
+                && standOnDie.CurrentState.GridPos == targetCell
+                && MatchesExpectedLandingTier(standOnDie)) {
                 context.InputSource.SetMove(Vector2.zero);
+                LogComplete(context, "RollWorkDie");
                 return true;
             }
 
-            if (context.Character.StandingGridCell == targetCell && context.IsWorldIdle()) {
+            if (standOnDie != null) {
+                if (moveFrames >= moveMaxFrames) {
+                    context.InputSource.SetMove(Vector2.zero);
+                    LogComplete(context, "Timeout");
+                    return true;
+                }
+
+                return false;
+            }
+
+            if (context.Character.StandingGridCell == targetCell) {
                 context.InputSource.SetMove(Vector2.zero);
+                LogComplete(context, "ReachedTargetCell");
                 return true;
             }
 
-            if (!context.Character.IsJumping && moveFrames > 3 && context.IsWorldIdle()) {
+            if (!context.Character.IsJumping && moveFrames > 3) {
                 context.InputSource.SetMove(Vector2.zero);
+                LogComplete(context, "Settled");
                 return true;
             }
 
             if (moveFrames >= moveMaxFrames) {
                 context.InputSource.SetMove(Vector2.zero);
+                LogComplete(context, "Timeout");
                 return true;
             }
 
             return false;
+        }
+
+        bool MatchesExpectedLandingTier(DiceController die) {
+            if (!expectedLandingTier.HasValue) {
+                return true;
+            }
+
+            return die.CurrentState.Tier == expectedLandingTier.Value;
+        }
+
+        void LogComplete(AiExecutionContext context, string reason) {
+            var dieState = standOnDie != null ? standOnDie.CurrentState : default;
+            AiDebugLog.Log(
+                $"JumpMoveComplete reason={reason} direction={jumpDirection} targetCell={targetCell} " +
+                $"frames={moveFrames} limit={moveMaxFrames} sawMotion={sawMotion} " +
+                $"playerCell={context.Character.StandingGridCell} " +
+                $"currentDice={(context.Character.CurrentDice != null ? context.Character.CurrentDice.name : "none")} " +
+                $"standOn={(standOnDie != null ? standOnDie.name : "none")} " +
+                $"dieCell={(standOnDie != null ? dieState.GridPos.ToString() : "none")} " +
+                $"dieTier={(standOnDie != null ? dieState.Tier.ToString() : "none")} " +
+                $"dieTop={(standOnDie != null ? dieState.Orientation.Top.ToString() : "none")}");
         }
     }
 

@@ -117,6 +117,14 @@ namespace DiceGame.Gameplay.AI.Application.Actions
                 return true;
             }
 
+            if (purpose == MoveActionPurpose.RollWorkDie
+                && standOnDie != null
+                && context.Character.CurrentDice == standOnDie
+                && rollStepSettled) {
+                reason = "RollWorkDie";
+                return true;
+            }
+
             if (rollStepSettled || atStepCenter) {
                 reason = "ReachedStepCell";
                 return true;

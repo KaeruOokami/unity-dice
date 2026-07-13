@@ -121,7 +121,16 @@ namespace DiceGame.Gameplay.AI.Domain
                 return null;
             }
 
-            if (IsStandingOnDice(snapshot, workDie.Controller)) {
+            var subGoals = new List<AiSubGoal>();
+            if (!IsStandingOnDice(snapshot, workDie.Controller)) {
+                subGoals.Add(AiSubGoal.ReachWorkDie(workDie.Controller));
+            }
+
+            if (workDie.TopFace != face) {
+                subGoals.Add(AiSubGoal.OrientDie(workDie.Controller, face));
+            }
+
+            if (subGoals.Count == 0) {
                 return null;
             }
 
@@ -131,10 +140,6 @@ namespace DiceGame.Gameplay.AI.Domain
                 snapshot.PlayerCell,
                 distanceToWorkDie,
                 settings);
-
-            var subGoals = new List<AiSubGoal> {
-                AiSubGoal.ReachWorkDie(workDie.Controller)
-            };
 
             return new MatchGoal(
                 face,
