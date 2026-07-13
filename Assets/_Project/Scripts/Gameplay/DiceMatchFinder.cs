@@ -69,7 +69,7 @@ namespace DiceGame.Gameplay
             var lookup = new Dictionary<(Vector2Int, DiceStackTier), DiceController>();
 
             foreach (var dice in allDice) {
-                if (dice == null || consumed.Contains(dice) || dice.IsSpawning) {
+                if (dice == null || consumed.Contains(dice) || !IsMatchEligible(dice)) {
                     continue;
                 }
 
@@ -82,6 +82,10 @@ namespace DiceGame.Gameplay
             }
 
             return lookup;
+        }
+
+        static bool IsMatchEligible(DiceController dice) {
+            return !dice.IsSpawning && !dice.IsRolling;
         }
 
         static List<DiceController> FloodFill(

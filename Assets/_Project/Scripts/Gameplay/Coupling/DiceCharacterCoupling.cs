@@ -396,7 +396,7 @@ namespace DiceGame.Gameplay.Coupling
 
         public bool TryBeginGroundIceSlide(DiceSlidePlan plan, Vector2 nextXZ, float halfExtent) {
             var dice = standing.CurrentDice;
-            if (dice?.View.DiceTransform == null || dice.IsErasing) {
+            if (dice?.View.DiceTransform == null || dice.IsBusy) {
                 return false;
             }
 
@@ -423,7 +423,7 @@ namespace DiceGame.Gameplay.Coupling
             Vector2 nextXZ,
             float halfExtent) {
             var dice = standing.CurrentDice;
-            if (dice?.View.DiceTransform == null || dice.IsErasing) {
+            if (dice?.View.DiceTransform == null || dice.IsBusy) {
                 return false;
             }
 

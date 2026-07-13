@@ -19,6 +19,10 @@ namespace DiceGame.Placement
                 return false;
             }
 
+            if (dice.IsErasing || dice.IsVanishing) {
+                return false;
+            }
+
             if (!dice.Capabilities.CanBeLiftedByPlayer) {
                 return false;
             }

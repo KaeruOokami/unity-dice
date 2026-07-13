@@ -50,7 +50,7 @@ namespace DiceGame.Gameplay
         public bool IsErasureGhost =>
             IsSinkErasing && diceView != null && diceView.IsErasureGhost;
         public bool IsCarried => isCarried;
-        public bool IsBusy => IsRolling || isSpawning || IsErasing || isCarried;
+        public bool IsBusy => IsRolling || isSpawning || IsErasing || isVanishing || isCarried;
         public DiceState CurrentState => currentState;
         public DiceKind Kind => currentState.Kind;
         public DiceCapabilities Capabilities => DiceBehaviorResolver.GetCapabilities(Kind);
@@ -414,7 +414,7 @@ namespace DiceGame.Gameplay
             DiceGridMovePlan plan,
             DiceRollVisualSnapshot snapshot,
             float cancelProgress) {
-            if (IsErasing || isCarried || isRolling || board == null || diceView == null || registry == null) {
+            if (IsErasing || isVanishing || isCarried || isRolling || board == null || diceView == null || registry == null) {
                 return false;
             }
 
@@ -443,7 +443,7 @@ namespace DiceGame.Gameplay
             DiceGridMovePlan plan,
             DiceRollVisualSnapshot snapshot,
             Func<VerticalMotionState> jumpMotionProvider) {
-            if (IsErasing || isCarried || isRolling || board == null || diceView == null || registry == null) {
+            if (IsErasing || isVanishing || isCarried || isRolling || board == null || diceView == null || registry == null) {
                 return false;
             }
 
@@ -489,7 +489,7 @@ namespace DiceGame.Gameplay
         }
 
         bool TryExecuteMovePlan(DiceGridMovePlan plan, DiceMoveVisualContext context) {
-            if (IsErasing || isCarried || isSpawning || isRolling || board == null || diceView == null || registry == null) {
+            if (IsErasing || isVanishing || isCarried || isSpawning || isRolling || board == null || diceView == null || registry == null) {
                 return false;
             }
 
