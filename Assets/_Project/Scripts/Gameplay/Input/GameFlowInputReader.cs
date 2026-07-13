@@ -12,7 +12,7 @@ namespace DiceGame.Gameplay.Input
         InputActionMap[] gameplayMaps;
         bool isConfigured;
 
-        public void Configure(PlayerInputSettings inputSettings)
+        public void Configure(PlayerInputSettings inputSettings, int requiredPlayerCount)
         {
             if (inputSettings?.InputActions == null)
             {
@@ -30,7 +30,7 @@ namespace DiceGame.Gameplay.Input
                 PlayerInputSettings.ResetAction,
                 throwIfNotFound: true);
 
-            gameplayMaps = new InputActionMap[inputSettings.ActivePlayerCount];
+            gameplayMaps = new InputActionMap[requiredPlayerCount];
             for (var i = 0; i < gameplayMaps.Length; i++)
             {
                 var slot = i == 0 ? PlayerSlot.Player1 : PlayerSlot.Player2;

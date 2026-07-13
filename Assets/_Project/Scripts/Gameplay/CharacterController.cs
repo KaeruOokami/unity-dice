@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using DiceGame.Config;
 using DiceGame.Core;
+using DiceGame.Gameplay.AI.Domain;
 using DiceGame.Gameplay.Character;
 using DiceGame.Gameplay.Coupling;
 using DiceGame.Gameplay.Input;
@@ -20,6 +21,8 @@ namespace DiceGame.Gameplay
         [SerializeField] Board board;
         [SerializeField] GameObject characterObject;
         [SerializeField] CharacterInputReader inputReader;
+
+        ICharacterInputSource inputSource;
 
         CharacterMovementSettings movementSettings;
         PhysicsSettings physicsSettings;
@@ -124,6 +127,18 @@ namespace DiceGame.Gameplay
             : Vector2.zero;
         public DiceController CurrentDice => standingController?.CurrentDice;
         public PlayerSlot PlayerSlot { get; private set; }
+        public Vector2Int StandingGridCell => standingController != null ? standingController.GridCell : Vector2Int.zero;
+        public CharacterPlacement StandingPlacement =>
+            standingController != null ? standingController.Current : default;
+        public bool IsJumping => jumpPhase != JumpPhase.None;
+        public bool IsLiftCarrying => liftPhase == LiftPhase.Carrying;
+        public bool IsLiftBusy => liftPhase == LiftPhase.Lifting || liftPhase == LiftPhase.Placing;
+
+        ICharacterInputSource ActiveInputSource => inputSource != null ? inputSource : inputReader;
+
+        public void SetInputSource(ICharacterInputSource source) {
+            inputSource = source;
+        }
 
         public void Configure(
             Board targetBoard,
@@ -146,7 +161,7 @@ namespace DiceGame.Gameplay
                 inputReader = GetComponent<CharacterInputReader>();
             }
 
-            if (inputSettings != null && inputReader != null) {
+            if (inputSettings != null && inputReader != null && inputSource == null) {
                 inputReader.Configure(slot, inputSettings);
             }
             standingController = new CharacterStandingController();
@@ -185,8 +200,8 @@ namespace DiceGame.Gameplay
                 inputReader = GetComponent<CharacterInputReader>();
             }
 
-            if (inputReader == null) {
-                Debug.LogError("CharacterController: CharacterInputReader is not assigned.");
+            if (ActiveInputSource == null) {
+                Debug.LogError("CharacterController: Character input source is not assigned.");
                 return;
             }
 
@@ -313,7 +328,7 @@ namespace DiceGame.Gameplay
                 return;
             }
 
-            var input = inputReader.ReadMove();
+            var input = ActiveInputSource.ReadMove();
             UpdateLastFacing(input);
 
             if (liftPhase == LiftPhase.Lifting || liftPhase == LiftPhase.Placing) {
@@ -323,7 +338,7 @@ namespace DiceGame.Gameplay
 
             if (liftPhase == LiftPhase.Carrying) {
                 currentSpeed = 0f;
-                if (inputReader.TryGetDirectionPressedThisFrame(out var placeDirection)) {
+                if (ActiveInputSource.TryGetDirectionPressedThisFrame(out var placeDirection)) {
                     TryPlaceCarriedDice(placeDirection);
                 }
 
@@ -344,11 +359,11 @@ namespace DiceGame.Gameplay
 
             TryMountOntoCoveringDiceIfNeeded();
 
-            if (inputReader.WasLiftPressedThisFrame()) {
+            if (ActiveInputSource.WasLiftPressedThisFrame()) {
                 TryBeginLift();
             }
 
-            if (jumpPhase == JumpPhase.None && inputReader.WasJumpPressedThisFrame()) {
+            if (jumpPhase == JumpPhase.None && ActiveInputSource.WasJumpPressedThisFrame()) {
                 TryBeginJump();
             }
 
@@ -862,7 +877,7 @@ namespace DiceGame.Gameplay
             coupling.EnsureTrackingFromCurrentPose();
             currentSpeed = 0f;
 
-            var jumpPressed = inputReader.WasJumpPressedThisFrame();
+            var jumpPressed = ActiveInputSource.WasJumpPressedThisFrame();
             var halfExtent = transformDriver.GetWalkHalfExtent();
             coupling.TryHandleRollCancel(
                 input,
@@ -1732,7 +1747,7 @@ namespace DiceGame.Gameplay
                 return false;
             }
 
-            var input = inputReader.ReadMove();
+            var input = ActiveInputSource.ReadMove();
             if (input.sqrMagnitude > 0f) {
                 UpdateLastFacing(input);
             }
@@ -2089,6 +2104,129 @@ namespace DiceGame.Gameplay
 
             matchActionContext?.RegisterActionDice(landingDice, PlayerSlot);
             matchActionContext?.NotifyParticipantMoveCompleted();
+        }
+
+        public static Vector2 DirectionToMoveVector(Direction direction) {
+            return direction switch {
+                Direction.East => Vector2.right,
+                Direction.West => Vector2.left,
+                Direction.North => new Vector2(0f, 1f),
+                Direction.South => new Vector2(0f, -1f),
+                _ => Vector2.zero
+            };
+        }
+
+        public bool TryEvaluateMove(Vector2 moveInput, out CharacterMovePlan plan) {
+            plan = default;
+            if (!isInitialized || movePlanner == null || standingController == null || transformDriver == null) {
+                return false;
+            }
+
+            var currentXZ = transformDriver.GetWorldXZ();
+            var standingCell = standingController.GridCell;
+            var fromLevel = standingController.Level;
+            var footingWorldY = GetFootingWorldY();
+            var walkHalfExtent = transformDriver.GetWalkHalfExtent();
+            var rollTriggerHalfExtent = movementSettings.GetRollTriggerHalfExtent(walkHalfExtent);
+            var isJumping = jumpPhase != JumpPhase.None;
+            var hasJumpCapability = false;
+            JumpCoupledMoveCapability jumpCapability = default;
+            if (isJumping) {
+                hasJumpCapability = TryGetJumpCoupledMoveCapability(out jumpCapability);
+            }
+
+            plan = movePlanner.TryBuildPlan(
+                currentXZ,
+                moveInput,
+                standingCell,
+                fromLevel,
+                footingWorldY,
+                rollTriggerHalfExtent,
+                standingController,
+                isJumping,
+                hasJumpCapability,
+                jumpCapability,
+                PlayerSlot);
+            return true;
+        }
+
+        public bool CanLiftTarget(DiceController dice) {
+            if (dice == null || registry == null || standingController == null) {
+                return false;
+            }
+
+            if (dice.IsErasing || dice.IsVanishing || dice.IsBusy) {
+                return false;
+            }
+
+            return LiftPassability.CanLift(
+                standingController.Current,
+                IsOnFloor,
+                standingController.ResolveStandingDiceForMovement(),
+                dice,
+                registry);
+        }
+
+        public bool CanPlaceCarriedAt(Direction direction) {
+            if (liftPhase != LiftPhase.Carrying || carriedDice == null || board == null) {
+                return false;
+            }
+
+            var targetGrid = standingController.GridCell + direction.ToGridDelta();
+            return CarryPlacementPassability.TryResolveTarget(targetGrid, registry, out _, out _);
+        }
+
+        public bool IsReadyForAiPlanning() {
+            return isInitialized
+                && liftPhase != LiftPhase.Lifting
+                && liftPhase != LiftPhase.Placing
+                && jumpPhase == JumpPhase.None
+                && !isPushFollowing
+                && !isFalling
+                && (registry == null || !registry.AnyRolling())
+                && !IsBusy;
+        }
+
+        public bool TryGetAiNavigationQuery(
+            out MovementTransitionEvaluator passability,
+            out float footingWorldY) {
+            if (!isInitialized || movementTransition == null) {
+                passability = null;
+                footingWorldY = 0f;
+                return false;
+            }
+
+            passability = movementTransition;
+            footingWorldY = GetFootingWorldY();
+            return true;
+        }
+
+        public AiNavigationState GetAiNavigationState() {
+            return new AiNavigationState(
+                StandingGridCell,
+                StandingPlacement.Level,
+                CurrentDice);
+        }
+
+        public Vector2 GetStandingWorldXZ() {
+            return transformDriver != null ? transformDriver.GetWorldXZ() : Vector2.zero;
+        }
+
+        public bool IsNearCellCenter(Vector2Int cell, float tolerance) {
+            if (transformDriver == null) {
+                return false;
+            }
+
+            var delta = transformDriver.GetWorldXZ() - transformDriver.GetCellCenterXZ(cell);
+            return delta.sqrMagnitude <= tolerance * tolerance;
+        }
+
+        public float GetDistanceToCellCenter(Vector2Int cell) {
+            if (transformDriver == null) {
+                return float.MaxValue;
+            }
+
+            return Vector2.Distance(transformDriver.GetWorldXZ(), transformDriver.GetCellCenterXZ(cell));
         }
     }
 }

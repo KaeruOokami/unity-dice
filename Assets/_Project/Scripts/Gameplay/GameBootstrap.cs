@@ -1,6 +1,8 @@
 using System;
 using System.Collections.Generic;
 using DiceGame.Config;
+using DiceGame.Gameplay.AI.Application;
+using DiceGame.Gameplay.Input;
 using DiceGame.Grid;
 using DiceGame.Placement;
 using DiceGame.View;
@@ -64,6 +66,7 @@ namespace DiceGame.Gameplay
         [SerializeField] DiceOneVanishSettings diceOneVanishSettings;
         [SerializeField] DiceSpawnSettings diceSpawnSettings;
         [SerializeField] DiceCatalog diceCatalog;
+        [SerializeField] AiPlayerSettings aiPlayerSettings;
         [SerializeField] CameraSetupSettings cameraSetup = new();
 
         DiceRegistry registry;
@@ -114,12 +117,15 @@ namespace DiceGame.Gameplay
                 return;
             }
 
-            if (!gameSessionSettings.TryValidate(playerInputSettings, out var sessionError)) {
+            if (!gameSessionSettings.TryValidate(out var sessionError)) {
                 Debug.LogError($"GameBootstrap: {sessionError}");
                 return;
             }
 
-            if (!playerInputSettings.TryValidateStartup(out var inputError)) {
+            if (!playerInputSettings.TryValidateStartup(
+                gameSessionSettings.RequiredPlayerCount,
+                aiPlayerSettings,
+                out var inputError)) {
                 Debug.LogError($"GameBootstrap: {inputError}");
                 return;
             }
@@ -166,7 +172,7 @@ namespace DiceGame.Gameplay
                 return;
             }
 
-            var playerCount = playerInputSettings.ActivePlayerCount;
+            var playerCount = gameSessionSettings.RequiredPlayerCount;
             var startDice = spawnSystem.SpawnInitialPlayerDice(playerCount);
             if (startDice.Count < playerCount) {
                 Debug.LogError($"GameBootstrap: Failed to spawn initial dice for {playerCount} player(s).");
@@ -338,6 +344,7 @@ namespace DiceGame.Gameplay
                     slot,
                     playerInputSettings,
                     matchActionContext);
+                TryConfigureAiControl(characterObject, characterController, slot);
                 spawnedCharacters.Add(characterController);
             }
 
@@ -346,6 +353,35 @@ namespace DiceGame.Gameplay
 
         public void ApplyCameraSetup() {
             cameraSetup.Apply(board);
+        }
+
+        void TryConfigureAiControl(GameObject characterObject, CharacterController characterController, PlayerSlot slot) {
+            if (aiPlayerSettings == null || !aiPlayerSettings.IsAiControlled(slot)) {
+                return;
+            }
+
+            if (gameSessionSettings != null && gameSessionSettings.GameMode == GameMode.Versus) {
+                Debug.LogWarning($"GameBootstrap: AI control for {slot} is not enabled in Versus mode yet.");
+                return;
+            }
+
+            var humanReader = characterObject.GetComponent<CharacterInputReader>();
+            if (humanReader != null) {
+                humanReader.enabled = false;
+            }
+
+            var aiInput = characterObject.GetComponent<AiCharacterInputSource>();
+            if (aiInput == null) {
+                aiInput = characterObject.AddComponent<AiCharacterInputSource>();
+            }
+
+            var brain = characterObject.GetComponent<AiCharacterBrain>();
+            if (brain == null) {
+                brain = characterObject.AddComponent<AiCharacterBrain>();
+            }
+
+            characterController.SetInputSource(aiInput);
+            brain.Configure(characterController, registry, aiInput, aiPlayerSettings);
         }
     }
 }

@@ -21,24 +21,11 @@ namespace DiceGame.Config
         public int RequiredPlayerCount =>
             gameMode == GameMode.Single ? 1 : 2;
 
-        public bool TryValidate(PlayerInputSettings inputSettings, out string errorMessage)
+        public bool TryValidate(out string errorMessage)
         {
             if (gameMode == GameMode.Versus && versusBoardSettings == null)
             {
                 errorMessage = "GameSessionSettings: Versus mode requires VersusBoardSettings.";
-                return false;
-            }
-
-            if (inputSettings == null)
-            {
-                errorMessage = "GameSessionSettings: PlayerInputSettings is not assigned.";
-                return false;
-            }
-
-            if (inputSettings.ActivePlayerCount != RequiredPlayerCount)
-            {
-                errorMessage =
-                    $"GameSessionSettings: {gameMode} requires {RequiredPlayerCount} player(s), but PlayerInputSettings has {inputSettings.ActivePlayerCount}.";
                 return false;
             }
 

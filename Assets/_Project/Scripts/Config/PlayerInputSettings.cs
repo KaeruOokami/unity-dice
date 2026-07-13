@@ -4,12 +4,6 @@ using UnityEngine.InputSystem;
 
 namespace DiceGame.Config
 {
-    public enum PlayerCount
-    {
-        One = 1,
-        Two = 2
-    }
-
     public enum PlayerSlot
     {
         Player1,
@@ -49,17 +43,13 @@ namespace DiceGame.Config
         public const string PauseAction = "Pause";
         public const string ResetAction = "Reset";
 
-        [SerializeField] PlayerCount playerCount = PlayerCount.One;
         [SerializeField] InputActionAsset inputActions;
         [SerializeField] PlayerSlotInputConfig player1 = new(PlayerInputDeviceKind.Keyboard, 0);
         [SerializeField] PlayerSlotInputConfig player2 = new(PlayerInputDeviceKind.Gamepad, 0);
 
-        public PlayerCount PlayerCount => playerCount;
         public InputActionAsset InputActions => inputActions;
         public PlayerSlotInputConfig Player1 => player1;
         public PlayerSlotInputConfig Player2 => player2;
-
-        public int ActivePlayerCount => (int)playerCount;
 
         public PlayerSlotInputConfig GetSlotConfig(PlayerSlot slot)
         {
@@ -76,7 +66,10 @@ namespace DiceGame.Config
             return config.DeviceKind == PlayerInputDeviceKind.Keyboard ? KeyboardScheme : GamepadScheme;
         }
 
-        public bool TryValidateStartup(out string errorMessage)
+        public bool TryValidateStartup(
+            int requiredPlayerCount,
+            AiPlayerSettings aiSettings,
+            out string errorMessage)
         {
             if (inputActions == null)
             {
@@ -84,17 +77,23 @@ namespace DiceGame.Config
                 return false;
             }
 
-            if (!ValidateSlot(PlayerSlot.Player1, player1, out errorMessage))
+            if (requiredPlayerCount >= 1
+                && IsHumanControlled(PlayerSlot.Player1, aiSettings)
+                && !ValidateSlot(PlayerSlot.Player1, player1, out errorMessage))
             {
                 return false;
             }
 
-            if (playerCount == PlayerCount.Two && !ValidateSlot(PlayerSlot.Player2, player2, out errorMessage))
+            if (requiredPlayerCount >= 2
+                && IsHumanControlled(PlayerSlot.Player2, aiSettings)
+                && !ValidateSlot(PlayerSlot.Player2, player2, out errorMessage))
             {
                 return false;
             }
 
-            if (playerCount == PlayerCount.Two
+            if (requiredPlayerCount >= 2
+                && IsHumanControlled(PlayerSlot.Player1, aiSettings)
+                && IsHumanControlled(PlayerSlot.Player2, aiSettings)
                 && player1.DeviceKind == PlayerInputDeviceKind.Gamepad
                 && player2.DeviceKind == PlayerInputDeviceKind.Gamepad
                 && player1.GamepadIndex == player2.GamepadIndex)
@@ -105,6 +104,11 @@ namespace DiceGame.Config
 
             errorMessage = null;
             return true;
+        }
+
+        static bool IsHumanControlled(PlayerSlot slot, AiPlayerSettings aiSettings)
+        {
+            return aiSettings == null || !aiSettings.IsAiControlled(slot);
         }
 
         static bool ValidateSlot(PlayerSlot slot, PlayerSlotInputConfig config, out string errorMessage)

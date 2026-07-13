@@ -5,7 +5,7 @@ using UnityEngine.InputSystem;
 
 namespace DiceGame.Gameplay.Input
 {
-    public sealed class CharacterInputReader : MonoBehaviour
+    public sealed class CharacterInputReader : MonoBehaviour, ICharacterInputSource
     {
         [SerializeField] PlayerInputSettings inputSettings;
 

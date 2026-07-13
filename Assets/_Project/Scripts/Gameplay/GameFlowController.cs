@@ -72,7 +72,7 @@ namespace DiceGame.Gameplay
                 inputReader = gameObject.AddComponent<GameFlowInputReader>();
             }
 
-            inputReader.Configure(playerInputSettings);
+            inputReader.Configure(playerInputSettings, sessionSettings.RequiredPlayerCount);
             State = GameFlowState.Playing;
             isConfigured = true;
         }
