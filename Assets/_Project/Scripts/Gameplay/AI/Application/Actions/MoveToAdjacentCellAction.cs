@@ -61,11 +61,17 @@ namespace DiceGame.Gameplay.AI.Application.Actions
                 frameCount++;
             }
 
-            var shouldHoldDirection = edgeKind != MovementTransitionKind.CanRoll || !sawBusy;
+            var shouldHoldDirection = !IsGroundRollEdge() || !sawBusy;
             context.InputSource.SetMove(
                 shouldHoldDirection
                     ? CharacterController.DirectionToMoveVector(direction)
                     : Vector2.zero);
+        }
+
+        bool IsGroundRollEdge() {
+            return edgeKind == MovementTransitionKind.CanRoll
+                || (purpose == MoveActionPurpose.RollWorkDie
+                    && edgeKind == MovementTransitionKind.Walkable);
         }
 
         public override bool IsComplete(AiExecutionContext context) {
@@ -107,7 +113,7 @@ namespace DiceGame.Gameplay.AI.Application.Actions
 
             var atStepCell = context.Character.StandingGridCell == nextCell;
             var atStepCenter = atStepCell && context.Character.IsNearCellCenter(nextCell, tolerance);
-            var rollStepSettled = edgeKind == MovementTransitionKind.CanRoll && atStepCell;
+            var rollStepSettled = IsGroundRollEdge() && atStepCell;
 
             if (purpose == MoveActionPurpose.StandOnDie
                 && standOnDie != null

@@ -29,7 +29,7 @@ namespace DiceGame.Gameplay.AI.Domain
                 var clusters = DiceBoardAnalyzer.FindFaceClusters(snapshot.AllDice, face);
                 for (var i = 0; i < clusters.Count; i++) {
                     var cluster = clusters[i];
-                    var goal = BuildGoalForCluster(snapshot, face, cluster, settings);
+                    var goal = BuildGoalForCluster(snapshot, face, cluster, registry, settings);
                     if (goal == null) {
                         continue;
                     }
@@ -101,6 +101,7 @@ namespace DiceGame.Gameplay.AI.Domain
             GameStateSnapshot snapshot,
             int face,
             List<DiceSnapshot> cluster,
+            DiceRegistry registry,
             AiPlayerSettings settings) {
             if (cluster.Count == 0) {
                 return null;
@@ -128,6 +129,16 @@ namespace DiceGame.Gameplay.AI.Domain
 
             if (workDie.TopFace != face) {
                 subGoals.Add(AiSubGoal.OrientDie(workDie.Controller, face));
+            }
+
+            if (registry != null
+                && WorkDieSlidePlanner.TrySelectJoinTargetCell(
+                    cluster,
+                    workDie,
+                    registry,
+                    out var joinCell,
+                    out var joinTier)) {
+                subGoals.Add(AiSubGoal.JoinCluster(workDie.Controller, face, joinCell, joinTier));
             }
 
             if (subGoals.Count == 0) {

@@ -165,7 +165,8 @@ namespace DiceGame.Gameplay.AI.Domain
                 character.PlayerSlot,
                 subGoal.TargetFace,
                 allowJump,
-                out var orientStep)) {
+                out var orientStep,
+                out var remainingRolls)) {
                 Application.AiDebugLog.Log(
                     $"OrientPlan FAILED die={die.name} cell={die.CurrentState.GridPos} " +
                     $"currentTop={die.CurrentState.Orientation.Top} targetTop={subGoal.TargetFace}");
@@ -175,30 +176,9 @@ namespace DiceGame.Gameplay.AI.Domain
             Application.AiDebugLog.Log(
                 $"OrientPlan die={die.name} currentTop={die.CurrentState.Orientation.Top} targetTop={subGoal.TargetFace} " +
                 $"step={orientStep.Direction} mode={orientStep.Mode} landing={orientStep.LandingCell} " +
-                $"landingTier={orientStep.LandingTier} remainingRolls={orientStep.RemainingRolls}");
+                $"landingTier={orientStep.LandingTier} remainingRolls={remainingRolls}");
 
-            var maxFrames = settings != null ? settings.MoveActionMaxFrames : 30;
-            if (orientStep.Mode == WorkDieOrientExecutionMode.GroundRoll) {
-                return new Application.Actions.MoveToAdjacentCellAction(
-                    orientStep.LandingCell,
-                    orientStep.LandingCell,
-                    maxFrames,
-                    Application.Actions.MoveActionPurpose.RollWorkDie,
-                    die,
-                    MovementTransitionKind.CanRoll);
-            }
-
-            if (!allowJump) {
-                return null;
-            }
-
-            return new Application.Actions.JumpThenMoveAction(
-                orientStep.Direction,
-                orientStep.LandingCell,
-                settings != null ? settings.JumpMoveMaxFrames : 48,
-                die,
-                releaseInputDuringRoll: false,
-                expectedLandingTier: orientStep.LandingTier);
+            return BuildWorkDieRollAction(orientStep, die, settings, allowJump);
         }
 
         static Application.AiDiscreteAction BuildJoinClusterAction(
@@ -212,41 +192,135 @@ namespace DiceGame.Gameplay.AI.Domain
                 return null;
             }
 
-            if (die.CurrentState.GridPos == subGoal.TargetCell
-                && die.CurrentState.Orientation.Top == subGoal.TargetFace) {
+            var state = die.CurrentState;
+            if (state.GridPos == subGoal.TargetCell
+                && state.Orientation.Top == subGoal.TargetFace) {
                 subGoal.MarkComplete();
                 return null;
             }
 
-            if (die.CurrentState.GridPos != subGoal.TargetCell
-                && DiceBehaviorResolver.GetCapabilities(die.CurrentState.Kind).CanBeLiftedByPlayer
-                && CarryPlacementPassability.TryResolveTarget(subGoal.TargetCell, registry, out _, out _)) {
-                if (snapshot.PlayerIsCarrying) {
-                    return BuildPlaceCarriedAction(AiSubGoal.PlaceCarriedDie(subGoal.TargetCell), character);
-                }
-
-                if (!IsAdjacentToDice(snapshot, die)) {
-                    return SelectMovementAction(
-                        die.CurrentState.GridPos,
-                        snapshot,
-                        character,
-                        settings,
-                        preferJump: false,
-                        standOnDie: null,
-                        AiNavigationConstraints.None);
-                }
-
-                var faceDirection = GetFacingDirectionTowardDie(snapshot, die);
-                if (faceDirection.HasValue) {
-                    return new Application.Actions.LiftSequenceAction(faceDirection.Value, subGoal.TargetCell);
-                }
+            if (!IsStandingOnTarget(snapshot, die)) {
+                return SelectMovementAction(
+                    die.CurrentState.GridPos,
+                    snapshot,
+                    character,
+                    settings,
+                    preferJump: false,
+                    standOnDie: die,
+                    AiNavigationConstraints.None);
             }
 
-            return BuildOrientAction(
-                AiSubGoal.OrientDie(die, subGoal.TargetFace),
-                snapshot,
-                character,
-                settings);
+            if (!character.TryGetAiNavigationQuery(out var passability, out var footingWorldY)) {
+                Application.AiDebugLog.Log("JoinPlan FAILED navigation-query-unavailable");
+                return null;
+            }
+
+            subGoal.TryAdvanceJoinSlideStep(state);
+
+            if (!subGoal.HasJoinSlidePlan && state.Orientation.Top != subGoal.TargetFace) {
+                return BuildOrientAction(subGoal, snapshot, character, settings);
+            }
+
+            if (!TryEnsureJoinSlidePlan(subGoal, state)) {
+                Application.AiDebugLog.Log(
+                    $"JoinPlan FAILED die={die.name} cell={state.GridPos} target={subGoal.TargetCell} " +
+                    $"top={state.Orientation.Top}");
+                return null;
+            }
+
+            var plan = subGoal.JoinSlidePlan.Value;
+            var stepIndex = subGoal.JoinSlideStepIndex;
+            if (stepIndex >= plan.Directions.Count) {
+                if (state.GridPos == subGoal.TargetCell
+                    && state.Orientation.Top == subGoal.TargetFace) {
+                    subGoal.MarkComplete();
+                }
+
+                return null;
+            }
+
+            var fromLevel = character.StandingPlacement.Level;
+            var allowJump = settings != null && settings.AllowJump;
+            if (!WorkDieSlidePlanner.TrySelectNextStep(
+                passability,
+                die,
+                fromLevel,
+                footingWorldY,
+                character.PlayerSlot,
+                plan,
+                stepIndex,
+                allowJump,
+                out var slideStep)) {
+                Application.AiDebugLog.Log(
+                    $"JoinPlan FAILED die={die.name} cell={state.GridPos} target={subGoal.TargetCell} " +
+                    $"top={state.Orientation.Top} step={stepIndex}/{plan.Directions.Count}");
+                return null;
+            }
+
+            Application.AiDebugLog.Log(
+                $"JoinPlan die={die.name} top={state.Orientation.Top} target={subGoal.TargetCell} " +
+                $"stepIndex={stepIndex}/{plan.Directions.Count} planned={plan.Directions[stepIndex]} " +
+                $"exec={slideStep.Direction} mode={slideStep.Mode} landing={slideStep.LandingCell} " +
+                $"landingTier={slideStep.LandingTier}");
+
+            return BuildWorkDieRollAction(slideStep, die, settings, allowJump);
+        }
+
+        static bool TryEnsureJoinSlidePlan(AiSubGoal subGoal, DiceState state) {
+            if (subGoal.HasJoinSlidePlan) {
+                var existing = subGoal.JoinSlidePlan.Value;
+                if (WorkDieSlidePlanner.IsPlanStillValid(existing, subGoal.JoinSlideStepIndex, state)) {
+                    return existing.Directions != null && existing.Directions.Count > 0;
+                }
+
+                subGoal.ClearJoinSlidePlan();
+            }
+
+            if (state.Orientation.Top != subGoal.TargetFace) {
+                return false;
+            }
+
+            if (!WorkDieSlidePlanner.TryBuildSlidePlan(
+                state.GridPos,
+                subGoal.TargetCell,
+                state.Orientation,
+                out var plan)
+                || plan.Directions == null
+                || plan.Directions.Count == 0) {
+                return false;
+            }
+
+            subGoal.SetJoinSlidePlan(plan);
+            return true;
+        }
+
+        static Application.AiDiscreteAction BuildWorkDieRollAction(
+            WorkDieRollStep rollStep,
+            DiceController die,
+            AiPlayerSettings settings,
+            bool allowJump) {
+            var maxFrames = settings != null ? settings.MoveActionMaxFrames : 30;
+            if (rollStep.Mode == WorkDieRollExecutionMode.GroundRoll) {
+                return new Application.Actions.MoveToAdjacentCellAction(
+                    rollStep.LandingCell,
+                    rollStep.LandingCell,
+                    maxFrames,
+                    Application.Actions.MoveActionPurpose.RollWorkDie,
+                    die,
+                    rollStep.EdgeKind);
+            }
+
+            if (!allowJump) {
+                return null;
+            }
+
+            return new Application.Actions.JumpThenMoveAction(
+                rollStep.Direction,
+                rollStep.LandingCell,
+                settings != null ? settings.JumpMoveMaxFrames : 48,
+                die,
+                releaseInputDuringRoll: false,
+                expectedLandingTier: rollStep.LandingTier);
         }
 
         static Application.AiDiscreteAction BuildLiftAction(

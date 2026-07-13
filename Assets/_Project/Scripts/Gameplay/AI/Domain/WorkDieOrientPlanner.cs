@@ -3,38 +3,9 @@ using DiceGame.Config;
 using DiceGame.Core;
 using DiceGame.Gameplay;
 using DiceGame.Placement;
-using UnityEngine;
 
 namespace DiceGame.Gameplay.AI.Domain
 {
-    public enum WorkDieOrientExecutionMode
-    {
-        GroundRoll,
-        JumpRoll
-    }
-
-    public readonly struct WorkDieOrientStep
-    {
-        public Direction Direction { get; }
-        public Vector2Int LandingCell { get; }
-        public DiceStackTier LandingTier { get; }
-        public WorkDieOrientExecutionMode Mode { get; }
-        public int RemainingRolls { get; }
-
-        public WorkDieOrientStep(
-            Direction direction,
-            Vector2Int landingCell,
-            DiceStackTier landingTier,
-            WorkDieOrientExecutionMode mode,
-            int remainingRolls) {
-            Direction = direction;
-            LandingCell = landingCell;
-            LandingTier = landingTier;
-            Mode = mode;
-            RemainingRolls = remainingRolls;
-        }
-    }
-
     public static class WorkDieOrientPlanner
     {
         static readonly Direction[] Directions = {
@@ -49,8 +20,10 @@ namespace DiceGame.Gameplay.AI.Domain
             PlayerSlot movementOwner,
             int targetFace,
             bool allowJump,
-            out WorkDieOrientStep step) {
+            out WorkDieRollStep step,
+            out int remainingRolls) {
             step = default;
+            remainingRolls = int.MaxValue;
             if (passability == null || workDie == null) {
                 return false;
             }
@@ -65,94 +38,22 @@ namespace DiceGame.Gameplay.AI.Domain
             }
 
             var orderedDirections = OrderDirectionsByOrientProgress(state.Orientation, targetFace);
-            var fromCell = state.GridPos;
-            var groundContext = PassabilityContext.ForGround(footingWorldY, movementOwner);
-            var jumpContext = PassabilityContext.Jump(true, true, footingWorldY, movementOwner);
-
             for (var i = 0; i < orderedDirections.Count; i++) {
                 var direction = orderedDirections[i];
-                var landingCell = fromCell + direction.ToGridDelta();
-                var remainingRolls = CountRollsToTarget(state.Orientation.Roll(direction), targetFace);
-
-                var groundTransition = passability.Evaluate(
-                    fromCell,
-                    fromLevel,
-                    direction,
+                var rollsAfterStep = CountRollsToTarget(state.Orientation.Roll(direction), targetFace);
+                if (!WorkDieRollPlanner.TrySelectRollStep(
+                    passability,
                     workDie,
-                    groundContext);
-
-                if (TryResolveGroundRoll(groundTransition, landingCell, out var groundLandingTier)) {
-                    step = new WorkDieOrientStep(
-                        direction,
-                        landingCell,
-                        groundLandingTier,
-                        WorkDieOrientExecutionMode.GroundRoll,
-                        remainingRolls);
-                    return true;
-                }
-
-                if (!allowJump || !workDie.CanJumpCoupleWithPlayer) {
+                    fromLevel,
+                    footingWorldY,
+                    movementOwner,
+                    direction,
+                    allowJump,
+                    out step)) {
                     continue;
                 }
 
-                if (groundTransition.Kind == MovementTransitionKind.CanRoll) {
-                    continue;
-                }
-
-                var jumpTransition = passability.Evaluate(
-                    fromCell,
-                    fromLevel,
-                    direction,
-                    workDie,
-                    jumpContext);
-
-                if (TryResolveJumpRoll(jumpTransition, landingCell, out var jumpLandingTier)) {
-                    step = new WorkDieOrientStep(
-                        direction,
-                        landingCell,
-                        jumpLandingTier,
-                        WorkDieOrientExecutionMode.JumpRoll,
-                        remainingRolls);
-                    return true;
-                }
-            }
-
-            return false;
-        }
-
-        static bool TryResolveGroundRoll(
-            MovementTransition transition,
-            Vector2Int landingCell,
-            out DiceStackTier landingTier) {
-            landingTier = default;
-            if (transition.Kind != MovementTransitionKind.CanRoll
-                || !transition.HasDiceGridMovePlan
-                || transition.DiceGridMovePlan.To.GridPos != landingCell) {
-                return false;
-            }
-
-            landingTier = transition.DiceGridMovePlan.To.Tier;
-            return true;
-        }
-
-        static bool TryResolveJumpRoll(
-            MovementTransition transition,
-            Vector2Int landingCell,
-            out DiceStackTier landingTier) {
-            landingTier = default;
-            if (!transition.HasDiceGridMovePlan
-                || transition.DiceGridMovePlan.To.GridPos != landingCell) {
-                return false;
-            }
-
-            if (transition.Kind == MovementTransitionKind.CanRoll) {
-                landingTier = transition.DiceGridMovePlan.To.Tier;
-                return true;
-            }
-
-            if (transition.Kind == MovementTransitionKind.Walkable
-                && transition.Route == MovementTransitionRoute.CoupledGridMove) {
-                landingTier = transition.DiceGridMovePlan.To.Tier;
+                remainingRolls = rollsAfterStep;
                 return true;
             }
 

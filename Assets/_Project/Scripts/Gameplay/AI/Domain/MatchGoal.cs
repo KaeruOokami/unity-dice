@@ -23,6 +23,8 @@ namespace DiceGame.Gameplay.AI.Domain
         public Vector2Int TargetCell { get; }
         public DiceStackTier TargetTier { get; }
         public bool IsComplete { get; private set; }
+        public WorkDieSlidePlan? JoinSlidePlan { get; private set; }
+        public int JoinSlideStepIndex { get; private set; }
 
         AiSubGoal(
             AiSubGoalKind kind,
@@ -65,6 +67,34 @@ namespace DiceGame.Gameplay.AI.Domain
 
         public void MarkComplete() {
             IsComplete = true;
+            ClearJoinSlidePlan();
+        }
+
+        public bool HasJoinSlidePlan => JoinSlidePlan.HasValue;
+
+        public void SetJoinSlidePlan(WorkDieSlidePlan plan) {
+            JoinSlidePlan = plan;
+            JoinSlideStepIndex = 0;
+        }
+
+        public void ClearJoinSlidePlan() {
+            JoinSlidePlan = null;
+            JoinSlideStepIndex = 0;
+        }
+
+        public bool TryAdvanceJoinSlideStep(DiceState state) {
+            if (!JoinSlidePlan.HasValue) {
+                return false;
+            }
+
+            var plan = JoinSlidePlan.Value;
+            var stepIndex = JoinSlideStepIndex;
+            if (!WorkDieSlidePlanner.TryAdvanceCompletedSteps(plan, ref stepIndex, state)) {
+                return false;
+            }
+
+            JoinSlideStepIndex = stepIndex;
+            return true;
         }
     }
 
