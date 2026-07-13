@@ -29,6 +29,21 @@ namespace DiceGame.Gameplay.AI.Domain
             return score;
         }
 
+        public static float ScoreCluster(
+            List<DiceSnapshot> cluster,
+            int face,
+            IReadOnlyList<DiceSnapshot> allDice,
+            Vector2Int playerCell,
+            int distanceToWorkDie,
+            AiPlayerSettings settings) {
+            var score = ScoreCluster(cluster, playerCell, distanceToWorkDie, settings);
+            if (SinkingChainEvaluator.IsChainPossible(face, allDice)) {
+                score += settings.SinkingChainBonus;
+            }
+
+            return score;
+        }
+
         public static float ComputeCompactnessRatio(List<DiceSnapshot> cluster) {
             if (cluster == null || cluster.Count == 0) {
                 return 0f;
@@ -85,6 +100,8 @@ namespace DiceGame.Gameplay.AI.Domain
             int clusterFace,
             IReadOnlyList<DiceSnapshot> allDice,
             Vector2Int playerCell,
+            AiPlayerSettings settings,
+            bool preferChain,
             out DiceSnapshot workDie) {
             workDie = default;
             var bestScore = float.MinValue;
@@ -116,6 +133,16 @@ namespace DiceGame.Gameplay.AI.Domain
                 var distanceToCluster = GetDistanceToCluster(candidate.GridPos, cluster);
                 var distanceToPlayer = DiceBoardAnalyzer.ManhattanDistance(playerCell, candidate.GridPos);
                 var score = -distanceToCluster * 10f - distanceToPlayer;
+
+                if (preferChain && settings != null) {
+                    var sinkingDistance = SinkingChainEvaluator.GetMinDistanceToSinkingSameFace(
+                        candidate,
+                        clusterFace,
+                        allDice);
+                    if (sinkingDistance < int.MaxValue) {
+                        score -= sinkingDistance * settings.SinkingChainWorkDieWeight;
+                    }
+                }
 
                 if (score > bestScore) {
                     bestScore = score;

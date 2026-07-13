@@ -21,6 +21,9 @@ namespace DiceGame.Config
         [SerializeField] float immovableClusterPenalty = 20f;
         [SerializeField] float clusterSizeWeight = 100f;
         [SerializeField] float clusterCompactnessWeight = 50f;
+        [SerializeField] float sinkingChainBonus = 200f;
+        [SerializeField] float sinkingChainImmediateBonus = 50f;
+        [SerializeField] float sinkingChainWorkDieWeight = 8f;
         [SerializeField] float goalSwitchMargin = 8f;
         [SerializeField] int pathSearchMaxSteps = 64;
         [SerializeField] float cellCenterTolerance = 0.08f;
@@ -42,6 +45,9 @@ namespace DiceGame.Config
         public float ImmovableClusterPenalty => immovableClusterPenalty;
         public float ClusterSizeWeight => clusterSizeWeight;
         public float ClusterCompactnessWeight => clusterCompactnessWeight;
+        public float SinkingChainBonus => sinkingChainBonus;
+        public float SinkingChainImmediateBonus => sinkingChainImmediateBonus;
+        public float SinkingChainWorkDieWeight => sinkingChainWorkDieWeight;
         public float GoalSwitchMargin => goalSwitchMargin;
         public int PathSearchMaxSteps => pathSearchMaxSteps;
         public float CellCenterTolerance => cellCenterTolerance;

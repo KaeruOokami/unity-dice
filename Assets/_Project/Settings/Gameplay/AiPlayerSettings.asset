@@ -28,6 +28,9 @@ MonoBehaviour:
   immovableClusterPenalty: 20
   clusterSizeWeight: 100
   clusterCompactnessWeight: 50
+  sinkingChainBonus: 200
+  sinkingChainImmediateBonus: 50
+  sinkingChainWorkDieWeight: 8
   goalSwitchMargin: 8
   pathSearchMaxSteps: 64
   cellCenterTolerance: 0.08
