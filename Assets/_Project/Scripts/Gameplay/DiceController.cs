@@ -233,6 +233,7 @@ namespace DiceGame.Gameplay
             void OnSpawnComplete() {
                 registry?.CommitPendingSpawn(this, currentState.GridPos, currentState.Tier);
                 isSpawning = false;
+                spawnAppearMode = DiceSpawnAppearMode.None;
                 ConfigurePushBody();
                 StateChanged?.Invoke(currentState);
                 onComplete?.Invoke();
