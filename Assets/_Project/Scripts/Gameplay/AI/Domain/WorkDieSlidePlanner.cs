@@ -2,6 +2,7 @@ using System.Collections.Generic;
 using DiceGame.Config;
 using DiceGame.Core;
 using DiceGame.Gameplay;
+using DiceGame.Grid;
 using DiceGame.Placement;
 using UnityEngine;
 
@@ -30,6 +31,8 @@ namespace DiceGame.Gameplay.AI.Domain
             DiceSnapshot workDie,
             IReadOnlyList<DiceSnapshot> allDice,
             DiceRegistry registry,
+            VersusArenaLayout versusLayout,
+            PlayerSlot playerSlot,
             out Vector2Int targetCell,
             out DiceStackTier targetTier) {
             targetCell = default;
@@ -45,6 +48,10 @@ namespace DiceGame.Gameplay.AI.Domain
 
             foreach (var cell in adjacent) {
                 if (clusterCells.Contains(cell)) {
+                    continue;
+                }
+
+                if (!AiRegionFilter.IsInPlayerRegion(versusLayout, playerSlot, cell)) {
                     continue;
                 }
 

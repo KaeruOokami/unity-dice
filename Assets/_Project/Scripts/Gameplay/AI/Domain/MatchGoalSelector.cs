@@ -22,8 +22,8 @@ namespace DiceGame.Gameplay.AI.Domain
                 return BuildCarryPlacementGoal(snapshot, registry, settings);
             }
 
-            var hasSinking = SinkingChainEvaluator.HasSinkingDiceOnBoard(snapshot.AllDice);
-            var chainPriority = hasSinking && SinkingChainEvaluator.HasAnyChainPossibleFace(snapshot.AllDice);
+            var hasSinking = SinkingChainEvaluator.HasSinkingDiceOnBoard(snapshot.PlanningDice);
+            var chainPriority = hasSinking && SinkingChainEvaluator.HasAnyChainPossibleFace(snapshot.PlanningDice);
             if (chainPriority
                 && TrySelectBestChainGoal(snapshot, registry, settings, out var chainGoal)) {
                 return chainGoal;
@@ -42,7 +42,7 @@ namespace DiceGame.Gameplay.AI.Domain
             var bestScore = float.MinValue;
 
             for (var face = 2; face <= 6; face++) {
-                if (!SinkingChainEvaluator.IsChainPossible(face, snapshot.AllDice)) {
+                if (!SinkingChainEvaluator.IsChainPossible(face, snapshot.PlanningDice)) {
                     continue;
                 }
 
@@ -71,11 +71,11 @@ namespace DiceGame.Gameplay.AI.Domain
 
             for (var face = 2; face <= 6; face++) {
                 if (suppressChainFaces
-                    && SinkingChainEvaluator.IsChainPossible(face, snapshot.AllDice)) {
+                    && SinkingChainEvaluator.IsChainPossible(face, snapshot.PlanningDice)) {
                     continue;
                 }
 
-                var clusters = DiceBoardAnalyzer.FindFaceClusters(snapshot.AllDice, face);
+                var clusters = DiceBoardAnalyzer.FindFaceClusters(snapshot.PlanningDice, face);
                 for (var i = 0; i < clusters.Count; i++) {
                     var cluster = clusters[i];
                     var goal = BuildGoalForCluster(snapshot, face, cluster, registry, settings);
@@ -98,11 +98,11 @@ namespace DiceGame.Gameplay.AI.Domain
             int face,
             DiceRegistry registry,
             AiPlayerSettings settings) {
-            if (!SinkingChainEvaluator.IsChainPossible(face, snapshot.AllDice)) {
+            if (!SinkingChainEvaluator.IsChainPossible(face, snapshot.PlanningDice)) {
                 return null;
             }
 
-            var sinkingDice = SinkingChainEvaluator.GetSinkingDice(face, snapshot.AllDice);
+            var sinkingDice = SinkingChainEvaluator.GetSinkingDice(face, snapshot.PlanningDice);
             if (sinkingDice.Count == 0) {
                 return null;
             }
@@ -110,7 +110,7 @@ namespace DiceGame.Gameplay.AI.Domain
             if (!ClusterSelectionEvaluator.TrySelectNearestExternalDie(
                 sinkingDice,
                 face,
-                snapshot.AllDice,
+                snapshot.PlanningDice,
                 snapshot.PlayerCell,
                 settings,
                 preferChain: true,
@@ -122,9 +122,11 @@ namespace DiceGame.Gameplay.AI.Domain
             if (registry == null
                 || !SinkingChainEvaluator.TrySelectChainJoinTargetCell(
                     face,
-                    snapshot.AllDice,
+                    snapshot.PlanningDice,
                     workDie,
                     registry,
+                    snapshot.VersusLayout,
+                    snapshot.PlayerSlot,
                     out var joinCell,
                     out var joinTier)) {
                 return null;
@@ -171,7 +173,7 @@ namespace DiceGame.Gameplay.AI.Domain
             var found = false;
 
             for (var face = 2; face <= 6; face++) {
-                var clusters = DiceBoardAnalyzer.FindFaceClusters(snapshot.AllDice, face);
+                var clusters = DiceBoardAnalyzer.FindFaceClusters(snapshot.PlanningDice, face);
                 for (var i = 0; i < clusters.Count; i++) {
                     var cluster = clusters[i];
                     if (cluster.Count >= face) {
@@ -179,6 +181,10 @@ namespace DiceGame.Gameplay.AI.Domain
                     }
 
                     foreach (var adjacent in GetClusterAdjacentCells(cluster)) {
+                        if (!snapshot.IsInPlayerRegion(adjacent)) {
+                            continue;
+                        }
+
                         if (!CarryPlacementPassability.TryResolveTarget(adjacent, registry, out _, out _)) {
                             continue;
                         }
@@ -197,6 +203,10 @@ namespace DiceGame.Gameplay.AI.Domain
             if (!found) {
                 foreach (var direction in new[] { Direction.East, Direction.West, Direction.North, Direction.South }) {
                     var cell = snapshot.PlayerCell + direction.ToGridDelta();
+                    if (!snapshot.IsInPlayerRegion(cell)) {
+                        continue;
+                    }
+
                     if (CarryPlacementPassability.TryResolveTarget(cell, registry, out _, out _)) {
                         bestCell = cell;
                         found = true;
@@ -233,7 +243,7 @@ namespace DiceGame.Gameplay.AI.Domain
             if (!ClusterSelectionEvaluator.TrySelectNearestExternalDie(
                 cluster,
                 face,
-                snapshot.AllDice,
+                snapshot.PlanningDice,
                 snapshot.PlayerCell,
                 settings,
                 preferChain: false,
@@ -255,8 +265,10 @@ namespace DiceGame.Gameplay.AI.Domain
                 && WorkDieSlidePlanner.TrySelectJoinTargetCell(
                     cluster,
                     workDie,
-                    snapshot.AllDice,
+                    snapshot.PlanningDice,
                     registry,
+                    snapshot.VersusLayout,
+                    snapshot.PlayerSlot,
                     out var joinCell,
                     out var joinTier)) {
                 subGoals.Add(AiSubGoal.JoinCluster(workDie.Controller, face, joinCell, joinTier));
@@ -270,7 +282,7 @@ namespace DiceGame.Gameplay.AI.Domain
             var score = ClusterSelectionEvaluator.ScoreCluster(
                 cluster,
                 face,
-                snapshot.AllDice,
+                snapshot.PlanningDice,
                 snapshot.PlayerCell,
                 distanceToWorkDie,
                 settings);
@@ -303,7 +315,7 @@ namespace DiceGame.Gameplay.AI.Domain
             var score = ClusterSelectionEvaluator.ScoreCluster(
                 cluster,
                 face,
-                snapshot.AllDice,
+                snapshot.PlanningDice,
                 snapshot.PlayerCell,
                 distance,
                 settings) + settings.ImmediateMatchBonus;

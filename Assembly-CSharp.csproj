@@ -190,6 +190,9 @@
      <Compile Include="Assets\_Project\Scripts\Gameplay\AI\Domain\WorkDieRollPlanner.cs" />
      <Compile Include="Assets\_Project\Scripts\Gameplay\AI\Domain\WorkDieRollPathPlanner.cs" />
      <Compile Include="Assets\_Project\Scripts\Gameplay\AI\Domain\SinkingChainEvaluator.cs" />
+     <Compile Include="Assets\_Project\Scripts\Gameplay\AI\Domain\AiRegionFilter.cs" />
+     <Compile Include="Assets\_Project\Scripts\Gameplay\PlayerMotionGate.cs" />
+     <Compile Include="Assets\_Project\Scripts\Gameplay\MotionConflictEvaluator.cs" />
      <None Include="Assets\Packages\Dice_6\Documentation\Readmy.txt" />
     <Reference Include="UnityEngine">
         <HintPath>D:\Program Files\Unity\Hub\Editor\2021.3.10f1\Editor\Data\Managed\UnityEngine\UnityEngine.dll</HintPath>

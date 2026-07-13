@@ -11,6 +11,7 @@ namespace DiceGame.Gameplay
         [SerializeField] Board board;
         [SerializeField] DiceRegistry registry;
         [SerializeField] DiceOneVanishSettings oneVanishSettings;
+        DiceErasureSettings erasureSettings;
 
         readonly HashSet<DiceController> subscribedDice = new();
         readonly List<CharacterController> characters = new();
@@ -19,10 +20,12 @@ namespace DiceGame.Gameplay
             Board targetBoard,
             DiceRegistry targetRegistry,
             IReadOnlyList<CharacterController> targetCharacters,
-            DiceOneVanishSettings settings) {
+            DiceOneVanishSettings settings,
+            DiceErasureSettings targetErasureSettings) {
             board = targetBoard;
             registry = targetRegistry;
             oneVanishSettings = settings;
+            erasureSettings = targetErasureSettings;
             characters.Clear();
             if (targetCharacters != null) {
                 characters.AddRange(targetCharacters);
@@ -61,50 +64,40 @@ namespace DiceGame.Gameplay
             if (board == null
                 || registry == null
                 || oneVanishSettings == null
+                || erasureSettings == null
                 || action == null) {
                 return;
             }
 
-            if (board.IsVersusArena && board.VersusLayout != null) {
-                foreach (var slot in action.GetParticipatingPlayers()) {
-                    EvaluateForPlayerSlot(action.GetDiceFor(slot), slot);
-                }
-
-                return;
+            foreach (var slot in action.GetParticipatingPlayers()) {
+                EvaluateForInitiator(
+                    action.GetDiceFor(slot),
+                    slot,
+                    restrictToPlayerRegion: board.IsVersusArena && board.VersusLayout != null);
             }
-
-            EvaluateGlobal(action.AllDice);
         }
 
         public void EvaluateForDeferredAction(DeferredMatchSnapshot snapshot) {
             if (board == null
                 || registry == null
                 || oneVanishSettings == null
+                || erasureSettings == null
                 || snapshot == null
                 || snapshot.Participants == null
                 || snapshot.Participants.Count == 0) {
                 return;
             }
 
-            if (board.IsVersusArena && board.VersusLayout != null) {
-                EvaluateForPlayerSlot(snapshot.Participants, snapshot.Attacker);
-                return;
-            }
-
-            EvaluateGlobal(snapshot.Participants);
+            EvaluateForInitiator(
+                snapshot.Participants,
+                snapshot.Attacker,
+                restrictToPlayerRegion: board.IsVersusArena && board.VersusLayout != null);
         }
 
-        void EvaluateGlobal(IReadOnlyCollection<DiceController> actionDice) {
-            if (!DiceOneVanishTrigger.ShouldTrigger(registry.AllDice, actionDice)) {
-                return;
-            }
-
-            VanishOnesMatching(
-                dice => true,
-                GetExcludedStandingDiceForAllPlayers());
-        }
-
-        void EvaluateForPlayerSlot(IReadOnlyList<DiceController> actionDice, PlayerSlot slot) {
+        void EvaluateForInitiator(
+            IReadOnlyList<DiceController> actionDice,
+            PlayerSlot initiator,
+            bool restrictToPlayerRegion) {
             if (actionDice == null || actionDice.Count == 0) {
                 return;
             }
@@ -113,13 +106,24 @@ namespace DiceGame.Gameplay
                 return;
             }
 
-            var layout = board.VersusLayout;
-            VanishOnesMatching(
-                dice => layout.IsInsidePlayerRegion(slot, dice.CurrentState.GridPos),
-                GetExcludedStandingDiceForPlayer(slot));
+            System.Func<DiceController, bool> includeDice;
+            HashSet<DiceController> excludedDice;
+            if (restrictToPlayerRegion) {
+                var layout = board.VersusLayout;
+                includeDice = dice => layout.IsInsidePlayerRegion(initiator, dice.CurrentState.GridPos);
+                excludedDice = GetExcludedStandingDiceForPlayer(initiator);
+            } else {
+                includeDice = dice => true;
+                excludedDice = GetExcludedStandingDiceForAllPlayers();
+            }
+
+            VanishOnesMatching(includeDice, excludedDice, initiator);
         }
 
-        void VanishOnesMatching(System.Func<DiceController, bool> includeDice, HashSet<DiceController> excludedDice) {
+        void VanishOnesMatching(
+            System.Func<DiceController, bool> includeDice,
+            HashSet<DiceController> excludedDice,
+            PlayerSlot initiator) {
             var targets = new List<DiceController>();
 
             foreach (var dice in registry.AllDice) {
@@ -142,8 +146,9 @@ namespace DiceGame.Gameplay
                 targets.Add(dice);
             }
 
+            var emissionColor = erasureSettings.GetPlayerEmissionColor(initiator);
             foreach (var dice in targets) {
-                dice.BeginOneVanish(oneVanishSettings, null);
+                dice.BeginOneVanish(oneVanishSettings, emissionColor, null);
             }
         }
 

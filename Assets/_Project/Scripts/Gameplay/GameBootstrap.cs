@@ -196,7 +196,7 @@ namespace DiceGame.Gameplay
                 oneVanishSystem = gameObject.AddComponent<DiceOneVanishSystem>();
             }
 
-            oneVanishSystem.Configure(board, registry, characters, diceOneVanishSettings);
+            oneVanishSystem.Configure(board, registry, characters, diceOneVanishSettings, diceErasureSettings);
 
             var erasureSystem = GetComponent<DiceMatchErasureSystem>();
             if (erasureSystem == null) {
@@ -209,8 +209,11 @@ namespace DiceGame.Gameplay
                 characters,
                 matchActionContext,
                 oneVanishSystem,
-                ownershipContext);
+                ownershipContext,
+                diceErasureSettings);
             spawnSystem.ConfigureErasureSystem(erasureSystem);
+
+            erasureSystem.ConfigureSinkingChain();
 
             VersusAttackController attackController = null;
             if (gameSessionSettings.GameMode == GameMode.Versus) {
@@ -357,11 +360,6 @@ namespace DiceGame.Gameplay
 
         void TryConfigureAiControl(GameObject characterObject, CharacterController characterController, PlayerSlot slot) {
             if (aiPlayerSettings == null || !aiPlayerSettings.IsAiControlled(slot)) {
-                return;
-            }
-
-            if (gameSessionSettings != null && gameSessionSettings.GameMode == GameMode.Versus) {
-                Debug.LogWarning($"GameBootstrap: AI control for {slot} is not enabled in Versus mode yet.");
                 return;
             }
 

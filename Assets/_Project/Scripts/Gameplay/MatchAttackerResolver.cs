@@ -20,8 +20,11 @@ namespace DiceGame.Gameplay
                 return false;
             }
 
-            if (action != null && HasActionParticipant(cluster, participants)) {
-                attacker = ResolveAttackerFromAction(action, cluster);
+            if (action != null
+                && action.AllDice != null
+                && action.AllDice.Count > 0
+                && HasActionParticipant(cluster, action.AllDice)
+                && TryResolveAttackerFromAction(action, cluster, out attacker)) {
                 return true;
             }
 
@@ -30,7 +33,7 @@ namespace DiceGame.Gameplay
             }
 
             var dice = referenceDice ?? ResolveReferenceDice(cluster, participants);
-            if (TryResolveFromBoardRegion(dice, board, out attacker)) {
+            if (TryResolveFromBoardRegion(dice, board, ownershipContext, out attacker)) {
                 return true;
             }
 
@@ -40,13 +43,40 @@ namespace DiceGame.Gameplay
             return false;
         }
 
-        public static bool TryResolveAttackerForDice(
-            DiceController dice,
+        /// <summary>
+        /// Resolves the attacker for a tier-fall match (reservation dice / one-erasure fall).
+        /// The fallen dice never carries its own owner here: it must inherit either from the
+        /// support (removed bottom) owner or from a sinking member of its match cluster.
+        /// </summary>
+        public static bool TryResolveAttackerForTierFall(
+            IReadOnlyList<DiceController> cluster,
             DiceMatchOwnershipContext ownershipContext,
-            Board board,
+            DiceController fallenDice,
             out PlayerSlot attacker) {
             attacker = default;
-            return TryResolveFromBoardRegion(dice, board, out attacker);
+            if (fallenDice == null) {
+                return false;
+            }
+
+            if (ownershipContext != null
+                && ownershipContext.TryGetTierFallSupportOwner(fallenDice, out var supportOwner)) {
+                attacker = supportOwner;
+                Debug.Log($"TryResolveAttackerForTierFall: resolved attacker={attacker} from support owner");
+                return true;
+            }
+
+            if (cluster != null
+                && cluster.Count > 0
+                && TryResolveFromErasingMembers(cluster, ownershipContext, out attacker)) {
+                Debug.Log($"TryResolveAttackerForTierFall: resolved attacker={attacker} from erasing members");
+                return true;
+            }
+
+            Debug.LogError(
+                "MatchAttackerResolver: Failed to resolve tier-fall attacker. " +
+                $"fallen={fallenDice.name} cell={fallenDice.CurrentState.GridPos} " +
+                "Expected a support owner or a sinking cluster member.");
+            return false;
         }
 
         static bool HasActionParticipant(
@@ -105,7 +135,11 @@ namespace DiceGame.Gameplay
             return true;
         }
 
-        static bool TryResolveFromBoardRegion(DiceController dice, Board board, out PlayerSlot attacker) {
+        static bool TryResolveFromBoardRegion(
+            DiceController dice,
+            Board board,
+            DiceMatchOwnershipContext ownershipContext,
+            out PlayerSlot attacker) {
             attacker = default;
             if (dice == null || board == null) {
                 return false;
@@ -113,6 +147,11 @@ namespace DiceGame.Gameplay
 
             if (board.IsVersusArena && board.VersusLayout != null) {
                 attacker = board.VersusLayout.GetOwner(dice.CurrentState.GridPos);
+                return true;
+            }
+
+            if (ownershipContext != null && ownershipContext.TryGetOwner(dice, out var owner)) {
+                attacker = owner;
                 return true;
             }
 
@@ -140,7 +179,15 @@ namespace DiceGame.Gameplay
             return cluster[0];
         }
 
-        static PlayerSlot ResolveAttackerFromAction(MatchActionSnapshot action, IReadOnlyList<DiceController> cluster) {
+        static bool TryResolveAttackerFromAction(
+            MatchActionSnapshot action,
+            IReadOnlyList<DiceController> cluster,
+            out PlayerSlot attacker) {
+            attacker = default;
+            if (action == null || cluster == null) {
+                return false;
+            }
+
             foreach (var slot in action.GetParticipatingPlayers()) {
                 var actionDice = action.GetDiceFor(slot);
                 for (var i = 0; i < actionDice.Count; i++) {
@@ -151,17 +198,14 @@ namespace DiceGame.Gameplay
 
                     for (var j = 0; j < cluster.Count; j++) {
                         if (cluster[j] == dice) {
-                            return slot;
+                            attacker = slot;
+                            return true;
                         }
                     }
                 }
             }
 
-            foreach (var slot in action.GetParticipatingPlayers()) {
-                return slot;
-            }
-
-            return PlayerSlot.Player1;
+            return false;
         }
     }
 }

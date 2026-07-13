@@ -1,6 +1,8 @@
 using System.Collections.Generic;
+using DiceGame.Config;
 using DiceGame.Core;
 using DiceGame.Gameplay;
+using DiceGame.Grid;
 using DiceGame.Placement;
 using UnityEngine;
 
@@ -122,6 +124,8 @@ namespace DiceGame.Gameplay.AI.Domain
             IReadOnlyList<DiceSnapshot> allDice,
             DiceSnapshot workDie,
             DiceRegistry registry,
+            VersusArenaLayout versusLayout,
+            PlayerSlot playerSlot,
             out Vector2Int targetCell,
             out DiceStackTier targetTier) {
             targetCell = default;
@@ -140,6 +144,10 @@ namespace DiceGame.Gameplay.AI.Domain
             var found = false;
 
             foreach (var cell in CollectCandidateJoinCells(sinkingCells, allDice)) {
+                if (!AiRegionFilter.IsInPlayerRegion(versusLayout, playerSlot, cell)) {
+                    continue;
+                }
+
                 if (!CarryPlacementPassability.TryResolveTarget(cell, registry, out var tier, out _)) {
                     continue;
                 }

@@ -24,19 +24,7 @@ namespace DiceGame.Gameplay.AI.Application
         }
 
         public bool IsWorldIdle() {
-            if (Character == null || !Character.IsReadyForAiPlanning()) {
-                return false;
-            }
-
-            if (Registry != null && Registry.AnyRolling()) {
-                return false;
-            }
-
-            if (Registry != null && Registry.AnyCarried() && !Character.IsLiftCarrying) {
-                return false;
-            }
-
-            return true;
+            return Character != null && Character.IsReadyForAiPlanning();
         }
     }
 }

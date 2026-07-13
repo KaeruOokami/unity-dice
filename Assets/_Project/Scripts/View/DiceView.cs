@@ -1407,8 +1407,8 @@ namespace DiceGame.View
                 return;
             }
 
-            var emissionColor = erasureSettings.ErasureEmissionColor
-                * (settings.EmissionIntensity * factor);
+            var baseColor = erasureEmissionColorOverride ?? erasureSettings.NeutralEmissionColor;
+            var emissionColor = baseColor * (settings.EmissionIntensity * factor);
 
             for (var i = 0; i < dissolveMaterials.Count; i++) {
                 var map = dissolveEmissionMapOverride != null
@@ -1422,6 +1422,7 @@ namespace DiceGame.View
 
         void ResetOneVanishVisuals() {
             if (dissolveMaterials.Count == 0) {
+                erasureEmissionColorOverride = null;
                 return;
             }
 
@@ -1432,6 +1433,8 @@ namespace DiceGame.View
                     dissolveMaterialBaseEmissionMaps[i],
                     dissolveMaterialHadEmission[i]);
             }
+
+            erasureEmissionColorOverride = null;
         }
 
         IEnumerator ErasureCoroutine(Board board, ErasureKind kind, Action onComplete) {
@@ -1495,7 +1498,7 @@ namespace DiceGame.View
             erasureProgress = progress;
             ApplySurfaceLayout(board, progress);
             ApplyErasureAlpha(progress, allowGhostAlpha: false);
-            ApplyErasureEmission(progress);
+            ApplyErasureEmission(progress, useNeutralColor: true);
             EnsurePushBody();
             pushBody?.SetCollisionEnabled(progress < erasureSettings.SinkGhostThreshold);
         }
@@ -1576,7 +1579,7 @@ namespace DiceGame.View
             activeErasureKind = ErasureKind.None;
         }
 
-        void ApplyErasureEmission(float progress) {
+        void ApplyErasureEmission(float progress, bool useNeutralColor = false) {
             if (dissolveMaterials.Count == 0 || erasureSettings == null) {
                 return;
             }
@@ -1598,7 +1601,10 @@ namespace DiceGame.View
                 erasureSettings.ErasureEmissionPulseMin,
                 erasureSettings.ErasureEmissionPulseMax,
                 pulse);
-            var baseColor = erasureEmissionColorOverride ?? erasureSettings.ErasureEmissionColor;
+            var baseColor = useNeutralColor
+                ? erasureSettings.NeutralEmissionColor
+                : erasureEmissionColorOverride
+                    ?? erasureSettings.NeutralEmissionColor;
             var emissionColor = baseColor
                 * (erasureSettings.ErasureEmissionIntensity * pulseMultiplier);
 

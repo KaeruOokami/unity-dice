@@ -52,7 +52,7 @@ namespace DiceGame.Gameplay.AI.Application.Actions
             context.InputSource.SetMove(CharacterController.DirectionToMoveVector(direction));
 
             if (context.Character.IsBusy
-                || (context.Registry != null && context.Registry.AnyRolling())) {
+                || context.Character.AnyActionDiceRollingForPlayer()) {
                 startedMotion = true;
             }
         }

@@ -34,4 +34,3 @@ MonoBehaviour:
   face5Weight: 1
   face6Weight: 1
   queueToBoardDelay: 1.5
-  erasureEmissionColor: {r: 1, g: 0.35, b: 0.2, a: 1}

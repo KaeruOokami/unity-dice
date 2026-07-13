@@ -11,6 +11,7 @@ namespace DiceGame.Gameplay
     {
         readonly HashSet<DiceController> actionDice = new();
         readonly Dictionary<DiceController, PlayerSlot> actionDiceOwners = new();
+        readonly List<PlayerSlot> pendingPlayersScratch = new();
 
         DiceRegistry registry;
         DiceMatchOwnershipContext ownershipContext;
@@ -46,38 +47,109 @@ namespace DiceGame.Gameplay
             return dice != null && actionDice.Contains(dice);
         }
 
-        public void NotifyParticipantMoveCompleted() {
-            TryCompleteAction();
-        }
-
-        void TryCompleteAction() {
-            if (actionDice.Count == 0) {
-                return;
-            }
-
-            if (registry != null && (registry.AnyRolling() || registry.AnyCarried())) {
-                return;
-            }
-
-            var allDice = new List<DiceController>(actionDice);
-            var diceByPlayer = new Dictionary<PlayerSlot, List<DiceController>>();
-
+        public bool AnyRollingForPlayer(PlayerSlot player) {
             foreach (var dice in actionDice) {
-                if (!actionDiceOwners.TryGetValue(dice, out var owner)) {
+                if (dice == null || !dice.IsRolling) {
                     continue;
                 }
 
-                if (!diceByPlayer.TryGetValue(owner, out var ownedDice)) {
-                    ownedDice = new List<DiceController>();
-                    diceByPlayer[owner] = ownedDice;
+                if (actionDiceOwners.TryGetValue(dice, out var owner) && owner == player) {
+                    return true;
                 }
-
-                ownedDice.Add(dice);
             }
 
-            actionDice.Clear();
-            actionDiceOwners.Clear();
-            ActionCompleted?.Invoke(new MatchActionSnapshot(allDice, diceByPlayer));
+            return false;
+        }
+
+        public bool TryGetActionOwner(DiceController dice, out PlayerSlot owner) {
+            return actionDiceOwners.TryGetValue(dice, out owner);
+        }
+
+        public bool AnyBusyActionDiceIntersectingCells(HashSet<Vector2Int> cells) {
+            if (cells == null || cells.Count == 0) {
+                return false;
+            }
+
+            foreach (var dice in actionDice) {
+                if (dice == null || (!dice.IsRolling && !dice.IsCarried)) {
+                    continue;
+                }
+
+                if (dice.IsCarried) {
+                    continue;
+                }
+
+                if (cells.Contains(dice.CurrentState.GridPos)) {
+                    return true;
+                }
+            }
+
+            return false;
+        }
+
+        public void NotifyParticipantMoveCompleted(PlayerSlot player) {
+            TryCompleteActionForPlayer(player);
+        }
+
+        public void NotifyParticipantMoveCompleted() {
+            CollectPlayersWithPendingActions(pendingPlayersScratch);
+            for (var i = 0; i < pendingPlayersScratch.Count; i++) {
+                TryCompleteActionForPlayer(pendingPlayersScratch[i]);
+            }
+        }
+
+        public void NotifyParticipantMoveCompleted(DiceController participant) {
+            if (participant != null
+                && TryGetActionOwner(participant, out var owner)) {
+                TryCompleteActionForPlayer(owner);
+                return;
+            }
+
+            NotifyParticipantMoveCompleted();
+        }
+
+        void TryCompleteActionForPlayer(PlayerSlot player) {
+            if (!TryCollectActionDiceForPlayer(player, out var playerDice) || playerDice.Count == 0) {
+                return;
+            }
+
+            for (var i = 0; i < playerDice.Count; i++) {
+                var dice = playerDice[i];
+                if (dice != null && (dice.IsRolling || dice.IsCarried)) {
+                    return;
+                }
+            }
+
+            for (var i = 0; i < playerDice.Count; i++) {
+                var dice = playerDice[i];
+                actionDice.Remove(dice);
+                actionDiceOwners.Remove(dice);
+            }
+
+            var diceByPlayer = new Dictionary<PlayerSlot, List<DiceController>> {
+                [player] = playerDice
+            };
+            ActionCompleted?.Invoke(new MatchActionSnapshot(playerDice, diceByPlayer));
+        }
+
+        void CollectPlayersWithPendingActions(List<PlayerSlot> players) {
+            players.Clear();
+            foreach (var pair in actionDiceOwners) {
+                if (!players.Contains(pair.Value)) {
+                    players.Add(pair.Value);
+                }
+            }
+        }
+
+        bool TryCollectActionDiceForPlayer(PlayerSlot player, out List<DiceController> playerDice) {
+            playerDice = new List<DiceController>();
+            foreach (var dice in actionDice) {
+                if (actionDiceOwners.TryGetValue(dice, out var owner) && owner == player) {
+                    playerDice.Add(dice);
+                }
+            }
+
+            return playerDice.Count > 0;
         }
 
         public static bool IsActionParticipationMove(DiceState from, DiceState to) {

@@ -19,6 +19,7 @@ namespace DiceGame.Gameplay
 
         DiceRegistry registry;
         PlayerMatchActionContext matchActionContext;
+        DiceMatchOwnershipContext ownershipContext;
         ITierFallMatchNotifier tierFallMatchNotifier;
         DiceState currentState;
         bool isRolling;
@@ -96,6 +97,10 @@ namespace DiceGame.Gameplay
 
         public void ConfigureMatchActionContext(PlayerMatchActionContext actionContext) {
             matchActionContext = actionContext;
+        }
+
+        public void ConfigureOwnershipContext(DiceMatchOwnershipContext targetOwnershipContext) {
+            ownershipContext = targetOwnershipContext;
         }
 
         public void ConfigureTierFallMatchNotifier(ITierFallMatchNotifier notifier) {
@@ -475,12 +480,12 @@ namespace DiceGame.Gameplay
 
         void NotifyActionMoveCompleted(DiceState fromState, DiceState toState) {
             if (PlayerMatchActionContext.IsActionParticipationMove(fromState, toState)) {
-                matchActionContext?.NotifyParticipantMoveCompleted();
+                matchActionContext?.NotifyParticipantMoveCompleted(this);
             }
         }
 
         void NotifyActionMoveCompleted() {
-            matchActionContext?.NotifyParticipantMoveCompleted();
+            matchActionContext?.NotifyParticipantMoveCompleted(this);
         }
 
         bool TryExecuteMovePlan(DiceGridMovePlan plan, DiceMoveVisualContext context) {
@@ -657,12 +662,13 @@ namespace DiceGame.Gameplay
             diceView.AdvanceErasure(amount);
         }
 
-        public void BeginOneVanish(DiceOneVanishSettings settings, Action onComplete) {
+        public void BeginOneVanish(DiceOneVanishSettings settings, Color emissionColor, Action onComplete) {
             if (isVanishing || IsErasing || isCarried || board == null || diceView == null || settings == null) {
                 return;
             }
 
             isVanishing = true;
+            diceView.SetErasureEmissionColor(emissionColor);
             diceView.PlayOneVanish(settings, () => {
                 registry?.Unregister(this);
                 Erased?.Invoke(this);
@@ -698,6 +704,8 @@ namespace DiceGame.Gameplay
                 || currentState.Tier != DiceStackTier.Top) {
                 return;
             }
+
+            ownershipContext?.CaptureTierFallSupportOwner(this, removedBottom);
 
             if (removedBottom != null && removedBottom.IsErasureGhost) {
                 removedBottom.CompleteErasureFromOverride();

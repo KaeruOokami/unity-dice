@@ -1,7 +1,9 @@
 using System;
 using System.Collections.Generic;
+using DiceGame.Config;
 using DiceGame.Core;
 using DiceGame.Gameplay;
+using DiceGame.Grid;
 using DiceGame.Placement;
 using UnityEngine;
 
@@ -46,6 +48,9 @@ namespace DiceGame.Gameplay.AI.Domain
     public sealed class GameStateSnapshot
     {
         public IReadOnlyList<DiceSnapshot> AllDice { get; }
+        public IReadOnlyList<DiceSnapshot> PlanningDice { get; }
+        public PlayerSlot PlayerSlot { get; }
+        public VersusArenaLayout VersusLayout { get; }
         public Vector2Int PlayerCell { get; }
         public CharacterPlacement PlayerPlacement { get; }
         public bool PlayerIsOnFloor { get; }
@@ -55,6 +60,9 @@ namespace DiceGame.Gameplay.AI.Domain
 
         GameStateSnapshot(
             IReadOnlyList<DiceSnapshot> allDice,
+            IReadOnlyList<DiceSnapshot> planningDice,
+            PlayerSlot playerSlot,
+            VersusArenaLayout versusLayout,
             Vector2Int playerCell,
             CharacterPlacement playerPlacement,
             bool playerIsOnFloor,
@@ -62,12 +70,19 @@ namespace DiceGame.Gameplay.AI.Domain
             bool playerIsJumping,
             DiceController standingDice) {
             AllDice = allDice;
+            PlanningDice = planningDice;
+            PlayerSlot = playerSlot;
+            VersusLayout = versusLayout;
             PlayerCell = playerCell;
             PlayerPlacement = playerPlacement;
             PlayerIsOnFloor = playerIsOnFloor;
             PlayerIsCarrying = playerIsCarrying;
             PlayerIsJumping = playerIsJumping;
             StandingDice = standingDice;
+        }
+
+        public bool IsInPlayerRegion(Vector2Int cell) {
+            return AiRegionFilter.IsInPlayerRegion(VersusLayout, PlayerSlot, cell);
         }
 
         public static GameStateSnapshot Capture(CharacterController character, DiceRegistry registry) {
@@ -82,8 +97,16 @@ namespace DiceGame.Gameplay.AI.Domain
                 }
             }
 
+            var board = registry != null ? registry.Board : null;
+            var versusLayout = board != null && board.IsVersusArena ? board.VersusLayout : null;
+            var playerSlot = character.PlayerSlot;
+            var planningDice = AiRegionFilter.FilterPlanningDice(diceList, versusLayout, playerSlot);
+
             return new GameStateSnapshot(
                 diceList,
+                planningDice,
+                playerSlot,
+                versusLayout,
                 character.StandingGridCell,
                 character.StandingPlacement,
                 character.IsOnFloor,

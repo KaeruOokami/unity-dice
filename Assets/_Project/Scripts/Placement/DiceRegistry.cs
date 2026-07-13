@@ -21,6 +21,8 @@ namespace DiceGame.Placement
 
         public IReadOnlyList<DiceController> AllDice => allDice;
 
+        public Board Board => board;
+
         public void Configure(Board targetBoard) {
             board = targetBoard;
         }

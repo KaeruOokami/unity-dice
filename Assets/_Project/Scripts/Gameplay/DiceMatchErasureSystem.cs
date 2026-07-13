@@ -23,9 +23,9 @@ namespace DiceGame.Gameplay
         readonly List<DiceController> pendingTierFallMatches = new();
 
         VersusBoardSettings versusSettings;
+        DiceErasureSettings erasureSettings;
         SinkingGroupTracker sinkingGroups;
         DiceMatchOwnershipContext ownershipContext;
-        MatchActionSnapshot currentAction;
         bool versusAttackEnabled;
 
         public event Action<ErasureResolvedEvent> ErasureResolved;
@@ -36,12 +36,14 @@ namespace DiceGame.Gameplay
             IReadOnlyList<CharacterController> targetCharacters,
             PlayerMatchActionContext targetActionContext,
             DiceOneVanishSystem targetOneVanishSystem,
-            DiceMatchOwnershipContext targetOwnershipContext) {
+            DiceMatchOwnershipContext targetOwnershipContext,
+            DiceErasureSettings targetErasureSettings) {
             board = targetBoard;
             registry = targetRegistry;
             actionContext = targetActionContext;
             oneVanishSystem = targetOneVanishSystem;
             ownershipContext = targetOwnershipContext;
+            erasureSettings = targetErasureSettings;
             characters.Clear();
             if (targetCharacters != null) {
                 characters.AddRange(targetCharacters);
@@ -55,10 +57,16 @@ namespace DiceGame.Gameplay
             SubscribeAllDice();
         }
 
+        public void ConfigureSinkingChain() {
+            sinkingGroups = board != null ? new SinkingGroupTracker() : null;
+        }
+
         public void ConfigureVersusAttack(VersusBoardSettings settings) {
             versusSettings = settings;
             versusAttackEnabled = settings != null && board != null && board.IsVersusArena;
-            sinkingGroups = versusAttackEnabled ? new SinkingGroupTracker() : null;
+            if (versusAttackEnabled && sinkingGroups == null) {
+                ConfigureSinkingChain();
+            }
         }
 
         public void EnsureDiceSubscribed(DiceController dice) {
@@ -88,17 +96,23 @@ namespace DiceGame.Gameplay
         }
 
         void TryFlushPendingTierFallMatches() {
-            if (pendingTierFallMatches.Count == 0
-                || registry == null
-                || (registry.AnyRolling() || registry.AnyCarried())) {
+            if (pendingTierFallMatches.Count == 0 || registry == null) {
                 return;
             }
 
-            var pending = new List<DiceController>(pendingTierFallMatches);
-            pendingTierFallMatches.Clear();
+            for (var i = pendingTierFallMatches.Count - 1; i >= 0; i--) {
+                var fallenDice = pendingTierFallMatches[i];
+                if (fallenDice == null) {
+                    pendingTierFallMatches.RemoveAt(i);
+                    continue;
+                }
 
-            for (var i = 0; i < pending.Count; i++) {
-                EvaluateTierFallMatch(pending[i]);
+                if (MotionConflictEvaluator.BlocksTierFallEvaluation(fallenDice, registry, actionContext)) {
+                    continue;
+                }
+
+                pendingTierFallMatches.RemoveAt(i);
+                EvaluateTierFallMatch(fallenDice);
             }
         }
 
@@ -112,12 +126,9 @@ namespace DiceGame.Gameplay
             PlayerSlot? deferredAttacker = null;
 
             foreach (var cluster in clusters) {
-                if (!MatchAttackerResolver.TryResolveAttacker(
+                if (!MatchAttackerResolver.TryResolveAttackerForTierFall(
                     cluster,
-                    currentAction,
-                    participants,
                     ownershipContext,
-                    board,
                     fallenDice,
                     out var attacker)) {
                     continue;
@@ -127,17 +138,21 @@ namespace DiceGame.Gameplay
                 ProcessCluster(cluster, attacker);
             }
 
-            if (!MatchAttackerResolver.TryResolveAttackerForDice(
-                fallenDice,
-                ownershipContext,
-                board,
-                out var vanishAttacker)) {
-                return;
+            if (deferredAttacker == null
+                && MatchAttackerResolver.TryResolveAttackerForTierFall(
+                    cluster: null,
+                    ownershipContext,
+                    fallenDice,
+                    out var supportAttacker)) {
+                deferredAttacker = supportAttacker;
             }
 
-            deferredAttacker ??= vanishAttacker;
-            oneVanishSystem?.EvaluateForDeferredAction(
-                new DeferredMatchSnapshot(fallenDice, deferredAttacker.Value));
+            if (deferredAttacker.HasValue) {
+                oneVanishSystem?.EvaluateForDeferredAction(
+                    new DeferredMatchSnapshot(fallenDice, deferredAttacker.Value));
+            }
+
+            ownershipContext.ClearTierFallSupportOwner(fallenDice);
         }
 
         void SubscribeAllDice() {
@@ -158,6 +173,7 @@ namespace DiceGame.Gameplay
             subscribedDice.Add(dice);
             dice.Erased += OnDiceErased;
             dice.BecameErasureGhost += OnDiceBecameErasureGhost;
+            dice.ConfigureOwnershipContext(ownershipContext);
             dice.ConfigureTierFallMatchNotifier(this);
         }
 
@@ -179,8 +195,6 @@ namespace DiceGame.Gameplay
         }
 
         void OnActionCompleted(MatchActionSnapshot action) {
-            currentAction = action;
-
             if (registry != null) {
                 foreach (var dice in registry.AllDice) {
                     SubscribeDice(dice);
@@ -276,7 +290,7 @@ namespace DiceGame.Gameplay
             }
 
             if (erasingMembers.Count > 0) {
-                EmitVersusFollowUpAttack(cluster, attacker);
+                ProcessSinkingFollowUp(cluster, attacker);
             }
         }
 
@@ -309,36 +323,32 @@ namespace DiceGame.Gameplay
             List<DiceController> newMembers,
             List<DiceController> erasingMembers,
             PlayerSlot attacker) {
-            var face = newMembers[0].CurrentState.Orientation.Top;
-
-            if (versusAttackEnabled && versusSettings != null) {
-                ProcessVersusCluster(
-                    cluster,
-                    newMembers,
-                    erasingMembers,
-                    face,
-                    attacker);
+            if (!TryGetPlayerEmissionColor(attacker, out var emissionColor)) {
                 return;
             }
+
+            var face = newMembers[0].CurrentState.Orientation.Top;
+            var chainResult = RegisterSinkingCluster(erasingMembers, newMembers, face, attacker, out var clusterSize);
 
             foreach (var dice in erasingMembers) {
                 dice.RetreatErasure(chainRollbackAmount);
+                dice.SetErasureEmissionColor(emissionColor);
             }
 
             AssignErasingOwners(newMembers, attacker);
-            foreach (var dice in newMembers) {
-                dice.BeginErasureForCurrentTier(null, null);
+            if (erasingMembers.Count > 0) {
+                AssignErasingOwners(erasingMembers, attacker);
             }
+
+            foreach (var dice in newMembers) {
+                dice.BeginErasureForCurrentTier(emissionColor, null);
+            }
+
+            TryEmitVersusAttack(attacker, face, chainResult, clusterSize);
         }
 
-        void EmitVersusFollowUpAttack(List<DiceController> cluster, PlayerSlot attacker) {
-            if (!versusAttackEnabled || versusSettings == null || sinkingGroups == null) {
-                return;
-            }
-
-            var attackSettings = versusSettings.GetAttackSettings(attacker);
-            if (attackSettings == null) {
-                Debug.LogError($"DiceMatchErasureSystem: Attack settings missing for {attacker}.");
+        void ProcessSinkingFollowUp(List<DiceController> cluster, PlayerSlot attacker) {
+            if (sinkingGroups == null) {
                 return;
             }
 
@@ -348,44 +358,44 @@ namespace DiceGame.Gameplay
                 out var face,
                 out var clusterSize);
 
-            var target = SinkingChainResolver.GetOpponent(attacker);
-            ErasureResolved?.Invoke(new ErasureResolvedEvent(
-                attacker,
-                target,
-                face,
-                chainResult.ChainCount,
-                clusterSize,
-                chainResult.IsSnatch));
-        }
-
-        void ProcessVersusCluster(
-            List<DiceController> cluster,
-            List<DiceController> newMembers,
-            List<DiceController> erasingMembers,
-            int face,
-            PlayerSlot attacker) {
-            var attackSettings = versusSettings.GetAttackSettings(attacker);
-            if (attackSettings == null) {
-                Debug.LogError($"DiceMatchErasureSystem: Attack settings missing for {attacker}.");
-                return;
+            if (chainResult.IsSnatch
+                && TryGetPlayerEmissionColor(attacker, out var emissionColor)) {
+                PartitionClusterMembers(cluster, out _, out var erasingMembers);
+                AssignErasingOwners(erasingMembers, attacker);
+                for (var i = 0; i < erasingMembers.Count; i++) {
+                    erasingMembers[i].SetErasureEmissionColor(emissionColor);
+                }
             }
 
-            var emissionColor = attackSettings.ErasureEmissionColor;
-            var chainResult = sinkingGroups.RegisterCluster(
+            TryEmitVersusAttack(attacker, face, chainResult, clusterSize);
+        }
+
+        SinkingChainResult RegisterSinkingCluster(
+            IReadOnlyList<DiceController> erasingMembers,
+            IReadOnlyList<DiceController> newMembers,
+            int face,
+            PlayerSlot attacker,
+            out int clusterSize) {
+            clusterSize = newMembers.Count + erasingMembers.Count;
+            if (sinkingGroups == null) {
+                return new SinkingChainResult(0, false);
+            }
+
+            return sinkingGroups.RegisterCluster(
                 erasingMembers,
                 newMembers,
                 face,
                 attacker,
-                out var clusterSize);
+                out clusterSize);
+        }
 
-            foreach (var dice in erasingMembers) {
-                dice.RetreatErasure(chainRollbackAmount);
-                dice.SetErasureEmissionColor(emissionColor);
-            }
-
-            AssignErasingOwners(newMembers, attacker);
-            foreach (var dice in newMembers) {
-                dice.BeginErasureForCurrentTier(emissionColor, null);
+        void TryEmitVersusAttack(
+            PlayerSlot attacker,
+            int face,
+            SinkingChainResult chainResult,
+            int clusterSize) {
+            if (!versusAttackEnabled || versusSettings == null) {
+                return;
             }
 
             var target = SinkingChainResolver.GetOpponent(attacker);
@@ -398,13 +408,24 @@ namespace DiceGame.Gameplay
                 chainResult.IsSnatch));
         }
 
-        void AssignErasingOwners(IReadOnlyList<DiceController> newMembers, PlayerSlot attacker) {
-            if (ownershipContext == null || newMembers == null) {
+        bool TryGetPlayerEmissionColor(PlayerSlot attacker, out Color emissionColor) {
+            emissionColor = default;
+            if (erasureSettings == null) {
+                Debug.LogError("DiceMatchErasureSystem: Erasure settings are not configured.");
+                return false;
+            }
+
+            emissionColor = erasureSettings.GetPlayerEmissionColor(attacker);
+            return true;
+        }
+
+        void AssignErasingOwners(IReadOnlyList<DiceController> members, PlayerSlot attacker) {
+            if (ownershipContext == null || members == null) {
                 return;
             }
 
-            for (var i = 0; i < newMembers.Count; i++) {
-                ownershipContext.SetOwner(newMembers[i], attacker);
+            for (var i = 0; i < members.Count; i++) {
+                ownershipContext.SetOwner(members[i], attacker);
             }
         }
 

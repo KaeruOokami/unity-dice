@@ -17,7 +17,9 @@ MonoBehaviour:
   sinkGhostAlpha: 0.4
   radianceDuration: 4
   radianceRampUpDuration: 0.1
-  erasureEmissionColor: {r: 1, g: 1, b: 1, a: 1}
+  neutralEmissionColor: {r: 1, g: 1, b: 1, a: 1}
+  player1EmissionColor: {r: 0.2, g: 0.6, b: 1, a: 1}
+  player2EmissionColor: {r: 1, g: 0.35, b: 0.2, a: 1}
   erasureEmissionIntensity: 5
   erasureEmissionMap: {fileID: 2800000, guid: 33d3f824f77d9084a8c29c1b7973fb19, type: 3}
   erasureEmissionPulseSpeed: 4

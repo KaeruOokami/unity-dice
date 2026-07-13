@@ -1160,7 +1160,13 @@ namespace DiceGame.Gameplay
                 return;
             }
 
-            if (registry == null || registry.AnyRolling() || registry.AnyCarried()) {
+            if (PlayerMotionGate.BlocksPushContact(
+                PlayerSlot,
+                matchActionContext,
+                registry,
+                board,
+                StandingGridCell,
+                standingController != null ? standingController.CurrentDice : null)) {
                 ResetPushState();
                 return;
             }
@@ -1743,7 +1749,13 @@ namespace DiceGame.Gameplay
                 return false;
             }
 
-            if (registry == null || registry.AnyRolling() || registry.AnyCarried()) {
+            if (PlayerMotionGate.BlocksJumpOrLiftStart(
+                PlayerSlot,
+                matchActionContext,
+                registry,
+                board,
+                StandingGridCell,
+                standingController != null ? standingController.CurrentDice : null)) {
                 return false;
             }
 
@@ -1877,20 +1889,8 @@ namespace DiceGame.Gameplay
                 return false;
             }
 
-            if (!IsOnFloor && standingController.CurrentDice != null && standingController.CurrentDice.IsRolling) {
-                LogJump(
-                    $"TryBeginJump rejected reason=standing-dice-rolling " +
-                    $"dice={standingController.CurrentDice.name} {FormatJumpContext()}");
-                return false;
-            }
-
-            if (registry != null && registry.AnyRolling()) {
-                LogJump($"TryBeginJump rejected reason=any-rolling {FormatJumpContext()}");
-                return false;
-            }
-
-            if (registry != null && registry.AnyCarried()) {
-                LogJump($"TryBeginJump rejected reason=any-carried {FormatJumpContext()}");
+            if (IsPlayerMotionGateBlockingInput(out var jumpBlockReason)) {
+                LogJump($"TryBeginJump rejected reason={jumpBlockReason} {FormatJumpContext()}");
                 return false;
             }
 
@@ -2103,7 +2103,7 @@ namespace DiceGame.Gameplay
             }
 
             matchActionContext?.RegisterActionDice(landingDice, PlayerSlot);
-            matchActionContext?.NotifyParticipantMoveCompleted();
+            matchActionContext?.NotifyParticipantMoveCompleted(PlayerSlot);
         }
 
         public static Vector2 DirectionToMoveVector(Direction direction) {
@@ -2183,8 +2183,39 @@ namespace DiceGame.Gameplay
                 && jumpPhase == JumpPhase.None
                 && !isPushFollowing
                 && !isFalling
-                && (registry == null || !registry.AnyRolling())
+                && !IsPlayerMotionGateBlockingInput(out _)
                 && !IsBusy;
+        }
+
+        bool IsPlayerMotionGateBlockingInput(out string reason) {
+            reason = null;
+            var standingDice = standingController != null ? standingController.CurrentDice : null;
+            if (standingDice != null && standingDice.IsRolling) {
+                reason = "standing-dice-rolling";
+                return true;
+            }
+
+            if (matchActionContext != null && matchActionContext.AnyRollingForPlayer(PlayerSlot)) {
+                reason = "action-dice-rolling";
+                return true;
+            }
+
+            if (MotionConflictEvaluator.HasExternalRollingConflict(
+                PlayerSlot,
+                registry,
+                board,
+                matchActionContext,
+                StandingGridCell,
+                standingDice)) {
+                reason = "spatial-motion-conflict";
+                return true;
+            }
+
+            return false;
+        }
+
+        public bool AnyActionDiceRollingForPlayer() {
+            return matchActionContext != null && matchActionContext.AnyRollingForPlayer(PlayerSlot);
         }
 
         public bool TryGetAiNavigationQuery(

@@ -19,9 +19,17 @@ namespace DiceGame.Config
         [FormerlySerializedAs("radianceRampUpDuration")]
         [SerializeField] float radianceRampUpDuration = 0.1f;
 
+        [Header("Neutral Emission")]
+        [SerializeField] Color neutralEmissionColor = new(1f, 1f, 1f, 1f);
+
+        [Header("Player 1 Emission")]
+        [FormerlySerializedAs("erasureEmissionColor")]
+        [SerializeField] Color player1EmissionColor = new(0.2f, 0.6f, 1f, 1f);
+
+        [Header("Player 2 Emission")]
+        [SerializeField] Color player2EmissionColor = new(1f, 0.35f, 0.2f, 1f);
+
         [Header("Shared Emission")]
-        [FormerlySerializedAs("dissolveEmissionColor")]
-        [SerializeField] Color erasureEmissionColor = new Color(0.4f, 0.8f, 1f, 1f);
         [FormerlySerializedAs("dissolveEmissionIntensity")]
         [SerializeField] float erasureEmissionIntensity = 2f;
         [FormerlySerializedAs("dissolveEmissionMap")]
@@ -38,12 +46,17 @@ namespace DiceGame.Config
         public float SinkGhostAlpha => sinkGhostAlpha;
         public float RadianceDuration => radianceDuration;
         public float RadianceRampUpDuration => radianceRampUpDuration;
-        public Color ErasureEmissionColor => erasureEmissionColor;
         public float ErasureEmissionIntensity => erasureEmissionIntensity;
         public Texture ErasureEmissionMap => erasureEmissionMap;
         public float ErasureEmissionPulseSpeed => erasureEmissionPulseSpeed;
         public float ErasureEmissionPulseMin => erasureEmissionPulseMin;
         public float ErasureEmissionPulseMax => erasureEmissionPulseMax;
+
+        public Color NeutralEmissionColor => neutralEmissionColor;
+
+        public Color GetPlayerEmissionColor(PlayerSlot slot) {
+            return slot == PlayerSlot.Player1 ? player1EmissionColor : player2EmissionColor;
+        }
 
         void OnValidate() {
             sinkDuration = Mathf.Max(0.01f, sinkDuration);
