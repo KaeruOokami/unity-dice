@@ -25,6 +25,8 @@ namespace DiceGame.Gameplay.AI.Domain
         public bool IsComplete { get; private set; }
         public WorkDieSlidePlan? JoinSlidePlan { get; private set; }
         public int JoinSlideStepIndex { get; private set; }
+        public WorkDieSlidePlan? OrientRollPlan { get; private set; }
+        public int OrientRollStepIndex { get; private set; }
 
         AiSubGoal(
             AiSubGoalKind kind,
@@ -68,18 +70,31 @@ namespace DiceGame.Gameplay.AI.Domain
         public void MarkComplete() {
             IsComplete = true;
             ClearJoinSlidePlan();
+            ClearOrientRollPlan();
         }
 
         public bool HasJoinSlidePlan => JoinSlidePlan.HasValue;
+
+        public bool HasOrientRollPlan => OrientRollPlan.HasValue;
 
         public void SetJoinSlidePlan(WorkDieSlidePlan plan) {
             JoinSlidePlan = plan;
             JoinSlideStepIndex = 0;
         }
 
+        public void SetOrientRollPlan(WorkDieSlidePlan plan) {
+            OrientRollPlan = plan;
+            OrientRollStepIndex = 0;
+        }
+
         public void ClearJoinSlidePlan() {
             JoinSlidePlan = null;
             JoinSlideStepIndex = 0;
+        }
+
+        public void ClearOrientRollPlan() {
+            OrientRollPlan = null;
+            OrientRollStepIndex = 0;
         }
 
         public bool TryAdvanceJoinSlideStep(DiceState state) {
@@ -94,6 +109,21 @@ namespace DiceGame.Gameplay.AI.Domain
             }
 
             JoinSlideStepIndex = stepIndex;
+            return true;
+        }
+
+        public bool TryAdvanceOrientRollStep(DiceState state) {
+            if (!OrientRollPlan.HasValue) {
+                return false;
+            }
+
+            var plan = OrientRollPlan.Value;
+            var stepIndex = OrientRollStepIndex;
+            if (!WorkDieSlidePlanner.TryAdvanceCompletedSteps(plan, ref stepIndex, state)) {
+                return false;
+            }
+
+            OrientRollStepIndex = stepIndex;
             return true;
         }
     }

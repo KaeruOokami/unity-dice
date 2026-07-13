@@ -134,7 +134,8 @@ namespace DiceGame.Gameplay.AI.Domain
                 return null;
             }
 
-            if (die.CurrentState.Orientation.Top == subGoal.TargetFace) {
+            var state = die.CurrentState;
+            if (state.Orientation.Top == subGoal.TargetFace) {
                 subGoal.MarkComplete();
                 return null;
             }
@@ -155,6 +156,25 @@ namespace DiceGame.Gameplay.AI.Domain
                 return null;
             }
 
+            subGoal.TryAdvanceOrientRollStep(state);
+
+            if (!TryEnsureOrientRollPlan(subGoal, state, passability, character, footingWorldY, settings)) {
+                Application.AiDebugLog.Log(
+                    $"OrientPlan FAILED die={die.name} cell={state.GridPos} " +
+                    $"currentTop={state.Orientation.Top} targetTop={subGoal.TargetFace}");
+                return null;
+            }
+
+            var plan = subGoal.OrientRollPlan.Value;
+            var stepIndex = subGoal.OrientRollStepIndex;
+            if (stepIndex >= plan.Directions.Count) {
+                if (state.Orientation.Top == subGoal.TargetFace) {
+                    subGoal.MarkComplete();
+                }
+
+                return null;
+            }
+
             var fromLevel = character.StandingPlacement.Level;
             var allowJump = settings != null && settings.AllowJump;
             if (!WorkDieOrientPlanner.TrySelectNextStep(
@@ -163,22 +183,62 @@ namespace DiceGame.Gameplay.AI.Domain
                 fromLevel,
                 footingWorldY,
                 character.PlayerSlot,
-                subGoal.TargetFace,
+                plan,
+                stepIndex,
                 allowJump,
                 out var orientStep,
                 out var remainingRolls)) {
+                subGoal.ClearOrientRollPlan();
                 Application.AiDebugLog.Log(
-                    $"OrientPlan FAILED die={die.name} cell={die.CurrentState.GridPos} " +
-                    $"currentTop={die.CurrentState.Orientation.Top} targetTop={subGoal.TargetFace}");
+                    $"OrientPlan FAILED die={die.name} cell={state.GridPos} " +
+                    $"currentTop={state.Orientation.Top} targetTop={subGoal.TargetFace} " +
+                    $"step={stepIndex}/{plan.Directions.Count}");
                 return null;
             }
 
             Application.AiDebugLog.Log(
-                $"OrientPlan die={die.name} currentTop={die.CurrentState.Orientation.Top} targetTop={subGoal.TargetFace} " +
-                $"step={orientStep.Direction} mode={orientStep.Mode} landing={orientStep.LandingCell} " +
+                $"OrientPlan die={die.name} currentTop={state.Orientation.Top} targetTop={subGoal.TargetFace} " +
+                $"stepIndex={stepIndex}/{plan.Directions.Count} planned={plan.Directions[stepIndex]} " +
+                $"exec={orientStep.Direction} mode={orientStep.Mode} landing={orientStep.LandingCell} " +
                 $"landingTier={orientStep.LandingTier} remainingRolls={remainingRolls}");
 
             return BuildWorkDieRollAction(orientStep, die, settings, allowJump);
+        }
+
+        static bool TryEnsureOrientRollPlan(
+            AiSubGoal subGoal,
+            DiceState state,
+            MovementTransitionEvaluator passability,
+            CharacterController character,
+            float footingWorldY,
+            AiPlayerSettings settings) {
+            if (subGoal.HasOrientRollPlan) {
+                var existing = subGoal.OrientRollPlan.Value;
+                if (WorkDieSlidePlanner.IsPlanStillValid(existing, subGoal.OrientRollStepIndex, state)) {
+                    return existing.Directions != null && existing.Directions.Count > 0;
+                }
+
+                subGoal.ClearOrientRollPlan();
+            }
+
+            var allowJump = settings != null && settings.AllowJump;
+            if (!WorkDieOrientPlanner.TryBuildOrientPlan(
+                passability,
+                subGoal.TargetDie,
+                character.StandingPlacement.Level,
+                footingWorldY,
+                character.PlayerSlot,
+                state,
+                subGoal.TargetFace,
+                allowJump,
+                out var plan)
+                || plan.Directions == null
+                || plan.Directions.Count == 0) {
+                return false;
+            }
+
+            subGoal.SetOrientRollPlan(plan);
+            return true;
         }
 
         static Application.AiDiscreteAction BuildJoinClusterAction(
@@ -221,7 +281,7 @@ namespace DiceGame.Gameplay.AI.Domain
                 return BuildOrientAction(subGoal, snapshot, character, settings);
             }
 
-            if (!TryEnsureJoinSlidePlan(subGoal, state)) {
+            if (!TryEnsureJoinSlidePlan(subGoal, state, passability, character, footingWorldY, settings)) {
                 Application.AiDebugLog.Log(
                     $"JoinPlan FAILED die={die.name} cell={state.GridPos} target={subGoal.TargetCell} " +
                     $"top={state.Orientation.Top}");
@@ -251,6 +311,7 @@ namespace DiceGame.Gameplay.AI.Domain
                 stepIndex,
                 allowJump,
                 out var slideStep)) {
+                subGoal.ClearJoinSlidePlan();
                 Application.AiDebugLog.Log(
                     $"JoinPlan FAILED die={die.name} cell={state.GridPos} target={subGoal.TargetCell} " +
                     $"top={state.Orientation.Top} step={stepIndex}/{plan.Directions.Count}");
@@ -266,7 +327,13 @@ namespace DiceGame.Gameplay.AI.Domain
             return BuildWorkDieRollAction(slideStep, die, settings, allowJump);
         }
 
-        static bool TryEnsureJoinSlidePlan(AiSubGoal subGoal, DiceState state) {
+        static bool TryEnsureJoinSlidePlan(
+            AiSubGoal subGoal,
+            DiceState state,
+            MovementTransitionEvaluator passability,
+            CharacterController character,
+            float footingWorldY,
+            AiPlayerSettings settings) {
             if (subGoal.HasJoinSlidePlan) {
                 var existing = subGoal.JoinSlidePlan.Value;
                 if (WorkDieSlidePlanner.IsPlanStillValid(existing, subGoal.JoinSlideStepIndex, state)) {
@@ -280,10 +347,16 @@ namespace DiceGame.Gameplay.AI.Domain
                 return false;
             }
 
+            var allowJump = settings != null && settings.AllowJump;
             if (!WorkDieSlidePlanner.TryBuildSlidePlan(
-                state.GridPos,
+                passability,
+                subGoal.TargetDie,
+                character.StandingPlacement.Level,
+                footingWorldY,
+                character.PlayerSlot,
+                state,
                 subGoal.TargetCell,
-                state.Orientation,
+                allowJump,
                 out var plan)
                 || plan.Directions == null
                 || plan.Directions.Count == 0) {
