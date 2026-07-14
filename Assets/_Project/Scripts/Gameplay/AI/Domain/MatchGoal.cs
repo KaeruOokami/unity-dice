@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using DiceGame.Config;
 using DiceGame.Core;
 using DiceGame.Gameplay;
 using UnityEngine;
@@ -166,7 +167,7 @@ namespace DiceGame.Gameplay.AI.Domain
             return GetNextIncompleteSubGoal() == null;
         }
 
-        public bool IsStale(GameStateSnapshot snapshot) {
+        public bool IsStale(GameStateSnapshot snapshot, AiPlayerSettings settings) {
             if (snapshot == null) {
                 return true;
             }
@@ -179,6 +180,20 @@ namespace DiceGame.Gameplay.AI.Domain
             }
 
             if (snapshot.StandingDice != null && snapshot.StandingDice.IsSinkErasing) {
+                return true;
+            }
+
+            if (!IsImmediateMatch
+                && settings != null
+                && ClusterSelectionEvaluator.IsStrandedIsolatedNonSinkingCluster(
+                    snapshot,
+                    Face,
+                    ClusterDice)
+                && ClusterSelectionEvaluator.HasRetargetableCluster(
+                    snapshot,
+                    Face,
+                    ClusterDice,
+                    settings)) {
                 return true;
             }
 

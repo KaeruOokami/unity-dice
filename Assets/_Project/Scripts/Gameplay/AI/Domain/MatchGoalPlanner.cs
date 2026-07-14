@@ -109,9 +109,26 @@ namespace DiceGame.Gameplay.AI.Domain
                 }
             }
 
-            var constraints = avoidClusterCells
+            var strandedOnProtectedCluster = avoidClusterCells
+                && goal.ClusterDice != null
+                && ClusterSelectionEvaluator.IsStandingOnCluster(snapshot, goal.ClusterDice)
+                && snapshot.StandingDice != null
+                && !snapshot.StandingDice.IsSinkErasing
+                && !AiFloorRecoveryPlanner.HasAdjacentClusterExternalDie(
+                    goal.ClusterDice,
+                    goal.Face,
+                    snapshot.PlanningDice);
+
+            var constraints = avoidClusterCells && !strandedOnProtectedCluster
                 ? AiNavigationConstraints.ForClusterProtection(goal.ClusterDice)
                 : AiNavigationConstraints.None;
+            if (strandedOnProtectedCluster) {
+                Application.AiDebugLog.Log(
+                    $"ReachWorkDie allow-cluster-roll player={snapshot.PlayerCell} " +
+                    $"standOn={(snapshot.StandingDice != null ? snapshot.StandingDice.name : "none")} " +
+                    $"goal={targetCell}");
+            }
+
             var preferJump = subGoal.Kind != AiSubGoalKind.ReachWorkDie;
 
             return SelectMovementAction(

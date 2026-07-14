@@ -178,6 +178,124 @@ namespace DiceGame.Gameplay.AI.Domain
             return false;
         }
 
+        public static bool TryGetStrandedIsolatedNonSinkingCluster(
+            GameStateSnapshot snapshot,
+            out int face,
+            out List<DiceSnapshot> cluster) {
+            face = 0;
+            cluster = null;
+
+            var standing = snapshot?.StandingDice;
+            if (standing == null
+                || standing.IsSinkErasing
+                || standing.IsErasing
+                || standing.IsVanishing
+                || snapshot.PlanningDice == null) {
+                return false;
+            }
+
+            face = standing.CurrentState.Orientation.Top;
+            if (face < 2 || face > 6) {
+                return false;
+            }
+
+            var clusters = DiceBoardAnalyzer.FindFaceClusters(snapshot.PlanningDice, face);
+            for (var i = 0; i < clusters.Count; i++) {
+                var candidate = clusters[i];
+                if (!ClusterContainsController(candidate, standing)) {
+                    continue;
+                }
+
+                if (AiFloorRecoveryPlanner.HasAdjacentClusterExternalDie(
+                    candidate,
+                    face,
+                    snapshot.PlanningDice)) {
+                    return false;
+                }
+
+                cluster = candidate;
+                return true;
+            }
+
+            return false;
+        }
+
+        public static bool IsStrandedIsolatedNonSinkingCluster(
+            GameStateSnapshot snapshot,
+            int face,
+            IReadOnlyList<DiceSnapshot> cluster) {
+            return TryGetStrandedIsolatedNonSinkingCluster(
+                    snapshot,
+                    out var strandedFace,
+                    out var strandedCluster)
+                && strandedFace == face
+                && IsSameCluster(cluster, strandedCluster);
+        }
+
+        public static bool HasRetargetableCluster(
+            GameStateSnapshot snapshot,
+            int excludeFace,
+            IReadOnlyList<DiceSnapshot> excludeCluster,
+            AiPlayerSettings settings) {
+            if (snapshot?.PlanningDice == null || settings == null) {
+                return false;
+            }
+
+            for (var face = 2; face <= 6; face++) {
+                var clusters = DiceBoardAnalyzer.FindFaceClusters(snapshot.PlanningDice, face);
+                for (var i = 0; i < clusters.Count; i++) {
+                    var cluster = clusters[i];
+                    if (face == excludeFace && IsSameCluster(cluster, excludeCluster)) {
+                        continue;
+                    }
+
+                    if (cluster.Count >= face) {
+                        return true;
+                    }
+
+                    if (TrySelectNearestExternalDie(
+                        cluster,
+                        face,
+                        snapshot.PlanningDice,
+                        snapshot.PlayerCell,
+                        settings,
+                        preferChain: false,
+                        out _)) {
+                        return true;
+                    }
+                }
+            }
+
+            return false;
+        }
+
+        public static bool IsStandingOnCluster(
+            GameStateSnapshot snapshot,
+            IReadOnlyList<DiceSnapshot> cluster) {
+            return snapshot?.StandingDice != null
+                && ClusterContainsController(cluster, snapshot.StandingDice);
+        }
+
+        public static bool IsSameCluster(
+            IReadOnlyList<DiceSnapshot> left,
+            IReadOnlyList<DiceSnapshot> right) {
+            if (left == null || right == null || left.Count == 0 || right.Count == 0) {
+                return false;
+            }
+
+            if (left.Count != right.Count) {
+                return false;
+            }
+
+            for (var i = 0; i < left.Count; i++) {
+                if (!ClusterContains(right, left[i])) {
+                    return false;
+                }
+            }
+
+            return true;
+        }
+
         public static HashSet<Vector2Int> GetClusterCells(IReadOnlyList<DiceSnapshot> cluster) {
             var cells = new HashSet<Vector2Int>();
             if (cluster == null) {

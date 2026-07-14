@@ -66,6 +66,32 @@ namespace DiceGame.Gameplay.AI.Domain
             AiPlayerSettings settings,
             bool suppressChainFaces,
             out MatchGoal bestGoal) {
+            if (TrySelectBestGoalPass(
+                snapshot,
+                registry,
+                settings,
+                suppressChainFaces,
+                abandonStrandedIslands: true,
+                out bestGoal)) {
+                return true;
+            }
+
+            return TrySelectBestGoalPass(
+                snapshot,
+                registry,
+                settings,
+                suppressChainFaces,
+                abandonStrandedIslands: false,
+                out bestGoal);
+        }
+
+        static bool TrySelectBestGoalPass(
+            GameStateSnapshot snapshot,
+            DiceRegistry registry,
+            AiPlayerSettings settings,
+            bool suppressChainFaces,
+            bool abandonStrandedIslands,
+            out MatchGoal bestGoal) {
             bestGoal = null;
             var bestScore = float.MinValue;
 
@@ -78,7 +104,13 @@ namespace DiceGame.Gameplay.AI.Domain
                 var clusters = DiceBoardAnalyzer.FindFaceClusters(snapshot.PlanningDice, face);
                 for (var i = 0; i < clusters.Count; i++) {
                     var cluster = clusters[i];
-                    var goal = BuildGoalForCluster(snapshot, face, cluster, registry, settings);
+                    var goal = BuildGoalForCluster(
+                        snapshot,
+                        face,
+                        cluster,
+                        registry,
+                        settings,
+                        abandonStrandedIslands);
                     if (goal == null) {
                         continue;
                     }
@@ -230,7 +262,8 @@ namespace DiceGame.Gameplay.AI.Domain
             int face,
             List<DiceSnapshot> cluster,
             DiceRegistry registry,
-            AiPlayerSettings settings) {
+            AiPlayerSettings settings,
+            bool abandonStrandedIslands) {
             if (cluster.Count == 0) {
                 return null;
             }
@@ -238,6 +271,12 @@ namespace DiceGame.Gameplay.AI.Domain
             var isImmediate = cluster.Count >= face;
             if (isImmediate) {
                 return BuildImmediateMatchGoal(snapshot, face, cluster, settings);
+            }
+
+            // Incomplete isolated non-sinking island: prefer other clusters so CanRoll can leave.
+            if (abandonStrandedIslands
+                && ClusterSelectionEvaluator.IsStrandedIsolatedNonSinkingCluster(snapshot, face, cluster)) {
+                return null;
             }
 
             if (!ClusterSelectionEvaluator.TrySelectNearestExternalDie(

@@ -238,7 +238,7 @@ namespace DiceGame.Gameplay.AI.Application
             if (activeGoal != null) {
                 MatchGoalProgressSync.Sync(activeGoal, snapshot);
 
-                if (!activeGoal.IsStale(snapshot) && !activeGoal.AreAllSubGoalsComplete()) {
+                if (!activeGoal.IsStale(snapshot, settings) && !activeGoal.AreAllSubGoalsComplete()) {
                     var candidate = MatchGoalSelector.SelectBest(snapshot, character, registry, settings);
                     if (candidate != null && activeGoal.ShouldSwitchTo(candidate, settings.GoalSwitchMargin)) {
                         activeGoal = candidate;
