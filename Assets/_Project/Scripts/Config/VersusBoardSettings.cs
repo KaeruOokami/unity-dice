@@ -1,9 +1,14 @@
-using DiceGame.Config;
 using DiceGame.Grid;
 using UnityEngine;
 
 namespace DiceGame.Config
 {
+    public enum VersusInitialDicePlacementMode
+    {
+        Independent,
+        Mirrored
+    }
+
     [System.Serializable]
     public struct PlayerBoardDefinition
     {
@@ -44,10 +49,13 @@ namespace DiceGame.Config
     {
         [SerializeField] PlayerBoardDefinition player1 = new(4, 6, null, null, null, null);
         [SerializeField] PlayerBoardDefinition player2 = new(4, 6, null, null, null, null);
+        [SerializeField] VersusInitialDicePlacementMode initialDicePlacementMode =
+            VersusInitialDicePlacementMode.Mirrored;
         [SerializeField] AttackQueueUiSettings attackQueueUiSettings;
 
         public PlayerBoardDefinition Player1 => player1;
         public PlayerBoardDefinition Player2 => player2;
+        public VersusInitialDicePlacementMode InitialDicePlacementMode => initialDicePlacementMode;
         public AttackQueueUiSettings AttackQueueUiSettings => attackQueueUiSettings;
 
         public VersusArenaLayout CreateLayout()
@@ -91,6 +99,23 @@ namespace DiceGame.Config
             {
                 errorMessage = "VersusBoardSettings: Each player requires DiceCatalog.";
                 return false;
+            }
+
+            if (initialDicePlacementMode == VersusInitialDicePlacementMode.Mirrored)
+            {
+                if (player1.Width != player2.Width || player1.Height != player2.Height)
+                {
+                    errorMessage =
+                        "VersusBoardSettings: Mirrored initial dice placement requires matching board sizes.";
+                    return false;
+                }
+
+                if (player1.SpawnSettings.InitialDiceCount != player2.SpawnSettings.InitialDiceCount)
+                {
+                    errorMessage =
+                        "VersusBoardSettings: Mirrored initial dice placement requires matching InitialDiceCount.";
+                    return false;
+                }
             }
 
             if (player1.AttackSettings == null || player2.AttackSettings == null)

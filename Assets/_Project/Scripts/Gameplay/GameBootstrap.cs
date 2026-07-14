@@ -292,7 +292,8 @@ namespace DiceGame.Gameplay
                     versusSettings.Player1.SpawnSettings,
                     versusSettings.Player1.DiceCatalog,
                     versusSettings.Player2.SpawnSettings,
-                    versusSettings.Player2.DiceCatalog);
+                    versusSettings.Player2.DiceCatalog,
+                    versusSettings.InitialDicePlacementMode);
                 return true;
             }
 

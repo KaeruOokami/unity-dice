@@ -75,5 +75,34 @@ namespace DiceGame.Grid
             minCell = new Vector2Int(PartitionX, 0);
             maxCell = new Vector2Int(GlobalWidth - 1, Player2Height - 1);
         }
+
+        public bool TryMapMirroredCell(PlayerSlot fromSlot, Vector2Int fromCell, out Vector2Int mirroredCell)
+        {
+            mirroredCell = default;
+            if (!IsInsidePlayerRegion(fromSlot, fromCell))
+            {
+                return false;
+            }
+
+            var toSlot = fromSlot == PlayerSlot.Player1 ? PlayerSlot.Player2 : PlayerSlot.Player1;
+            GetPlayerGridBounds(fromSlot, out var fromMin, out var fromMax);
+            GetPlayerGridBounds(toSlot, out var toMin, out var toMax);
+
+            var fromWidth = fromMax.x - fromMin.x + 1;
+            var fromHeight = fromMax.y - fromMin.y + 1;
+            var toWidth = toMax.x - toMin.x + 1;
+            var toHeight = toMax.y - toMin.y + 1;
+            if (fromWidth != toWidth || fromHeight != toHeight)
+            {
+                return false;
+            }
+
+            var localX = fromCell.x - fromMin.x;
+            var localY = fromCell.y - fromMin.y;
+            mirroredCell = new Vector2Int(
+                toMin.x + (fromWidth - 1 - localX),
+                toMin.y + (fromHeight - 1 - localY));
+            return true;
+        }
     }
 }

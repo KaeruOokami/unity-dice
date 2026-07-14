@@ -90,6 +90,8 @@ namespace DiceGame.Gameplay
         System.Random random;
         readonly List<PlayerSpawnChannel> versusChannels = new();
         readonly Dictionary<PlayerSlot, int> attackSpawnCellIndices = new();
+        VersusInitialDicePlacementMode versusInitialPlacementMode =
+            VersusInitialDicePlacementMode.Mirrored;
 
         Coroutine spawnCoroutine;
         bool gameplayEnabled = true;
@@ -126,7 +128,9 @@ namespace DiceGame.Gameplay
             DiceSpawnSettings player1Settings,
             DiceCatalog player1Catalog,
             DiceSpawnSettings player2Settings,
-            DiceCatalog player2Catalog) {
+            DiceCatalog player2Catalog,
+            VersusInitialDicePlacementMode initialPlacementMode =
+                VersusInitialDicePlacementMode.Mirrored) {
             versusChannels.Clear();
             versusChannels.Add(new PlayerSpawnChannel {
                 Slot = PlayerSlot.Player1,
@@ -140,6 +144,7 @@ namespace DiceGame.Gameplay
                 Catalog = player2Catalog
             });
             attackSpawnCellIndices[PlayerSlot.Player2] = 0;
+            versusInitialPlacementMode = initialPlacementMode;
         }
 
         public void ConfigureErasureSystem(DiceMatchErasureSystem targetErasureSystem) {
@@ -264,53 +269,18 @@ namespace DiceGame.Gameplay
             }
 
             var requiredCount = Mathf.Min(playerCount, versusChannels.Count);
+            if (versusInitialPlacementMode == VersusInitialDicePlacementMode.Mirrored) {
+                return SpawnInitialVersusPlayersMirrored(requiredCount);
+            }
+
             for (var i = 0; i < requiredCount; i++) {
                 var channel = versusChannels[i];
-                if (channel.Settings == null) {
-                    Debug.LogError($"DiceSpawnSystem: Spawn settings for {channel.Slot} are not assigned.");
+                if (!TryValidateVersusChannel(channel)) {
                     results.Clear();
                     return results;
                 }
 
-                if (channel.Catalog == null) {
-                    Debug.LogError($"DiceSpawnSystem: Dice catalog for {channel.Slot} is not assigned.");
-                    results.Clear();
-                    return results;
-                }
-
-                var initialCount = Mathf.Max(1, channel.Settings.InitialDiceCount);
-                var slots = DiceSpawnCellPicker.PickRandomSpawnSlots(
-                    board,
-                    registry,
-                    channel.Slot,
-                    initialCount,
-                    channel.Settings.BottomSpawnWeight,
-                    random);
-                if (slots.Count == 0) {
-                    Debug.LogError($"DiceSpawnSystem: No valid spawn slots for {channel.Slot}.");
-                    results.Clear();
-                    return results;
-                }
-
-                DiceController standingDice = null;
-                for (var j = 0; j < slots.Count; j++) {
-                    var diceController = SpawnDiceAt(
-                        slots[j].Cell,
-                        slots[j].Tier,
-                        channel.Settings,
-                        channel.Catalog,
-                        useSpawnAppear: channel.Settings.AnimateInitialDiceSpawn);
-                    if (diceController == null) {
-                        continue;
-                    }
-
-                    if (standingDice == null) {
-                        standingDice = diceController;
-                    }
-                }
-
-                if (standingDice == null) {
-                    Debug.LogError($"DiceSpawnSystem: Failed to spawn initial dice for {channel.Slot}.");
+                if (!TrySpawnInitialChannelDice(channel, out var standingDice)) {
                     results.Clear();
                     return results;
                 }
@@ -319,6 +289,182 @@ namespace DiceGame.Gameplay
             }
 
             return results;
+        }
+
+        List<DiceController> SpawnInitialVersusPlayersMirrored(int requiredCount) {
+            var results = new List<DiceController>(requiredCount);
+            if (requiredCount < 2
+                || board.VersusLayout == null
+                || !TryFindVersusChannel(PlayerSlot.Player1, out var player1Channel)
+                || !TryFindVersusChannel(PlayerSlot.Player2, out var player2Channel)) {
+                Debug.LogError("DiceSpawnSystem: Mirrored initial spawn requires both player channels and VersusLayout.");
+                return results;
+            }
+
+            if (!TryValidateVersusChannel(player1Channel) || !TryValidateVersusChannel(player2Channel)) {
+                return results;
+            }
+
+            var initialCount = Mathf.Max(1, player1Channel.Settings.InitialDiceCount);
+            var slots = DiceSpawnCellPicker.PickRandomSpawnSlots(
+                board,
+                registry,
+                PlayerSlot.Player1,
+                initialCount,
+                player1Channel.Settings.BottomSpawnWeight,
+                random);
+            if (slots.Count == 0) {
+                Debug.LogError("DiceSpawnSystem: No valid spawn slots for Player1.");
+                return results;
+            }
+
+            var spawnedSpecs = new List<(Vector2Int Cell, DiceStackTier Tier, DiceKind Kind, DiceOrientation Orientation)>(
+                slots.Count);
+            DiceController player1Standing = null;
+            for (var i = 0; i < slots.Count; i++) {
+                var diceController = SpawnDiceAt(
+                    slots[i].Cell,
+                    slots[i].Tier,
+                    player1Channel.Settings,
+                    player1Channel.Catalog,
+                    useSpawnAppear: player1Channel.Settings.AnimateInitialDiceSpawn);
+                if (diceController == null) {
+                    continue;
+                }
+
+                spawnedSpecs.Add((
+                    diceController.CurrentState.GridPos,
+                    diceController.CurrentState.Tier,
+                    diceController.Kind,
+                    diceController.CurrentState.Orientation));
+                if (player1Standing == null) {
+                    player1Standing = diceController;
+                }
+            }
+
+            if (player1Standing == null || spawnedSpecs.Count == 0) {
+                Debug.LogError("DiceSpawnSystem: Failed to spawn initial dice for Player1.");
+                results.Clear();
+                return results;
+            }
+
+            DiceController player2Standing = null;
+            for (var i = 0; i < spawnedSpecs.Count; i++) {
+                var spec = spawnedSpecs[i];
+                if (!board.VersusLayout.TryMapMirroredCell(PlayerSlot.Player1, spec.Cell, out var mirroredCell)) {
+                    Debug.LogError(
+                        $"DiceSpawnSystem: Failed to mirror Player1 cell {spec.Cell} for initial spawn.");
+                    results.Clear();
+                    return results;
+                }
+
+                if (!player2Channel.Catalog.TryGetMeshPrefab(spec.Kind, out _)) {
+                    Debug.LogError(
+                        $"DiceSpawnSystem: Player2 catalog has no mesh for mirrored kind={spec.Kind}.");
+                    results.Clear();
+                    return results;
+                }
+
+                var diceController = SpawnDiceAt(
+                    mirroredCell,
+                    spec.Tier,
+                    player2Channel.Settings,
+                    player2Channel.Catalog,
+                    useSpawnAppear: player2Channel.Settings.AnimateInitialDiceSpawn,
+                    onComplete: null,
+                    fixedKind: spec.Kind,
+                    fixedOrientation: spec.Orientation);
+                if (diceController == null) {
+                    Debug.LogError(
+                        $"DiceSpawnSystem: Failed to spawn mirrored dice at {mirroredCell} for Player2.");
+                    results.Clear();
+                    return results;
+                }
+
+                if (player2Standing == null) {
+                    player2Standing = diceController;
+                }
+            }
+
+            if (player2Standing == null) {
+                Debug.LogError("DiceSpawnSystem: Failed to spawn initial dice for Player2.");
+                results.Clear();
+                return results;
+            }
+
+            results.Add(player1Standing);
+            if (requiredCount > 1) {
+                results.Add(player2Standing);
+            }
+
+            return results;
+        }
+
+        bool TryFindVersusChannel(PlayerSlot slot, out PlayerSpawnChannel channel) {
+            for (var i = 0; i < versusChannels.Count; i++) {
+                if (versusChannels[i].Slot != slot) {
+                    continue;
+                }
+
+                channel = versusChannels[i];
+                return true;
+            }
+
+            channel = null;
+            return false;
+        }
+
+        bool TryValidateVersusChannel(PlayerSpawnChannel channel) {
+            if (channel.Settings == null) {
+                Debug.LogError($"DiceSpawnSystem: Spawn settings for {channel.Slot} are not assigned.");
+                return false;
+            }
+
+            if (channel.Catalog == null) {
+                Debug.LogError($"DiceSpawnSystem: Dice catalog for {channel.Slot} is not assigned.");
+                return false;
+            }
+
+            return true;
+        }
+
+        bool TrySpawnInitialChannelDice(PlayerSpawnChannel channel, out DiceController standingDice) {
+            standingDice = null;
+            var initialCount = Mathf.Max(1, channel.Settings.InitialDiceCount);
+            var slots = DiceSpawnCellPicker.PickRandomSpawnSlots(
+                board,
+                registry,
+                channel.Slot,
+                initialCount,
+                channel.Settings.BottomSpawnWeight,
+                random);
+            if (slots.Count == 0) {
+                Debug.LogError($"DiceSpawnSystem: No valid spawn slots for {channel.Slot}.");
+                return false;
+            }
+
+            for (var j = 0; j < slots.Count; j++) {
+                var diceController = SpawnDiceAt(
+                    slots[j].Cell,
+                    slots[j].Tier,
+                    channel.Settings,
+                    channel.Catalog,
+                    useSpawnAppear: channel.Settings.AnimateInitialDiceSpawn);
+                if (diceController == null) {
+                    continue;
+                }
+
+                if (standingDice == null) {
+                    standingDice = diceController;
+                }
+            }
+
+            if (standingDice == null) {
+                Debug.LogError($"DiceSpawnSystem: Failed to spawn initial dice for {channel.Slot}.");
+                return false;
+            }
+
+            return true;
         }
 
         DiceCatalog ResolveCatalog(PlayerSlot? ownerSlot) {
@@ -340,13 +486,18 @@ namespace DiceGame.Gameplay
             DiceSpawnSettings activeSpawnSettings,
             DiceCatalog catalog,
             bool useSpawnAppear,
-            Action onComplete = null) {
+            Action onComplete = null,
+            DiceKind? fixedKind = null,
+            DiceOrientation? fixedOrientation = null) {
             if (catalog == null) {
                 Debug.LogError("DiceSpawnSystem: DiceCatalog is not assigned.");
                 return null;
             }
 
-            if (!catalog.TryPickRandomKind(random, out var kind)) {
+            DiceKind kind;
+            if (fixedKind.HasValue) {
+                kind = fixedKind.Value;
+            } else if (!catalog.TryPickRandomKind(random, out kind)) {
                 Debug.LogError("DiceSpawnSystem: Failed to pick dice kind. Check DiceCatalog spawn weights.");
                 return null;
             }
@@ -356,7 +507,7 @@ namespace DiceGame.Gameplay
                 return null;
             }
 
-            var orientation = DiceSpawnFactory.CreateRandomOrientation();
+            var orientation = fixedOrientation ?? DiceSpawnFactory.CreateRandomOrientation();
             var diceController = DiceSpawnFactory.TryCreate(
                 diceEntityPrefab,
                 spawnParent,
