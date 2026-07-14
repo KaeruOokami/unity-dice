@@ -36,8 +36,10 @@
     <ImplicitlyExpandDesignTimeFacades>false</ImplicitlyExpandDesignTimeFacades>
   </PropertyGroup>
   <ItemGroup>
+     <Compile Include="Assets\_Project\Scripts\Gameplay\AI\Domain\AiRegionFilter.cs" />
      <Compile Include="Assets\_Project\Scripts\Placement\JumpGridPassability.cs" />
      <Compile Include="Assets\_Project\Scripts\Gameplay\AI\Domain\MatchGoalProgressSync.cs" />
+     <Compile Include="Assets\_Project\Scripts\Gameplay\AI\Domain\AiNavigationConstraints.cs" />
      <Compile Include="Assets\_Project\Scripts\Core\DiceState.cs" />
      <Compile Include="Assets\_Project\Scripts\Config\DiceAnimationSettings.cs" />
      <Compile Include="Assets\_Project\Scripts\Gameplay\Coupling\RollCancelPolicy.cs" />
@@ -57,6 +59,7 @@
      <Compile Include="Assets\_Project\Scripts\Placement\WalkTransferPolicy.cs" />
      <Compile Include="Assets\_Project\Scripts\Config\VersusBoardSettings.cs" />
      <Compile Include="Assets\_Project\Scripts\Placement\HeightStepLimits.cs" />
+     <Compile Include="Assets\_Project\Scripts\Gameplay\AI\Domain\WorkDieSlidePlanner.cs" />
      <Compile Include="Assets\_Project\Scripts\Placement\GroundGridPassability.cs" />
      <Compile Include="Assets\_Project\Scripts\Core\DiceGridMovePlan.cs" />
      <Compile Include="Assets\_Project\Scripts\Versus\Core\AttackVolumeResolver.cs" />
@@ -89,13 +92,16 @@
      <Compile Include="Assets\_Project\Scripts\Gameplay\Input\GameFlowInputReader.cs" />
      <Compile Include="Assets\_Project\Scripts\Gameplay\AI\Application\AiDebugLog.cs" />
      <Compile Include="Assets\_Project\Scripts\Config\GameSessionSettings.cs" />
+     <Compile Include="Assets\_Project\Scripts\Gameplay\AI\Application\AiFloorRecoveryCoordinator.cs" />
      <Compile Include="Assets\_Project\Scripts\Versus\Core\AttackVolleyBuilder.cs" />
      <Compile Include="Assets\_Project\Scripts\Versus\Core\AttackDieSpec.cs" />
      <Compile Include="Assets\_Project\Scripts\Placement\SurfaceHeightLevel.cs" />
      <Compile Include="Assets\_Project\Scripts\Placement\MovementTransition.cs" />
      <Compile Include="Assets\_Project\Scripts\Config\DiceErasureSettings.cs" />
      <Compile Include="Assets\_Project\Scripts\Placement\CellOccupancyTier.cs" />
+     <Compile Include="Assets\_Project\Scripts\Gameplay\AI\Domain\SinkingChainEvaluator.cs" />
      <Compile Include="Assets\_Project\Scripts\Placement\MagnetMoveExecutor.cs" />
+     <Compile Include="Assets\_Project\Scripts\Gameplay\AI\Domain\AiCellPathfinder.cs" />
      <Compile Include="Assets\_Project\Scripts\Gameplay\AI\Application\AiCharacterBrain.cs" />
      <Compile Include="Assets\_Project\Scripts\Gameplay\AI\Domain\DiceBoardAnalyzer.cs" />
      <Compile Include="Assets\_Project\Scripts\Placement\Support\DiceSurfaceLevel.cs" />
@@ -106,8 +112,11 @@
      <Compile Include="Assets\_Project\Scripts\Gameplay\DiceMoveVisualContext.cs" />
      <Compile Include="Assets\_Project\Scripts\Gameplay\DiceOneVanishSystem.cs" />
      <Compile Include="Assets\_Project\Scripts\Placement\Support\CharacterSupportState.cs" />
+     <Compile Include="Assets\_Project\Scripts\Gameplay\AI\Domain\AiFloorRecoveryPlanner.cs" />
      <Compile Include="Assets\_Project\Scripts\Core\DiceStackTier.cs" />
      <Compile Include="Assets\_Project\Scripts\Board\PartitionBoundaryPolicy.cs" />
+     <Compile Include="Assets\_Project\Scripts\Gameplay\AI\Application\Actions\DissolveDescentAction.cs" />
+     <Compile Include="Assets\_Project\Scripts\Gameplay\AI\Domain\WorkDieOrientPlanner.cs" />
      <Compile Include="Assets\_Project\Scripts\Gameplay\Character\CharacterStandingController.cs" />
      <Compile Include="Assets\_Project\Scripts\Placement\CarryPlacementPassability.cs" />
      <Compile Include="Assets\_Project\Scripts\Versus\SinkingGroupTracker.cs" />
@@ -122,6 +131,7 @@
      <Compile Include="Assets\_Project\Scripts\Core\DiceKind.cs" />
      <Compile Include="Assets\_Project\Scripts\Placement\DiceRegistry.cs" />
      <Compile Include="Assets\_Project\Scripts\Gameplay\CharacterController.cs" />
+     <Compile Include="Assets\_Project\Scripts\Gameplay\PlayerMotionGate.cs" />
      <Compile Include="Assets\_Project\Scripts\Placement\TransferFootingPolicy.cs" />
      <Compile Include="Assets\_Project\Scripts\Placement\Support\SupportKind.cs" />
      <Compile Include="Assets\_Project\Scripts\Placement\IronAdjacencyBlock.cs" />
@@ -131,6 +141,7 @@
      <Compile Include="Assets\_Project\Scripts\Placement\PushPassability.cs" />
      <Compile Include="Assets\_Project\Scripts\Gameplay\AI\Domain\GameStateSnapshot.cs" />
      <Compile Include="Assets\_Project\Scripts\Placement\MagnetChainResolver.cs" />
+     <Compile Include="Assets\_Project\Scripts\Gameplay\AI\Application\Actions\WaitForNaturalSpawnAction.cs" />
      <Compile Include="Assets\_Project\Scripts\Gameplay\ITierFallMatchNotifier.cs" />
      <Compile Include="Assets\_Project\Scripts\Placement\BoardSurface.cs" />
      <Compile Include="Assets\TutorialInfo\Scripts\Readme.cs" />
@@ -147,6 +158,7 @@
      <Compile Include="Assets\_Project\Scripts\Gameplay\DiceMatchErasureSystem.cs" />
      <Compile Include="Assets\_Project\Scripts\Gameplay\AI\Application\AiExecutionContext.cs" />
      <Compile Include="Assets\_Project\Scripts\Placement\PassabilityContext.cs" />
+     <Compile Include="Assets\_Project\Scripts\Gameplay\AI\Domain\ClusterSelectionEvaluator.cs" />
      <Compile Include="Assets\_Project\Scripts\Config\PhysicsSettings.cs" />
      <Compile Include="Assets\_Project\Scripts\View\BoardView.cs" />
      <Compile Include="Assets\_Project\Scripts\Placement\Support\CharacterPlacementConversion.cs" />
@@ -155,14 +167,18 @@
      <Compile Include="Assets\_Project\Scripts\Gameplay\AI\Application\Actions\MoveToAdjacentCellAction.cs" />
      <Compile Include="Assets\_Project\Scripts\Placement\GridTraversability.cs" />
      <Compile Include="Assets\_Project\Scripts\Config\DiceSpawnSettings.cs" />
+     <Compile Include="Assets\_Project\Scripts\Gameplay\AI\Domain\AiNavigationState.cs" />
      <Compile Include="Assets\_Project\Scripts\Placement\MovementTransitionEvaluator.cs" />
      <Compile Include="Assets\_Project\Scripts\Gameplay\MatchActionSnapshot.cs" />
      <Compile Include="Assets\_Project\Scripts\Core\DiceRollVisualSnapshot.cs" />
+     <Compile Include="Assets\_Project\Scripts\Gameplay\MotionConflictEvaluator.cs" />
+     <Compile Include="Assets\_Project\Scripts\Gameplay\AI\Application\AiSinkingClusterEscapeCoordinator.cs" />
      <Compile Include="Assets\_Project\Scripts\Gameplay\AI\Domain\MatchGoalPlanner.cs" />
      <Compile Include="Assets\_Project\Scripts\Placement\IDicePlacement.cs" />
      <Compile Include="Assets\_Project\Scripts\Board\Board.cs" />
      <Compile Include="Assets\_Project\Scripts\Gameplay\BoardFillEvaluator.cs" />
      <Compile Include="Assets\_Project\Scripts\Gameplay\DiceSpawnFactory.cs" />
+     <Compile Include="Assets\_Project\Scripts\Gameplay\AI\Domain\AiSinkingClusterEscapePlanner.cs" />
      <Compile Include="Assets\_Project\Scripts\Core\DiceBehaviorResolver.cs" />
      <Compile Include="Assets\_Project\Scripts\Placement\GridMovePlanBuilder.cs" />
      <Compile Include="Assets\_Project\Scripts\Placement\JumpDiceTransferPolicy.cs" />
@@ -174,25 +190,15 @@
      <Compile Include="Assets\_Project\Scripts\Gameplay\AI\Domain\MatchGoal.cs" />
      <Compile Include="Assets\_Project\Scripts\Placement\CellOccupancyQuery.cs" />
      <Compile Include="Assets\_Project\Scripts\Core\DiceSpawnAppearMode.cs" />
+     <Compile Include="Assets\_Project\Scripts\Gameplay\AI\Domain\WorkDieRollPathPlanner.cs" />
      <Compile Include="Assets\_Project\Scripts\Versus\Core\NaturalSendVolleyBuilder.cs" />
      <Compile Include="Assets\_Project\Scripts\Versus\Core\AttackPowerCalculator.cs" />
      <Compile Include="Assets\_Project\Scripts\Gameplay\AI\Application\AiCharacterInputSource.cs" />
+     <Compile Include="Assets\_Project\Scripts\Gameplay\AI\Domain\WorkDieRollPlanner.cs" />
      <Compile Include="Assets\_Project\Scripts\Placement\JumpPlayerTransferPolicy.cs" />
      <Compile Include="Assets\_Project\Scripts\Placement\SurfaceQuery.cs" />
      <Compile Include="Assets\_Project\Scripts\Core\DiceCapabilities.cs" />
      <Compile Include="Assets\_Project\Scripts\Versus\Core\AttackKindBreakdown.cs" />
-     <Compile Include="Assets\_Project\Scripts\Gameplay\AI\Domain\AiNavigationState.cs" />
-     <Compile Include="Assets\_Project\Scripts\Gameplay\AI\Domain\AiCellPathfinder.cs" />
-     <Compile Include="Assets\_Project\Scripts\Gameplay\AI\Domain\ClusterSelectionEvaluator.cs" />
-     <Compile Include="Assets\_Project\Scripts\Gameplay\AI\Domain\AiNavigationConstraints.cs" />
-     <Compile Include="Assets\_Project\Scripts\Gameplay\AI\Domain\WorkDieOrientPlanner.cs" />
-     <Compile Include="Assets\_Project\Scripts\Gameplay\AI\Domain\WorkDieSlidePlanner.cs" />
-     <Compile Include="Assets\_Project\Scripts\Gameplay\AI\Domain\WorkDieRollPlanner.cs" />
-     <Compile Include="Assets\_Project\Scripts\Gameplay\AI\Domain\WorkDieRollPathPlanner.cs" />
-     <Compile Include="Assets\_Project\Scripts\Gameplay\AI\Domain\SinkingChainEvaluator.cs" />
-     <Compile Include="Assets\_Project\Scripts\Gameplay\AI\Domain\AiRegionFilter.cs" />
-     <Compile Include="Assets\_Project\Scripts\Gameplay\PlayerMotionGate.cs" />
-     <Compile Include="Assets\_Project\Scripts\Gameplay\MotionConflictEvaluator.cs" />
      <None Include="Assets\Packages\Dice_6\Documentation\Readmy.txt" />
     <Reference Include="UnityEngine">
         <HintPath>D:\Program Files\Unity\Hub\Editor\2021.3.10f1\Editor\Data\Managed\UnityEngine\UnityEngine.dll</HintPath>

@@ -18,6 +18,8 @@ namespace DiceGame.Gameplay.AI.Application
         AiActionExecutor executor;
         AiExecutionContext executionContext;
         MatchGoal activeGoal;
+        AiFloorRecoverySession floorRecoverySession;
+        int? pendingFloorRecoveryTrappedFace;
         float replanCooldown;
         int stuckActionCount;
 
@@ -52,6 +54,14 @@ namespace DiceGame.Gameplay.AI.Application
             }
 
             var snapshot = GameStateSnapshot.Capture(character, registry);
+            if (TryHandleSinkingClusterEscape(snapshot)) {
+                return;
+            }
+
+            if (TryHandleFloorRecovery(snapshot)) {
+                return;
+            }
+
             var goal = ResolveGoal(snapshot);
             if (goal == null) {
                 replanCooldown = settings.IdleReplanInterval;
@@ -110,6 +120,115 @@ namespace DiceGame.Gameplay.AI.Application
             replanCooldown = settings.MinReplanInterval;
         }
 
+        bool TryHandleSinkingClusterEscape(GameStateSnapshot snapshot) {
+            var trapped = AiSinkingClusterEscapePlanner.IsTrappedOnSinkingCluster(
+                snapshot,
+                settings,
+                out var trappedFace,
+                out _);
+
+            if (!trapped) {
+                return false;
+            }
+
+            activeGoal = null;
+
+            if (AiSinkingClusterEscapePlanner.NeedsDescent(snapshot)) {
+                pendingFloorRecoveryTrappedFace = trappedFace;
+
+                if (!AiSinkingClusterEscapeCoordinator.TryBuildDescendAction(
+                    snapshot,
+                    character,
+                    settings,
+                    out var action)) {
+                    replanCooldown = settings.FailedReplanInterval;
+                    return true;
+                }
+
+                stuckActionCount = 0;
+                AiDebugLog.Log(
+                    $"StartSinkingDescent face={trappedFace} action={action.GetType().Name} " +
+                    $"playerCell={snapshot.PlayerCell}");
+                executor.StartAction(action);
+                replanCooldown = settings.MinReplanInterval;
+                return true;
+            }
+
+            BeginFloorRecovery(snapshot, trappedFace);
+            return false;
+        }
+
+        bool TryHandleFloorRecovery(GameStateSnapshot snapshot) {
+            if (floorRecoverySession == null) {
+                if (!AiFloorRecoveryPlanner.NeedsRecovery(snapshot)) {
+                    return false;
+                }
+
+                BeginFloorRecovery(snapshot, pendingFloorRecoveryTrappedFace);
+                pendingFloorRecoveryTrappedFace = null;
+                if (floorRecoverySession == null) {
+                    return false;
+                }
+            }
+
+            if (!AiFloorRecoveryPlanner.NeedsRecovery(snapshot)) {
+                floorRecoverySession = null;
+                return false;
+            }
+
+            activeGoal = null;
+
+            if (AiFloorRecoveryPlanner.IsRecoveryComplete(snapshot, floorRecoverySession)) {
+                AiDebugLog.Log(
+                    $"FloorRecoveryComplete die={snapshot.StandingDice.name} " +
+                    $"phase={floorRecoverySession.Phase}");
+                floorRecoverySession = null;
+                replanCooldown = settings.MinReplanInterval;
+                return true;
+            }
+
+            if (!AiFloorRecoveryCoordinator.TryBuildAction(
+                floorRecoverySession,
+                snapshot,
+                registry,
+                character,
+                settings,
+                out var action)) {
+                replanCooldown = settings.FailedReplanInterval;
+                return true;
+            }
+
+            if (action == null) {
+                replanCooldown = settings.IdleReplanInterval;
+                return true;
+            }
+
+            stuckActionCount = 0;
+            AiDebugLog.Log(
+                $"StartFloorRecovery phase={floorRecoverySession.Phase} action={action.GetType().Name} " +
+                $"playerCell={snapshot.PlayerCell}");
+            executor.StartAction(action);
+            replanCooldown = settings.MinReplanInterval;
+            return true;
+        }
+
+        void BeginFloorRecovery(GameStateSnapshot snapshot, int? sourceTrappedFace) {
+            if (!AiFloorRecoveryPlanner.NeedsRecovery(snapshot)) {
+                return;
+            }
+
+            floorRecoverySession = AiFloorRecoveryPlanner.CreateSession(
+                snapshot,
+                registry,
+                settings,
+                sourceTrappedFace);
+            AiDebugLog.Log(
+                $"FloorRecoveryStart phase={floorRecoverySession.Phase} " +
+                $"sourceFace={(sourceTrappedFace.HasValue ? sourceTrappedFace.Value.ToString() : "none")} " +
+                $"alternate={(floorRecoverySession.AlternateWorkDie != null ? floorRecoverySession.AlternateWorkDie.name : "none")} " +
+                $"spawn={(floorRecoverySession.SpawnDie != null ? floorRecoverySession.SpawnDie.name : "none")}");
+        }
+
         MatchGoal ResolveGoal(GameStateSnapshot snapshot) {
             if (activeGoal != null) {
                 MatchGoalProgressSync.Sync(activeGoal, snapshot);
@@ -144,6 +263,8 @@ namespace DiceGame.Gameplay.AI.Application
             executor?.Cancel();
             inputSource?.SetMove(Vector2.zero);
             activeGoal = null;
+            floorRecoverySession = null;
+            pendingFloorRecoveryTrappedFace = null;
             stuckActionCount = 0;
         }
 

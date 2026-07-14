@@ -242,6 +242,18 @@ namespace DiceGame.Gameplay.AI.Domain
                         fromState.StandingDice);
                     return true;
 
+                case MovementTransitionKind.BlockedStepOnly:
+                    if (!transition.IsDissolveDescentHold) {
+                        return false;
+                    }
+
+                    neighborCell = fromState.Cell + direction.ToGridDelta();
+                    neighborState = new AiNavigationState(
+                        transition.IsDissolveDescentToFloor ? fromState.Cell : neighborCell,
+                        transition.TargetLevel,
+                        transition.IsDissolveDescentToFloor ? null : transition.TargetDice);
+                    return true;
+
                 default:
                     return false;
             }

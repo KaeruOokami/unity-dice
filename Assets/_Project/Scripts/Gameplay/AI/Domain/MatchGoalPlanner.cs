@@ -424,6 +424,23 @@ namespace DiceGame.Gameplay.AI.Domain
             return new Application.Actions.PulseLiftAction(faceDirection.Value);
         }
 
+        public static Application.AiDiscreteAction BuildNavigateToTarget(
+            Vector2Int targetCell,
+            GameStateSnapshot snapshot,
+            CharacterController character,
+            AiPlayerSettings settings,
+            DiceController standOnDie = null,
+            bool preferJump = true) {
+            return SelectMovementAction(
+                targetCell,
+                snapshot,
+                character,
+                settings,
+                preferJump,
+                standOnDie,
+                AiNavigationConstraints.None);
+        }
+
         static Application.AiDiscreteAction SelectMovementAction(
             Vector2Int targetCell,
             GameStateSnapshot snapshot,
@@ -521,7 +538,7 @@ namespace DiceGame.Gameplay.AI.Domain
             return DiceBoardAnalyzer.ManhattanDistance(snapshot.PlayerCell, cell) == 1;
         }
 
-        static Direction? GetFacingDirectionTowardDie(GameStateSnapshot snapshot, DiceController die) {
+        public static Direction? GetFacingDirectionTowardDie(GameStateSnapshot snapshot, DiceController die) {
             var delta = die.CurrentState.GridPos - snapshot.PlayerCell;
             if (delta.x == 1 && delta.y == 0) {
                 return Direction.East;

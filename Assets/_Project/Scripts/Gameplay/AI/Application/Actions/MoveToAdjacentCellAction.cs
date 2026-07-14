@@ -136,6 +136,14 @@ namespace DiceGame.Gameplay.AI.Application.Actions
                 return true;
             }
 
+            if (edgeKind == MovementTransitionKind.BlockedStepOnly
+                && purpose == MoveActionPurpose.NavigateToCell
+                && context.Character.IsOnFloor
+                && context.IsWorldIdle()) {
+                reason = "DissolveDescentReachedFloor";
+                return true;
+            }
+
             return false;
         }
 

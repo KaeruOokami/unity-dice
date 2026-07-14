@@ -173,7 +173,12 @@ namespace DiceGame.Gameplay.AI.Domain
 
             if (ParticipantTarget == null
                 || ParticipantTarget.IsSpawning
-                || ParticipantTarget.IsErasing) {
+                || ParticipantTarget.IsErasing
+                || ParticipantTarget.IsSinkErasing) {
+                return true;
+            }
+
+            if (snapshot.StandingDice != null && snapshot.StandingDice.IsSinkErasing) {
                 return true;
             }
 
