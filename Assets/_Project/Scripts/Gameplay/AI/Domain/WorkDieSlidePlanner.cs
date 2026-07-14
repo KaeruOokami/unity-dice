@@ -26,6 +26,35 @@ namespace DiceGame.Gameplay.AI.Domain
 
     public static class WorkDieSlidePlanner
     {
+        const float PreferBottomJoinScoreBonus = 0.5f;
+
+        public static bool IsJoinComplete(
+            DiceState state,
+            Vector2Int targetCell,
+            DiceStackTier targetTier,
+            int targetFace) {
+            return state.GridPos == targetCell
+                && state.Tier == targetTier
+                && state.Orientation.Top == targetFace;
+        }
+
+        public static bool IsJoinLandingAvailable(
+            DiceRegistry registry,
+            DiceController workDie,
+            Vector2Int targetCell,
+            DiceStackTier targetTier) {
+            if (registry == null || workDie == null) {
+                return false;
+            }
+
+            var state = workDie.CurrentState;
+            if (state.GridPos == targetCell && state.Tier == targetTier) {
+                return true;
+            }
+
+            return CarryPlacementPassability.CanPlaceAt(targetCell, targetTier, registry, out _);
+        }
+
         public static bool TrySelectJoinTargetCell(
             IReadOnlyList<DiceSnapshot> cluster,
             DiceSnapshot workDie,
@@ -34,7 +63,9 @@ namespace DiceGame.Gameplay.AI.Domain
             VersusArenaLayout versusLayout,
             PlayerSlot playerSlot,
             out Vector2Int targetCell,
-            out DiceStackTier targetTier) {
+            out DiceStackTier targetTier,
+            Vector2Int? excludeCell = null,
+            DiceStackTier? excludeTier = null) {
             targetCell = default;
             targetTier = default;
             if (cluster == null || cluster.Count == 0 || registry == null || workDie.Controller == null) {
@@ -59,6 +90,17 @@ namespace DiceGame.Gameplay.AI.Domain
                     continue;
                 }
 
+                if (excludeCell.HasValue
+                    && excludeTier.HasValue
+                    && excludeCell.Value == cell
+                    && excludeTier.Value == tier) {
+                    continue;
+                }
+
+                if (!IsJoinLandingAvailable(registry, workDie.Controller, cell, tier)) {
+                    continue;
+                }
+
                 if (!ClusterSelectionEvaluator.HasMovableExternalNeighbor(
                     cell,
                     tier,
@@ -68,13 +110,19 @@ namespace DiceGame.Gameplay.AI.Domain
                     continue;
                 }
 
-                if (workDie.GridPos == cell) {
+                // Already parked on a valid join slot.
+                if (workDie.GridPos == cell && workDie.Tier == tier) {
                     targetCell = cell;
                     targetTier = tier;
                     return true;
                 }
 
-                var score = -DiceBoardAnalyzer.ManhattanDistance(workDie.GridPos, cell);
+                var score = (float)(-DiceBoardAnalyzer.ManhattanDistance(workDie.GridPos, cell));
+                // Prefer Bottom landings while Top slots remain open (denser later).
+                if (tier == DiceStackTier.Bottom) {
+                    score += PreferBottomJoinScoreBonus;
+                }
+
                 if (score > bestScore) {
                     bestScore = score;
                     targetCell = cell;
@@ -94,6 +142,7 @@ namespace DiceGame.Gameplay.AI.Domain
             PlayerSlot movementOwner,
             DiceState startState,
             Vector2Int targetCell,
+            DiceStackTier targetTier,
             bool allowJump,
             out WorkDieSlidePlan plan) {
             plan = default;
@@ -105,6 +154,7 @@ namespace DiceGame.Gameplay.AI.Domain
                 movementOwner,
                 startState,
                 targetCell,
+                targetTier,
                 allowJump,
                 out var directions)) {
                 return false;
@@ -226,10 +276,15 @@ namespace DiceGame.Gameplay.AI.Domain
             PlayerSlot movementOwner,
             DiceState startState,
             Vector2Int targetCell,
+            DiceStackTier targetTier,
             bool allowJump,
             out List<Direction> directions) {
             directions = null;
             if (startState.GridPos == targetCell) {
+                if (startState.Tier != targetTier) {
+                    return false;
+                }
+
                 directions = new List<Direction>();
                 return true;
             }
@@ -244,6 +299,7 @@ namespace DiceGame.Gameplay.AI.Domain
                     movementOwner,
                     startState,
                     targetCell,
+                    targetTier,
                     axisXFirst: true,
                     allowJump,
                     out directions)) {
@@ -258,6 +314,7 @@ namespace DiceGame.Gameplay.AI.Domain
                     movementOwner,
                     startState,
                     targetCell,
+                    targetTier,
                     axisXFirst: false,
                     allowJump,
                     out directions);
@@ -271,6 +328,7 @@ namespace DiceGame.Gameplay.AI.Domain
                 movementOwner,
                 startState,
                 targetCell,
+                targetTier,
                 axisXFirst: delta.x != 0,
                 allowJump,
                 out directions);
@@ -284,6 +342,7 @@ namespace DiceGame.Gameplay.AI.Domain
             PlayerSlot movementOwner,
             DiceState startState,
             Vector2Int targetCell,
+            DiceStackTier targetTier,
             bool axisXFirst,
             bool allowJump,
             out List<Direction> directions) {
@@ -359,7 +418,8 @@ namespace DiceGame.Gameplay.AI.Domain
             }
 
             return currentState.Orientation.Top == startState.Orientation.Top
-                && currentState.GridPos == targetCell;
+                && currentState.GridPos == targetCell
+                && currentState.Tier == targetTier;
         }
 
         static bool TryAppendAxisSlide(

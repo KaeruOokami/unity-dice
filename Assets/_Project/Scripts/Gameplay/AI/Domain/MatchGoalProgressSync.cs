@@ -29,12 +29,13 @@ namespace DiceGame.Gameplay.AI.Domain
                         }
                         break;
                     case AiSubGoalKind.JoinCluster:
-                        if (subGoal.TargetDie != null) {
-                            var state = subGoal.TargetDie.CurrentState;
-                            if (state.GridPos == subGoal.TargetCell
-                                && state.Orientation.Top == subGoal.TargetFace) {
-                                subGoal.MarkComplete();
-                            }
+                        if (subGoal.TargetDie != null
+                            && WorkDieSlidePlanner.IsJoinComplete(
+                                subGoal.TargetDie.CurrentState,
+                                subGoal.TargetCell,
+                                subGoal.TargetTier,
+                                subGoal.TargetFace)) {
+                            subGoal.MarkComplete();
                         }
                         break;
                     case AiSubGoalKind.PlaceCarriedDie:

@@ -165,7 +165,15 @@ namespace DiceGame.Gameplay.AI.Domain
                     continue;
                 }
 
-                if (workDie.GridPos == cell) {
+                if (!WorkDieSlidePlanner.IsJoinLandingAvailable(
+                    registry,
+                    workDie.Controller,
+                    cell,
+                    tier)) {
+                    continue;
+                }
+
+                if (workDie.GridPos == cell && workDie.Tier == tier) {
                     targetCell = cell;
                     targetTier = tier;
                     return true;

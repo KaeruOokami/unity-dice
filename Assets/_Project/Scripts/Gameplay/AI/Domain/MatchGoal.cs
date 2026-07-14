@@ -21,8 +21,8 @@ namespace DiceGame.Gameplay.AI.Domain
         public AiSubGoalKind Kind { get; }
         public DiceController TargetDie { get; }
         public int TargetFace { get; }
-        public Vector2Int TargetCell { get; }
-        public DiceStackTier TargetTier { get; }
+        public Vector2Int TargetCell { get; private set; }
+        public DiceStackTier TargetTier { get; private set; }
         public bool IsComplete { get; private set; }
         public WorkDieSlidePlan? JoinSlidePlan { get; private set; }
         public int JoinSlideStepIndex { get; private set; }
@@ -96,6 +96,16 @@ namespace DiceGame.Gameplay.AI.Domain
         public void ClearOrientRollPlan() {
             OrientRollPlan = null;
             OrientRollStepIndex = 0;
+        }
+
+        public void RetargetJoin(Vector2Int targetCell, DiceStackTier targetTier) {
+            if (Kind != AiSubGoalKind.JoinCluster) {
+                return;
+            }
+
+            TargetCell = targetCell;
+            TargetTier = targetTier;
+            ClearJoinSlidePlan();
         }
 
         public bool TryAdvanceJoinSlideStep(DiceState state) {

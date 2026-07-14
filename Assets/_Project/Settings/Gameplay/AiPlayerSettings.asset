@@ -12,10 +12,10 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: a1b2c3d4e5f6478990abcdef12345678, type: 3}
   m_Name: AiPlayerSettings
   m_EditorClassIdentifier: 
-  player1IsAi: 0
-  player2IsAi: 1
+  player1IsAi: 1
+  player2IsAi: 0
   minReplanInterval: 0
-  idleReplanInterval: 0.8
+  idleReplanInterval: 0
   failedReplanInterval: 0
   moveActionMaxFrames: 36
   jumpMoveMaxFrames: 48
@@ -35,4 +35,4 @@ MonoBehaviour:
   pathSearchMaxSteps: 64
   cellCenterTolerance: 0.08
   rollStepMaxFrames: 120
-  debugLog: 0
+  debugLog: 1
