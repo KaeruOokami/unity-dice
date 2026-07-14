@@ -31,7 +31,9 @@ namespace DiceGame.Gameplay.AI.Application
                 case AiFloorRecoveryPhase.MountNaturalSpawn:
                     return TryBuildMountSpawnAction(session, snapshot, character, settings, out action);
                 case AiFloorRecoveryPhase.WaitForNaturalSpawn:
-                    action = new WaitForNaturalSpawnAction(Mathf.Max(settings.MoveActionMaxFrames, 30));
+                    action = new WaitForNaturalSpawnAction(
+                        Mathf.Max(settings.MoveActionMaxFrames, 30),
+                        session.SourceTrappedFace ?? 0);
                     return true;
                 default:
                     return false;
@@ -54,13 +56,30 @@ namespace DiceGame.Gameplay.AI.Application
                 return false;
             }
 
+            if (AiFloorRecoveryPlanner.IsReadyToMountAlternate(session, snapshot)) {
+                var mountDirection = MatchGoalPlanner.GetFacingDirectionTowardDie(snapshot, workDie)
+                    ?? DiceBoardAnalyzer.GetPrimaryDirectionToward(
+                        snapshot.PlayerCell,
+                        workDie.CurrentState.GridPos);
+                if (!mountDirection.HasValue) {
+                    return false;
+                }
+
+                action = new MoveInDirectionAction(
+                    mountDirection.Value,
+                    settings.MoveActionMaxFrames,
+                    workDie.CurrentState.GridPos,
+                    MoveActionPurpose.StandOnDie,
+                    workDie);
+                return true;
+            }
+
             action = MatchGoalPlanner.BuildNavigateToTarget(
                 workDie.CurrentState.GridPos,
                 snapshot,
                 character,
                 settings,
-                workDie,
-                preferJump: false);
+                preferJump: settings.AllowJump);
             return action != null;
         }
 
@@ -81,9 +100,8 @@ namespace DiceGame.Gameplay.AI.Application
                 return TryBuildMountSpawnAction(session, snapshot, character, settings, out action);
             }
 
-            var spawnCell = spawnDie.CurrentState.GridPos;
             action = MatchGoalPlanner.BuildNavigateToTarget(
-                spawnCell,
+                spawnDie.CurrentState.GridPos,
                 snapshot,
                 character,
                 settings,

@@ -32,6 +32,7 @@ namespace DiceGame.Gameplay.AI.Application
             registry = targetRegistry;
             inputSource = targetInputSource;
             settings = targetSettings;
+            AiDebugLog.Enabled = targetSettings != null && targetSettings.DebugLog;
             executionContext = new AiExecutionContext(character, registry, inputSource, settings);
             executor = new AiActionExecutor();
             executor.Configure(executionContext);
@@ -171,13 +172,6 @@ namespace DiceGame.Gameplay.AI.Application
                 }
             }
 
-            if (!AiFloorRecoveryPlanner.NeedsRecovery(snapshot)) {
-                floorRecoverySession = null;
-                return false;
-            }
-
-            activeGoal = null;
-
             if (AiFloorRecoveryPlanner.IsRecoveryComplete(snapshot, floorRecoverySession)) {
                 AiDebugLog.Log(
                     $"FloorRecoveryComplete die={snapshot.StandingDice.name} " +
@@ -186,6 +180,17 @@ namespace DiceGame.Gameplay.AI.Application
                 replanCooldown = settings.MinReplanInterval;
                 return true;
             }
+
+            // Unintended standing die: keep session, allow normal goals until back on floor.
+            if (snapshot.StandingDice != null) {
+                return false;
+            }
+
+            if (!snapshot.PlayerIsOnFloor) {
+                return false;
+            }
+
+            activeGoal = null;
 
             if (!AiFloorRecoveryCoordinator.TryBuildAction(
                 floorRecoverySession,

@@ -39,8 +39,7 @@ namespace DiceGame.Gameplay.AI.Domain
             var session = new AiFloorRecoverySession {
                 SourceTrappedFace = sourceTrappedFace
             };
-            EnsureSessionTargets(session, snapshot, registry, settings);
-            session.Phase = ResolveInitialPhase(session, snapshot);
+            AdvancePhase(session, snapshot, registry, settings);
             return session;
         }
 
@@ -70,7 +69,30 @@ namespace DiceGame.Gameplay.AI.Domain
             }
         }
 
-        public static AiFloorRecoveryPhase ResolveInitialPhase(
+        public static void InvalidateFailedTargets(AiFloorRecoverySession session, GameStateSnapshot snapshot) {
+            if (session == null || snapshot == null) {
+                return;
+            }
+
+            if (session.SpawnDie != null
+                && snapshot.StandingDice != session.SpawnDie
+                && !IsNaturalSpawnCandidate(snapshot, session.SpawnDie)) {
+                AiDebugLogClearSpawn(session);
+                session.SpawnDie = null;
+            }
+
+            if (session.AlternateWorkDie != null
+                && snapshot.StandingDice != session.AlternateWorkDie
+                && !IsLockedAlternateStillValid(
+                    session.AlternateWorkDie,
+                    snapshot,
+                    session.SourceTrappedFace ?? 0)) {
+                AiDebugLogClearAlternate(session);
+                session.AlternateWorkDie = null;
+            }
+        }
+
+        public static AiFloorRecoveryPhase ResolvePhase(
             AiFloorRecoverySession session,
             GameStateSnapshot snapshot) {
             if (session?.AlternateWorkDie != null) {
@@ -95,32 +117,35 @@ namespace DiceGame.Gameplay.AI.Domain
                 return;
             }
 
+            InvalidateFailedTargets(session, snapshot);
             EnsureSessionTargets(session, snapshot, registry, settings);
-
-            if (session.Phase == AiFloorRecoveryPhase.ApproachNaturalSpawn
-                && IsReadyToMountNaturalSpawn(session, snapshot)) {
-                session.Phase = AiFloorRecoveryPhase.MountNaturalSpawn;
-            }
-
-            if (session.Phase == AiFloorRecoveryPhase.WaitForNaturalSpawn
-                && TryFindNaturalSpawnTarget(snapshot, registry, out var spawnDie)) {
-                session.SpawnDie = spawnDie;
-                session.Phase = IsReadyToMountNaturalSpawn(session, snapshot)
-                    ? AiFloorRecoveryPhase.MountNaturalSpawn
-                    : AiFloorRecoveryPhase.ApproachNaturalSpawn;
-            }
+            session.Phase = ResolvePhase(session, snapshot);
         }
 
         public static bool IsReadyToMountNaturalSpawn(
             AiFloorRecoverySession session,
             GameStateSnapshot snapshot) {
             var spawnDie = session?.SpawnDie;
-            if (spawnDie == null || snapshot == null || spawnDie.IsSpawning) {
+            if (spawnDie == null || snapshot == null || !IsNaturalSpawnCandidate(snapshot, spawnDie)) {
                 return false;
             }
 
             return snapshot.PlayerIsOnFloor
+                && snapshot.StandingDice == null
                 && snapshot.PlayerCell == spawnDie.CurrentState.GridPos;
+        }
+
+        public static bool IsReadyToMountAlternate(
+            AiFloorRecoverySession session,
+            GameStateSnapshot snapshot) {
+            var workDie = session?.AlternateWorkDie;
+            if (workDie == null || snapshot == null) {
+                return false;
+            }
+
+            return snapshot.PlayerIsOnFloor
+                && snapshot.StandingDice == null
+                && snapshot.PlayerCell == workDie.CurrentState.GridPos;
         }
 
         public static bool IsRecoveryComplete(GameStateSnapshot snapshot, AiFloorRecoverySession session) {
@@ -227,7 +252,7 @@ namespace DiceGame.Gameplay.AI.Domain
             return found;
         }
 
-        static bool IsNaturalSpawnCandidate(GameStateSnapshot snapshot, DiceController candidate) {
+        public static bool IsNaturalSpawnCandidate(GameStateSnapshot snapshot, DiceController candidate) {
             if (candidate == null
                 || !candidate.IsSpawning
                 || !candidate.AllowsUnconditionalMount
@@ -241,6 +266,43 @@ namespace DiceGame.Gameplay.AI.Domain
                 snapshot.VersusLayout,
                 snapshot.PlayerSlot,
                 candidate.CurrentState.GridPos);
+        }
+
+        public static bool IsLockedAlternateStillValid(
+            DiceController workDie,
+            GameStateSnapshot snapshot,
+            int excludedTrappedFace) {
+            if (workDie == null
+                || snapshot == null
+                || workDie.IsErasing
+                || workDie.IsVanishing) {
+                return false;
+            }
+
+            for (var face = 2; face <= 6; face++) {
+                if (excludedTrappedFace > 0 && face == excludedTrappedFace) {
+                    continue;
+                }
+
+                if (!SinkingChainEvaluator.IsChainPossible(face, snapshot.PlanningDice)) {
+                    continue;
+                }
+
+                var clusterGroup = SinkingChainEvaluator.GetSinkingDice(face, snapshot.PlanningDice);
+                if (clusterGroup.Count == 0) {
+                    continue;
+                }
+
+                if (IsExternalAdjacentToSinkingCluster(
+                    workDie,
+                    clusterGroup,
+                    face,
+                    snapshot.PlanningDice)) {
+                    return true;
+                }
+            }
+
+            return false;
         }
 
         public static bool HasAdjacentClusterExternalDie(
@@ -267,6 +329,48 @@ namespace DiceGame.Gameplay.AI.Domain
                         clusterControllers,
                         allDice,
                         out _)) {
+                        return true;
+                    }
+                }
+            }
+
+            return false;
+        }
+
+        static bool IsExternalAdjacentToSinkingCluster(
+            DiceController workDie,
+            IReadOnlyList<DiceSnapshot> clusterGroup,
+            int clusterFace,
+            IReadOnlyList<DiceSnapshot> allDice) {
+            if (workDie == null || clusterGroup == null || clusterGroup.Count == 0) {
+                return false;
+            }
+
+            var clusterControllers = new HashSet<DiceController>();
+            for (var i = 0; i < clusterGroup.Count; i++) {
+                if (clusterGroup[i].Controller != null) {
+                    clusterControllers.Add(clusterGroup[i].Controller);
+                }
+            }
+
+            if (clusterControllers.Contains(workDie)) {
+                return false;
+            }
+
+            var workCell = workDie.CurrentState.GridPos;
+            for (var i = 0; i < clusterGroup.Count; i++) {
+                foreach (var adjacentCell in DiceBoardAnalyzer.GetAdjacentCells(clusterGroup[i].GridPos)) {
+                    if (adjacentCell != workCell) {
+                        continue;
+                    }
+
+                    if (TryFindMovableExternalDieAt(
+                        adjacentCell,
+                        clusterFace,
+                        clusterControllers,
+                        allDice,
+                        out var found)
+                        && found.Controller == workDie) {
                         return true;
                     }
                 }
@@ -303,6 +407,16 @@ namespace DiceGame.Gameplay.AI.Domain
             }
 
             return false;
+        }
+
+        static void AiDebugLogClearSpawn(AiFloorRecoverySession session) {
+            Application.AiDebugLog.Log(
+                $"FloorRecoveryCancel spawn={(session.SpawnDie != null ? session.SpawnDie.name : "none")} reason=became-normal");
+        }
+
+        static void AiDebugLogClearAlternate(AiFloorRecoverySession session) {
+            Application.AiDebugLog.Log(
+                $"FloorRecoveryCancel alternate={(session.AlternateWorkDie != null ? session.AlternateWorkDie.name : "none")} reason=cluster-no-longer-valid");
         }
     }
 }

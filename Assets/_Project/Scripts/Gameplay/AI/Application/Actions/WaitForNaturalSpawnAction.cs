@@ -7,10 +7,12 @@ namespace DiceGame.Gameplay.AI.Application.Actions
     public sealed class WaitForNaturalSpawnAction : AiDiscreteAction
     {
         readonly int maxFrames;
+        readonly int excludedTrappedFace;
         int frameCount;
 
-        public WaitForNaturalSpawnAction(int maxFrames) {
+        public WaitForNaturalSpawnAction(int maxFrames, int excludedTrappedFace = 0) {
             this.maxFrames = maxFrames;
+            this.excludedTrappedFace = excludedTrappedFace;
         }
 
         public override void Begin(AiExecutionContext context) {
@@ -30,25 +32,33 @@ namespace DiceGame.Gameplay.AI.Application.Actions
                 return true;
             }
 
-            if (TryFindSpawnTarget(context, out _)) {
-                AiDebugLog.Log($"WaitForSpawnComplete reason=spawn-detected frames={frameCount}");
+            if (HasRecoveryTarget(context)) {
+                AiDebugLog.Log($"WaitForSpawnComplete reason=target-detected frames={frameCount}");
                 return true;
             }
 
             return false;
         }
 
-        public static bool TryFindSpawnTarget(AiExecutionContext context, out DiceController spawnDie) {
-            spawnDie = null;
+        bool HasRecoveryTarget(AiExecutionContext context) {
             if (context?.Registry == null || context.Character == null) {
                 return false;
             }
 
             var snapshot = GameStateSnapshot.Capture(context.Character, context.Registry);
-            return AiFloorRecoveryPlanner.TryFindNaturalSpawnTarget(
+            if (AiFloorRecoveryPlanner.TryFindNaturalSpawnTarget(snapshot, context.Registry, out _)) {
+                return true;
+            }
+
+            if (context.Settings == null) {
+                return false;
+            }
+
+            return AiFloorRecoveryPlanner.TrySelectAlternateSinkingTarget(
                 snapshot,
-                context.Registry,
-                out spawnDie);
+                excludedTrappedFace,
+                context.Settings,
+                out _);
         }
     }
 }

@@ -28,6 +28,7 @@ namespace DiceGame.Config
         [SerializeField] int pathSearchMaxSteps = 64;
         [SerializeField] float cellCenterTolerance = 0.08f;
         [SerializeField] int rollStepMaxFrames = 120;
+        [SerializeField] bool debugLog;
 
         public bool Player1IsAi => player1IsAi;
         public bool Player2IsAi => player2IsAi;
@@ -52,6 +53,7 @@ namespace DiceGame.Config
         public int PathSearchMaxSteps => pathSearchMaxSteps;
         public float CellCenterTolerance => cellCenterTolerance;
         public int RollStepMaxFrames => rollStepMaxFrames;
+        public bool DebugLog => debugLog;
 
         public bool IsAiControlled(PlayerSlot slot) {
             return slot == PlayerSlot.Player1 ? player1IsAi : player2IsAi;

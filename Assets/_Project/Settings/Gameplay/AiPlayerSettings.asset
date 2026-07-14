@@ -16,7 +16,7 @@ MonoBehaviour:
   player2IsAi: 1
   minReplanInterval: 0
   idleReplanInterval: 0.8
-  failedReplanInterval: 1.2
+  failedReplanInterval: 0
   moveActionMaxFrames: 36
   jumpMoveMaxFrames: 48
   faceBeforeLiftFrames: 4
@@ -35,3 +35,4 @@ MonoBehaviour:
   pathSearchMaxSteps: 64
   cellCenterTolerance: 0.08
   rollStepMaxFrames: 120
+  debugLog: 0
