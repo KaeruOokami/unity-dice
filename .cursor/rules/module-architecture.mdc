@@ -15,13 +15,26 @@ alwaysApply: true
 | モジュール | 主な配置 | 責務 |
 |-----------|---------|------|
 | Board | `Board/` | 盤面・セル定義 |
-| Dice（コア） | `Core/` | 純 C# のダイスロジック |
-| Dice（実行） | `Gameplay/` | ダイスの Unity 実行・状態管理 |
-| Character | `Gameplay/Character/` | キャラの立位・移動計画・実行 |
-| Placement | `Placement/` | 盤上の配置状態の単一ソース |
+| Dice（コア） | `Core/Model` `Core/Behavior` `Core/Motion` | 純 C# のダイスモデル・挙動・運動計画 |
+| Dice（実行） | `Gameplay/Dice/` | ダイスの Unity 実行・状態管理 |
+| Character | `Gameplay/Character/` | キャラの立位・移動計画・実行・入口ゲート |
+| Match | `Gameplay/Match/` | 試合フロー・消去・所有・競合 |
+| Placement | `Placement/{Registry,Occupancy,Movement,Interaction,Rules,Magnet,Spawn,Support}` | 盤上配置・通行・相互作用 |
 | Coupling / Sync | `Gameplay/Coupling/` | ダイスとキャラの同期・連携 |
 | View | `View/` | 表示のみ |
 | Config | `Config/` | 設定 |
+| AI | `Gameplay/AI/{Domain,Application}` | AI 計画・実行 |
+
+### Placement / Core の葉フォルダ
+
+- `Placement/Registry` — 配置の単一ソース
+- `Placement/Occupancy` — セル占有・表面
+- `Placement/Movement` — 隣マス遷移（`Walk` / `Jump` / `Grid`）
+- `Placement/Interaction` — 押し・リフト・配置持ち運び
+- `Placement/Rules` — Ghost / Iron 隣接 / Effective 入口
+- `Core/Behavior` — 種類ごとの挙動オブジェクト
+- `Core/Model` — Kind / State / Orientation 等
+- `Core/Motion` — GridMove / Slide / Gravity 計画
 
 ## モジュール内の階層
 
@@ -33,12 +46,13 @@ alwaysApply: true
 
 - 下位層は上位層を参照しない。
 - 新規クラス追加時は「どのモジュールのどの層か」を先に決める。
+- **同じディレクトリには同粒度の関心だけを置く**（例: Registry と JumpPolicy を並べない）。
 
 ### 既存パターン（参考）
 
-- ダイス判定: `Core/RollResolver`（純ロジック）← `Gameplay/DiceController`（実行）
+- ダイス判定: `Core/Behavior`（純ロジック）← `Gameplay/Dice/DiceController`（実行）
 - キャラ移動: `Character/CharacterMovePlanner`（計画）→ `CharacterMovementExecutor`（実行）
-- 配置状態: `Placement/PlacementService`（一元管理）← 各 Controller はここ経由で参照
+- 配置状態: `Placement/Registry/PlacementService`（一元管理）← 各 Controller はここ経由で参照
 
 ## 重複処理の禁止・一元化
 

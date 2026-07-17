@@ -1,6 +1,23 @@
+---
+description: キャラ移動 Policy の L1/L2 階層と dice capability 分岐
+globs: Assets/_Project/Scripts/Placement/**/*.cs
+alwaysApply: false
+---
+
 # Movement Policy Hierarchy
 
 `MovementTransitionEvaluator` はディスパッチャ。L2 本体は `DiceCoupledMoveEngine`、グリッド経路は `DiceGridPassability`。
+
+## 配置パス（階層）
+
+- Behavior: `Core/Behavior/`
+- 配置台帳: `Placement/Registry/`
+- 占有・表面: `Placement/Occupancy/`
+- 移動本流: `Placement/Movement/`（`Walk/` `Jump/` `Grid/`）
+- 押し・リフト: `Placement/Interaction/`
+- Ghost/Iron/Effective: `Placement/Rules/`
+- Magnet: `Placement/Magnet/`
+- スポーンセル: `Placement/Spawn/`
 
 ## L0: Behavior / Capability 定義
 
@@ -40,7 +57,7 @@
 - Demote でも氷は `DiceTransition.GridMove`（HorizontalThenDrop）。`RollThenDemote` は使わない。
 - Demote ビジュアル切替は `UsesSlideVisualForDemote` Capability を見る。
 - 押し実行形は `IDiceBehavior.ResolvePushStyle` / `CharacterPushExecutor` を見る。
-- `CharacterController` は入力・物理 overlap・演出・実行呼び出しのみ。
+- `CharacterController` は入力・物理 overlap・演出・実行呼び出しのみ（`Gameplay/Character/`）。
   - 開始ゲート: `PlayerMotionGate`
   - 押し幾何: `PushContactEvaluator`
   - 押し実行: `CharacterPushExecutor`
@@ -53,3 +70,4 @@
 2. L1 / L2 / L3 のどこに属するか決める。
 3. L2 なら `DiceCoupledMoveEngine` の `Slide` / `Roll` 分岐内に追加する。
 4. 一時状態の例外は Behavior 本体ではなく Modifier（`DiceBehaviorRuntimeState`）で表現する。
+5. 新規ファイルは上記フォルダ階層の適切な葉に置く（同列でない責務を同じディレクトリに置かない）。
