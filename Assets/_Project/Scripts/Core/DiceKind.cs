@@ -7,6 +7,7 @@ namespace DiceGame.Core
         Iron,
         Magnet,
         Ice,
-        Stone
+        Stone,
+        Ghost
     }
 }

@@ -454,18 +454,36 @@ namespace DiceGame.Placement
                     MovementTransitionRoute.HeightTransfer);
             }
 
-            if (registry.CanPlaceBottomDiceAt(toCell)) {
-                if (evaluateDiceCoupledMovement
-                    && TryEvaluateDiceCoupledMovementOnEmptyCell(
-                        fromCell,
-                        toCell,
-                        fromLevel,
-                        fromSurface,
-                        standingDice,
-                        direction,
-                        context,
-                        out var emptyCellDiceTransition)) {
-                    return emptyCellDiceTransition;
+            // Empty or ghost-only: player may walk as floor, but dice-coupled roll/swap runs first.
+            if (GhostPlacementRules.IsPlayerFloorPassable(registry, toCell)) {
+                if (evaluateDiceCoupledMovement) {
+                    if (registry.CanPlaceBottomDiceAt(toCell)
+                        && TryEvaluateDiceCoupledMovementOnEmptyCell(
+                            fromCell,
+                            toCell,
+                            fromLevel,
+                            fromSurface,
+                            standingDice,
+                            direction,
+                            context,
+                            out var emptyCellDiceTransition)) {
+                        return emptyCellDiceTransition;
+                    }
+
+                    // Ghost occupies the cell: prefer grid-roll / cell-swap over floor pass-through.
+                    if (!registry.CanPlaceBottomDiceAt(toCell)
+                        && TryEvaluateDiceCoupledMovementOnOccupiedCell(
+                            fromCell,
+                            toCell,
+                            fromLevel,
+                            fromSurface,
+                            standingDice,
+                            direction,
+                            context,
+                            reach,
+                            out var ghostSwapDiceTransition)) {
+                        return ghostSwapDiceTransition;
+                    }
                 }
 
                 if (isJumping
@@ -695,21 +713,25 @@ namespace DiceGame.Placement
             targetLevel = SurfaceHeightLevel.Floor;
             targetSurfaceWorldY = board.FloorSurfaceWorldY;
 
-            if (registry.TryGetTopAt(toCell, out var top) && top != null) {
+            if (registry.TryGetTopAt(toCell, out var top)
+                && top != null
+                && !GhostPlacementRules.IsPlayerPassThrough(top)) {
                 targetDice = top;
                 targetLevel = SurfaceHeightLevel.Top;
                 targetSurfaceWorldY = top.GetLogicalTopSurfaceWorldY();
                 return true;
             }
 
-            if (registry.TryGetBottomIncludingPending(toCell, out var bottom) && bottom != null) {
+            if (registry.TryGetBottomIncludingPending(toCell, out var bottom)
+                && bottom != null
+                && !GhostPlacementRules.IsPlayerPassThrough(bottom)) {
                 targetDice = bottom;
                 targetLevel = SurfaceHeightLevel.Bottom;
                 targetSurfaceWorldY = bottom.GetLogicalTopSurfaceWorldY();
                 return true;
             }
 
-            // Empty cell: floor
+            // Empty cell or player-pass-through only: floor
             return true;
         }
 
@@ -723,7 +745,8 @@ namespace DiceGame.Placement
 
             if (JumpPlayerTransferPolicy.IsLowerLevelTransfer(fromLevel, SurfaceHeightLevel.Bottom)
                 && registry.TryGetBottomAt(toCell, out var bottom)
-                && bottom != null) {
+                && bottom != null
+                && !GhostPlacementRules.IsPlayerPassThrough(bottom)) {
                 targetDice = bottom;
                 targetLevel = SurfaceHeightLevel.Bottom;
                 return true;

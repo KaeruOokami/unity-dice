@@ -34,9 +34,16 @@ namespace DiceGame.Placement
             Direction direction,
             int distance,
             bool allowUpwardTier,
+            DiceKind moverKind,
             out DiceStackTier landingTier,
+            out GhostLandingMode ghostLanding,
+            out DiceState ghostFrom,
+            out DiceState ghostTo,
             out string rejectReason) {
             landingTier = default;
+            ghostLanding = GhostLandingMode.None;
+            ghostFrom = default;
+            ghostTo = default;
             rejectReason = null;
 
             if (distance < 1) {
@@ -65,7 +72,18 @@ namespace DiceGame.Placement
                 return false;
             }
 
-            if (!CanLandAt(query, fromTier, landingCell, allowUpwardTier, out landingTier, out rejectReason)) {
+            if (!CanLandAt(
+                query,
+                fromTier,
+                fromCell,
+                landingCell,
+                moverKind,
+                allowUpwardTier,
+                out landingTier,
+                out ghostLanding,
+                out ghostFrom,
+                out ghostTo,
+                out rejectReason)) {
                 rejectReason = $"land step={distance}/{distance} {rejectReason}";
                 return false;
             }
@@ -76,17 +94,37 @@ namespace DiceGame.Placement
         public static bool CanLandAt(
             CellOccupancyQuery query,
             DiceStackTier fromTier,
+            Vector2Int fromCell,
             Vector2Int cell,
+            DiceKind moverKind,
             bool allowUpwardTier,
             out DiceStackTier landingTier,
+            out GhostLandingMode ghostLanding,
+            out DiceState ghostFrom,
+            out DiceState ghostTo,
             out string rejectReason) {
             landingTier = default;
+            ghostLanding = GhostLandingMode.None;
+            ghostFrom = default;
+            ghostTo = default;
             rejectReason = null;
             var fromRank = CellOccupancyQuery.ToTierRank(fromTier);
 
-            if (!query.TryResolveLandingTier(fromTier, cell, out landingTier)) {
+            if (!query.TryResolveLandingTier(
+                fromTier,
+                fromCell,
+                cell,
+                moverKind,
+                out landingTier,
+                out ghostLanding,
+                out ghostFrom,
+                out ghostTo)) {
                 rejectReason = $"cell={FormatGrid(cell)} no-valid-landing fromTier={fromTier}";
                 return false;
+            }
+
+            if (ghostLanding != GhostLandingMode.None) {
+                return true;
             }
 
             var landingRank = CellOccupancyQuery.ToTierRank(landingTier);

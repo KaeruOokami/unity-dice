@@ -357,6 +357,17 @@ namespace DiceGame.Gameplay
                 return;
             }
 
+            // Ghost (pass-through) is never a standable surface.
+            if (!isFalling
+                && jumpPhase == JumpPhase.None
+                && liftPhase == LiftPhase.None
+                && standingController.TryGetStandingDice(out var passThroughStanding)
+                && GhostPlacementRules.IsPlayerPassThrough(passThroughStanding)) {
+                standingController.SetOnFloor(standingController.GridCell);
+                transformDriver.SnapYToSurface();
+                currentSpeed = 0f;
+            }
+
             TryMountOntoCoveringDiceIfNeeded();
 
             if (ActiveInputSource.WasLiftPressedThisFrame()) {
@@ -960,6 +971,7 @@ namespace DiceGame.Gameplay
                 if (!registry.TryGetBottomIncludingPending(cell, out var bottom)
                     || bottom == null
                     || bottom == standingController.CurrentDice
+                    || GhostPlacementRules.IsPlayerPassThrough(bottom)
                     || (bottom.IsSpawning && !bottom.AllowsUnconditionalMount)) {
                     return false;
                 }
@@ -972,6 +984,7 @@ namespace DiceGame.Gameplay
                 if (!registry.TryGetTopAt(cell, out var top)
                     || top == null
                     || top == standingController.CurrentDice
+                    || GhostPlacementRules.IsPlayerPassThrough(top)
                     || top.IsSpawning) {
                     return false;
                 }
@@ -989,6 +1002,10 @@ namespace DiceGame.Gameplay
                 return;
             }
 
+            if (GhostPlacementRules.IsPlayerPassThrough(coveringDice)) {
+                return;
+            }
+
             var state = coveringDice.CurrentState;
             standingController.SetOnDice(state.GridPos, state.Tier, coveringDice);
             currentSpeed = 0f;
@@ -1001,7 +1018,8 @@ namespace DiceGame.Gameplay
         }
 
         float ResolveFallTargetWorldY(Vector2Int cell) {
-            if (registry.TryGetBottomAt(cell, out var bottom)) {
+            if (registry.TryGetBottomAt(cell, out var bottom)
+                && !GhostPlacementRules.IsPlayerPassThrough(bottom)) {
                 return bottom.GetLogicalTopSurfaceWorldY();
             }
 
@@ -1009,7 +1027,8 @@ namespace DiceGame.Gameplay
         }
 
         void LandFromFall(Vector2Int cell) {
-            if (registry.TryGetBottomAt(cell, out var bottom)) {
+            if (registry.TryGetBottomAt(cell, out var bottom)
+                && !GhostPlacementRules.IsPlayerPassThrough(bottom)) {
                 standingController.ApplySupportState(CharacterSupportState.OnDice(
                     cell,
                     1,
@@ -1342,6 +1361,11 @@ namespace DiceGame.Gameplay
             }
 
             if (registry.TryGetBottomAt(gridCell, out var bottom)) {
+                if (GhostPlacementRules.IsPlayerPassThrough(bottom)) {
+                    ApplyFloorStanding(gridCell);
+                    return;
+                }
+
                 ApplyDiceStanding(gridCell, DiceStackTier.Bottom, bottom);
                 return;
             }
@@ -1404,6 +1428,11 @@ namespace DiceGame.Gameplay
                 }
 
                 var diceLabel = FormatMovementDice(pushBody.Dice);
+                if (GhostPlacementRules.IsPlayerPassThrough(pushBody.Dice)) {
+                    overlapSummary.Append($" [{diceLabel}:ghost-pass-through]");
+                    continue;
+                }
+
                 if (pushBody.Dice.IsVanishing || pushBody.Dice.IsBusy) {
                     overlapSummary.Append($" [{diceLabel}:busy]");
                     continue;

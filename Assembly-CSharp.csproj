@@ -153,6 +153,7 @@
      <Compile Include="Assets\_Project\Scripts\Board\VersusArenaLayout.cs" />
      <Compile Include="Assets\_Project\Scripts\Core\DiceGridMovePlanner.cs" />
      <Compile Include="Assets\_Project\Scripts\Versus\Core\SinkingChainResolver.cs" />
+     <Compile Include="Assets\_Project\Scripts\Placement\GhostPlacementRules.cs" />
      <Compile Include="Assets\_Project\Scripts\Placement\JumpInputPolicy.cs" />
      <Compile Include="Assets\_Project\Scripts\Gameplay\MatchAttackerResolver.cs" />
      <Compile Include="Assets\_Project\Scripts\Gameplay\DiceMatchErasureSystem.cs" />
@@ -171,6 +172,7 @@
      <Compile Include="Assets\_Project\Scripts\Placement\MovementTransitionEvaluator.cs" />
      <Compile Include="Assets\_Project\Scripts\Gameplay\MatchActionSnapshot.cs" />
      <Compile Include="Assets\_Project\Scripts\Core\DiceRollVisualSnapshot.cs" />
+     <Compile Include="Assets\_Project\Scripts\Core\GhostLandingMode.cs" />
      <Compile Include="Assets\_Project\Scripts\Gameplay\MotionConflictEvaluator.cs" />
      <Compile Include="Assets\_Project\Scripts\Gameplay\AI\Application\AiSinkingClusterEscapeCoordinator.cs" />
      <Compile Include="Assets\_Project\Scripts\Gameplay\AI\Domain\MatchGoalPlanner.cs" />

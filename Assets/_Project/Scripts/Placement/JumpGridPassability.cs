@@ -14,9 +14,15 @@ namespace DiceGame.Placement
             PassabilityContext context,
             out DiceStackTier landingTier,
             out DiceGridMoveKind moveKind,
+            out GhostLandingMode ghostLanding,
+            out DiceState ghostFrom,
+            out DiceState ghostTo,
             out string rejectReason) {
             landingTier = default;
             moveKind = default;
+            ghostLanding = GhostLandingMode.None;
+            ghostFrom = default;
+            ghostTo = default;
             rejectReason = null;
 
             if (!context.IsJumping) {
@@ -46,15 +52,22 @@ namespace DiceGame.Placement
                 direction,
                 distance,
                 allowUpwardTier: distance == 1,
+                fromState.Kind,
                 out landingTier,
+                out ghostLanding,
+                out ghostFrom,
+                out ghostTo,
                 out rejectReason)) {
                 return false;
             }
 
-            moveKind = GridTraversability.ResolveMoveKind(fromState.Tier, landingTier);
+            moveKind = ghostLanding == GhostLandingMode.InCellPromoteGhost
+                ? GridTraversability.ResolveMoveKind(fromState.Tier, DiceStackTier.Bottom)
+                : GridTraversability.ResolveMoveKind(fromState.Tier, landingTier);
             if (moveKind != DiceGridMoveKind.Parallel
                 && distance == 1
-                && !context.AllowJumpTierChange) {
+                && !context.AllowJumpTierChange
+                && ghostLanding == GhostLandingMode.None) {
                 rejectReason = $"tier-change-not-allowed kind={moveKind}";
                 return false;
             }

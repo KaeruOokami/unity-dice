@@ -259,6 +259,7 @@ namespace DiceGame.Gameplay
                     bounceRestitution,
                     maxBounceCount,
                     spawnSettings.MinBounceVelocity,
+                    Capabilities.SpawnGravityScale,
                     OnSpawnComplete);
             } else {
                 diceView.PlayBottomEmergenceAppear(
@@ -273,6 +274,34 @@ namespace DiceGame.Gameplay
         void ConfigurePushBody() {
             var pushBody = GetComponentInChildren<DicePushBody>();
             pushBody?.Configure(board);
+            // Pass-through Ghost disables push; sink-erasing Ghost is solid again.
+            pushBody?.SetCollisionEnabled(!GhostPlacementRules.IsPlayerPassThrough(this));
+        }
+
+        public void ApplyExternalState(DiceState state, bool snapVisual = false) {
+            currentState = state;
+            if (snapVisual && diceView != null && board != null && registry != null) {
+                diceView.SnapTo(currentState, board, registry);
+            }
+
+            StateChanged?.Invoke(currentState);
+        }
+
+        public void PlayGhostDisplaceVisual(DiceState fromState, DiceState toState) {
+            if (diceView == null || board == null || registry == null) {
+                return;
+            }
+
+            if (fromState.GridPos == toState.GridPos && fromState.Tier != toState.Tier) {
+                diceView.SnapTo(toState, board, registry);
+                return;
+            }
+
+            isRolling = true;
+            PlaySlideVisual(fromState, toState, () => {
+                isRolling = false;
+                StateChanged?.Invoke(currentState);
+            });
         }
 
         public float GetTopSurfaceWorldY() {
@@ -304,7 +333,7 @@ namespace DiceGame.Gameplay
                 return false;
             }
 
-            return BeginSlide(plan.From, plan.To);
+            return BeginSlide(plan);
         }
 
         public bool TryExecuteGroundMovePlan(DiceGridMovePlan plan, PassabilityContext context) {
@@ -478,6 +507,26 @@ namespace DiceGame.Gameplay
                 toState.Tier);
         }
 
+        bool ApplyLogicalMoveWithGhost(
+            DiceState fromState,
+            DiceState toState,
+            GhostLandingMode ghostLanding,
+            DiceState ghostFrom,
+            DiceState ghostTo) {
+            if (ghostLanding == GhostLandingMode.None) {
+                ApplyLogicalMove(fromState, toState);
+                return true;
+            }
+
+            currentState = toState;
+            if (!registry.TryApplyGhostLanding(this, fromState, toState, ghostLanding, ghostFrom, ghostTo)) {
+                currentState = fromState;
+                return false;
+            }
+
+            return true;
+        }
+
         void NotifyActionMoveCompleted(DiceState fromState, DiceState toState) {
             if (PlayerMatchActionContext.IsActionParticipationMove(fromState, toState)) {
                 matchActionContext?.NotifyParticipantMoveCompleted(this);
@@ -493,7 +542,15 @@ namespace DiceGame.Gameplay
                 return false;
             }
 
-            ApplyLogicalMove(plan.From, plan.To);
+            if (!ApplyLogicalMoveWithGhost(
+                plan.From,
+                plan.To,
+                plan.GhostLanding,
+                plan.GhostFrom,
+                plan.GhostTo)) {
+                return false;
+            }
+
             isRolling = true;
             PlayVisualForPlan(
                 plan,
@@ -603,12 +660,20 @@ namespace DiceGame.Gameplay
             diceView.PlayTransition(transition, board, registry, onComplete, Mathf.Max(1, distance));
         }
 
-        bool BeginSlide(DiceState fromState, DiceState nextState) {
-            ApplyLogicalMove(fromState, nextState);
+        bool BeginSlide(DiceSlidePlan plan) {
+            if (!ApplyLogicalMoveWithGhost(
+                plan.From,
+                plan.To,
+                plan.GhostLanding,
+                plan.GhostFrom,
+                plan.GhostTo)) {
+                return false;
+            }
+
             isRolling = true;
-            PlaySlideVisual(fromState, nextState, () => {
+            PlaySlideVisual(plan.From, plan.To, () => {
                 isRolling = false;
-                NotifyActionMoveCompleted(fromState, nextState);
+                NotifyActionMoveCompleted(plan.From, plan.To);
                 StateChanged?.Invoke(currentState);
             });
 
@@ -626,6 +691,11 @@ namespace DiceGame.Gameplay
 
             erasureKind = kind;
             ErasureStarted?.Invoke(this);
+            // Sink starts: Ghost becomes solid for the player again.
+            if (kind == ErasureKind.Sink && Capabilities.IsPlayerPassThrough) {
+                ConfigurePushBody();
+            }
+
             diceView.PlayErasure(kind, board, currentState.Orientation.Top, emissionColor, () => {
                 registry?.Unregister(this);
                 erasureKind = ErasureKind.None;

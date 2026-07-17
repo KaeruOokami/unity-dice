@@ -55,7 +55,7 @@ namespace DiceGame.Placement
             HeightReachEvaluation reach,
             out MovementTransition transition) {
             transition = default;
-            if (bottomDice == null) {
+            if (bottomDice == null || GhostPlacementRules.IsPlayerPassThrough(bottomDice)) {
                 return false;
             }
 
@@ -194,6 +194,11 @@ namespace DiceGame.Placement
             rejectReason = null;
             if (target == null) {
                 rejectReason = "target-null";
+                return false;
+            }
+
+            if (GhostPlacementRules.IsPlayerPassThrough(target)) {
+                rejectReason = "ghost-pass-through";
                 return false;
             }
 

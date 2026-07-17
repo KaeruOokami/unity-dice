@@ -13,9 +13,15 @@ namespace DiceGame.Placement
             bool hasTopOnSameCell,
             out DiceStackTier landingTier,
             out DiceGridMoveKind moveKind,
+            out GhostLandingMode ghostLanding,
+            out DiceState ghostFrom,
+            out DiceState ghostTo,
             out string rejectReason) {
             landingTier = default;
             moveKind = default;
+            ghostLanding = GhostLandingMode.None;
+            ghostFrom = default;
+            ghostTo = default;
             rejectReason = null;
 
             if (distance < 1 || distance > DiceGridRollLimits.MaxParallelRollDistance) {
@@ -38,12 +44,18 @@ namespace DiceGame.Placement
                 direction,
                 distance,
                 allowUpwardTier,
+                fromState.Kind,
                 out landingTier,
+                out ghostLanding,
+                out ghostFrom,
+                out ghostTo,
                 out rejectReason)) {
                 return false;
             }
 
-            moveKind = GridTraversability.ResolveMoveKind(fromState.Tier, landingTier);
+            moveKind = ghostLanding == GhostLandingMode.InCellPromoteGhost
+                ? GridTraversability.ResolveMoveKind(fromState.Tier, DiceStackTier.Bottom)
+                : GridTraversability.ResolveMoveKind(fromState.Tier, landingTier);
             return true;
         }
     }

@@ -23,7 +23,7 @@ namespace DiceGame.Placement
                 return BoardSurface.Floor(gridCell, board.FloorSurfaceWorldY);
             }
 
-            if (standingDice == null) {
+            if (standingDice == null || GhostPlacementRules.IsPlayerPassThrough(standingDice)) {
                 return BoardSurface.Floor(gridCell, board.FloorSurfaceWorldY);
             }
 
@@ -42,12 +42,26 @@ namespace DiceGame.Placement
             }
 
             if (SurfaceHeightLevel.IsAtOrAboveTop(level)) {
-                if (registry.TryGetTopAt(gridCell, out var topDice) && topDice != null) {
+                if (registry.TryGetTopAt(gridCell, out var topDice)
+                    && topDice != null
+                    && !GhostPlacementRules.IsPlayerPassThrough(topDice)) {
                     surface = BoardSurface.FromDice(gridCell, SurfaceHeightLevel.Top, topDice);
                     return true;
                 }
 
-                if (registry.TryGetBottomAt(gridCell, out var bottomForTop) && bottomForTop != null) {
+                if (registry.TryGetBottomAt(gridCell, out var bottomForTop)
+                    && bottomForTop != null
+                    && !GhostPlacementRules.IsPlayerPassThrough(bottomForTop)) {
+                    // Ghost-only top: stand on the solid bottom, not at ghost elevation.
+                    if (registry.TryGetTopAt(gridCell, out var topOccupant)
+                        && GhostPlacementRules.IsPlayerPassThrough(topOccupant)) {
+                        surface = BoardSurface.FromDice(
+                            gridCell,
+                            SurfaceHeightLevel.Bottom,
+                            bottomForTop);
+                        return true;
+                    }
+
                     surface = BoardSurface.FromDiceAtStackTop(
                         gridCell,
                         bottomForTop,
@@ -55,17 +69,19 @@ namespace DiceGame.Placement
                     return true;
                 }
 
-                surface = default;
-                return false;
+                surface = BoardSurface.Floor(gridCell, board.FloorSurfaceWorldY);
+                return true;
             }
 
-            if (registry.TryGetBottomAt(gridCell, out var bottomDice) && bottomDice != null) {
+            if (registry.TryGetBottomAt(gridCell, out var bottomDice)
+                && bottomDice != null
+                && !GhostPlacementRules.IsPlayerPassThrough(bottomDice)) {
                 surface = BoardSurface.FromDice(gridCell, SurfaceHeightLevel.Bottom, bottomDice);
                 return true;
             }
 
-            surface = default;
-            return false;
+            surface = BoardSurface.Floor(gridCell, board.FloorSurfaceWorldY);
+            return true;
         }
 
         public float GetStackTopStandingSurfaceY(DiceController bottomDice) {
@@ -73,7 +89,9 @@ namespace DiceGame.Placement
                 return board.FloorSurfaceWorldY;
             }
 
-            if (registry.TryGetTopAt(bottomDice.CurrentState.GridPos, out var top) && top != null) {
+            if (registry.TryGetTopAt(bottomDice.CurrentState.GridPos, out var top)
+                && top != null
+                && !GhostPlacementRules.IsPlayerPassThrough(top)) {
                 return top.GetLogicalTopSurfaceWorldY();
             }
 

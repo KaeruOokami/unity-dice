@@ -10,7 +10,15 @@ namespace DiceGame.Core
         public bool SlideUntilBlocked { get; }
         public bool HasMagnetCoupling { get; }
         public bool HasSpawnBounce { get; }
+        public float SpawnGravityScale { get; }
         public float RollDurationMultiplier { get; }
+        /// <summary>Player walks through; cannot stand on or ride this die.</summary>
+        public bool IsPlayerPassThrough { get; }
+        /// <summary>
+        /// Other dice can swap into this die's cell (horizontal) or force an in-cell promote
+        /// when trying to stack on top of it.
+        /// </summary>
+        public bool AllowsDiceSwapThrough { get; }
 
         public DiceCapabilities(
             bool canBePushedByPlayer,
@@ -21,7 +29,10 @@ namespace DiceGame.Core
             bool slideUntilBlocked,
             bool hasMagnetCoupling,
             bool hasSpawnBounce,
-            float rollDurationMultiplier) {
+            float rollDurationMultiplier,
+            float spawnGravityScale = DiceBehaviorConstants.DefaultSpawnGravityScale,
+            bool isPlayerPassThrough = false,
+            bool allowsDiceSwapThrough = false) {
             CanBePushedByPlayer = canBePushedByPlayer;
             CanBeLiftedByPlayer = canBeLiftedByPlayer;
             CanJumpCoupleWithPlayer = canJumpCoupleWithPlayer;
@@ -30,7 +41,10 @@ namespace DiceGame.Core
             SlideUntilBlocked = slideUntilBlocked;
             HasMagnetCoupling = hasMagnetCoupling;
             HasSpawnBounce = hasSpawnBounce;
+            SpawnGravityScale = spawnGravityScale;
             RollDurationMultiplier = rollDurationMultiplier;
+            IsPlayerPassThrough = isPlayerPassThrough;
+            AllowsDiceSwapThrough = allowsDiceSwapThrough;
         }
     }
 }

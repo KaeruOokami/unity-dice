@@ -27,6 +27,9 @@ namespace DiceGame.Placement
             bool passable;
             DiceStackTier landingTier;
             DiceGridMoveKind moveKind;
+            GhostLandingMode ghostLanding;
+            DiceState ghostFrom;
+            DiceState ghostTo;
 
             if (context.IsJumping) {
                 passable = JumpGridPassability.TryEvaluate(
@@ -38,6 +41,9 @@ namespace DiceGame.Placement
                     context,
                     out landingTier,
                     out moveKind,
+                    out ghostLanding,
+                    out ghostFrom,
+                    out ghostTo,
                     out rejectReason);
             } else {
                 passable = GroundGridPassability.TryEvaluate(
@@ -48,6 +54,9 @@ namespace DiceGame.Placement
                     hasTopOnSameCell,
                     out landingTier,
                     out moveKind,
+                    out ghostLanding,
+                    out ghostFrom,
+                    out ghostTo,
                     out rejectReason);
             }
 
@@ -55,14 +64,32 @@ namespace DiceGame.Placement
                 return false;
             }
 
-            return DiceGridMovePlanner.TryBuildPlan(
+            if (!DiceGridMovePlanner.TryBuildPlan(
                 fromState,
                 direction,
                 distance,
                 landingTier,
                 moveKind,
                 out plan,
-                out rejectReason);
+                out rejectReason)) {
+                return false;
+            }
+
+            if (ghostLanding != GhostLandingMode.None) {
+                plan.GhostLanding = ghostLanding;
+                plan.GhostFrom = ghostFrom;
+                plan.GhostTo = ghostTo;
+                if (ghostLanding == GhostLandingMode.InCellPromoteGhost) {
+                    plan.To = new DiceState(
+                        plan.To.GridPos,
+                        plan.To.Orientation,
+                        DiceStackTier.Bottom,
+                        plan.To.Kind);
+                    plan.Kind = GridTraversability.ResolveMoveKind(fromState.Tier, DiceStackTier.Bottom);
+                }
+            }
+
+            return true;
         }
     }
 }

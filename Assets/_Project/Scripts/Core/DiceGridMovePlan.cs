@@ -16,7 +16,11 @@ namespace DiceGame.Core
         public DiceGridMoveKind Kind;
         public Direction Direction;
         public int Distance;
+        public GhostLandingMode GhostLanding;
+        public DiceState GhostFrom;
+        public DiceState GhostTo;
 
         public bool ChangesTier => From.Tier != To.Tier;
+        public bool HasGhostSwap => GhostLanding != GhostLandingMode.None;
     }
 }

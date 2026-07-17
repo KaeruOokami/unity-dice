@@ -1,5 +1,4 @@
 using DiceGame.Core;
-using DiceGame.Gameplay;
 
 namespace DiceGame.Placement
 {
@@ -17,9 +16,17 @@ namespace DiceGame.Placement
             var current = fromState;
             var steps = 0;
             string stepRejectReason = null;
+            DiceSlidePlan lastStep = default;
 
             while (DiceSlidePassability.TryEvaluate(current, direction, placement, out var stepPlan, out stepRejectReason)) {
                 steps++;
+                lastStep = stepPlan;
+
+                if (stepPlan.HasGhostSwap) {
+                    current = stepPlan.To;
+                    break;
+                }
+
                 // If Ice falls to a lower tier, stop there.
                 // (Top -> Bottom is considered a "fall" to a lower level.)
                 if (current.Tier == DiceStackTier.Top
@@ -36,7 +43,9 @@ namespace DiceGame.Placement
                 return false;
             }
 
-            plan = new DiceSlidePlan(fromState, current);
+            plan = lastStep.HasGhostSwap
+                ? DiceSlidePlan.WithRetargetedFrom(lastStep, fromState)
+                : new DiceSlidePlan(fromState, current);
             return true;
         }
     }

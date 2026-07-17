@@ -28,7 +28,8 @@ namespace DiceGame.Placement
 
             if (!registry.TryGetBottomAt(fromCell, out var landingDice)
                 || landingDice == null
-                || landingDice == standingDice) {
+                || landingDice == standingDice
+                || GhostPlacementRules.IsPlayerPassThrough(landingDice)) {
                 return false;
             }
 

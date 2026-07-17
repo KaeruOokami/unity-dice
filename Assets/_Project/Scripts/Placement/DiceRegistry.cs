@@ -162,7 +162,77 @@ namespace DiceGame.Placement
             }
 
             EvictErasingDiceAt(gridPos);
+
+            if (tier == DiceStackTier.Top
+                && TryGetBottomAt(gridPos, out var ghostBottom)
+                && !HasTopAt(gridPos)
+                && GhostPlacementRules.ShouldInCellPromoteOnTopPlacement(ghostBottom, dice.Kind)) {
+                ClearDiceAt(gridPos, ghostBottom, DiceStackTier.Bottom);
+                SetDiceAt(gridPos, dice, DiceStackTier.Bottom);
+                SetDiceAt(gridPos, ghostBottom, DiceStackTier.Top);
+                dice.ApplyExternalState(
+                    new DiceState(
+                        gridPos,
+                        dice.CurrentState.Orientation,
+                        DiceStackTier.Bottom,
+                        dice.Kind),
+                    snapVisual: true);
+                ghostBottom.ApplyExternalState(
+                    new DiceState(
+                        gridPos,
+                        ghostBottom.CurrentState.Orientation,
+                        DiceStackTier.Top,
+                        ghostBottom.Kind),
+                    snapVisual: true);
+                return;
+            }
+
             SetDiceAt(gridPos, dice, tier);
+        }
+
+        public bool TryApplyGhostLanding(
+            DiceController mover,
+            DiceState moverFrom,
+            DiceState moverTo,
+            GhostLandingMode mode,
+            DiceState ghostFrom,
+            DiceState ghostTo) {
+            if (mover == null || mode == GhostLandingMode.None) {
+                return false;
+            }
+
+            if (!TryGetDiceAt(ghostFrom.GridPos, ghostFrom.Tier, out var ghost) || ghost == null) {
+                Debug.LogError(
+                    $"DiceRegistry: ghost landing missing occupant at ({ghostFrom.GridPos.x},{ghostFrom.GridPos.y}) tier={ghostFrom.Tier}");
+                return false;
+            }
+
+            if (!GhostPlacementRules.AllowsDiceSwapThrough(ghost)) {
+                Debug.LogError($"DiceRegistry: ghost landing target is not swap-through kind={ghost.Kind}");
+                return false;
+            }
+
+            if (mode == GhostLandingMode.CellSwap) {
+                ClearDiceAt(moverFrom.GridPos, mover, moverFrom.Tier);
+                ClearDiceAt(ghostFrom.GridPos, ghost, ghostFrom.Tier);
+                SetDiceAt(moverTo.GridPos, mover, moverTo.Tier);
+                SetDiceAt(ghostTo.GridPos, ghost, ghostTo.Tier);
+                ghost.ApplyExternalState(ghostTo, snapVisual: false);
+                ghost.PlayGhostDisplaceVisual(ghostFrom, ghostTo);
+                return true;
+            }
+
+            if (mode == GhostLandingMode.InCellPromoteGhost) {
+                ClearDiceAt(moverFrom.GridPos, mover, moverFrom.Tier);
+                ClearDiceAt(ghostFrom.GridPos, ghost, ghostFrom.Tier);
+                SetDiceAt(moverTo.GridPos, mover, moverTo.Tier);
+                SetDiceAt(ghostTo.GridPos, ghost, ghostTo.Tier);
+                ghost.ApplyExternalState(ghostTo, snapVisual: false);
+                ghost.PlayGhostDisplaceVisual(ghostFrom, ghostTo);
+                return true;
+            }
+
+            return false;
         }
 
         public void Remove(DiceController dice, Vector2Int gridPos, DiceStackTier tier) {
@@ -350,18 +420,24 @@ namespace DiceGame.Placement
 
             var neighborPos = fromDice.CurrentState.GridPos + direction.ToGridDelta();
             if (SurfaceHeightLevel.IsAtOrAboveTop(fromLevel)) {
-                TryGetTopAt(neighborPos, out var top);
-                return top;
+                if (TryGetTopAt(neighborPos, out var top)
+                    && top != null
+                    && !GhostPlacementRules.IsPlayerPassThrough(top)) {
+                    return top;
+                }
+
+                return null;
             }
 
             TryGetBottomAt(neighborPos, out var bottom);
-            if (bottom != null) {
+            if (bottom != null && !GhostPlacementRules.IsPlayerPassThrough(bottom)) {
                 return bottom;
             }
 
             if (TryGetPendingBottomAt(neighborPos, out var pendingBottom)
                 && pendingBottom != null
-                && pendingBottom.AllowsUnconditionalMount) {
+                && pendingBottom.AllowsUnconditionalMount
+                && !GhostPlacementRules.IsPlayerPassThrough(pendingBottom)) {
                 return pendingBottom;
             }
 

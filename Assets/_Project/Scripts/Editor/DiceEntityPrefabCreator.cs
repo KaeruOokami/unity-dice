@@ -22,6 +22,7 @@ namespace DiceGame.Editor
         const string MagnetDicePrefabPath = "Assets/_Project/Prefabs/Magnet Dice.prefab";
         const string IceDicePrefabPath = "Assets/_Project/Prefabs/Ice Dice.prefab";
         const string StoneDicePrefabPath = "Assets/_Project/Prefabs/Stone Dice.prefab";
+        const string GhostDicePrefabPath = "Assets/_Project/Prefabs/Ghost Dice.prefab";
 
         [MenuItem("Dice/Create DiceEntity Prefab")]
         public static void CreateDiceEntityPrefab() {
@@ -83,13 +84,14 @@ namespace DiceGame.Editor
             var catalog = ScriptableObject.CreateInstance<DiceCatalog>();
             var serialized = new SerializedObject(catalog);
             var entries = serialized.FindProperty("entries");
-            entries.arraySize = 6;
+            entries.arraySize = 7;
             SetCatalogEntry(entries, 0, DiceKind.Normal, NormalDicePrefabPath, 5f);
             SetCatalogEntry(entries, 1, DiceKind.Wood, WoodDicePrefabPath, 2f);
             SetCatalogEntry(entries, 2, DiceKind.Iron, IronDicePrefabPath, 1f);
             SetCatalogEntry(entries, 3, DiceKind.Magnet, MagnetDicePrefabPath, 1f);
             SetCatalogEntry(entries, 4, DiceKind.Ice, IceDicePrefabPath, 1.5f);
             SetCatalogEntry(entries, 5, DiceKind.Stone, StoneDicePrefabPath, 1.5f);
+            SetCatalogEntry(entries, 6, DiceKind.Ghost, GhostDicePrefabPath, 1f);
             serialized.ApplyModifiedPropertiesWithoutUndo();
 
             AssetDatabase.CreateAsset(catalog, DiceCatalogPath);

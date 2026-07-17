@@ -445,6 +445,28 @@ namespace DiceGame.View
             int maxBounceCount,
             float minBounceVelocity,
             Action onComplete) {
+            PlaySpawnAppear(
+                state,
+                board,
+                registry,
+                spawnHeightAboveSurface,
+                bounceRestitution,
+                maxBounceCount,
+                minBounceVelocity,
+                DiceBehaviorConstants.DefaultSpawnGravityScale,
+                onComplete);
+        }
+
+        public void PlaySpawnAppear(
+            DiceState state,
+            Board board,
+            DiceRegistry registry,
+            float spawnHeightAboveSurface,
+            float bounceRestitution,
+            int maxBounceCount,
+            float minBounceVelocity,
+            float spawnGravityScale,
+            Action onComplete) {
             if (!HasGameplaySettings()) {
                 return;
             }
@@ -465,6 +487,7 @@ namespace DiceGame.View
                 bounceRestitution,
                 maxBounceCount,
                 minBounceVelocity,
+                spawnGravityScale,
                 onComplete));
         }
 
@@ -1264,6 +1287,7 @@ namespace DiceGame.View
             float bounceRestitution,
             int maxBounceCount,
             float minBounceVelocity,
+            float spawnGravityScale,
             Action onComplete) {
             isAnimating = true;
             EnsureMesh();
@@ -1291,10 +1315,12 @@ namespace DiceGame.View
             var groundWorldY = landedWorld.y;
             positionRoot.position = landedWorld + Vector3.up * spawnHeightAboveSurface;
 
+            var gravity = physicsSettings.Gravity
+                * Mathf.Max(0.01f, spawnGravityScale);
             var motion = GravityMotion.CreateDrop(spawnHeightAboveSurface);
             yield return GravityMotion.AnimateSpawnBounceDropCoroutine(
                 motion,
-                physicsSettings.Gravity,
+                gravity,
                 groundWorldY,
                 bounceRestitution,
                 maxBounceCount,
