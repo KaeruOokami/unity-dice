@@ -24,43 +24,19 @@ namespace DiceGame.Placement
             rejectReason = null;
 
             var hasTopOnSameCell = registry.HasTopAt(fromState.GridPos);
-            bool passable;
-            DiceStackTier landingTier;
-            DiceGridMoveKind moveKind;
-            GhostLandingMode ghostLanding;
-            DiceState ghostFrom;
-            DiceState ghostTo;
-
-            if (context.IsJumping) {
-                passable = JumpGridPassability.TryEvaluate(
-                    occupancyQuery,
-                    fromState,
-                    direction,
-                    distance,
-                    hasTopOnSameCell,
-                    context,
-                    out landingTier,
-                    out moveKind,
-                    out ghostLanding,
-                    out ghostFrom,
-                    out ghostTo,
-                    out rejectReason);
-            } else {
-                passable = GroundGridPassability.TryEvaluate(
-                    occupancyQuery,
-                    fromState,
-                    direction,
-                    distance,
-                    hasTopOnSameCell,
-                    out landingTier,
-                    out moveKind,
-                    out ghostLanding,
-                    out ghostFrom,
-                    out ghostTo,
-                    out rejectReason);
-            }
-
-            if (!passable) {
+            if (!DiceGridPassability.TryEvaluate(
+                occupancyQuery,
+                fromState,
+                direction,
+                distance,
+                hasTopOnSameCell,
+                context,
+                out var landingTier,
+                out var moveKind,
+                out var ghostLanding,
+                out var ghostFrom,
+                out var ghostTo,
+                out rejectReason)) {
                 return false;
             }
 

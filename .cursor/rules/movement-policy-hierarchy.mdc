@@ -1,21 +1,18 @@
----
-description: キャラ移動 Policy の L1/L2 階層と dice capability 分岐
-globs: Assets/_Project/Scripts/Placement/**/*.cs
-alwaysApply: false
----
-
 # Movement Policy Hierarchy
 
-`MovementTransitionEvaluator` および関連 Policy は **L1 → L2 → L3** の階層で評価する。各 Policy 内に capability チェックを散在させない。
+`MovementTransitionEvaluator` はディスパッチャ。L2 本体は `DiceCoupledMoveEngine`、グリッド経路は `DiceGridPassability`。
 
-## L0: Capability 定義
+## L0: Behavior / Capability 定義
 
-- 種別ごとの能力は `DiceBehaviorResolver` / `DiceCapabilities` に集約する。
-- 入口判定は `DiceController.IsPlayerMovable` / `CanJumpCoupleWithPlayer` を使う。
+- 種別ごとの恒常ルールは `IDiceBehavior`（`DiceKindBehaviors`）に集約する。入口は `DiceBehaviorResolver.GetBehavior`。
+- 実行時上書き（Sink solidify / Radiance・Spawn ロック / Magnet+Iron）は `EffectiveDiceBehavior`（`DiceEffectiveBehaviorResolver` + `DiceEffectiveBehaviorFactory`）。
+- 入口判定は `DiceController.EffectiveBehavior` / `IsPlayerMovable` / `CanJumpCoupleWithPlayer` を使う。
+- 連携移動モードは `EffectiveDiceBehavior.ResolveStandingMoveMode`（または `JumpPlayerTransferPolicy.ResolveStandingMoveMode`）で一度だけ決める。
+- `DiceKind` 直比較は禁止。種別差は Behavior / Capability で表現する。
 
 ## L1: Player-only（ダイス連携なし）
 
-- API: `JumpPlayerTransferPolicy.UsesPlayerOnlyMovement(isJumping, standingDice)`
+- API: `ResolveStandingMoveMode == PlayerOnly`
   - ジャンプ: `!CanJumpCoupleWithPlayer`（鉄・石・鉄隣接 Magnet 等）
   - 地上: `!IsPlayerMovable`（鉄・動かせない Magnet 等）
 - L1 に該当したら **L2（dice-coupled）Policy は一切評価しない**。
@@ -23,32 +20,36 @@ alwaysApply: false
 
 ## L2: Dice-coupled（ダイス連携）
 
-- 入口: `JumpPlayerTransferPolicy.ShouldEvaluateDiceCoupledMovement`
-- **移動モードで分岐**（入口または最初の分岐で決定）:
-  - `SlideUntilBlocked`（氷）→ `IceSlide` / `IceSlidePassability` のみ
-  - `CanGridRoll` → `TopFallPolicy` / `TryEvaluateGridRoll` / `JumpGridRollPolicy`
-  - どちらも不可 → L2 評価しない
-
-### L2 評価順（空セル）
-
-1. IceSlide（地上）
-2. JumpGridRoll（ジャンプ）
-3. TopFall（`CanGridRoll` のみ）
-4. GridRoll
+- 入口: `MovementTransitionEvaluator` → `DiceCoupledMoveEngine`
+- mode: `ResolveStandingMoveMode` が `Slide` または `Roll`
+- **mode で分岐**（順序付き capability プローブはしない）:
+  - `Slide` → 地上 `IceSlide` / ジャンプ `JumpGridRoll`（+ occupied なら `TierLanding`）
+  - `Roll` → `JumpGridRoll` / empty は `TopFall` / occupied は `TierLanding` / `GridRoll`
+- グリッド経路・着地: `GridMovePlanBuilder` → `DiceGridPassability` → `GridTraversability`
+- `GroundGridPassability` / `JumpGridPassability` は互換ラッパー（新規コードは `DiceGridPassability` を使う）
 
 ### 禁止
 
-- L2 Policy（特に `TopFallPolicy`）内で `CanGridRoll` / `IsPlayerMovable` を個別に書かない。入口でスキップ済みにする。
-- Roll 系 Policy を Slide 系より先に置かない（氷が TopFall に入る原因になる）。
+- L2 Policy（特に `TopFallPolicy`）内で `CanGridRoll` / `IsPlayerMovable` を個別に書かない。入口で mode 済みにする。
+- `Slide` と `Roll` を同じ if チェーンで順序依存させない（`ResolveStandingMoveMode` 側で排他）。
 - `AllowsRoll`（盤面状態）と `IsPlayerMovable`（ダイス capability）を混同しない。
 
-## L3: 実行・ビジュアル
+## L3: 実行・ビジュアル / Character 入口
 
 - 判定結果に応じ `DiceController` → `DiceView`。
 - Demote でも氷は `DiceTransition.GridMove`（HorizontalThenDrop）。`RollThenDemote` は使わない。
+- Demote ビジュアル切替は `UsesSlideVisualForDemote` Capability を見る。
+- 押し実行形は `IDiceBehavior.ResolvePushStyle` / `CharacterPushExecutor` を見る。
+- `CharacterController` は入力・物理 overlap・演出・実行呼び出しのみ。
+  - 開始ゲート: `PlayerMotionGate`
+  - 押し幾何: `PushContactEvaluator`
+  - 押し実行: `CharacterPushExecutor`
+  - リフト対象: `CharacterLiftTargetQuery`
+  - ジャンプ capability 上書き: `JumpInputPolicy.ApplyStandingDiceOverrides`
 
-## 新規 Policy 追加時
+## 新規 Policy / 種類追加時
 
-1. L1 / L2 / L3 のどこに属するか決める。
-2. L2 なら `ShouldEvaluateDiceCoupledMovement` 通過後の helper（`TryEvaluateDiceCoupledMovementOn*Cell`）に追加する。
-3. capability 分岐は Policy 本体ではなく **L2 入口または評価順** で表現する。
+1. 新種類は `IDiceBehavior` 実装を追加し `DiceBehaviorResolver.GetBehavior` に登録する。
+2. L1 / L2 / L3 のどこに属するか決める。
+3. L2 なら `DiceCoupledMoveEngine` の `Slide` / `Roll` 分岐内に追加する。
+4. 一時状態の例外は Behavior 本体ではなく Modifier（`DiceBehaviorRuntimeState`）で表現する。

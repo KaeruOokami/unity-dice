@@ -61,18 +61,18 @@ namespace DiceGame.Core
             out DiceState toState) {
             toState = default;
 
-            // Ice dice should not roll (no orientation change) during grid-jump/grid-roll movement.
             var orientation = fromState.Orientation;
-            if (fromState.Kind != DiceKind.Ice) {
+            var capabilities = DiceBehaviorResolver.GetBehavior(fromState.Kind).Capabilities;
+            if (capabilities.PreservesOrientationOnGridMove) {
+                if (!orientation.IsValid()) {
+                    return false;
+                }
+            } else {
                 for (var step = 0; step < distance; step++) {
                     orientation = orientation.Roll(direction);
                     if (!orientation.IsValid()) {
                         return false;
                     }
-                }
-            } else {
-                if (!orientation.IsValid()) {
-                    return false;
                 }
             }
 

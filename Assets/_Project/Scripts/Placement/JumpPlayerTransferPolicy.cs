@@ -1,41 +1,42 @@
+using DiceGame.Core;
 using DiceGame.Gameplay;
 
 namespace DiceGame.Placement
 {
     public static class JumpPlayerTransferPolicy
     {
-        static bool IsNonCoupledJumpDice(DiceController standingDice) {
-            return standingDice.IsSinkErasing || !standingDice.CanJumpCoupleWithPlayer;
+        /// <summary>
+        /// Resolves L1/L2 standing-move mode from effective dice behavior.
+        /// </summary>
+        public static DiceStandingMoveMode ResolveStandingMoveMode(
+            bool isJumping,
+            DiceController standingDice) {
+            if (standingDice == null) {
+                return DiceStandingMoveMode.None;
+            }
+
+            return standingDice.EffectiveBehavior.ResolveStandingMoveMode(isJumping);
         }
 
         /// <summary>
         /// L1: Player moves alone; standing dice must not enter dice-coupled (L2) policies.
-        /// Jump uses jump-coupling capability; ground uses general player-movable capability.
         /// </summary>
         public static bool UsesPlayerOnlyMovement(bool isJumping, DiceController standingDice) {
-            if (standingDice == null) {
-                return false;
-            }
-
-            if (isJumping) {
-                return IsNonCoupledJumpDice(standingDice);
-            }
-
-            return !standingDice.IsPlayerMovable;
+            return ResolveStandingMoveMode(isJumping, standingDice) == DiceStandingMoveMode.PlayerOnly;
         }
 
         /// <summary>
-        /// L2 gate: dice-coupled policies (roll / slide / top-fall) run only when this is true.
+        /// L2 gate: dice-coupled policies run only for Slide or Roll modes.
         /// </summary>
         public static bool ShouldEvaluateDiceCoupledMovement(bool isJumping, DiceController standingDice) {
-            return standingDice != null
-                && !UsesPlayerOnlyMovement(isJumping, standingDice);
+            var mode = ResolveStandingMoveMode(isJumping, standingDice);
+            return mode == DiceStandingMoveMode.Slide || mode == DiceStandingMoveMode.Roll;
         }
 
         public static bool UsesPlayerOnlyReach(bool isJumping, DiceController standingDice) {
             return isJumping
                 && standingDice != null
-                && IsNonCoupledJumpDice(standingDice);
+                && ResolveStandingMoveMode(true, standingDice) == DiceStandingMoveMode.PlayerOnly;
         }
 
         public static bool IsLowerLevelTransfer(int fromLevel, int targetLevel) {
@@ -43,8 +44,8 @@ namespace DiceGame.Placement
         }
 
         /// <summary>
-        /// Sink-erasing dice, or non-couple dice that cannot grid-roll (Iron / iron-adjacent Magnet).
-        /// Stone is excluded because it can grid-roll.
+        /// Sink-erasing dice, or player-only immovable dice (Iron / iron-adjacent Magnet).
+        /// Stone is excluded: it remains player-movable via CanGridRoll even though it cannot jump-couple.
         /// </summary>
         public static bool RequiresJumpForLowerLevelTransfer(DiceController standingDice) {
             if (standingDice == null) {
@@ -52,7 +53,7 @@ namespace DiceGame.Placement
             }
 
             return standingDice.IsSinkErasing
-                || (!standingDice.CanJumpCoupleWithPlayer && !standingDice.Capabilities.CanGridRoll);
+                || (!standingDice.CanJumpCoupleWithPlayer && !standingDice.IsPlayerMovable);
         }
 
         public static bool BlocksGroundLowerLevelTransfer(

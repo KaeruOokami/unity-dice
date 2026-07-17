@@ -1,8 +1,8 @@
 using DiceGame.Core;
-using UnityEngine;
 
 namespace DiceGame.Placement
 {
+    /// <summary>Compatibility wrapper — prefer <see cref="DiceGridPassability"/>.</summary>
     public static class GroundGridPassability
     {
         public static bool TryEvaluate(
@@ -17,46 +17,19 @@ namespace DiceGame.Placement
             out DiceState ghostFrom,
             out DiceState ghostTo,
             out string rejectReason) {
-            landingTier = default;
-            moveKind = default;
-            ghostLanding = GhostLandingMode.None;
-            ghostFrom = default;
-            ghostTo = default;
-            rejectReason = null;
-
-            if (distance < 1 || distance > DiceGridRollLimits.MaxParallelRollDistance) {
-                rejectReason = $"distance-out-of-range distance={distance}";
-                return false;
-            }
-
-            if (fromState.Tier == DiceStackTier.Bottom && hasTopOnSameCell) {
-                rejectReason = "has-top-on-start-cell";
-                return false;
-            }
-
-            var landingCell = fromState.GridPos + direction.ToGridDelta() * distance;
-            var allowUpwardTier = occupancyQuery.CanOverwriteTopAt(landingCell);
-
-            if (!GridTraversability.TryEvaluateRollPath(
+            return DiceGridPassability.TryEvaluate(
                 occupancyQuery,
-                fromState.Tier,
-                fromState.GridPos,
+                fromState,
                 direction,
                 distance,
-                allowUpwardTier,
-                fromState.Kind,
+                hasTopOnSameCell,
+                PassabilityContext.ForGround(footingWorldY: 0f),
                 out landingTier,
+                out moveKind,
                 out ghostLanding,
                 out ghostFrom,
                 out ghostTo,
-                out rejectReason)) {
-                return false;
-            }
-
-            moveKind = ghostLanding == GhostLandingMode.InCellPromoteGhost
-                ? GridTraversability.ResolveMoveKind(fromState.Tier, DiceStackTier.Bottom)
-                : GridTraversability.ResolveMoveKind(fromState.Tier, landingTier);
-            return true;
+                out rejectReason);
         }
     }
 }

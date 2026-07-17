@@ -27,7 +27,7 @@ namespace DiceGame.Placement
                 return false;
             }
 
-            if (!IronAdjacencyBlock.IsPlayerMovable(dice, registry)) {
+            if (!DiceEffectiveBehaviorFactory.For(dice, registry).IsPlayerMovable) {
                 return false;
             }
 

@@ -1,5 +1,6 @@
 using DiceGame.Config;
 using DiceGame.Core;
+using DiceGame.Gameplay;
 
 namespace DiceGame.Placement
 {
@@ -94,6 +95,35 @@ namespace DiceGame.Placement
                 maxDistance: 0,
                 allowTierChange: true,
                 capability.Timeline);
+        }
+
+        /// <summary>
+        /// Applies standing-die EffectiveBehavior overlays (couple + upward tier block).
+        /// </summary>
+        public static JumpCoupledMoveCapability ApplyStandingDiceOverrides(
+            JumpCoupledMoveCapability capability,
+            DiceController standingDice) {
+            if (!capability.IsJumping) {
+                return capability;
+            }
+
+            var canJumpCoupleWithPlayer = standingDice == null
+                || (standingDice.CanJumpCoupleWithPlayer && !standingDice.IsSinkErasing);
+            capability = ApplyPlayerOnlyJumpOverride(capability, canJumpCoupleWithPlayer);
+
+            if (standingDice != null
+                && standingDice.Capabilities.BlocksJumpUpwardTierChange
+                && capability.AllowTierChange) {
+                capability = new JumpCoupledMoveCapability(
+                    capability.IsJumping,
+                    capability.AllowCrossCellMove,
+                    capability.AllowDiceGridMove,
+                    capability.MaxDistance,
+                    allowTierChange: false,
+                    capability.Timeline);
+            }
+
+            return capability;
         }
 
         static bool TryGetAscentTimeline(

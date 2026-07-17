@@ -4,6 +4,10 @@ using UnityEngine;
 
 namespace DiceGame.Placement
 {
+    /// <summary>
+    /// Board query for magnet-blocking adjacency. Movable/couple resolution lives in
+    /// <see cref="DiceEffectiveBehaviorResolver"/>.
+    /// </summary>
     public static class IronAdjacencyBlock
     {
         static readonly Direction[] CardinalDirections = {
@@ -11,28 +15,7 @@ namespace DiceGame.Placement
         };
 
         public static bool IsPlayerMovable(DiceController dice, DiceRegistry registry) {
-            if (dice == null || registry == null) {
-                return false;
-            }
-
-            if (dice.IsRadianceErasing) {
-                return false;
-            }
-
-            if (dice.IsSpawning) {
-                return false;
-            }
-
-            var capabilities = dice.Capabilities;
-            if (!capabilities.CanBePushedByPlayer && !capabilities.CanGridRoll && !capabilities.SlideUntilBlocked) {
-                return false;
-            }
-
-            if (!capabilities.HasMagnetCoupling) {
-                return capabilities.CanBePushedByPlayer || capabilities.CanGridRoll || capabilities.SlideUntilBlocked;
-            }
-
-            return !HasAdjacentIron(dice, registry);
+            return DiceEffectiveBehaviorFactory.For(dice, registry).IsPlayerMovable;
         }
 
         public static bool CanJumpCoupleWithPlayer(DiceController dice, DiceRegistry registry) {
@@ -40,26 +23,14 @@ namespace DiceGame.Placement
                 return true;
             }
 
-            if (dice.IsRadianceErasing) {
-                return false;
-            }
-
-            if (dice.IsSpawning) {
-                return false;
-            }
-
-            if (!dice.Capabilities.CanJumpCoupleWithPlayer) {
-                return false;
-            }
-
-            if (dice.Capabilities.HasMagnetCoupling && HasAdjacentIron(dice, registry)) {
-                return false;
-            }
-
-            return true;
+            return DiceEffectiveBehaviorFactory.For(dice, registry).CanJumpCoupleWithPlayer;
         }
 
-        static bool HasAdjacentIron(DiceController dice, DiceRegistry registry) {
+        public static bool HasAdjacentMagnetBlocker(DiceController dice, DiceRegistry registry) {
+            if (dice == null || registry == null) {
+                return false;
+            }
+
             var tier = dice.CurrentState.Tier;
             var cell = dice.CurrentState.GridPos;
 
@@ -69,7 +40,7 @@ namespace DiceGame.Placement
                     continue;
                 }
 
-                if (neighborDice.Kind == DiceKind.Iron
+                if (neighborDice.Capabilities.BlocksAdjacentMagnet
                     && !neighborDice.IsErasing
                     && !neighborDice.IsVanishing) {
                     return true;

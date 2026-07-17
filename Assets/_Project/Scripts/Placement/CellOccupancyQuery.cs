@@ -132,7 +132,7 @@ namespace DiceGame.Placement
             ghostFrom = default;
             ghostTo = default;
 
-            if (registry == null || GhostPlacementRules.IsGhostKind(moverKind)) {
+            if (registry == null || GhostPlacementRules.IsPassThroughKind(moverKind)) {
                 return false;
             }
 

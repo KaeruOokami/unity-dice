@@ -106,13 +106,6 @@ namespace DiceGame.Gameplay
         public float PlayerHeightNorm { get; private set; }
         public SupportRef PlayerSupport { get; private set; } = SupportRef.None();
 
-        struct PushContactCandidate {
-            public DiceController Dice;
-            public Direction Direction;
-            public float InputAlignment;
-            public float FaceDistance;
-        }
-
         public bool IsOnFloor => standingController != null
             && standingController.IsOnFloor
             && !standingController.IsAirborne;
@@ -660,22 +653,7 @@ namespace DiceGame.Gameplay
             }
 
             var standingDice = standingController.ResolveStandingDiceForMovement();
-            var canJumpCoupleWithPlayer = standingDice == null
-                || (standingDice.CanJumpCoupleWithPlayer && !standingDice.IsSinkErasing);
-            capability = JumpInputPolicy.ApplyPlayerOnlyJumpOverride(capability, canJumpCoupleWithPlayer);
-
-            // Ice dice should not climb up to the upper level during jump movement.
-            if (standingDice != null
-                && standingDice.Kind == DiceKind.Ice
-                && capability.AllowTierChange) {
-                capability = new JumpCoupledMoveCapability(
-                    capability.IsJumping,
-                    capability.AllowCrossCellMove,
-                    capability.AllowDiceGridMove,
-                    capability.MaxDistance,
-                    allowTierChange: false,
-                    capability.Timeline);
-            }
+            capability = JumpInputPolicy.ApplyStandingDiceOverrides(capability, standingDice);
 
             if (coupling.JumpDiceGridMoved) {
                 LogJumpParallelRoll(
@@ -1248,7 +1226,7 @@ namespace DiceGame.Gameplay
             pushFollowDice = dice;
             pushFollowDirection = direction;
             isPushFollowing = true;
-            pushFollowLimitOneCell = dice != null && dice.Capabilities.SlideUntilBlocked;
+            pushFollowLimitOneCell = CharacterPushExecutor.LimitsPushFollowToOneCell(dice);
             pushFollowDiceStartWorld = dice?.View?.DiceTransform != null
                 ? dice.View.DiceTransform.position
                 : Vector3.zero;
@@ -1451,7 +1429,7 @@ namespace DiceGame.Gameplay
                 overlapSummary.Append($" [{diceLabel}:canPush=ok");
                 foreach (Direction direction in new[] {
                     Direction.East, Direction.West, Direction.North, Direction.South }) {
-                    if (TryEvaluatePushCandidate(
+                    if (PushContactEvaluator.TryEvaluate(
                         pushBody.Collider.bounds,
                         characterXZ,
                         input,
@@ -1470,13 +1448,14 @@ namespace DiceGame.Gameplay
                 overlapSummary.Append(']');
 
                 var pushBounds = pushBody.Collider.bounds;
-                TryAddPushCandidate(candidates, pushBody.Dice, pushBounds, input, characterXZ, Direction.East);
-                TryAddPushCandidate(candidates, pushBody.Dice, pushBounds, input, characterXZ, Direction.West);
-                TryAddPushCandidate(candidates, pushBody.Dice, pushBounds, input, characterXZ, Direction.North);
-                TryAddPushCandidate(candidates, pushBody.Dice, pushBounds, input, characterXZ, Direction.South);
+                var minAlignment = movementSettings.PushInputAlignment;
+                PushContactEvaluator.TryAdd(candidates, pushBody.Dice, pushBounds, input, characterXZ, Direction.East, minAlignment);
+                PushContactEvaluator.TryAdd(candidates, pushBody.Dice, pushBounds, input, characterXZ, Direction.West, minAlignment);
+                PushContactEvaluator.TryAdd(candidates, pushBody.Dice, pushBounds, input, characterXZ, Direction.North, minAlignment);
+                PushContactEvaluator.TryAdd(candidates, pushBody.Dice, pushBounds, input, characterXZ, Direction.South, minAlignment);
             }
 
-            candidates.Sort(ComparePushCandidates);
+            candidates.Sort(PushContactEvaluator.Compare);
 
             LogPushDebugWhenInput(
                 input,
@@ -1486,168 +1465,21 @@ namespace DiceGame.Gameplay
                 $"hits={hits.Length} dice={overlapSummary} candidates={candidates.Count}");
         }
 
-        void TryAddPushCandidate(
-            List<PushContactCandidate> candidates,
-            DiceController dice,
-            Bounds bounds,
-            Vector2 input,
-            Vector2 characterPosition,
-            Direction direction) {
-            if (!TryEvaluatePushCandidate(
-                bounds,
-                characterPosition,
-                input,
-                direction,
-                movementSettings.PushInputAlignment,
-                out var inputAlignment,
-                out var faceDistance,
-                out _)) {
-                return;
-            }
-
-            candidates.Add(new PushContactCandidate {
-                Dice = dice,
-                Direction = direction,
-                InputAlignment = inputAlignment,
-                FaceDistance = faceDistance
-            });
-        }
-
-        static int ComparePushCandidates(PushContactCandidate a, PushContactCandidate b) {
-            var alignmentCompare = b.InputAlignment.CompareTo(a.InputAlignment);
-            if (alignmentCompare != 0) {
-                return alignmentCompare;
-            }
-
-            return a.FaceDistance.CompareTo(b.FaceDistance);
-        }
-
-        static bool TryEvaluatePushCandidate(
-            Bounds bounds,
-            Vector2 characterPosition,
-            Vector2 input,
-            Direction direction,
-            float minInputAlignment,
-            out float inputAlignment,
-            out float faceDistance,
-            out string rejectReason) {
-            rejectReason = null;
-            inputAlignment = Vector2.Dot(input, GetDirectionInputVector(direction));
-            if (inputAlignment < minInputAlignment) {
-                faceDistance = 0f;
-                rejectReason = $"input={inputAlignment:F2}<{minInputAlignment:F2}";
-                return false;
-            }
-
-            var charX = characterPosition.x;
-            var charZ = characterPosition.y;
-
-            switch (direction) {
-                case Direction.East:
-                    if (charX > bounds.center.x + EdgeEpsilon) {
-                        faceDistance = 0f;
-                        rejectReason = $"charX={charX:F3}>centerX={bounds.center.x:F3}";
-                        return false;
-                    }
-
-                    faceDistance = Mathf.Abs(charX - bounds.min.x);
-                    break;
-                case Direction.West:
-                    if (charX < bounds.center.x - EdgeEpsilon) {
-                        faceDistance = 0f;
-                        rejectReason = $"charX={charX:F3}<centerX={bounds.center.x:F3}";
-                        return false;
-                    }
-
-                    faceDistance = Mathf.Abs(charX - bounds.max.x);
-                    break;
-                case Direction.North:
-                    if (charZ > bounds.center.z + EdgeEpsilon) {
-                        faceDistance = 0f;
-                        rejectReason = $"charZ={charZ:F3}>centerZ={bounds.center.z:F3}";
-                        return false;
-                    }
-
-                    faceDistance = Mathf.Abs(charZ - bounds.min.z);
-                    break;
-                case Direction.South:
-                    if (charZ < bounds.center.z - EdgeEpsilon) {
-                        faceDistance = 0f;
-                        rejectReason = $"charZ={charZ:F3}<centerZ={bounds.center.z:F3}";
-                        return false;
-                    }
-
-                    faceDistance = Mathf.Abs(charZ - bounds.max.z);
-                    break;
-                default:
-                    faceDistance = 0f;
-                    rejectReason = "invalidDirection";
-                    return false;
-            }
-
-            return true;
-        }
-
-        static Vector2 GetDirectionInputVector(Direction direction) {
-            return direction switch {
-                Direction.East => Vector2.right,
-                Direction.West => Vector2.left,
-                Direction.North => Vector2.up,
-                Direction.South => Vector2.down,
-                _ => Vector2.zero
-            };
-        }
-
         bool TryPushDice(PushContactCandidate candidate, out DiceController pushedDice, out Direction pushDir) {
             pushedDice = null;
             pushDir = candidate.Direction;
-            var dice = candidate.Dice;
-
-            if (dice.Capabilities.PushUsesRoll) {
-                if (movementTransition.TryBuildGridMovePlan(
-                    dice.CurrentState,
-                    candidate.Direction,
-                    1,
-                    PassabilityContext.ForGround(GetFootingWorldY(), PlayerSlot),
-                    out var rollPlan,
-                    out _)
-                    && dice.TryExecuteGroundMovePlan(
-                        rollPlan,
-                        PassabilityContext.ForGround(GetFootingWorldY(), PlayerSlot))) {
-                    pushedDice = dice;
-                    return true;
-                }
-
-                return false;
-            }
-
-            if (dice.Capabilities.SlideUntilBlocked) {
-                if (IceSlidePassability.TryBuildUntilBlocked(
-                    dice.CurrentState,
-                    candidate.Direction,
-                    registry,
-                    out var iceSlidePlan,
-                    out _)
-                    && dice.TryExecuteSlidePlan(iceSlidePlan, PlayerSlot)) {
-                    pushedDice = dice;
-                    return true;
-                }
-
-                return false;
-            }
-
-            if (DiceSlidePassability.TryEvaluate(
-                dice.CurrentState,
+            if (!CharacterPushExecutor.TryExecute(
+                candidate.Dice,
                 candidate.Direction,
                 registry,
-                out var normalSlidePlan,
-                out _)
-                && dice.TryExecuteSlidePlan(normalSlidePlan, PlayerSlot)) {
-                pushedDice = dice;
-                return true;
+                movementTransition,
+                GetFootingWorldY(),
+                PlayerSlot)) {
+                return false;
             }
 
-            return false;
+            pushedDice = candidate.Dice;
+            return true;
         }
 
         bool CanPushDice(DiceController dice) {
@@ -1662,23 +1494,6 @@ namespace DiceGame.Gameplay
                 dice,
                 registry,
                 out rejectReason);
-        }
-
-        bool CanLiftDice(DiceController dice) {
-            return LiftPassability.CanLift(
-                standingController.Current,
-                IsOnFloor,
-                standingController.ResolveStandingDiceForMovement(),
-                dice,
-                registry);
-        }
-
-        bool IsPushReachableFromStanding(DiceController dice) {
-            return PushPassability.IsReachable(standingController.Current, IsOnFloor, dice);
-        }
-
-        bool IsLiftReachableFromStanding(DiceController dice) {
-            return LiftPassability.IsReachable(standingController.Current, dice);
         }
 
         void LogPushDebugWhenInput(Vector2 input, string key, string message) {
@@ -1861,45 +1676,19 @@ namespace DiceGame.Gameplay
         bool TryFindLiftTarget(out DiceController targetDice) {
             targetDice = null;
 
-            if (registry == null || board == null || !hasLastFacing) {
+            if (registry == null || board == null || !hasLastFacing || standingController == null) {
                 return false;
             }
 
             var neighborGrid = standingController.GridCell + lastFacing.ToGridDelta();
-            if (!board.IsInside(neighborGrid)) {
-                return false;
-            }
-
-            DiceController candidate = ResolveLiftCandidateAt(neighborGrid);
-            if (candidate == null) {
-                return false;
-            }
-
-            if (candidate == standingController.ResolveStandingDiceForMovement()
-                || candidate.IsErasing
-                || candidate.IsVanishing
-                || candidate.IsBusy
-                || !CanLiftDice(candidate)) {
-                return false;
-            }
-
-            targetDice = candidate;
-            return true;
-        }
-
-        DiceController ResolveLiftCandidateAt(Vector2Int neighborGrid) {
-            registry.TryGetTopAt(neighborGrid, out var top);
-            registry.TryGetBottomAt(neighborGrid, out var bottom);
-
-            if (top != null && IsLiftReachableFromStanding(top)) {
-                return top;
-            }
-
-            if (bottom != null && IsLiftReachableFromStanding(bottom)) {
-                return bottom;
-            }
-
-            return null;
+            return CharacterLiftTargetQuery.TryResolve(
+                standingController.Current,
+                IsOnFloor,
+                standingController.ResolveStandingDiceForMovement(),
+                neighborGrid,
+                board,
+                registry,
+                out targetDice);
         }
 
         bool TryBeginJump() {
@@ -2217,30 +2006,14 @@ namespace DiceGame.Gameplay
         }
 
         bool IsPlayerMotionGateBlockingInput(out string reason) {
-            reason = null;
-            var standingDice = standingController != null ? standingController.CurrentDice : null;
-            if (standingDice != null && standingDice.IsRolling) {
-                reason = "standing-dice-rolling";
-                return true;
-            }
-
-            if (matchActionContext != null && matchActionContext.AnyRollingForPlayer(PlayerSlot)) {
-                reason = "action-dice-rolling";
-                return true;
-            }
-
-            if (MotionConflictEvaluator.HasExternalRollingConflict(
+            return PlayerMotionGate.TryGetBlockReason(
                 PlayerSlot,
+                matchActionContext,
                 registry,
                 board,
-                matchActionContext,
                 StandingGridCell,
-                standingDice)) {
-                reason = "spatial-motion-conflict";
-                return true;
-            }
-
-            return false;
+                standingController != null ? standingController.CurrentDice : null,
+                out reason);
         }
 
         public bool AnyActionDiceRollingForPlayer() {

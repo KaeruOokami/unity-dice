@@ -33,12 +33,13 @@ namespace DiceGame.Placement
                 return false;
             }
 
-            if (!dice.Capabilities.CanBePushedByPlayer) {
+            var effective = DiceEffectiveBehaviorFactory.For(dice, registry);
+            if (!effective.Capabilities.CanBePushedByPlayer) {
                 rejectReason = "notPushable";
                 return false;
             }
 
-            if (!IronAdjacencyBlock.IsPlayerMovable(dice, registry)) {
+            if (!effective.IsPlayerMovable) {
                 rejectReason = "notPlayerMovable";
                 return false;
             }

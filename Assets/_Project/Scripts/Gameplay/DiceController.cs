@@ -53,10 +53,13 @@ namespace DiceGame.Gameplay
         public bool IsBusy => IsRolling || isSpawning || IsErasing || isVanishing || isCarried;
         public DiceState CurrentState => currentState;
         public DiceKind Kind => currentState.Kind;
-        public DiceCapabilities Capabilities => DiceBehaviorResolver.GetCapabilities(Kind);
-        public bool IsPlayerMovable => registry != null && IronAdjacencyBlock.IsPlayerMovable(this, registry);
+        public IDiceBehavior Behavior => DiceBehaviorResolver.GetBehavior(Kind);
+        public DiceCapabilities Capabilities => Behavior.Capabilities;
+        public EffectiveDiceBehavior EffectiveBehavior =>
+            DiceEffectiveBehaviorFactory.For(this, registry);
+        public bool IsPlayerMovable => registry != null && EffectiveBehavior.IsPlayerMovable;
         public bool CanJumpCoupleWithPlayer =>
-            registry != null && IronAdjacencyBlock.CanJumpCoupleWithPlayer(this, registry);
+            registry != null && EffectiveBehavior.CanJumpCoupleWithPlayer;
         public DiceView View => diceView;
         public float GroundRollProgress => diceView != null ? diceView.GroundRollProgress : 0f;
 
@@ -575,7 +578,7 @@ namespace DiceGame.Gameplay
 
                     return;
                 case DiceGridMoveKind.Demote:
-                    if (plan.From.Kind == DiceKind.Ice) {
+                    if (DiceBehaviorResolver.GetBehavior(plan.From.Kind).Capabilities.UsesSlideVisualForDemote) {
                         PlaySlideVisual(plan.From, plan.To, onComplete);
                         return;
                     }

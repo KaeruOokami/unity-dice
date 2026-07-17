@@ -1,8 +1,8 @@
 using DiceGame.Core;
-using UnityEngine;
 
 namespace DiceGame.Placement
 {
+    /// <summary>Compatibility wrapper — prefer <see cref="DiceGridPassability"/>.</summary>
     public static class JumpGridPassability
     {
         public static bool TryEvaluate(
@@ -30,49 +30,19 @@ namespace DiceGame.Placement
                 return false;
             }
 
-            if (!context.AllowJumpGridMove) {
-                rejectReason = "jump-grid-move-not-allowed";
-                return false;
-            }
-
-            if (distance < 1 || distance > DiceGridRollLimits.MaxParallelRollDistance) {
-                rejectReason = $"distance-out-of-range distance={distance}";
-                return false;
-            }
-
-            if (fromState.Tier == DiceStackTier.Bottom && hasTopOnSameCell) {
-                rejectReason = "has-top-on-start-cell";
-                return false;
-            }
-
-            if (!GridTraversability.TryEvaluateRollPath(
+            return DiceGridPassability.TryEvaluate(
                 occupancyQuery,
-                fromState.Tier,
-                fromState.GridPos,
+                fromState,
                 direction,
                 distance,
-                allowUpwardTier: distance == 1,
-                fromState.Kind,
+                hasTopOnSameCell,
+                context,
                 out landingTier,
+                out moveKind,
                 out ghostLanding,
                 out ghostFrom,
                 out ghostTo,
-                out rejectReason)) {
-                return false;
-            }
-
-            moveKind = ghostLanding == GhostLandingMode.InCellPromoteGhost
-                ? GridTraversability.ResolveMoveKind(fromState.Tier, DiceStackTier.Bottom)
-                : GridTraversability.ResolveMoveKind(fromState.Tier, landingTier);
-            if (moveKind != DiceGridMoveKind.Parallel
-                && distance == 1
-                && !context.AllowJumpTierChange
-                && ghostLanding == GhostLandingMode.None) {
-                rejectReason = $"tier-change-not-allowed kind={moveKind}";
-                return false;
-            }
-
-            return true;
+                out rejectReason);
         }
     }
 }

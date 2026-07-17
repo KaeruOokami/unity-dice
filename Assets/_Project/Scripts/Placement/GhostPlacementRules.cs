@@ -7,18 +7,15 @@ namespace DiceGame.Placement
     public static class GhostPlacementRules
     {
         public static bool IsPlayerPassThrough(DiceController dice) {
-            // Sink-erasing Ghost is solid like a normal die until erasure completes.
-            return dice != null
-                && dice.Capabilities.IsPlayerPassThrough
-                && !dice.IsSinkErasing;
+            return dice != null && dice.EffectiveBehavior.IsPlayerPassThrough;
         }
 
         public static bool AllowsDiceSwapThrough(DiceController dice) {
             return dice != null && dice.Capabilities.AllowsDiceSwapThrough;
         }
 
-        public static bool IsGhostKind(DiceKind kind) {
-            return kind == DiceKind.Ghost;
+        public static bool IsPassThroughKind(DiceKind kind) {
+            return DiceBehaviorResolver.GetBehavior(kind).Capabilities.IsPlayerPassThrough;
         }
 
         /// <summary>
@@ -50,7 +47,7 @@ namespace DiceGame.Placement
 
         /// <summary>
         /// Non-ghost moving onto a ghost bottom (same tier) → cell swap.
-        /// Ghost-to-ghost cannot initiate: ghost is not player-movable.
+        /// Pass-through movers cannot initiate: they are not player-movable.
         /// </summary>
         public static bool TryResolveCellSwap(
             DiceState moverFrom,
@@ -62,7 +59,7 @@ namespace DiceGame.Placement
             ghostFrom = default;
             ghostTo = default;
 
-            if (!AllowsDiceSwapThrough(ghost) || IsGhostKind(moverFrom.Kind)) {
+            if (!AllowsDiceSwapThrough(ghost) || IsPassThroughKind(moverFrom.Kind)) {
                 return false;
             }
 
@@ -91,7 +88,7 @@ namespace DiceGame.Placement
 
         /// <summary>
         /// Non-ghost trying to stack on ghost bottom → same cell, mover Bottom, ghost Top.
-        /// Ghost stacking on ghost is a normal top placement (no swap).
+        /// Pass-through stacking on ghost is a normal top placement (no swap).
         /// </summary>
         public static bool TryResolveInCellPromote(
             DiceState moverFrom,
@@ -103,7 +100,7 @@ namespace DiceGame.Placement
             ghostFrom = default;
             ghostTo = default;
 
-            if (!AllowsDiceSwapThrough(ghostBottom) || IsGhostKind(moverFrom.Kind)) {
+            if (!AllowsDiceSwapThrough(ghostBottom) || IsPassThroughKind(moverFrom.Kind)) {
                 return false;
             }
 
@@ -133,7 +130,7 @@ namespace DiceGame.Placement
         public static bool ShouldInCellPromoteOnTopPlacement(
             DiceController bottom,
             DiceKind incomingKind) {
-            return AllowsDiceSwapThrough(bottom) && !IsGhostKind(incomingKind);
+            return AllowsDiceSwapThrough(bottom) && !IsPassThroughKind(incomingKind);
         }
     }
 }

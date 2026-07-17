@@ -7,7 +7,7 @@ namespace DiceGame.Placement
     {
         public static bool BlocksJumpTransferToOtherDice(DiceController standingDice) {
             return standingDice != null
-                && standingDice.Kind == DiceKind.Ice;
+                && standingDice.Capabilities.BlocksJumpTransferToOtherDice;
         }
 
         public static bool ShouldBlockDiceToDiceTransfer(

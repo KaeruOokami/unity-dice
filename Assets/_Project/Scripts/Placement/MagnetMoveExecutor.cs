@@ -34,7 +34,7 @@ namespace DiceGame.Placement
                 return false;
             }
 
-            if (!IronAdjacencyBlock.IsPlayerMovable(origin, registry)) {
+            if (!origin.IsPlayerMovable) {
                 return false;
             }
 
@@ -57,7 +57,7 @@ namespace DiceGame.Placement
                 return false;
             }
 
-            if (!IronAdjacencyBlock.IsPlayerMovable(origin, registry)) {
+            if (!origin.IsPlayerMovable) {
                 return false;
             }
 
@@ -243,7 +243,7 @@ namespace DiceGame.Placement
         }
 
         static bool CanParticipateInChainMove(DiceController dice, DiceRegistry registry) {
-            return IronAdjacencyBlock.IsPlayerMovable(dice, registry)
+            return dice.IsPlayerMovable
                 && !dice.IsBusy
                 && !dice.IsErasing
                 && !dice.IsVanishing;

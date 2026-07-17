@@ -12,6 +12,7 @@ namespace DiceGame.Placement
         readonly SurfaceQuery surfaceQuery;
         readonly CellOccupancyQuery occupancyQuery;
         readonly GridMovePlanBuilder gridPlanBuilder;
+        readonly DiceCoupledMoveEngine coupledMoveEngine;
         readonly HeightStepLimits stepLimits;
         Action<string> jumpParallelRollDebugLog;
         Action<string> heightTransferDebugLog;
@@ -26,6 +27,7 @@ namespace DiceGame.Placement
             this.surfaceQuery = surfaceQuery;
             occupancyQuery = new CellOccupancyQuery(board, registry);
             gridPlanBuilder = new GridMovePlanBuilder(registry, occupancyQuery);
+            coupledMoveEngine = new DiceCoupledMoveEngine(registry, gridPlanBuilder);
             this.stepLimits = stepLimits;
         }
 
@@ -555,73 +557,15 @@ namespace DiceGame.Placement
             Direction direction,
             PassabilityContext context,
             out MovementTransition transition) {
-            transition = default;
-            var isJumping = context.IsJumping;
-
-            if (!isJumping
-                && TryEvaluateIceSlide(
-                    standingDice,
-                    fromLevel,
-                    direction,
-                    out var iceSlidePlan,
-                    out _)) {
-                transition = MovementTransition.IceSlide(iceSlidePlan);
-                return true;
-            }
-
-            if (isJumping
-                && JumpGridRollPolicy.TryCreateCoupledTransition(
-                    fromCell,
-                    toCell,
-                    fromSurface,
-                    standingDice,
-                    direction,
-                    context,
-                    gridPlanBuilder,
-                    out var jumpDiceTransition)) {
-                transition = jumpDiceTransition;
-                return true;
-            }
-
-            if (standingDice.Capabilities.CanGridRoll
-                && TopFallPolicy.TryEvaluate(
-                    fromLevel,
-                    fromSurface,
-                    standingDice,
-                    direction,
-                    context,
-                    gridPlanBuilder,
-                    out var topFallTransition)) {
-                transition = topFallTransition;
-                return true;
-            }
-
-            if (!TryEvaluateGridRoll(
+            return coupledMoveEngine.TryEvaluateOnEmptyCell(
                 fromCell,
                 toCell,
+                fromLevel,
                 fromSurface,
                 standingDice,
                 direction,
-                GetOrthogonalDistance(fromCell, toCell),
-                allowMultiCell: false,
                 context,
-                out var gridPlan,
-                out _)) {
-                return false;
-            }
-
-            if (isJumping) {
-                if (!context.AllowJumpGridMove) {
-                    transition = MovementTransition.Blocked();
-                    return true;
-                }
-
-                transition = CreateCoupledGridMoveTransition(standingDice, gridPlan);
-                return true;
-            }
-
-            transition = MovementTransition.GridRoll(gridPlan);
-            return true;
+                out transition);
         }
 
         bool TryEvaluateDiceCoupledMovementOnOccupiedCell(
@@ -634,74 +578,16 @@ namespace DiceGame.Placement
             PassabilityContext context,
             HeightReachEvaluation reach,
             out MovementTransition transition) {
-            transition = default;
-            var isJumping = context.IsJumping;
-
-            if (!isJumping
-                && TryEvaluateIceSlide(
-                    standingDice,
-                    fromLevel,
-                    direction,
-                    out var iceSlidePlan,
-                    out _)) {
-                transition = MovementTransition.IceSlide(iceSlidePlan);
-                return true;
-            }
-
-            if (isJumping
-                && JumpGridRollPolicy.TryCreateCoupledTransition(
-                    fromCell,
-                    toCell,
-                    fromSurface,
-                    standingDice,
-                    direction,
-                    context,
-                    gridPlanBuilder,
-                    out var occupiedJumpDiceTransition)) {
-                transition = occupiedJumpDiceTransition;
-                return true;
-            }
-
-            if (TierLandingPolicy.TryEvaluate(
+            return coupledMoveEngine.TryEvaluateOnOccupiedCell(
                 fromCell,
                 toCell,
                 fromLevel,
                 fromSurface,
                 standingDice,
-                context,
-                registry,
-                reach,
-                out var jumpTopTransition)) {
-                transition = jumpTopTransition;
-                return true;
-            }
-
-            if (!TryEvaluateGridRoll(
-                fromCell,
-                toCell,
-                fromSurface,
-                standingDice,
                 direction,
-                GetOrthogonalDistance(fromCell, toCell),
-                allowMultiCell: false,
                 context,
-                out var occupiedGridPlan,
-                out _)) {
-                return false;
-            }
-
-            if (isJumping) {
-                if (!context.AllowJumpGridMove) {
-                    transition = MovementTransition.Blocked();
-                    return true;
-                }
-
-                transition = CreateCoupledGridMoveTransition(standingDice, occupiedGridPlan);
-                return true;
-            }
-
-            transition = MovementTransition.GridRoll(occupiedGridPlan);
-            return true;
+                reach,
+                out transition);
         }
 
         bool TryResolveTargetSurfaceAtForPlayerOnlyJump(
@@ -753,43 +639,6 @@ namespace DiceGame.Placement
             }
 
             return false;
-        }
-
-        bool TryEvaluateIceSlide(
-            DiceController standingDice,
-            int fromLevel,
-            Direction direction,
-            out DiceSlidePlan plan,
-            out string rejectReason) {
-            plan = default;
-            rejectReason = null;
-
-            if (standingDice == null) {
-                rejectReason = "no-standing-dice";
-                return false;
-            }
-
-            if (!standingDice.Capabilities.SlideUntilBlocked) {
-                rejectReason = "not-ice-dice";
-                return false;
-            }
-
-            if (SurfaceHeightLevel.ToDiceStackTier(fromLevel) != standingDice.CurrentState.Tier) {
-                rejectReason = "standing-tier-mismatch";
-                return false;
-            }
-
-            if (!IronAdjacencyBlock.IsPlayerMovable(standingDice, registry)) {
-                rejectReason = "dice-not-player-movable";
-                return false;
-            }
-
-            return IceSlidePassability.TryBuildUntilBlocked(
-                standingDice.CurrentState,
-                direction,
-                registry,
-                out plan,
-                out rejectReason);
         }
 
         bool TryEvaluateHeightTransfer(
@@ -994,17 +843,6 @@ namespace DiceGame.Placement
             return rejectReason != null && rejectReason.StartsWith("step-height");
         }
 
-        static MovementTransition CreateCoupledGridMoveTransition(
-            DiceController standingDice,
-            DiceGridMovePlan plan) {
-            var targetLevel = SurfaceHeightLevel.FromDiceStackTier(plan.To.Tier);
-            return MovementTransition.WalkableWithGridPlan(
-                standingDice,
-                targetLevel,
-                MovementTransitionRoute.CoupledGridMove,
-                plan);
-        }
-
         bool TryEvaluateGridRoll(
             Vector2Int fromCell,
             Vector2Int toCell,
@@ -1039,51 +877,14 @@ namespace DiceGame.Placement
             PassabilityContext context,
             out DiceGridMovePlan plan,
             out string rejectReason) {
-            plan = default;
-            rejectReason = null;
-
-            if (standingDice == null || !fromSurface.AllowsRoll) {
-                rejectReason = "no-standing-dice-or-surface-cannot-roll";
-                return false;
-            }
-
-            var standingTier = SurfaceHeightLevel.ToDiceStackTier(fromSurface.Level);
-            if (standingTier != standingDice.CurrentState.Tier) {
-                rejectReason =
-                    $"standing-tier-mismatch standingTier={standingTier} diceTier={standingDice.CurrentState.Tier}";
-                return false;
-            }
-
-            if (!standingDice.Capabilities.CanGridRoll) {
-                rejectReason = "dice-cannot-grid-roll";
-                return false;
-            }
-
-            if (!IronAdjacencyBlock.IsPlayerMovable(standingDice, registry)) {
-                rejectReason = "dice-not-player-movable";
-                return false;
-            }
-
-            if (distance < 1 || distance > DiceGridRollLimits.MaxParallelRollDistance) {
-                rejectReason = $"distance-out-of-range distance={distance}";
-                return false;
-            }
-
-            if (distance > 1 && !allowMultiCell) {
-                rejectReason = "multi-cell-not-allowed";
-                return false;
-            }
-
-            if (fromCell + direction.ToGridDelta() * distance != toCell) {
-                rejectReason =
-                    $"cell-mismatch from={FormatGrid(fromCell)} to={FormatGrid(toCell)} dir={direction} distance={distance}";
-                return false;
-            }
-
-            return TryBuildGridMovePlan(
-                standingDice.CurrentState,
+            return coupledMoveEngine.TryEvaluateGridRoll(
+                fromCell,
+                toCell,
+                fromSurface,
+                standingDice,
                 direction,
                 distance,
+                allowMultiCell,
                 context,
                 out plan,
                 out rejectReason);
