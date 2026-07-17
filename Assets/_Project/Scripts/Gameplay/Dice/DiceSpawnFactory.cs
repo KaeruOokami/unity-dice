@@ -89,7 +89,6 @@ namespace DiceGame.Gameplay
         DiceSpawnSettings spawnSettings;
         System.Random random;
         readonly List<PlayerSpawnChannel> versusChannels = new();
-        readonly Dictionary<PlayerSlot, int> attackSpawnCellIndices = new();
         VersusInitialDicePlacementMode versusInitialPlacementMode =
             VersusInitialDicePlacementMode.Mirrored;
 
@@ -120,7 +119,6 @@ namespace DiceGame.Gameplay
             spawnSettings = settings;
             random = spawnRandom;
             versusChannels.Clear();
-            attackSpawnCellIndices.Clear();
             gameplayEnabled = true;
         }
 
@@ -137,13 +135,11 @@ namespace DiceGame.Gameplay
                 Settings = player1Settings,
                 Catalog = player1Catalog
             });
-            attackSpawnCellIndices[PlayerSlot.Player1] = 0;
             versusChannels.Add(new PlayerSpawnChannel {
                 Slot = PlayerSlot.Player2,
                 Settings = player2Settings,
                 Catalog = player2Catalog
             });
-            attackSpawnCellIndices[PlayerSlot.Player2] = 0;
             versusInitialPlacementMode = initialPlacementMode;
         }
 
@@ -625,15 +621,11 @@ namespace DiceGame.Gameplay
 
         bool TryPickAttackSpawnSlot(PlayerSlot targetSlot, out DiceSpawnSlot slot) {
             if (board != null && board.IsVersusArena) {
-                attackSpawnCellIndices.TryGetValue(targetSlot, out var nextCellIndex);
-                var result = DiceSpawnCellPicker.TryPickSequentialAttackSpawnSlot(
+                return DiceSpawnCellPicker.TryPickSequentialAttackSpawnSlot(
                     board,
                     registry,
                     targetSlot,
-                    ref nextCellIndex,
                     out slot);
-                attackSpawnCellIndices[targetSlot] = nextCellIndex;
-                return result;
             }
 
             return DiceSpawnCellPicker.TryPickRandomSpawnSlot(

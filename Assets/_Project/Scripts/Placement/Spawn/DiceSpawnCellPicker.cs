@@ -98,7 +98,6 @@ namespace DiceGame.Placement
             Board board,
             DiceRegistry registry,
             PlayerSlot ownerSlot,
-            ref int nextCellIndex,
             out DiceSpawnSlot slot) {
             slot = default;
             if (board == null || registry == null || board.VersusLayout == null) {
@@ -113,9 +112,8 @@ namespace DiceGame.Placement
                 return false;
             }
 
-            nextCellIndex = WrapIndex(nextCellIndex, cellCount);
-            for (var checkedCount = 0; checkedCount < cellCount; checkedCount++) {
-                var index = (nextCellIndex + checkedCount) % cellCount;
+            // Always scan from the region edge (index 0) so vacated edge cells refill first.
+            for (var index = 0; index < cellCount; index++) {
                 var x = minCell.x + index % width;
                 var y = maxCell.y - index / width;
                 var cell = new Vector2Int(x, y);
@@ -126,13 +124,11 @@ namespace DiceGame.Placement
 
                 if (registry.CanPlaceBottomDiceAt(cell)) {
                     slot = new DiceSpawnSlot(cell, DiceStackTier.Bottom);
-                    nextCellIndex = (index + 1) % cellCount;
                     return true;
                 }
 
                 if (registry.CanPlaceTopDiceAt(cell)) {
                     slot = new DiceSpawnSlot(cell, DiceStackTier.Top);
-                    nextCellIndex = (index + 1) % cellCount;
                     return true;
                 }
             }
@@ -216,15 +212,6 @@ namespace DiceGame.Placement
                 cells.RemoveAt(i);
                 return;
             }
-        }
-
-        static int WrapIndex(int index, int count) {
-            if (count <= 0) {
-                return 0;
-            }
-
-            var wrapped = index % count;
-            return wrapped < 0 ? wrapped + count : wrapped;
         }
     }
 }
