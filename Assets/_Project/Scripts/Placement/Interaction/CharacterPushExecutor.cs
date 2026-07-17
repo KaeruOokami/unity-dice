@@ -34,13 +34,11 @@ namespace DiceGame.Placement
                 }
 
                 case DicePushMoveStyle.SlideUntilBlocked:
-                    return IceSlidePassability.TryBuildUntilBlocked(
-                            dice.CurrentState,
-                            direction,
-                            registry,
-                            out var iceSlidePlan,
-                            out _)
-                        && dice.TryExecuteSlidePlan(iceSlidePlan, playerSlot);
+                    return IceElasticSlideExecutor.TryExecute(
+                        dice,
+                        direction,
+                        registry,
+                        playerSlot);
 
                 default:
                     return DiceSlidePassability.TryEvaluate(

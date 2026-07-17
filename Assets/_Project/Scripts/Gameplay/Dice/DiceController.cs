@@ -29,6 +29,11 @@ namespace DiceGame.Gameplay
         bool isCarried;
         bool isInitialized;
         DiceSpawnAppearMode spawnAppearMode = DiceSpawnAppearMode.None;
+        Direction pendingElasticSlideDirection;
+        DiceController pendingElasticTransferTarget;
+        PlayerSlot pendingElasticActionOwner;
+        bool hasPendingElasticTransfer;
+        Action pendingSlideComplete;
 
         public bool IsSpawning => isSpawning;
         public DiceSpawnAppearMode SpawnAppearMode => spawnAppearMode;
@@ -320,6 +325,34 @@ namespace DiceGame.Gameplay
         }
 
         public bool TryExecuteSlidePlan(DiceSlidePlan plan, PlayerSlot actionOwner) {
+            return TryExecuteSlidePlan(
+                plan,
+                actionOwner,
+                slideDirection: null,
+                elasticTransferTarget: null,
+                onSlideComplete: null);
+        }
+
+        public bool TryExecuteSlidePlan(
+            DiceSlidePlan plan,
+            PlayerSlot actionOwner,
+            Direction slideDirection,
+            DiceController elasticTransferTarget,
+            Action onSlideComplete = null) {
+            return TryExecuteSlidePlan(
+                plan,
+                actionOwner,
+                (Direction?)slideDirection,
+                elasticTransferTarget,
+                onSlideComplete);
+        }
+
+        public bool TryExecuteSlidePlan(
+            DiceSlidePlan plan,
+            PlayerSlot actionOwner,
+            Direction? slideDirection,
+            DiceController elasticTransferTarget,
+            Action onSlideComplete = null) {
             if (IsBusy || IsErasing || isVanishing || board == null || diceView == null || registry == null) {
                 return false;
             }
@@ -328,15 +361,29 @@ namespace DiceGame.Gameplay
                 return MagnetMoveExecutor.TryExecuteSlide(this, plan, registry, matchActionContext, actionOwner);
             }
 
-            return TryExecuteSlidePlanInternal(plan);
+            return TryExecuteSlidePlanInternal(
+                plan,
+                actionOwner,
+                slideDirection,
+                elasticTransferTarget,
+                onSlideComplete);
         }
 
         internal bool TryExecuteSlidePlanInternal(DiceSlidePlan plan) {
+            return TryExecuteSlidePlanInternal(plan, PlayerSlot.Player1, null, null, null);
+        }
+
+        internal bool TryExecuteSlidePlanInternal(
+            DiceSlidePlan plan,
+            PlayerSlot actionOwner,
+            Direction? slideDirection,
+            DiceController elasticTransferTarget,
+            Action onSlideComplete = null) {
             if (IsBusy || IsErasing || isVanishing || board == null || diceView == null || registry == null) {
                 return false;
             }
 
-            return BeginSlide(plan);
+            return BeginSlide(plan, actionOwner, slideDirection, elasticTransferTarget, onSlideComplete);
         }
 
         public bool TryExecuteGroundMovePlan(DiceGridMovePlan plan, PassabilityContext context) {
@@ -394,6 +441,8 @@ namespace DiceGame.Gameplay
 
             diceView?.TryInterruptRollAnimation(out snapshot);
             isRolling = false;
+            ClearPendingElasticTransfer();
+            pendingSlideComplete = null;
             return snapshot.IsValid;
         }
 
@@ -663,7 +712,12 @@ namespace DiceGame.Gameplay
             diceView.PlayTransition(transition, board, registry, onComplete, Mathf.Max(1, distance));
         }
 
-        bool BeginSlide(DiceSlidePlan plan) {
+        bool BeginSlide(
+            DiceSlidePlan plan,
+            PlayerSlot actionOwner,
+            Direction? slideDirection,
+            DiceController elasticTransferTarget,
+            Action onSlideComplete) {
             if (!ApplyLogicalMoveWithGhost(
                 plan.From,
                 plan.To,
@@ -673,14 +727,57 @@ namespace DiceGame.Gameplay
                 return false;
             }
 
+            var resolvedDirection = slideDirection;
+            if (!resolvedDirection.HasValue
+                && MovementTransitionEvaluator.TryGetDirectionBetween(
+                    plan.From.GridPos,
+                    plan.To.GridPos,
+                    out var inferredDirection)) {
+                resolvedDirection = inferredDirection;
+            }
+
+            hasPendingElasticTransfer = Capabilities.TransfersSlideOnCollision
+                && resolvedDirection.HasValue
+                && elasticTransferTarget != null;
+            if (hasPendingElasticTransfer) {
+                pendingElasticSlideDirection = resolvedDirection.Value;
+                pendingElasticTransferTarget = elasticTransferTarget;
+                pendingElasticActionOwner = actionOwner;
+            } else {
+                ClearPendingElasticTransfer();
+            }
+
+            pendingSlideComplete = onSlideComplete;
+
             isRolling = true;
             PlaySlideVisual(plan.From, plan.To, () => {
                 isRolling = false;
                 NotifyActionMoveCompleted(plan.From, plan.To);
                 StateChanged?.Invoke(currentState);
+                var slideComplete = pendingSlideComplete;
+                pendingSlideComplete = null;
+                CompletePendingElasticTransfer();
+                slideComplete?.Invoke();
             });
 
             return true;
+        }
+
+        void ClearPendingElasticTransfer() {
+            hasPendingElasticTransfer = false;
+            pendingElasticTransferTarget = null;
+        }
+
+        void CompletePendingElasticTransfer() {
+            if (!hasPendingElasticTransfer) {
+                return;
+            }
+
+            var direction = pendingElasticSlideDirection;
+            var target = pendingElasticTransferTarget;
+            var owner = pendingElasticActionOwner;
+            ClearPendingElasticTransfer();
+            IceElasticSlideExecutor.TryBeginTransfer(target, direction, registry, owner);
         }
 
         public void BeginErasure(ErasureKind kind, Action onComplete) {

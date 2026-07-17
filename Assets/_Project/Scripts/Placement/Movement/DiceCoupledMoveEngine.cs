@@ -187,8 +187,13 @@ namespace DiceGame.Placement
             var isJumping = context.IsJumping;
 
             if (!isJumping
-                && TryBuildIceSlide(standingDice, fromLevel, direction, out var iceSlidePlan)) {
-                transition = MovementTransition.IceSlide(iceSlidePlan);
+                && TryBuildIceSlide(
+                    standingDice,
+                    fromLevel,
+                    direction,
+                    out var iceSlidePlan,
+                    out var elasticTransferTarget)) {
+                transition = MovementTransition.IceSlide(iceSlidePlan, elasticTransferTarget);
                 return true;
             }
 
@@ -307,8 +312,10 @@ namespace DiceGame.Placement
             DiceController standingDice,
             int fromLevel,
             Direction direction,
-            out DiceSlidePlan plan) {
+            out DiceSlidePlan plan,
+            out DiceController elasticTransferTarget) {
             plan = default;
+            elasticTransferTarget = null;
 
             if (standingDice == null) {
                 return false;
@@ -326,12 +333,21 @@ namespace DiceGame.Placement
                 return false;
             }
 
-            return IceSlidePassability.TryBuildUntilBlocked(
+            if (!IceSlidePassability.TryBuildUntilBlocked(
                 standingDice.CurrentState,
                 direction,
                 registry,
                 out plan,
-                out _);
+                out elasticTransferTarget,
+                out _)) {
+                return false;
+            }
+
+            if (!standingDice.Capabilities.TransfersSlideOnCollision) {
+                elasticTransferTarget = null;
+            }
+
+            return true;
         }
 
         static MovementTransition CreateCoupledGridMoveTransition(

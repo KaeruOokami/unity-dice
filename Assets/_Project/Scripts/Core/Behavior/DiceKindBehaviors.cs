@@ -108,10 +108,11 @@ namespace DiceGame.Core
             hasSpawnBounce: true,
             rollDurationMultiplier: DiceBehaviorConstants.DefaultRollDurationMultiplier,
             blocksJumpTransferToOtherDice: true,
-            blocksJumpUpwardTierChange: true,
-            maxJumpGridMoveDistance: 1,
+            blocksJumpCrossCellMove: true,
             preservesOrientationOnGridMove: true,
-            usesSlideVisualForDemote: true);
+            usesSlideVisualForDemote: true,
+            transfersSlideOnCollision: true,
+            ignoresPartitionBoundary: true);
     }
 
     public sealed class StoneDiceBehavior : DiceBehaviorBase

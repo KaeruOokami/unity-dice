@@ -996,25 +996,11 @@ namespace DiceGame.Gameplay
         }
 
         float ResolveFallTargetWorldY(Vector2Int cell) {
-            if (registry.TryGetBottomAt(cell, out var bottom)
-                && !GhostPlacementRules.IsPlayerPassThrough(bottom)) {
-                return bottom.GetLogicalTopSurfaceWorldY();
-            }
-
-            return board.FloorSurfaceWorldY;
+            return PlayerNaturalLanding.ResolveSurfaceWorldY(cell, registry, board);
         }
 
         void LandFromFall(Vector2Int cell) {
-            if (registry.TryGetBottomAt(cell, out var bottom)
-                && !GhostPlacementRules.IsPlayerPassThrough(bottom)) {
-                standingController.ApplySupportState(CharacterSupportState.OnDice(
-                    cell,
-                    1,
-                    SupportRef.DiceSupport(bottom, DiceSurfaceLevel.Bottom)));
-                return;
-            }
-
-            standingController.SetOnFloor(cell);
+            standingController.ApplySupportState(PlayerNaturalLanding.Resolve(cell, registry));
         }
         void EnsureCharacterInstance() {
             characterMount = transform;

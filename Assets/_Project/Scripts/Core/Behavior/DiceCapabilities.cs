@@ -21,6 +21,10 @@ namespace DiceGame.Core
         public bool AllowsDiceSwapThrough { get; }
         /// <summary>While jumping, block transfers onto a different die.</summary>
         public bool BlocksJumpTransferToOtherDice { get; }
+        /// <summary>
+        /// While jumping, forbid coupled dice grid moves (stationary / TierLanding-only).
+        /// </summary>
+        public bool BlocksJumpCrossCellMove { get; }
         /// <summary>While jumping, forbid climbing to a higher stack tier.</summary>
         public bool BlocksJumpUpwardTierChange { get; }
         /// <summary>
@@ -32,6 +36,13 @@ namespace DiceGame.Core
         public bool PreservesOrientationOnGridMove { get; }
         /// <summary>Demote uses slide visual instead of roll visual.</summary>
         public bool UsesSlideVisualForDemote { get; }
+        /// <summary>
+        /// Sliding into a stationary die with the same flag transfers slide momentum
+        /// (this die stops; the other starts sliding in the same direction).
+        /// </summary>
+        public bool TransfersSlideOnCollision { get; }
+        /// <summary>Slide / grid traversal may cross the versus partition boundary.</summary>
+        public bool IgnoresPartitionBoundary { get; }
         /// <summary>Adjacent magnet coupling is blocked while this die is present.</summary>
         public bool BlocksAdjacentMagnet { get; }
 
@@ -49,10 +60,13 @@ namespace DiceGame.Core
             bool isPlayerPassThrough = false,
             bool allowsDiceSwapThrough = false,
             bool blocksJumpTransferToOtherDice = false,
+            bool blocksJumpCrossCellMove = false,
             bool blocksJumpUpwardTierChange = false,
             int maxJumpGridMoveDistance = 0,
             bool preservesOrientationOnGridMove = false,
             bool usesSlideVisualForDemote = false,
+            bool transfersSlideOnCollision = false,
+            bool ignoresPartitionBoundary = false,
             bool blocksAdjacentMagnet = false) {
             CanBePushedByPlayer = canBePushedByPlayer;
             CanBeLiftedByPlayer = canBeLiftedByPlayer;
@@ -67,10 +81,13 @@ namespace DiceGame.Core
             IsPlayerPassThrough = isPlayerPassThrough;
             AllowsDiceSwapThrough = allowsDiceSwapThrough;
             BlocksJumpTransferToOtherDice = blocksJumpTransferToOtherDice;
+            BlocksJumpCrossCellMove = blocksJumpCrossCellMove;
             BlocksJumpUpwardTierChange = blocksJumpUpwardTierChange;
             MaxJumpGridMoveDistance = maxJumpGridMoveDistance;
             PreservesOrientationOnGridMove = preservesOrientationOnGridMove;
             UsesSlideVisualForDemote = usesSlideVisualForDemote;
+            TransfersSlideOnCollision = transfersSlideOnCollision;
+            IgnoresPartitionBoundary = ignoresPartitionBoundary;
             BlocksAdjacentMagnet = blocksAdjacentMagnet;
         }
 

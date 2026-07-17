@@ -98,7 +98,7 @@ namespace DiceGame.Placement
         }
 
         /// <summary>
-        /// Applies standing-die EffectiveBehavior overlays (couple + upward tier block).
+        /// Applies standing-die EffectiveBehavior overlays (couple + jump move blocks).
         /// </summary>
         public static JumpCoupledMoveCapability ApplyStandingDiceOverrides(
             JumpCoupledMoveCapability capability,
@@ -110,6 +110,20 @@ namespace DiceGame.Placement
             var canJumpCoupleWithPlayer = standingDice == null
                 || (standingDice.CanJumpCoupleWithPlayer && !standingDice.IsSinkErasing);
             capability = ApplyPlayerOnlyJumpOverride(capability, canJumpCoupleWithPlayer);
+
+            if (standingDice != null
+                && standingDice.Capabilities.BlocksJumpCrossCellMove) {
+                // Keep jump-window cross-cell for TierLanding (Bottom -> Top), but never
+                // couple a dice grid move. Outside the jump-move window this stays stationary.
+                var allowTierLanding = capability.AllowCrossCellMove;
+                return new JumpCoupledMoveCapability(
+                    capability.IsJumping,
+                    allowCrossCellMove: allowTierLanding,
+                    allowDiceGridMove: false,
+                    maxDistance: allowTierLanding ? 1 : 0,
+                    allowTierChange: allowTierLanding,
+                    capability.Timeline);
+            }
 
             if (standingDice != null
                 && standingDice.Capabilities.BlocksJumpUpwardTierChange

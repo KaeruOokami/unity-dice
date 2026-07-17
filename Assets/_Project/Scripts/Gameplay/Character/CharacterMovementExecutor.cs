@@ -159,7 +159,12 @@ namespace DiceGame.Gameplay.Character
             System.Action<string> logJumpParallelRoll) {
             if (plan.CoupledIntent == CoupledMoveIntent.GroundIceSlide) {
                 return plan.HasDiceSlidePlan
-                    && coupling.TryBeginGroundIceSlide(plan.DiceSlidePlan, nextXZ, halfExtent);
+                    && coupling.TryBeginGroundIceSlide(
+                        plan.DiceSlidePlan,
+                        plan.Direction,
+                        plan.Transition.TargetDice,
+                        nextXZ,
+                        halfExtent);
             }
 
             if (!plan.HasDiceGridMovePlan) {

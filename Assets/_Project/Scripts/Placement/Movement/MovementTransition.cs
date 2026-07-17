@@ -110,11 +110,13 @@ namespace DiceGame.Placement
                 default);
         }
 
-        public static MovementTransition IceSlide(DiceSlidePlan plan) {
+        public static MovementTransition IceSlide(
+            DiceSlidePlan plan,
+            DiceController elasticTransferTarget = null) {
             return new MovementTransition(
                 MovementTransitionKind.IceSlide,
                 MovementTransitionRoute.IceSlide,
-                null,
+                elasticTransferTarget,
                 SurfaceHeightLevel.Floor,
                 false,
                 default,

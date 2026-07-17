@@ -28,6 +28,9 @@ namespace DiceGame.Gameplay.Coupling
             public JumpDiceMoveKind JumpMoveKind;
             public Vector3 CharacterAnchor;
             public Vector3 DiceCenterAnchor;
+            public bool HasPendingPartitionDismount;
+            public Vector2Int PendingPartitionDismountCell;
+            public Direction PendingPartitionDismountDirection;
         }
 
         struct RollCancelSession
@@ -88,6 +91,11 @@ namespace DiceGame.Gameplay.Coupling
                 return;
             }
 
+            if (session.HasPendingPartitionDismount) {
+                CompletePartitionDismount(standing.CurrentDice);
+                return;
+            }
+
             SyncVisual();
             session.IsTracking = false;
             transformDriver.SnapYToSurface();
@@ -100,6 +108,12 @@ namespace DiceGame.Gameplay.Coupling
 
             var dice = standing.CurrentDice;
             var diceCenter = dice.View.DiceTransform.position;
+            if (session.HasPendingPartitionDismount
+                && HasPassedPartitionDismountBoundary(diceCenter)) {
+                CompletePartitionDismount(dice);
+                return;
+            }
+
             var delta = diceCenter - session.DiceCenterAnchor;
             var worldPosition = session.CharacterAnchor + delta;
             worldPosition.y = dice.GetTopSurfaceWorldY() + movementSettings.CharacterHeightOffset;
@@ -112,8 +126,13 @@ namespace DiceGame.Gameplay.Coupling
             }
 
             var wasJumpArc = session.IsJumpArc;
-            EndRollTracking();
-            session.IsActive = false;
+            if (session.HasPendingPartitionDismount) {
+                CompletePartitionDismount(dice);
+            } else {
+                EndRollTracking();
+                session.IsActive = false;
+            }
+
             session.IsJumpArc = false;
             ClearRollCancelSession();
             return wasJumpArc;
@@ -394,14 +413,28 @@ namespace DiceGame.Gameplay.Coupling
             return false;
         }
 
-        public bool TryBeginGroundIceSlide(DiceSlidePlan plan, Vector2 nextXZ, float halfExtent) {
+        public bool TryBeginGroundIceSlide(
+            DiceSlidePlan plan,
+            Direction direction,
+            DiceController elasticTransferTarget,
+            Vector2 nextXZ,
+            float halfExtent) {
             var dice = standing.CurrentDice;
             if (dice?.View.DiceTransform == null || dice.IsBusy) {
                 return false;
             }
 
             RegisterStandingDiceForAction();
-            if (!dice.TryExecuteSlidePlan(plan, playerSlot)) {
+
+            if (!IceSlidePassability.HasSlideDisplacement(plan)) {
+                return IceElasticSlideExecutor.TryBeginTransfer(
+                    elasticTransferTarget,
+                    direction,
+                    registry,
+                    playerSlot);
+            }
+
+            if (!dice.TryExecuteSlidePlan(plan, playerSlot, direction, elasticTransferTarget)) {
                 Debug.LogError(
                     $"DiceCharacterCoupling: ice slide execution failed " +
                     $"from={plan.From.GridPos} to={plan.To.GridPos}");
@@ -413,8 +446,61 @@ namespace DiceGame.Gameplay.Coupling
             var diceCenter = dice.View.DiceTransform.position;
             var charPos = transformDriver.GetWorldXZ();
             BeginFollow(new Vector3(charPos.x, 0f, charPos.y), diceCenter, jumpArc: false, JumpDiceMoveKind.None);
+
+            var layout = board != null && board.IsVersusArena ? board.VersusLayout : null;
+            if (IceSlidePassability.TryGetPartitionDismountCell(
+                plan,
+                direction,
+                layout,
+                out var dismountCell)) {
+                session.HasPendingPartitionDismount = true;
+                session.PendingPartitionDismountCell = dismountCell;
+                session.PendingPartitionDismountDirection = direction;
+            } else {
+                ClearPendingPartitionDismount();
+            }
+
             session.IsActive = true;
             return true;
+        }
+
+        bool HasPassedPartitionDismountBoundary(Vector3 diceCenter) {
+            if (board == null) {
+                return false;
+            }
+
+            var dismountWorld = board.GridToWorld(session.PendingPartitionDismountCell);
+            var nextCell = session.PendingPartitionDismountCell
+                + session.PendingPartitionDismountDirection.ToGridDelta();
+            var boundary = (dismountWorld + board.GridToWorld(nextCell)) * 0.5f;
+            var delta = session.PendingPartitionDismountDirection.ToGridDelta();
+            if (delta.x != 0) {
+                return delta.x > 0
+                    ? diceCenter.x >= boundary.x
+                    : diceCenter.x <= boundary.x;
+            }
+
+            if (delta.y != 0) {
+                return delta.y > 0
+                    ? diceCenter.z >= boundary.z
+                    : diceCenter.z <= boundary.z;
+            }
+
+            return false;
+        }
+
+        void CompletePartitionDismount(DiceController dice) {
+            var dismountCell = session.PendingPartitionDismountCell;
+            ClearPendingPartitionDismount();
+            session.IsTracking = false;
+            session.IsActive = false;
+            standing.ApplySupportState(PlayerNaturalLanding.Resolve(dismountCell, registry, dice));
+            transformDriver.SnapYToSurface();
+        }
+
+        void ClearPendingPartitionDismount() {
+            session.HasPendingPartitionDismount = false;
+            session.PendingPartitionDismountCell = default;
         }
 
         bool TryBeginGridMovePlan(

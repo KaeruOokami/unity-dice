@@ -1,5 +1,6 @@
 using DiceGame.Core;
 using DiceGame.Gameplay;
+using UnityEngine;
 
 namespace DiceGame.Placement
 {
@@ -57,7 +58,7 @@ namespace DiceGame.Placement
             rejectReason = null;
 
             var targetPos = fromState.GridPos + direction.ToGridDelta();
-            if (registry.BlocksTraversalBetween(fromState.GridPos, targetPos)) {
+            if (BlocksSlideTraversal(fromState, targetPos, registry)) {
                 rejectReason = $"target={FormatGrid(targetPos)} blocked-by-partition";
                 return false;
             }
@@ -100,7 +101,7 @@ namespace DiceGame.Placement
             rejectReason = null;
 
             var targetPos = fromState.GridPos + direction.ToGridDelta();
-            if (registry.BlocksTraversalBetween(fromState.GridPos, targetPos)) {
+            if (BlocksSlideTraversal(fromState, targetPos, registry)) {
                 rejectReason = $"target={FormatGrid(targetPos)} blocked-by-partition";
                 return false;
             }
@@ -154,6 +155,17 @@ namespace DiceGame.Placement
 
             rejectReason = $"target={FormatGrid(targetPos)} blocked";
             return false;
+        }
+
+        static bool BlocksSlideTraversal(
+            DiceState fromState,
+            Vector2Int targetPos,
+            DiceRegistry registry) {
+            if (DiceBehaviorResolver.GetBehavior(fromState.Kind).Capabilities.IgnoresPartitionBoundary) {
+                return false;
+            }
+
+            return registry.BlocksTraversalBetween(fromState.GridPos, targetPos);
         }
 
         static string FormatGrid(UnityEngine.Vector2Int grid) {
