@@ -48,6 +48,10 @@ namespace DiceGame.Core
         public bool IgnoresPartitionBoundary { get; }
         /// <summary>Adjacent magnet coupling is blocked while this die is present.</summary>
         public bool BlocksAdjacentMagnet { get; }
+        /// <summary>
+        /// Covering this die (same cell, level above the player) crushes the player after settle.
+        /// </summary>
+        public bool CrushesPlayerOnCover { get; }
 
         public DiceCapabilities(
             bool canBePushedByPlayer,
@@ -70,7 +74,8 @@ namespace DiceGame.Core
             bool usesSlideVisualForDemote = false,
             bool transfersSlideOnCollision = false,
             bool ignoresPartitionBoundary = false,
-            bool blocksAdjacentMagnet = false) {
+            bool blocksAdjacentMagnet = false,
+            bool crushesPlayerOnCover = false) {
             CanBePushedByPlayer = canBePushedByPlayer;
             CanBeLiftedByPlayer = canBeLiftedByPlayer;
             CanJumpCoupleWithPlayer = canJumpCoupleWithPlayer;
@@ -92,6 +97,7 @@ namespace DiceGame.Core
             TransfersSlideOnCollision = transfersSlideOnCollision;
             IgnoresPartitionBoundary = ignoresPartitionBoundary;
             BlocksAdjacentMagnet = blocksAdjacentMagnet;
+            CrushesPlayerOnCover = crushesPlayerOnCover;
         }
 
         public int GetEffectiveMaxJumpGridMoveDistance() {

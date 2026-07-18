@@ -65,6 +65,7 @@ namespace DiceGame.Gameplay
         public bool IsPlayerMovable => registry != null && EffectiveBehavior.IsPlayerMovable;
         public bool CanJumpCoupleWithPlayer =>
             registry != null && EffectiveBehavior.CanJumpCoupleWithPlayer;
+        public bool CrushesPlayerOnCover => Capabilities.CrushesPlayerOnCover;
         public DiceView View => diceView;
         public float GroundRollProgress => diceView != null ? diceView.GroundRollProgress : 0f;
 

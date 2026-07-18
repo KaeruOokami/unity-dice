@@ -311,6 +311,11 @@ namespace DiceGame.Gameplay
                 attackController,
                 gameSessionSettings,
                 playerInputSettings);
+
+            for (var i = 0; i < characters.Count; i++) {
+                characters[i].BindCrushOutcome(gameFlowController);
+            }
+
             spawnSystem.StartSpawning();
 
             if (session != null && session.PlayMode == OnlinePlayMode.OnlineHost) {

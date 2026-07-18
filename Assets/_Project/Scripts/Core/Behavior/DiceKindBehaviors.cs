@@ -64,7 +64,8 @@ namespace DiceGame.Core
             hasMagnetCoupling: false,
             hasSpawnBounce: false,
             rollDurationMultiplier: DiceBehaviorConstants.DefaultRollDurationMultiplier,
-            blocksAdjacentMagnet: true);
+            blocksAdjacentMagnet: true,
+            crushesPlayerOnCover: true);
     }
 
     public sealed class MagnetDiceBehavior : DiceBehaviorBase
@@ -133,7 +134,8 @@ namespace DiceGame.Core
             slideUntilBlocked: false,
             hasMagnetCoupling: false,
             hasSpawnBounce: false,
-            rollDurationMultiplier: DiceBehaviorConstants.StoneRollDurationMultiplier);
+            rollDurationMultiplier: DiceBehaviorConstants.StoneRollDurationMultiplier,
+            crushesPlayerOnCover: true);
     }
 
     public sealed class GhostDiceBehavior : DiceBehaviorBase

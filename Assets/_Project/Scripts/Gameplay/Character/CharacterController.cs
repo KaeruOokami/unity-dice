@@ -60,6 +60,7 @@ namespace DiceGame.Gameplay
         PlacementService placement;
         DiceRegistry registry;
         PlayerMatchActionContext matchActionContext;
+        GameFlowController crushOutcomeFlow;
         CharacterStandingController standingController;
         CharacterTransformDriver transformDriver;
         DiceCharacterCoupling coupling;
@@ -131,6 +132,10 @@ namespace DiceGame.Gameplay
 
         public void SetInputSource(ICharacterInputSource source) {
             inputSource = source;
+        }
+
+        public void BindCrushOutcome(GameFlowController flow) {
+            crushOutcomeFlow = flow;
         }
 
         public void Configure(
@@ -921,7 +926,8 @@ namespace DiceGame.Gameplay
 
         /// <summary>
         /// If a dice occupies the level directly above the player on the same cell,
-        /// mount onto that dice. Visual follow reuses DiceCharacterCoupling.
+        /// crush (Iron / Stone) or mount onto that dice. Visual follow reuses DiceCharacterCoupling.
+        /// Crush waits for full settle (spawn / demote / roll), including BottomEmergence.
         /// </summary>
         void TryMountOntoCoveringDiceIfNeeded() {
             if (registry == null
@@ -937,6 +943,25 @@ namespace DiceGame.Gameplay
                 return;
             }
 
+            if (coveringDice.CrushesPlayerOnCover) {
+                // Do not crush mid-motion (spawn / demote / roll), including BottomEmergence.
+                if (coveringDice.IsMotionFollowActive) {
+                    return;
+                }
+
+                if (crushOutcomeFlow == null) {
+                    Debug.LogError("CharacterController: Crush outcome flow is not bound.");
+                    return;
+                }
+
+                crushOutcomeFlow.NotifyPlayerCrushed(PlayerSlot);
+                return;
+            }
+
+            if (BlocksCoveringMountUntilSettled(coveringDice)) {
+                return;
+            }
+
             MountOntoCoveringDice(coveringDice);
         }
 
@@ -949,8 +974,7 @@ namespace DiceGame.Gameplay
                 if (!registry.TryGetBottomIncludingPending(cell, out var bottom)
                     || bottom == null
                     || bottom == standingController.CurrentDice
-                    || GhostPlacementRules.IsPlayerPassThrough(bottom)
-                    || BlocksCoveringMountUntilSettled(bottom)) {
+                    || GhostPlacementRules.IsPlayerPassThrough(bottom)) {
                     return false;
                 }
 
@@ -962,8 +986,7 @@ namespace DiceGame.Gameplay
                 if (!registry.TryGetTopAt(cell, out var top)
                     || top == null
                     || top == standingController.CurrentDice
-                    || GhostPlacementRules.IsPlayerPassThrough(top)
-                    || BlocksCoveringMountUntilSettled(top)) {
+                    || GhostPlacementRules.IsPlayerPassThrough(top)) {
                     return false;
                 }
 

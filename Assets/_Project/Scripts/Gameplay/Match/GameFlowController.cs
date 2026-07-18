@@ -5,6 +5,7 @@ using DiceGame.Placement;
 using DiceGame.Session;
 using DiceGame.Session.Network;
 using DiceGame.Versus;
+using DiceGame.Versus.Core;
 using Unity.Netcode;
 using UnityEngine;
 using UnityEngine.SceneManagement;
@@ -182,6 +183,26 @@ namespace DiceGame.Gameplay
             {
                 EnterGameOver(Player1WinLog);
             }
+        }
+
+        /// <summary>
+        /// Iron / Stone covering crush: crushed player loses (Versus) or Game Over (Standard).
+        /// </summary>
+        public void NotifyPlayerCrushed(PlayerSlot crushed)
+        {
+            if (State != GameFlowState.Playing)
+            {
+                return;
+            }
+
+            if (sessionSettings.GameMode != GameMode.Versus)
+            {
+                EnterGameOver(StandardGameOverLog);
+                return;
+            }
+
+            var winner = SinkingChainResolver.GetOpponent(crushed);
+            EnterGameOver(winner == PlayerSlot.Player1 ? Player1WinLog : Player2WinLog);
         }
 
         void OnPauseMenuResumeClicked()
