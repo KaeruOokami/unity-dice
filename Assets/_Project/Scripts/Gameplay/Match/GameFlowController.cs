@@ -2,7 +2,10 @@ using DiceGame.Config;
 using DiceGame.Gameplay.Input;
 using DiceGame.Grid;
 using DiceGame.Placement;
+using DiceGame.Session;
+using DiceGame.Session.Network;
 using DiceGame.Versus;
+using Unity.Netcode;
 using UnityEngine;
 using UnityEngine.SceneManagement;
 
@@ -28,9 +31,12 @@ namespace DiceGame.Gameplay
         VersusAttackController versusAttackController;
         GameSessionSettings sessionSettings;
         GameFlowInputReader inputReader;
+        PauseMenuUi pauseMenuUi;
+        OnlineSessionController sessionController;
         float playingTimeScale;
         bool isConfigured;
         bool ownsTimeScale;
+        bool applyingRemoteFlow;
 
         public GameFlowState State { get; private set; } = GameFlowState.Playing;
         public bool IsSimulationFrozen => State != GameFlowState.Playing;
@@ -65,6 +71,7 @@ namespace DiceGame.Gameplay
             versusAttackController = targetVersusAttackController;
             sessionSettings = targetSessionSettings;
             playingTimeScale = Time.timeScale;
+            sessionController = FindObjectOfType<OnlineSessionController>();
 
             inputReader = GetComponent<GameFlowInputReader>();
             if (inputReader == null)
@@ -73,8 +80,40 @@ namespace DiceGame.Gameplay
             }
 
             inputReader.Configure(playerInputSettings, sessionSettings.RequiredPlayerCount);
+
+            pauseMenuUi = GetComponent<PauseMenuUi>();
+            if (pauseMenuUi == null)
+            {
+                pauseMenuUi = gameObject.AddComponent<PauseMenuUi>();
+            }
+
+            pauseMenuUi.Configure();
+            pauseMenuUi.ResumeClicked -= OnPauseMenuResumeClicked;
+            pauseMenuUi.ReturnToTitleClicked -= OnPauseMenuReturnToTitleClicked;
+            pauseMenuUi.ResumeClicked += OnPauseMenuResumeClicked;
+            pauseMenuUi.ReturnToTitleClicked += OnPauseMenuReturnToTitleClicked;
+
+            BindOnlineFlowEvents(true);
+
             State = GameFlowState.Playing;
             isConfigured = true;
+            GameWorldVisibility.SetBoardVisible(board, true);
+        }
+
+        void OnDestroy()
+        {
+            if (pauseMenuUi != null)
+            {
+                pauseMenuUi.ResumeClicked -= OnPauseMenuResumeClicked;
+                pauseMenuUi.ReturnToTitleClicked -= OnPauseMenuReturnToTitleClicked;
+            }
+
+            BindOnlineFlowEvents(false);
+
+            if (ownsTimeScale)
+            {
+                Time.timeScale = playingTimeScale;
+            }
         }
 
         void Update()
@@ -86,7 +125,7 @@ namespace DiceGame.Gameplay
 
             if (inputReader.WasResetPressedThisFrame())
             {
-                ResetGame();
+                RequestOrApplyResetMatch();
                 return;
             }
 
@@ -94,11 +133,11 @@ namespace DiceGame.Gameplay
             {
                 if (State == GameFlowState.Playing)
                 {
-                    EnterPaused();
+                    RequestOrApplyPause();
                 }
                 else if (State == GameFlowState.Paused)
                 {
-                    ResumePlaying();
+                    RequestOrApplyResume();
                 }
 
                 return;
@@ -145,14 +184,90 @@ namespace DiceGame.Gameplay
             }
         }
 
-        void EnterPaused()
+        void OnPauseMenuResumeClicked()
         {
-            State = GameFlowState.Paused;
-            FreezeSimulation();
+            RequestOrApplyResume();
         }
 
-        void ResumePlaying()
+        void OnPauseMenuReturnToTitleClicked()
         {
+            RequestOrApplyReturnToTitle();
+        }
+
+        void RequestOrApplyPause()
+        {
+            if (IsOnlineClient())
+            {
+                sessionController.Messenger?.SendFlowRequestToServer(OnlineSessionConstants.FlowPause);
+                return;
+            }
+
+            ApplyPause(broadcast: IsOnlineHost());
+        }
+
+        void RequestOrApplyResume()
+        {
+            if (IsOnlineClient())
+            {
+                sessionController.Messenger?.SendFlowRequestToServer(OnlineSessionConstants.FlowResume);
+                return;
+            }
+
+            ApplyResume(broadcast: IsOnlineHost());
+        }
+
+        void RequestOrApplyResetMatch()
+        {
+            if (IsOnlineClient())
+            {
+                sessionController.Messenger?.SendFlowRequestToServer(OnlineSessionConstants.FlowResetMatch);
+                return;
+            }
+
+            ApplyResetMatch(broadcast: IsOnlineHost());
+        }
+
+        void RequestOrApplyReturnToTitle()
+        {
+            if (IsOnlineClient())
+            {
+                sessionController.Messenger?.SendFlowRequestToServer(OnlineSessionConstants.FlowReturnToTitle);
+                return;
+            }
+
+            ApplyReturnToTitle(broadcast: IsOnlineHost());
+        }
+
+        public void ApplyPause(bool broadcast)
+        {
+            if (State == GameFlowState.Paused)
+            {
+                return;
+            }
+
+            if (broadcast && !applyingRemoteFlow)
+            {
+                sessionController?.Messenger?.BroadcastFlowCommand(OnlineSessionConstants.FlowPause);
+            }
+
+            State = GameFlowState.Paused;
+            FreezeSimulation();
+            pauseMenuUi?.Show(IsLocalFlowAuthority());
+        }
+
+        public void ApplyResume(bool broadcast)
+        {
+            if (State != GameFlowState.Paused)
+            {
+                return;
+            }
+
+            if (broadcast && !applyingRemoteFlow)
+            {
+                sessionController?.Messenger?.BroadcastFlowCommand(OnlineSessionConstants.FlowResume);
+            }
+
+            pauseMenuUi?.Hide();
             Time.timeScale = playingTimeScale;
             ownsTimeScale = false;
             spawnSystem.SetGameplayEnabled(true);
@@ -161,10 +276,41 @@ namespace DiceGame.Gameplay
             State = GameFlowState.Playing;
         }
 
+        public void ApplyResetMatch(bool broadcast)
+        {
+            if (broadcast && !applyingRemoteFlow)
+            {
+                sessionController?.Messenger?.BroadcastFlowCommand(OnlineSessionConstants.FlowResetMatch);
+            }
+
+            var playMode = OnlineSessionState.Instance != null
+                ? OnlineSessionState.Instance.PlayMode
+                : OnlinePlayMode.Local;
+            MatchFlowFlags.ArmMatchRestart(playMode);
+            ReloadActiveScene();
+        }
+
+        public void ApplyReturnToTitle(bool broadcast)
+        {
+            if (broadcast && !applyingRemoteFlow)
+            {
+                sessionController?.Messenger?.BroadcastFlowCommand(OnlineSessionConstants.FlowReturnToTitle);
+            }
+
+            MatchFlowFlags.ArmTitleReturn();
+            if (sessionController != null)
+            {
+                sessionController.PrepareReturnToTitle();
+            }
+
+            ReloadActiveScene();
+        }
+
         void EnterGameOver(string resultLog)
         {
             State = GameFlowState.GameOver;
             FreezeSimulation();
+            pauseMenuUi?.Hide();
             Debug.Log(resultLog);
         }
 
@@ -177,7 +323,7 @@ namespace DiceGame.Gameplay
             ownsTimeScale = true;
         }
 
-        void ResetGame()
+        void ReloadActiveScene()
         {
             var activeScene = SceneManager.GetActiveScene();
             if (activeScene.buildIndex < 0)
@@ -187,17 +333,111 @@ namespace DiceGame.Gameplay
                 return;
             }
 
-            Time.timeScale = playingTimeScale;
+            Time.timeScale = playingTimeScale > 0f ? playingTimeScale : 1f;
             ownsTimeScale = false;
             SceneManager.LoadScene(activeScene.buildIndex);
         }
 
-        void OnDestroy()
+        void BindOnlineFlowEvents(bool bind)
         {
-            if (ownsTimeScale)
+            var messenger = sessionController != null ? sessionController.Messenger : null;
+            if (messenger == null)
             {
-                Time.timeScale = playingTimeScale;
+                return;
             }
+
+            messenger.FlowCommandReceived -= OnFlowCommandReceived;
+            messenger.FlowRequestReceived -= OnFlowRequestReceived;
+            if (bind)
+            {
+                messenger.FlowCommandReceived += OnFlowCommandReceived;
+                messenger.FlowRequestReceived += OnFlowRequestReceived;
+            }
+        }
+
+        void OnFlowRequestReceived(ulong senderClientId, byte command)
+        {
+            if (!IsOnlineHost())
+            {
+                return;
+            }
+
+            switch (command)
+            {
+                case OnlineSessionConstants.FlowPause:
+                    ApplyPause(broadcast: true);
+                    break;
+                case OnlineSessionConstants.FlowResume:
+                    ApplyResume(broadcast: true);
+                    break;
+                case OnlineSessionConstants.FlowResetMatch:
+                    ApplyResetMatch(broadcast: true);
+                    break;
+                case OnlineSessionConstants.FlowReturnToTitle:
+                    ApplyReturnToTitle(broadcast: true);
+                    break;
+            }
+        }
+
+        void OnFlowCommandReceived(byte command)
+        {
+            if (IsOnlineHost())
+            {
+                // Host already applied locally before broadcast.
+                return;
+            }
+
+            applyingRemoteFlow = true;
+            try
+            {
+                switch (command)
+                {
+                    case OnlineSessionConstants.FlowPause:
+                        ApplyPause(broadcast: false);
+                        break;
+                    case OnlineSessionConstants.FlowResume:
+                        ApplyResume(broadcast: false);
+                        break;
+                    case OnlineSessionConstants.FlowResetMatch:
+                        ApplyResetMatch(broadcast: false);
+                        break;
+                    case OnlineSessionConstants.FlowReturnToTitle:
+                        ApplyReturnToTitle(broadcast: false);
+                        break;
+                }
+            }
+            finally
+            {
+                applyingRemoteFlow = false;
+            }
+        }
+
+        bool IsOnlineHost()
+        {
+            return OnlineSessionState.Instance != null
+                && OnlineSessionState.Instance.PlayMode == OnlinePlayMode.OnlineHost
+                && NetworkManager.Singleton != null
+                && NetworkManager.Singleton.IsServer;
+        }
+
+        bool IsOnlineClient()
+        {
+            return OnlineSessionState.Instance != null
+                && OnlineSessionState.Instance.PlayMode == OnlinePlayMode.OnlineClient
+                && NetworkManager.Singleton != null
+                && NetworkManager.Singleton.IsClient
+                && !NetworkManager.Singleton.IsServer;
+        }
+
+        bool IsLocalFlowAuthority()
+        {
+            var session = OnlineSessionState.Instance;
+            if (session == null || !session.IsOnline)
+            {
+                return true;
+            }
+
+            return session.IsHost;
         }
     }
 }

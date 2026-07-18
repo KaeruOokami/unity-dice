@@ -5,6 +5,8 @@ using DiceGame.Gameplay.AI.Application;
 using DiceGame.Gameplay.Input;
 using DiceGame.Grid;
 using DiceGame.Placement;
+using DiceGame.Session;
+using DiceGame.Session.Network;
 using DiceGame.View;
 using DiceGame.Versus;
 using UnityEngine;
@@ -75,12 +77,61 @@ namespace DiceGame.Gameplay
         DiceSpawnSystem spawnSystem;
         System.Random spawnRandom;
         readonly List<CharacterController> characters = new();
+        bool sessionStarted;
+
+        public Board Board => board;
+        public GameObject DiceEntityPrefab => diceEntityPrefab;
+        public GameObject CharacterPrefab => characterPrefab;
+        public PlayerInputSettings PlayerInputSettings => playerInputSettings;
+        public GameSessionSettings GameSessionSettings => gameSessionSettings;
+
+        void OnDisable() {
+            if (OnlineSessionState.Instance != null) {
+                OnlineSessionState.Instance.MatchStartRequested -= OnOnlineMatchStartRequested;
+            }
+        }
 
         void Start() {
+            var onlineController = FindObjectOfType<OnlineSessionController>();
+            var session = OnlineSessionState.Instance;
+            if (onlineController != null) {
+                if (session == null) {
+                    Debug.LogError("GameBootstrap: OnlineSessionController is present but OnlineSessionState is missing.");
+                    return;
+                }
+
+                session.MatchStartRequested -= OnOnlineMatchStartRequested;
+                session.MatchStartRequested += OnOnlineMatchStartRequested;
+
+                if (session.PlayMode == OnlinePlayMode.Unspecified && !session.IsMatchRunning) {
+                    return;
+                }
+            }
+
+            BeginSession();
+        }
+
+        void OnOnlineMatchStartRequested() {
+            if (sessionStarted) {
+                return;
+            }
+
+            BeginSession();
+        }
+
+        void BeginSession() {
+            if (sessionStarted) {
+                return;
+            }
+
+            sessionStarted = true;
+
             if (board == null) {
                 Debug.LogError("GameBootstrap: Board is not assigned.");
                 return;
             }
+
+            GameWorldVisibility.SetBoardVisible(board, true);
 
             if (boardView == null) {
                 boardView = board.GetComponent<BoardView>();
@@ -122,9 +173,14 @@ namespace DiceGame.Gameplay
                 return;
             }
 
+            var effectiveAiSettings = ResolveAiSettingsForSession();
+            var session = OnlineSessionState.Instance;
+            var validationPlayerCount = session != null && session.IsOnline
+                ? 1
+                : gameSessionSettings.RequiredPlayerCount;
             if (!playerInputSettings.TryValidateStartup(
-                gameSessionSettings.RequiredPlayerCount,
-                aiPlayerSettings,
+                validationPlayerCount,
+                effectiveAiSettings,
                 out var inputError)) {
                 Debug.LogError($"GameBootstrap: {inputError}");
                 return;
@@ -132,6 +188,15 @@ namespace DiceGame.Gameplay
 
             if (!TryConfigureBoardForSession(out var boardError)) {
                 Debug.LogError($"GameBootstrap: {boardError}");
+                return;
+            }
+
+            if (cameraSetup.Enabled) {
+                cameraSetup.Apply(board);
+            }
+
+            if (session != null && session.PlayMode == OnlinePlayMode.OnlineClient) {
+                BeginOnlineClientPresentation();
                 return;
             }
 
@@ -184,7 +249,7 @@ namespace DiceGame.Gameplay
                 ownershipContext.SetOwner(startDice[i], slot);
             }
 
-            if (!TrySpawnPlayers(startDice, out var spawnedCharacters)) {
+            if (!TrySpawnPlayers(startDice, effectiveAiSettings, out var spawnedCharacters)) {
                 return;
             }
 
@@ -234,10 +299,6 @@ namespace DiceGame.Gameplay
                     transform);
             }
 
-            if (cameraSetup.Enabled) {
-                cameraSetup.Apply(board);
-            }
-
             var gameFlowController = GetComponent<GameFlowController>();
             if (gameFlowController == null) {
                 gameFlowController = gameObject.AddComponent<GameFlowController>();
@@ -251,6 +312,62 @@ namespace DiceGame.Gameplay
                 gameSessionSettings,
                 playerInputSettings);
             spawnSystem.StartSpawning();
+
+            if (session != null && session.PlayMode == OnlinePlayMode.OnlineHost) {
+                BindOnlineHostAuthority();
+            }
+        }
+
+        void BeginOnlineClientPresentation() {
+            var onlineController = FindObjectOfType<OnlineSessionController>();
+            if (onlineController?.Messenger == null) {
+                Debug.LogError("GameBootstrap: Online client matched without messenger.");
+                return;
+            }
+
+            GameWorldVisibility.SetBoardVisible(board, true);
+
+            var clientView = GetComponent<OnlineClientMatchView>();
+            if (clientView == null) {
+                clientView = gameObject.AddComponent<OnlineClientMatchView>();
+            }
+
+            clientView.Configure(
+                onlineController.Messenger,
+                diceEntityPrefab,
+                characterPrefab,
+                playerInputSettings);
+
+            var flowAdapter = GetComponent<OnlineClientFlowAdapter>();
+            if (flowAdapter == null) {
+                flowAdapter = gameObject.AddComponent<OnlineClientFlowAdapter>();
+            }
+
+            flowAdapter.Configure(onlineController.Messenger, playerInputSettings);
+        }
+
+        void BindOnlineHostAuthority() {
+            var onlineController = FindObjectOfType<OnlineSessionController>();
+            if (onlineController?.Messenger == null) {
+                Debug.LogError("GameBootstrap: Online host matched without messenger.");
+                return;
+            }
+
+            var binder = GetComponent<OnlineHostMatchBinder>();
+            if (binder == null) {
+                binder = gameObject.AddComponent<OnlineHostMatchBinder>();
+            }
+
+            binder.Configure(onlineController.Messenger, registry, characters);
+        }
+
+        AiPlayerSettings ResolveAiSettingsForSession() {
+            var session = OnlineSessionState.Instance;
+            if (session != null && session.IsOnline) {
+                return null;
+            }
+
+            return aiPlayerSettings;
         }
 
         bool TryConfigureBoardForSession(out string errorMessage) {
@@ -317,7 +434,10 @@ namespace DiceGame.Gameplay
             return true;
         }
 
-        bool TrySpawnPlayers(IReadOnlyList<DiceController> startDice, out List<CharacterController> spawnedCharacters) {
+        bool TrySpawnPlayers(
+            IReadOnlyList<DiceController> startDice,
+            AiPlayerSettings effectiveAiSettings,
+            out List<CharacterController> spawnedCharacters) {
             spawnedCharacters = new List<CharacterController>(startDice.Count);
 
             for (var i = 0; i < startDice.Count; i++) {
@@ -339,6 +459,14 @@ namespace DiceGame.Gameplay
                     return false;
                 }
 
+                var inputSettingsForSlot = playerInputSettings;
+                var sessionForSpawn = OnlineSessionState.Instance;
+                if (sessionForSpawn != null
+                    && sessionForSpawn.PlayMode == OnlinePlayMode.OnlineHost
+                    && slot == PlayerSlot.Player2) {
+                    inputSettingsForSlot = null;
+                }
+
                 characterController.Configure(
                     board,
                     placement,
@@ -346,9 +474,9 @@ namespace DiceGame.Gameplay
                     characterMovementSettings,
                     physicsSettings,
                     slot,
-                    playerInputSettings,
+                    inputSettingsForSlot,
                     matchActionContext);
-                TryConfigureAiControl(characterObject, characterController, slot);
+                TryConfigureAiControl(characterObject, characterController, slot, effectiveAiSettings);
                 spawnedCharacters.Add(characterController);
             }
 
@@ -359,8 +487,12 @@ namespace DiceGame.Gameplay
             cameraSetup.Apply(board);
         }
 
-        void TryConfigureAiControl(GameObject characterObject, CharacterController characterController, PlayerSlot slot) {
-            if (aiPlayerSettings == null || !aiPlayerSettings.IsAiControlled(slot)) {
+        void TryConfigureAiControl(
+            GameObject characterObject,
+            CharacterController characterController,
+            PlayerSlot slot,
+            AiPlayerSettings effectiveAiSettings) {
+            if (effectiveAiSettings == null || !effectiveAiSettings.IsAiControlled(slot)) {
                 return;
             }
 
@@ -380,7 +512,7 @@ namespace DiceGame.Gameplay
             }
 
             characterController.SetInputSource(aiInput);
-            brain.Configure(characterController, registry, aiInput, aiPlayerSettings);
+            brain.Configure(characterController, registry, aiInput, effectiveAiSettings);
         }
     }
 }
