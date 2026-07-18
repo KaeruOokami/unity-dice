@@ -462,31 +462,7 @@ namespace DiceGame.View
             DiceState state,
             Board board,
             DiceRegistry registry,
-            float spawnHeightAboveSurface,
-            float bounceRestitution,
-            int maxBounceCount,
-            float minBounceVelocity,
-            Action onComplete) {
-            PlaySpawnAppear(
-                state,
-                board,
-                registry,
-                spawnHeightAboveSurface,
-                bounceRestitution,
-                maxBounceCount,
-                minBounceVelocity,
-                DiceBehaviorConstants.DefaultFallGravityScale,
-                onComplete);
-        }
-
-        public void PlaySpawnAppear(
-            DiceState state,
-            Board board,
-            DiceRegistry registry,
-            float spawnHeightAboveSurface,
-            float bounceRestitution,
-            int maxBounceCount,
-            float minBounceVelocity,
+            bool enableSpawnBounce,
             float fallGravityScale,
             Action onComplete) {
             if (!HasGameplaySettings()) {
@@ -501,13 +477,16 @@ namespace DiceGame.View
                 StopCoroutine(rollCoroutine);
             }
 
+            var bounceRestitution = enableSpawnBounce ? physicsSettings.BounceRestitution : 0f;
+            var maxBounceCount = enableSpawnBounce ? physicsSettings.MaxBounceCount : 0;
+
             CacheSpawnFallParams(
                 state,
                 board,
                 registry,
                 bounceRestitution,
                 maxBounceCount,
-                minBounceVelocity,
+                physicsSettings.MinBounceVelocity,
                 fallGravityScale,
                 onComplete);
 
@@ -515,10 +494,10 @@ namespace DiceGame.View
                 state,
                 board,
                 registry,
-                spawnHeightAboveSurface,
+                physicsSettings.SpawnHeight,
                 bounceRestitution,
                 maxBounceCount,
-                minBounceVelocity,
+                physicsSettings.MinBounceVelocity,
                 fallGravityScale,
                 onComplete));
         }
@@ -527,7 +506,6 @@ namespace DiceGame.View
             DiceState state,
             Board board,
             DiceRegistry registry,
-            float emergenceDuration,
             float fallGravityScale,
             Action onComplete) {
             if (!HasGameplaySettings()) {
@@ -556,7 +534,7 @@ namespace DiceGame.View
                 state,
                 board,
                 registry,
-                emergenceDuration,
+                physicsSettings.BottomEmergenceDuration,
                 onComplete));
         }
 

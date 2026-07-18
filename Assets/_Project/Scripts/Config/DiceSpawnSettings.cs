@@ -17,16 +17,6 @@ namespace DiceGame.Config
         [Range(0f, 1f)]
         [SerializeField] float bottomSpawnWeight = 0.5f;
 
-        [Header("Bottom Emergence")]
-        [SerializeField] float bottomEmergenceDuration = 0.8f;
-
-        [Header("Top Spawn (fall + bounce)")]
-        [SerializeField] float spawnHeight = 4f;
-        [Range(0f, 1f)]
-        [SerializeField] float bounceRestitution = 0.35f;
-        [SerializeField] int maxBounceCount = 2;
-        [SerializeField] float minBounceVelocity = 2f;
-
         public int InitialDiceCount => initialDiceCount;
         public bool AnimateInitialDiceSpawn => animateInitialDiceSpawn;
         public bool ContinuousSpawnEnabled => continuousSpawnEnabled;
@@ -34,10 +24,5 @@ namespace DiceGame.Config
         public float SpawnIntervalJitter => spawnIntervalJitter;
         public float BottomSpawnWeight => bottomSpawnWeight;
         public float TopSpawnWeight => 1f - bottomSpawnWeight;
-        public float BottomEmergenceDuration => bottomEmergenceDuration;
-        public float SpawnHeight => spawnHeight;
-        public float BounceRestitution => bounceRestitution;
-        public int MaxBounceCount => maxBounceCount;
-        public float MinBounceVelocity => minBounceVelocity;
     }
 }

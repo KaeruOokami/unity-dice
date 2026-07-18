@@ -254,20 +254,11 @@ namespace DiceGame.Gameplay
             }
 
             if (forceFallFromAbove || tier == DiceStackTier.Top) {
-                var bounceRestitution = Capabilities.HasSpawnBounce
-                    ? spawnSettings.BounceRestitution
-                    : 0f;
-                var maxBounceCount = Capabilities.HasSpawnBounce
-                    ? spawnSettings.MaxBounceCount
-                    : 0;
                 diceView.PlaySpawnAppear(
                     currentState,
                     board,
                     registry,
-                    spawnSettings.SpawnHeight,
-                    bounceRestitution,
-                    maxBounceCount,
-                    spawnSettings.MinBounceVelocity,
+                    Capabilities.HasSpawnBounce,
                     Capabilities.FallGravityScale,
                     OnSpawnComplete);
             } else {
@@ -275,7 +266,6 @@ namespace DiceGame.Gameplay
                     currentState,
                     board,
                     registry,
-                    spawnSettings.BottomEmergenceDuration,
                     Capabilities.FallGravityScale,
                     OnSpawnComplete);
             }

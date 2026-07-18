@@ -20,6 +20,16 @@ namespace DiceGame.Config
         [Range(0f, 1f)]
         [SerializeField] float jumpGridMoveTierChangeMaxTimeline = 0.5f;
 
+        [Header("Bottom Emergence")]
+        [SerializeField] float bottomEmergenceDuration = 2.5f;
+
+        [Header("Top Spawn (fall + bounce)")]
+        [SerializeField] float spawnHeight = 7f;
+        [Range(0f, 1f)]
+        [SerializeField] float bounceRestitution = 0.35f;
+        [SerializeField] int maxBounceCount = 2;
+        [SerializeField] float minBounceVelocity = 2f;
+
         public float Gravity => gravity;
         public float JumpHeightFallback => jumpHeightFallback;
         public float JumpHeightDiceMultiplier => jumpHeightDiceMultiplier;
@@ -27,5 +37,10 @@ namespace DiceGame.Config
         public float JumpGridMoveOneCellMaxTimeline => jumpGridMoveOneCellMaxTimeline;
         public float JumpGridMoveTierChangeMinTimeline => jumpGridMoveTierChangeMinTimeline;
         public float JumpGridMoveTierChangeMaxTimeline => jumpGridMoveTierChangeMaxTimeline;
+        public float BottomEmergenceDuration => bottomEmergenceDuration;
+        public float SpawnHeight => spawnHeight;
+        public float BounceRestitution => bounceRestitution;
+        public int MaxBounceCount => maxBounceCount;
+        public float MinBounceVelocity => minBounceVelocity;
     }
 }

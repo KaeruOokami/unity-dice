@@ -18,8 +18,3 @@ MonoBehaviour:
   spawnInterval: 10
   spawnIntervalJitter: 3
   bottomSpawnWeight: 0.95
-  bottomEmergenceDuration: 2.5
-  spawnHeight: 4
-  bounceRestitution: 0.35
-  maxBounceCount: 2
-  minBounceVelocity: 2
