@@ -1,5 +1,6 @@
 using DiceGame.Core;
 using DiceGame.Gameplay;
+using DiceGame.Grid;
 using UnityEngine;
 
 namespace DiceGame.Placement
@@ -19,30 +20,65 @@ namespace DiceGame.Placement
         }
 
         /// <summary>
-        /// Player may walk this cell as floor: empty, or only pass-through dice occupy it.
+        /// True when the cell has a Top die that blocks player standing / Bottom occlusion.
+        /// Pass-through (Ghost) tops do not count.
+        /// </summary>
+        public static bool HasSolidTopAt(DiceRegistry registry, Vector2Int cell) {
+            return registry != null
+                && registry.TryGetTopAt(cell, out var top)
+                && top != null
+                && !IsPlayerPassThrough(top);
+        }
+
+        public static bool HasSolidBottomAt(DiceRegistry registry, Vector2Int cell) {
+            return registry != null
+                && registry.TryGetBottomAt(cell, out var bottom)
+                && bottom != null
+                && !IsPlayerPassThrough(bottom);
+        }
+
+        /// <summary>
+        /// Bottom slot is free for solid occupancy (ghosts do not occupy for collision).
+        /// </summary>
+        public static bool CanPlaceSolidBottomAt(DiceRegistry registry, Vector2Int cell) {
+            if (registry == null || registry.Board == null
+                || !registry.Board.IsInside(cell)
+                || registry.Board.GetCell(cell) != CellType.Floor) {
+                return false;
+            }
+
+            if (HasSolidBottomAt(registry, cell)) {
+                return false;
+            }
+
+            if (registry.TryGetPendingBottomAt(cell, out var pending)
+                && pending != null
+                && !IsPlayerPassThrough(pending)) {
+                return false;
+            }
+
+            return true;
+        }
+
+        /// <summary>
+        /// Top slot is free for solid occupancy: solid Bottom present, no solid Top (ghost Top ignored).
+        /// </summary>
+        public static bool CanPlaceSolidTopAt(DiceRegistry registry, Vector2Int cell) {
+            return HasSolidBottomAt(registry, cell) && !HasSolidTopAt(registry, cell);
+        }
+
+        /// <summary>
+        /// Player may walk this cell as floor when no solid dice occupy it (ghosts are not obstacles).
         /// </summary>
         public static bool IsPlayerFloorPassable(DiceRegistry registry, Vector2Int cell) {
             if (registry == null) {
                 return false;
             }
 
-            if (registry.CanPlaceBottomDiceAt(cell)) {
-                return true;
-            }
-
-            if (!registry.TryGetBottomIncludingPending(cell, out var bottom)
-                || bottom == null
-                || !IsPlayerPassThrough(bottom)) {
-                return false;
-            }
-
-            if (registry.TryGetTopAt(cell, out var top)
-                && top != null
-                && !IsPlayerPassThrough(top)) {
-                return false;
-            }
-
-            return true;
+            return !HasSolidTopAt(registry, cell) && !HasSolidBottomAt(registry, cell)
+                && !(registry.TryGetPendingBottomAt(cell, out var pending)
+                    && pending != null
+                    && !IsPlayerPassThrough(pending));
         }
 
         /// <summary>

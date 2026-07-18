@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using DiceGame.Core;
 using DiceGame.Gameplay;
@@ -167,7 +168,7 @@ namespace DiceGame.Placement
                 && TryGetBottomAt(gridPos, out var ghostBottom)
                 && !HasTopAt(gridPos)
                 && GhostPlacementRules.ShouldInCellPromoteOnTopPlacement(ghostBottom, dice.Kind)) {
-                ClearDiceAt(gridPos, ghostBottom, DiceStackTier.Bottom);
+                ClearDiceAt(gridPos, ghostBottom, DiceStackTier.Bottom, notifySupportLoss: false);
                 SetDiceAt(gridPos, dice, DiceStackTier.Bottom);
                 SetDiceAt(gridPos, ghostBottom, DiceStackTier.Top);
                 dice.ApplyExternalState(
@@ -201,38 +202,88 @@ namespace DiceGame.Placement
                 return false;
             }
 
-            if (!TryGetDiceAt(ghostFrom.GridPos, ghostFrom.Tier, out var ghost) || ghost == null) {
+            if (!TryDeferGhostOccupant(ghostFrom, out var ghost)) {
+                return false;
+            }
+
+            ClearDiceAt(moverFrom.GridPos, mover, moverFrom.Tier, notifySupportLoss: false);
+            SetDiceAt(moverTo.GridPos, mover, moverTo.Tier);
+            if (!TryCompleteDeferredGhostLanding(ghost, ghostFrom, ghostTo)) {
+                return false;
+            }
+
+            TryResolveUnsupportedTopAt(moverFrom.GridPos, mover);
+            TryResolveUnsupportedTopAt(ghostFrom.GridPos, ghost);
+            return true;
+        }
+
+        /// <summary>
+        /// Remove ghost from the grid slot but leave its <see cref="DiceController.CurrentState"/> unchanged
+        /// so displace can run after the mover animation completes.
+        /// </summary>
+        public bool TryDeferGhostOccupant(DiceState ghostFrom, out DiceController ghost) {
+            ghost = null;
+            if (!TryGetDiceAt(ghostFrom.GridPos, ghostFrom.Tier, out ghost) || ghost == null) {
                 Debug.LogError(
-                    $"DiceRegistry: ghost landing missing occupant at ({ghostFrom.GridPos.x},{ghostFrom.GridPos.y}) tier={ghostFrom.Tier}");
+                    $"DiceRegistry: deferred ghost missing at ({ghostFrom.GridPos.x},{ghostFrom.GridPos.y}) tier={ghostFrom.Tier}");
                 return false;
             }
 
             if (!GhostPlacementRules.AllowsDiceSwapThrough(ghost)) {
-                Debug.LogError($"DiceRegistry: ghost landing target is not swap-through kind={ghost.Kind}");
+                Debug.LogError($"DiceRegistry: deferred ghost is not swap-through kind={ghost.Kind}");
+                ghost = null;
                 return false;
             }
 
-            if (mode == GhostLandingMode.CellSwap) {
-                ClearDiceAt(moverFrom.GridPos, mover, moverFrom.Tier);
-                ClearDiceAt(ghostFrom.GridPos, ghost, ghostFrom.Tier);
-                SetDiceAt(moverTo.GridPos, mover, moverTo.Tier);
-                SetDiceAt(ghostTo.GridPos, ghost, ghostTo.Tier);
-                ghost.ApplyExternalState(ghostTo, snapVisual: false);
-                ghost.PlayGhostDisplaceVisual(ghostFrom, ghostTo);
-                return true;
+            ClearDiceAt(ghostFrom.GridPos, ghost, ghostFrom.Tier, notifySupportLoss: false);
+            return true;
+        }
+
+        /// <summary>
+        /// Place a previously deferred ghost at its destination and play displace visual.
+        /// </summary>
+        public bool TryCompleteDeferredGhostLanding(
+            DiceController ghost,
+            DiceState ghostFrom,
+            DiceState ghostTo,
+            Action onComplete = null) {
+            if (ghost == null) {
+                onComplete?.Invoke();
+                return false;
             }
 
-            if (mode == GhostLandingMode.InCellPromoteGhost) {
-                ClearDiceAt(moverFrom.GridPos, mover, moverFrom.Tier);
-                ClearDiceAt(ghostFrom.GridPos, ghost, ghostFrom.Tier);
-                SetDiceAt(moverTo.GridPos, mover, moverTo.Tier);
-                SetDiceAt(ghostTo.GridPos, ghost, ghostTo.Tier);
-                ghost.ApplyExternalState(ghostTo, snapVisual: false);
-                ghost.PlayGhostDisplaceVisual(ghostFrom, ghostTo);
-                return true;
+            SetDiceAt(ghostTo.GridPos, ghost, ghostTo.Tier);
+            ghost.ApplyExternalState(ghostTo, snapVisual: false);
+            ghost.PlayGhostDisplaceVisual(ghostFrom, ghostTo, onComplete);
+            return true;
+        }
+
+        public bool TryCompleteDeferredGhostLanding(
+            DiceState ghostFrom,
+            DiceState ghostTo,
+            Action onComplete = null) {
+            // Ghost was deferred: still holds ghostFrom in CurrentState, not in grid.
+            DiceController ghost = null;
+            foreach (var dice in allDice) {
+                if (dice == null || !GhostPlacementRules.AllowsDiceSwapThrough(dice)) {
+                    continue;
+                }
+
+                var state = dice.CurrentState;
+                if (state.GridPos == ghostFrom.GridPos && state.Tier == ghostFrom.Tier) {
+                    ghost = dice;
+                    break;
+                }
             }
 
-            return false;
+            if (ghost == null) {
+                Debug.LogError(
+                    $"DiceRegistry: deferred ghost not found for complete at ({ghostFrom.GridPos.x},{ghostFrom.GridPos.y}) tier={ghostFrom.Tier}");
+                onComplete?.Invoke();
+                return false;
+            }
+
+            return TryCompleteDeferredGhostLanding(ghost, ghostFrom, ghostTo, onComplete);
         }
 
         public void Remove(DiceController dice, Vector2Int gridPos, DiceStackTier tier) {
@@ -260,8 +311,9 @@ namespace DiceGame.Placement
             DiceStackTier fromTier,
             DiceStackTier toTier) {
             EvictErasingDiceAt(to);
-            ClearDiceAt(from, dice, fromTier);
+            ClearDiceAt(from, dice, fromTier, notifySupportLoss: false);
             SetDiceAt(to, dice, toTier);
+            TryResolveUnsupportedTopAt(from, dice);
         }
 
         public bool TryGetDiceAt(Vector2Int gridPos, DiceStackTier tier, out DiceController dice) {
@@ -500,7 +552,11 @@ namespace DiceGame.Placement
             byGrid[gridPos] = stack;
         }
 
-        void ClearDiceAt(Vector2Int gridPos, DiceController dice, DiceStackTier tier) {
+        void ClearDiceAt(
+            Vector2Int gridPos,
+            DiceController dice,
+            DiceStackTier tier,
+            bool notifySupportLoss = true) {
             if (!byGrid.TryGetValue(gridPos, out var stack)) {
                 return;
             }
@@ -524,9 +580,29 @@ namespace DiceGame.Placement
                 byGrid[gridPos] = stack;
             }
 
-            if (removedBottom != null) {
+            if (notifySupportLoss && removedBottom != null) {
                 NotifyTopAfterBottomRemoved(gridPos, removedBottom, topAfterBottomRemoved);
             }
+        }
+
+        /// <summary>
+        /// After a batched clear/place, demote Top only if Bottom is still without solid support.
+        /// Ghost Bottom does not count as support (same as empty for collision).
+        /// </summary>
+        public void ResolveUnsupportedTopAt(Vector2Int gridPos) {
+            TryResolveUnsupportedTopAt(gridPos, removedBottom: null);
+        }
+
+        void TryResolveUnsupportedTopAt(Vector2Int gridPos, DiceController removedBottom) {
+            if (!TryGetTopAt(gridPos, out var top) || top == null) {
+                return;
+            }
+
+            if (GhostPlacementRules.HasSolidBottomAt(this, gridPos)) {
+                return;
+            }
+
+            NotifyTopAfterBottomRemoved(gridPos, removedBottom, top);
         }
 
         static void NotifyTopAfterBottomRemoved(

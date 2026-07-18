@@ -456,38 +456,37 @@ namespace DiceGame.Placement
                     MovementTransitionRoute.HeightTransfer);
             }
 
-            // Empty or ghost-only: player may walk as floor, but dice-coupled roll/swap runs first.
-            if (GhostPlacementRules.IsPlayerFloorPassable(registry, toCell)) {
-                if (evaluateDiceCoupledMovement) {
-                    if (registry.CanPlaceBottomDiceAt(toCell)
-                        && TryEvaluateDiceCoupledMovementOnEmptyCell(
-                            fromCell,
-                            toCell,
-                            fromLevel,
-                            fromSurface,
-                            standingDice,
-                            direction,
-                            context,
-                            out var emptyCellDiceTransition)) {
-                        return emptyCellDiceTransition;
-                    }
-
-                    // Ghost occupies the cell: prefer grid-roll / cell-swap over floor pass-through.
-                    if (!registry.CanPlaceBottomDiceAt(toCell)
-                        && TryEvaluateDiceCoupledMovementOnOccupiedCell(
-                            fromCell,
-                            toCell,
-                            fromLevel,
-                            fromSurface,
-                            standingDice,
-                            direction,
-                            context,
-                            reach,
-                            out var ghostSwapDiceTransition)) {
-                        return ghostSwapDiceTransition;
-                    }
+            // Dice-coupled roll / ghost swap before player-only landing (ghost is not a solid obstacle).
+            if (evaluateDiceCoupledMovement) {
+                if (registry.CanPlaceBottomDiceAt(toCell)
+                    && TryEvaluateDiceCoupledMovementOnEmptyCell(
+                        fromCell,
+                        toCell,
+                        fromLevel,
+                        fromSurface,
+                        standingDice,
+                        direction,
+                        context,
+                        out var emptyCellDiceTransition)) {
+                    return emptyCellDiceTransition;
                 }
 
+                if (TryEvaluateDiceCoupledMovementOnOccupiedCell(
+                    fromCell,
+                    toCell,
+                    fromLevel,
+                    fromSurface,
+                    standingDice,
+                    direction,
+                    context,
+                    reach,
+                    out var occupiedCellDiceTransition)) {
+                    return occupiedCellDiceTransition;
+                }
+            }
+
+            // Empty or ghost-only: player walks as floor.
+            if (GhostPlacementRules.IsPlayerFloorPassable(registry, toCell)) {
                 if (isJumping
                     && fromLevel != SurfaceHeightLevel.Floor
                     && standingDice != null
@@ -529,20 +528,6 @@ namespace DiceGame.Placement
                 reach,
                 out var heightTransferTransition)) {
                 return heightTransferTransition;
-            }
-
-            if (evaluateDiceCoupledMovement
-                && TryEvaluateDiceCoupledMovementOnOccupiedCell(
-                    fromCell,
-                    toCell,
-                    fromLevel,
-                    fromSurface,
-                    standingDice,
-                    direction,
-                    context,
-                    reach,
-                    out var occupiedCellDiceTransition)) {
-                return occupiedCellDiceTransition;
             }
 
             return MovementTransition.Blocked();

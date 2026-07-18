@@ -10,7 +10,10 @@ namespace DiceGame.Core
         public bool SlideUntilBlocked { get; }
         public bool HasMagnetCoupling { get; }
         public bool HasSpawnBounce { get; }
-        public float SpawnGravityScale { get; }
+        /// <summary>
+        /// Multiplier on shared gravity for vertical falls (spawn appear, unsupported demote, etc.).
+        /// </summary>
+        public float FallGravityScale { get; }
         public float RollDurationMultiplier { get; }
         /// <summary>Player walks through; cannot stand on or ride this die.</summary>
         public bool IsPlayerPassThrough { get; }
@@ -56,7 +59,7 @@ namespace DiceGame.Core
             bool hasMagnetCoupling,
             bool hasSpawnBounce,
             float rollDurationMultiplier,
-            float spawnGravityScale = DiceBehaviorConstants.DefaultSpawnGravityScale,
+            float fallGravityScale = DiceBehaviorConstants.DefaultFallGravityScale,
             bool isPlayerPassThrough = false,
             bool allowsDiceSwapThrough = false,
             bool blocksJumpTransferToOtherDice = false,
@@ -76,7 +79,7 @@ namespace DiceGame.Core
             SlideUntilBlocked = slideUntilBlocked;
             HasMagnetCoupling = hasMagnetCoupling;
             HasSpawnBounce = hasSpawnBounce;
-            SpawnGravityScale = spawnGravityScale;
+            FallGravityScale = fallGravityScale;
             RollDurationMultiplier = rollDurationMultiplier;
             IsPlayerPassThrough = isPlayerPassThrough;
             AllowsDiceSwapThrough = allowsDiceSwapThrough;

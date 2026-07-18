@@ -155,7 +155,7 @@ namespace DiceGame.Core
             hasMagnetCoupling: false,
             hasSpawnBounce: false,
             rollDurationMultiplier: DiceBehaviorConstants.DefaultRollDurationMultiplier,
-            spawnGravityScale: DiceBehaviorConstants.GhostSpawnGravityScale,
+            fallGravityScale: DiceBehaviorConstants.GhostFallGravityScale,
             isPlayerPassThrough: true,
             allowsDiceSwapThrough: true);
     }

@@ -267,7 +267,7 @@ namespace DiceGame.Gameplay
                     bounceRestitution,
                     maxBounceCount,
                     spawnSettings.MinBounceVelocity,
-                    Capabilities.SpawnGravityScale,
+                    Capabilities.FallGravityScale,
                     OnSpawnComplete);
             } else {
                 diceView.PlayBottomEmergenceAppear(
@@ -295,21 +295,15 @@ namespace DiceGame.Gameplay
             StateChanged?.Invoke(currentState);
         }
 
-        public void PlayGhostDisplaceVisual(DiceState fromState, DiceState toState) {
+        public void PlayGhostDisplaceVisual(DiceState fromState, DiceState toState, Action onComplete = null) {
             if (diceView == null || board == null || registry == null) {
+                onComplete?.Invoke();
                 return;
             }
 
-            if (fromState.GridPos == toState.GridPos && fromState.Tier != toState.Tier) {
-                diceView.SnapTo(toState, board, registry);
-                return;
-            }
-
-            isRolling = true;
-            PlaySlideVisual(fromState, toState, () => {
-                isRolling = false;
-                StateChanged?.Invoke(currentState);
-            });
+            // Ghost displace is always an instant warp (no slide interpolation).
+            diceView.SnapTo(toState, board, registry);
+            onComplete?.Invoke();
         }
 
         public float GetTopSurfaceWorldY() {
@@ -319,9 +313,16 @@ namespace DiceGame.Gameplay
         }
 
         public float GetLogicalTopSurfaceWorldY() {
-            return diceView != null && board != null
-                ? diceView.GetLogicalTopSurfaceWorldY(board)
-                : board != null ? board.FloorSurfaceWorldY : 0f;
+            if (diceView == null || board == null) {
+                return board != null ? board.FloorSurfaceWorldY : 0f;
+            }
+
+            // Bottom tier is always floor-anchored so stacked ghosts/tops never read animated fall Y.
+            if (currentState.Tier == DiceStackTier.Bottom) {
+                return diceView.GetLogicalBottomTierTopSurfaceWorldY(board);
+            }
+
+            return diceView.GetLogicalTopSurfaceWorldY(board);
         }
 
         public bool TryExecuteSlidePlan(DiceSlidePlan plan, PlayerSlot actionOwner) {
@@ -579,6 +580,40 @@ namespace DiceGame.Gameplay
             return true;
         }
 
+        /// <summary>
+        /// Move the mover now; ghost slot is vacated but displace waits for animation complete.
+        /// </summary>
+        bool BeginLogicalMoveDeferringGhost(
+            DiceState fromState,
+            DiceState toState,
+            GhostLandingMode ghostLanding,
+            DiceState ghostFrom) {
+            if (ghostLanding == GhostLandingMode.None) {
+                ApplyLogicalMove(fromState, toState);
+                return true;
+            }
+
+            if (!registry.TryDeferGhostOccupant(ghostFrom, out _)) {
+                return false;
+            }
+
+            ApplyLogicalMove(fromState, toState);
+            return true;
+        }
+
+        void CompleteDeferredGhostLanding(
+            GhostLandingMode ghostLanding,
+            DiceState ghostFrom,
+            DiceState ghostTo,
+            Action onComplete = null) {
+            if (ghostLanding == GhostLandingMode.None || registry == null) {
+                onComplete?.Invoke();
+                return;
+            }
+
+            registry.TryCompleteDeferredGhostLanding(ghostFrom, ghostTo, onComplete);
+        }
+
         void NotifyActionMoveCompleted(DiceState fromState, DiceState toState) {
             if (PlayerMatchActionContext.IsActionParticipationMove(fromState, toState)) {
                 matchActionContext?.NotifyParticipantMoveCompleted(this);
@@ -594,12 +629,11 @@ namespace DiceGame.Gameplay
                 return false;
             }
 
-            if (!ApplyLogicalMoveWithGhost(
+            if (!BeginLogicalMoveDeferringGhost(
                 plan.From,
                 plan.To,
                 plan.GhostLanding,
-                plan.GhostFrom,
-                plan.GhostTo)) {
+                plan.GhostFrom)) {
                 return false;
             }
 
@@ -608,9 +642,16 @@ namespace DiceGame.Gameplay
                 plan,
                 context,
                 () => {
-                    isRolling = false;
-                    NotifyActionMoveCompleted(plan.From, plan.To);
-                    StateChanged?.Invoke(currentState);
+                    CompleteDeferredGhostLanding(
+                        plan.GhostLanding,
+                        plan.GhostFrom,
+                        plan.GhostTo,
+                        () => {
+                            isRolling = false;
+                            registry.ResolveUnsupportedTopAt(currentState.GridPos);
+                            NotifyActionMoveCompleted(plan.From, plan.To);
+                            StateChanged?.Invoke(currentState);
+                        });
                 });
 
             return true;
@@ -718,12 +759,11 @@ namespace DiceGame.Gameplay
             Direction? slideDirection,
             DiceController elasticTransferTarget,
             Action onSlideComplete) {
-            if (!ApplyLogicalMoveWithGhost(
+            if (!BeginLogicalMoveDeferringGhost(
                 plan.From,
                 plan.To,
                 plan.GhostLanding,
-                plan.GhostFrom,
-                plan.GhostTo)) {
+                plan.GhostFrom)) {
                 return false;
             }
 
@@ -751,13 +791,20 @@ namespace DiceGame.Gameplay
 
             isRolling = true;
             PlaySlideVisual(plan.From, plan.To, () => {
-                isRolling = false;
-                NotifyActionMoveCompleted(plan.From, plan.To);
-                StateChanged?.Invoke(currentState);
-                var slideComplete = pendingSlideComplete;
-                pendingSlideComplete = null;
-                CompletePendingElasticTransfer();
-                slideComplete?.Invoke();
+                CompleteDeferredGhostLanding(
+                    plan.GhostLanding,
+                    plan.GhostFrom,
+                    plan.GhostTo,
+                    () => {
+                        isRolling = false;
+                        registry.ResolveUnsupportedTopAt(currentState.GridPos);
+                        NotifyActionMoveCompleted(plan.From, plan.To);
+                        StateChanged?.Invoke(currentState);
+                        var slideComplete = pendingSlideComplete;
+                        pendingSlideComplete = null;
+                        CompletePendingElasticTransfer();
+                        slideComplete?.Invoke();
+                    });
             });
 
             return true;
@@ -864,6 +911,10 @@ namespace DiceGame.Gameplay
             DemoteAfterSupportRemoved(removedBottom);
         }
 
+        /// <summary>
+        /// Generic unsupported fall: Top with no Bottom demotes into Bottom (never floats).
+        /// Fall speed uses <see cref="DiceCapabilities.FallGravityScale"/>.
+        /// </summary>
         public void DemoteAfterSupportRemoved(DiceController removedBottom) {
             if (isCarried
                 || IsErasing
@@ -884,14 +935,40 @@ namespace DiceGame.Gameplay
             var fromWorld = diceView.DiceTransform.position;
             var fromState = currentState;
             var toState = new DiceState(fromState.GridPos, fromState.Orientation, DiceStackTier.Bottom, fromState.Kind);
+
+            var deferredGhostLanding = GhostLandingMode.None;
+            var deferredGhostFrom = default(DiceState);
+            var deferredGhostTo = default(DiceState);
+
+            // Vacate ghost Bottom for the fall; promote after fall animation completes.
+            if (registry.TryGetBottomAt(fromState.GridPos, out var ghostBottom)
+                && GhostPlacementRules.TryResolveInCellPromote(
+                    fromState,
+                    ghostBottom,
+                    out _,
+                    out deferredGhostFrom,
+                    out deferredGhostTo)) {
+                if (!registry.TryDeferGhostOccupant(deferredGhostFrom, out _)) {
+                    return;
+                }
+
+                deferredGhostLanding = GhostLandingMode.InCellPromoteGhost;
+            }
+
             ApplyLogicalMove(fromState, toState);
             isRolling = true;
 
             var transition = DiceTransition.CrushDemote(fromState, toState, fromWorld);
             diceView.PlayTransition(transition, board, registry, () => {
-                isRolling = false;
-                tierFallMatchNotifier?.NotifyTierFallCompleted(this);
-                StateChanged?.Invoke(currentState);
+                CompleteDeferredGhostLanding(
+                    deferredGhostLanding,
+                    deferredGhostFrom,
+                    deferredGhostTo,
+                    () => {
+                        isRolling = false;
+                        tierFallMatchNotifier?.NotifyTierFallCompleted(this);
+                        StateChanged?.Invoke(currentState);
+                    });
             });
         }
 

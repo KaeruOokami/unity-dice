@@ -215,7 +215,7 @@ namespace DiceGame.Placement
 
             if (standingTier == DiceStackTier.Bottom
                 && target.CurrentState.Tier == DiceStackTier.Bottom
-                && registry.HasTopAt(target.CurrentState.GridPos)) {
+                && GhostPlacementRules.HasSolidTopAt(registry, target.CurrentState.GridPos)) {
                 rejectReason = "neighbor-bottom-occluded-by-top";
                 return false;
             }

@@ -23,7 +23,7 @@ namespace DiceGame.Placement
             plan = default;
             rejectReason = null;
 
-            var hasTopOnSameCell = registry.HasTopAt(fromState.GridPos);
+            var hasTopOnSameCell = GhostPlacementRules.HasSolidTopAt(registry, fromState.GridPos);
             if (!DiceGridPassability.TryEvaluate(
                 occupancyQuery,
                 fromState,

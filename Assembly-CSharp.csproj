@@ -188,6 +188,7 @@
      <Compile Include="Assets\_Project\Scripts\Core\Motion\GhostLandingMode.cs" />
      <Compile Include="Assets\_Project\Scripts\Gameplay\Match\MotionConflictEvaluator.cs" />
      <Compile Include="Assets\_Project\Scripts\Gameplay\AI\Application\AiSinkingClusterEscapeCoordinator.cs" />
+     <Compile Include="Assets\_Project\Scripts\Placement\Support\PlayerNaturalLanding.cs" />
      <Compile Include="Assets\_Project\Scripts\Gameplay\AI\Domain\MatchGoalPlanner.cs" />
      <Compile Include="Assets\_Project\Scripts\Placement\Registry\IDicePlacement.cs" />
      <Compile Include="Assets\_Project\Scripts\Board\Board.cs" />
@@ -216,7 +217,6 @@
      <Compile Include="Assets\_Project\Scripts\Placement\Occupancy\SurfaceQuery.cs" />
      <Compile Include="Assets\_Project\Scripts\Core\Behavior\DiceCapabilities.cs" />
      <Compile Include="Assets\_Project\Scripts\Versus\Core\AttackKindBreakdown.cs" />
-     <Compile Include="Assets\_Project\Scripts\Placement\Support\PlayerNaturalLanding.cs" />
      <None Include="Assets\Packages\Dice_6\Documentation\Readmy.txt" />
     <Reference Include="UnityEngine">
         <HintPath>D:\Program Files\Unity\Hub\Editor\2021.3.10f1\Editor\Data\Managed\UnityEngine\UnityEngine.dll</HintPath>

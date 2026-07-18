@@ -63,27 +63,12 @@ namespace DiceGame.Placement
                 return false;
             }
 
-            if (registry.CanPlaceBottomDiceAt(targetPos)) {
-                plan = new DiceSlidePlan(
-                    fromState,
-                    new DiceState(targetPos, fromState.Orientation, DiceStackTier.Bottom, fromState.Kind));
-                return true;
-            }
-
-            if (registry.TryGetBottomAt(targetPos, out var ghost)
-                && !registry.HasTopAt(targetPos)
-                && GhostPlacementRules.TryResolveCellSwap(
-                    fromState,
-                    ghost,
-                    out var moverTo,
-                    out var ghostFrom,
-                    out var ghostTo)) {
-                plan = new DiceSlidePlan(
-                    fromState,
-                    moverTo,
-                    GhostLandingMode.CellSwap,
-                    ghostFrom,
-                    ghostTo);
+            if (TryBuildLandingPlan(
+                fromState,
+                targetPos,
+                DiceStackTier.Bottom,
+                registry,
+                out plan)) {
                 return true;
             }
 
@@ -106,11 +91,71 @@ namespace DiceGame.Placement
                 return false;
             }
 
-            if (registry.TryGetBottomAt(targetPos, out var bottom)
-                && !registry.HasTopAt(targetPos)
+            if (TryBuildLandingPlan(
+                fromState,
+                targetPos,
+                DiceStackTier.Top,
+                registry,
+                out plan)) {
+                return true;
+            }
+
+            rejectReason = $"target={FormatGrid(targetPos)} blocked";
+            return false;
+        }
+
+        /// <summary>
+        /// Same rules as grid landing: ghosts invisible for solid place; same-slot ghost → swap.
+        /// </summary>
+        static bool TryBuildLandingPlan(
+            DiceState fromState,
+            Vector2Int targetPos,
+            DiceStackTier fromTier,
+            DiceRegistry registry,
+            out DiceSlidePlan plan) {
+            plan = default;
+
+            if (GhostPlacementRules.IsPassThroughKind(fromState.Kind)) {
+                return false;
+            }
+
+            if (registry.TryGetDiceAt(targetPos, fromTier, out var sameTierGhost)
+                && GhostPlacementRules.TryResolveCellSwap(
+                    fromState,
+                    sameTierGhost,
+                    out var sameTierMoverTo,
+                    out var sameTierGhostFrom,
+                    out var sameTierGhostTo)) {
+                plan = new DiceSlidePlan(
+                    fromState,
+                    sameTierMoverTo,
+                    GhostLandingMode.CellSwap,
+                    sameTierGhostFrom,
+                    sameTierGhostTo);
+                return true;
+            }
+
+            if (!TryResolveSolidLandingTier(fromTier, targetPos, registry, out var landingTier)) {
+                return false;
+            }
+
+            var moverTo = new DiceState(
+                targetPos,
+                fromState.Orientation,
+                landingTier,
+                fromState.Kind);
+
+            if (!registry.TryGetDiceAt(targetPos, landingTier, out var landingGhost) || landingGhost == null) {
+                plan = new DiceSlidePlan(fromState, moverTo);
+                return true;
+            }
+
+            // Vertical demote onto ghost Bottom → in-cell promote.
+            if (fromTier == DiceStackTier.Top
+                && landingTier == DiceStackTier.Bottom
                 && GhostPlacementRules.TryResolveInCellPromote(
                     fromState,
-                    bottom,
+                    landingGhost,
                     out var promoteMoverTo,
                     out var promoteGhostFrom,
                     out var promoteGhostTo)) {
@@ -123,37 +168,60 @@ namespace DiceGame.Placement
                 return true;
             }
 
-            if (registry.CanAcceptTopDiceAt(targetPos)) {
+            var landingProbe = new DiceState(
+                fromState.GridPos,
+                fromState.Orientation,
+                landingTier,
+                fromState.Kind);
+            if (GhostPlacementRules.TryResolveCellSwap(
+                landingProbe,
+                landingGhost,
+                out moverTo,
+                out var landingGhostFrom,
+                out var landingGhostTo)) {
                 plan = new DiceSlidePlan(
                     fromState,
-                    new DiceState(targetPos, fromState.Orientation, DiceStackTier.Top, fromState.Kind));
-                return true;
-            }
-
-            if (registry.CanPlaceBottomDiceAt(targetPos)) {
-                plan = new DiceSlidePlan(
-                    fromState,
-                    new DiceState(targetPos, fromState.Orientation, DiceStackTier.Bottom, fromState.Kind));
-                return true;
-            }
-
-            if (registry.TryGetTopAt(targetPos, out var topGhost)
-                && GhostPlacementRules.TryResolveCellSwap(
-                    fromState,
-                    topGhost,
-                    out var topMoverTo,
-                    out var topGhostFrom,
-                    out var topGhostTo)) {
-                plan = new DiceSlidePlan(
-                    fromState,
-                    topMoverTo,
+                    moverTo,
                     GhostLandingMode.CellSwap,
-                    topGhostFrom,
-                    topGhostTo);
+                    landingGhostFrom,
+                    landingGhostTo);
                 return true;
             }
 
-            rejectReason = $"target={FormatGrid(targetPos)} blocked";
+            return false;
+        }
+
+        static bool TryResolveSolidLandingTier(
+            DiceStackTier fromTier,
+            Vector2Int cell,
+            DiceRegistry registry,
+            out DiceStackTier landingTier) {
+            landingTier = default;
+
+            if (fromTier == DiceStackTier.Bottom) {
+                if (GhostPlacementRules.CanPlaceSolidBottomAt(registry, cell)) {
+                    landingTier = DiceStackTier.Bottom;
+                    return true;
+                }
+
+                if (GhostPlacementRules.CanPlaceSolidTopAt(registry, cell)) {
+                    landingTier = DiceStackTier.Top;
+                    return true;
+                }
+
+                return false;
+            }
+
+            if (GhostPlacementRules.CanPlaceSolidBottomAt(registry, cell)) {
+                landingTier = DiceStackTier.Bottom;
+                return true;
+            }
+
+            if (GhostPlacementRules.CanPlaceSolidTopAt(registry, cell)) {
+                landingTier = DiceStackTier.Top;
+                return true;
+            }
+
             return false;
         }
 

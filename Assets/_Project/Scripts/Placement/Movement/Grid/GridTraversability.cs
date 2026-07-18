@@ -123,10 +123,7 @@ namespace DiceGame.Placement
                 return false;
             }
 
-            if (ghostLanding != GhostLandingMode.None) {
-                return true;
-            }
-
+            // Ghost swap must not bypass upward-tier rules (ground Bottom must not Stack via Top ghost).
             var landingRank = CellOccupancyQuery.ToTierRank(landingTier);
             if (landingRank > fromRank) {
                 if (!allowUpwardTier) {
@@ -135,6 +132,10 @@ namespace DiceGame.Placement
                     return false;
                 }
 
+                return true;
+            }
+
+            if (ghostLanding != GhostLandingMode.None) {
                 return true;
             }
 

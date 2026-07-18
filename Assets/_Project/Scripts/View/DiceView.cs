@@ -294,6 +294,19 @@ namespace DiceGame.View
             return surfaceBaseWorldY - minY + maxY;
         }
 
+        /// <summary>
+        /// Logical top surface for a Bottom-tier die: always floor-anchored (ignores animated world Y).
+        /// </summary>
+        public float GetLogicalBottomTierTopSurfaceWorldY(Board board) {
+            if (board == null || rotationRoot == null) {
+                return board != null ? board.FloorSurfaceWorldY : 0f;
+            }
+
+            var squash = 1f - erasureProgress;
+            ComputeVerticalExtents(board, currentTopFace, squash, out var minY, out var maxY);
+            return board.FloorSurfaceWorldY - minY + maxY;
+        }
+
         public void SnapTo(DiceState state, Board board, DiceRegistry registry = null) {
             InterruptRollAnimation();
 
@@ -453,7 +466,7 @@ namespace DiceGame.View
                 bounceRestitution,
                 maxBounceCount,
                 minBounceVelocity,
-                DiceBehaviorConstants.DefaultSpawnGravityScale,
+                DiceBehaviorConstants.DefaultFallGravityScale,
                 onComplete);
         }
 
@@ -465,7 +478,7 @@ namespace DiceGame.View
             float bounceRestitution,
             int maxBounceCount,
             float minBounceVelocity,
-            float spawnGravityScale,
+            float fallGravityScale,
             Action onComplete) {
             if (!HasGameplaySettings()) {
                 return;
@@ -487,7 +500,7 @@ namespace DiceGame.View
                 bounceRestitution,
                 maxBounceCount,
                 minBounceVelocity,
-                spawnGravityScale,
+                fallGravityScale,
                 onComplete));
         }
 
@@ -764,7 +777,8 @@ namespace DiceGame.View
                 && registry != null
                 && registry.TryGetBottomAt(state.GridPos, out var bottom)
                 && bottom != null) {
-                baseY = bottom.GetTopSurfaceWorldY();
+                // Cell/tier logical height — not the bottom die's current animated world Y.
+                baseY = bottom.GetLogicalTopSurfaceWorldY();
             }
 
             return baseY;
@@ -1268,11 +1282,14 @@ namespace DiceGame.View
                 yield break;
             }
 
+            var gravityScale = diceController != null
+                ? Mathf.Max(0.01f, diceController.Capabilities.FallGravityScale)
+                : DiceBehaviorConstants.DefaultFallGravityScale;
             var startOffset = positionRoot.position.y - targetWorld.y;
             var state = GravityMotion.CreateDrop(startOffset);
             yield return GravityMotion.AnimateVerticalDropCoroutine(
                 state,
-                physicsSettings.Gravity,
+                physicsSettings.Gravity * gravityScale,
                 targetWorld.y,
                 () => positionRoot.position.x,
                 () => positionRoot.position.z,
@@ -1287,7 +1304,7 @@ namespace DiceGame.View
             float bounceRestitution,
             int maxBounceCount,
             float minBounceVelocity,
-            float spawnGravityScale,
+            float fallGravityScale,
             Action onComplete) {
             isAnimating = true;
             EnsureMesh();
@@ -1316,7 +1333,7 @@ namespace DiceGame.View
             positionRoot.position = landedWorld + Vector3.up * spawnHeightAboveSurface;
 
             var gravity = physicsSettings.Gravity
-                * Mathf.Max(0.01f, spawnGravityScale);
+                * Mathf.Max(0.01f, fallGravityScale);
             var motion = GravityMotion.CreateDrop(spawnHeightAboveSurface);
             yield return GravityMotion.AnimateSpawnBounceDropCoroutine(
                 motion,

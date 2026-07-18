@@ -4,8 +4,8 @@ namespace DiceGame.Core
     {
         public const float StoneRollDurationMultiplier = 2f;
         public const float DefaultRollDurationMultiplier = 1f;
-        public const float DefaultSpawnGravityScale = 1f;
-        /// <summary>Ghost-only slower spawn fall (Iron/Stone stay at default gravity).</summary>
-        public const float GhostSpawnGravityScale = 0.35f;
+        public const float DefaultFallGravityScale = 1f;
+        /// <summary>Ghost falls slower (spawn appear and unsupported demote).</summary>
+        public const float GhostFallGravityScale = 0.35f;
     }
 }
