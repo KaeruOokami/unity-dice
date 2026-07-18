@@ -297,6 +297,19 @@ namespace DiceGame.Gameplay
                     erasureSystem,
                     spawnRandom,
                     transform);
+
+                var jumboSequence = GetComponent<JumboDiceSequenceController>();
+                if (jumboSequence == null) {
+                    jumboSequence = gameObject.AddComponent<JumboDiceSequenceController>();
+                }
+
+                jumboSequence.Configure(
+                    versusSettings,
+                    board,
+                    spawnSystem,
+                    ownershipContext,
+                    oneVanishSystem,
+                    characters);
             }
 
             var gameFlowController = GetComponent<GameFlowController>();

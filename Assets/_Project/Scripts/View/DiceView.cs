@@ -69,7 +69,8 @@ namespace DiceGame.View
         public bool IsErasureGhost =>
             activeErasureKind == ErasureKind.Sink
             && erasureSettings != null
-            && erasureProgress >= erasureSettings.SinkGhostThreshold;
+            && erasureProgress >= erasureSettings.SinkGhostThreshold
+            && (diceController == null || !diceController.Capabilities.SuppressesErasureGhost);
 
         public Transform DiceTransform => positionRoot;
 
@@ -202,7 +203,12 @@ namespace DiceGame.View
                 return;
             }
 
-            if (!float.IsNaN(appliedCellSize) && Mathf.Abs(appliedCellSize - board.CellSize) < 0.0001f) {
+            EnsureDiceController();
+            var footprintScale = diceController != null && diceController.Capabilities.HasExpandedFootprint
+                ? JumboFootprint.Size
+                : 1;
+            var targetLogicalSize = board.CellSize * footprintScale;
+            if (!float.IsNaN(appliedCellSize) && Mathf.Abs(appliedCellSize - targetLogicalSize) < 0.0001f) {
                 return;
             }
 
@@ -215,11 +221,25 @@ namespace DiceGame.View
                 return;
             }
 
-            var scale = board.CellSize / cachedMeshUnitMaxExtent;
+            var scale = targetLogicalSize / cachedMeshUnitMaxExtent;
             meshInstance.localScale = Vector3.one * scale;
             // Center mesh geometry on the rotationRoot origin.
             meshInstance.localPosition = -cachedMeshLocalBoundsCenter * scale;
-            appliedCellSize = board.CellSize;
+            appliedCellSize = targetLogicalSize;
+        }
+
+        Vector3 ResolveGridWorldPosition(DiceState state, Board board) {
+            if (board == null) {
+                return Vector3.zero;
+            }
+
+            EnsureDiceController();
+            var origin = board.GridToWorld(state.GridPos);
+            if (diceController != null && diceController.Capabilities.HasExpandedFootprint) {
+                return origin + JumboFootprint.GetCenterWorldOffset(board.CellSize);
+            }
+
+            return origin;
         }
 
         void EnsurePushBody() {
@@ -339,7 +359,7 @@ namespace DiceGame.View
             positionRoot.SetParent(transform);
             positionRoot.localRotation = Quaternion.identity;
             positionRoot.localScale = Vector3.one;
-            gridWorldPosition = board.GridToWorld(state.GridPos);
+            gridWorldPosition = ResolveGridWorldPosition(state, board);
             rotationRoot.rotation = DiceOrientationMapper.ToRotation(state.Orientation);
             UpdateSurfaceBase(state, board, registry);
             ResetErasureVisuals();
@@ -361,7 +381,7 @@ namespace DiceGame.View
                 return Vector3.zero;
             }
 
-            var grid = board.GridToWorld(state.GridPos);
+            var grid = ResolveGridWorldPosition(state, board);
             var savedRotation = rotationRoot.rotation;
             var savedFace = currentTopFace;
             rotationRoot.rotation = DiceOrientationMapper.ToRotation(state.Orientation);
@@ -885,7 +905,7 @@ namespace DiceGame.View
                 return;
             }
 
-            gridWorldPosition = board.GridToWorld(state.GridPos);
+            gridWorldPosition = ResolveGridWorldPosition(state, board);
             currentTopFace = state.Orientation.Top;
             rotationRoot.rotation = DiceOrientationMapper.ToRotation(state.Orientation);
             UpdateSurfaceBase(state, board, registry);
@@ -1616,6 +1636,12 @@ namespace DiceGame.View
             var duration = kind == ErasureKind.Radiance
                 ? erasureSettings.RadianceDuration
                 : erasureSettings.SinkDuration;
+            EnsureDiceController();
+            if (kind == ErasureKind.Sink
+                && diceController != null
+                && diceController.Capabilities.SinkDurationMultiplier > 0f) {
+                duration *= diceController.Capabilities.SinkDurationMultiplier;
+            }
 
             while (erasureProgress < 1f) {
                 erasureProgress = Mathf.Min(1f, erasureProgress + Time.deltaTime / duration);
@@ -1717,18 +1743,23 @@ namespace DiceGame.View
         }
 
         void ApplySinkGhostVisual(float progress) {
-            ApplyErasureAlpha(progress, allowGhostAlpha: true);
+            EnsureDiceController();
+            var suppressGhost = diceController != null && diceController.Capabilities.SuppressesErasureGhost;
+            ApplyErasureAlpha(progress, allowGhostAlpha: !suppressGhost);
             ApplyErasureEmission(progress);
             EnsurePushBody();
-            pushBody?.SetCollisionEnabled(!IsErasureGhost);
+            // Jumbo keeps collision until fully erased.
+            pushBody?.SetCollisionEnabled(suppressGhost || !IsErasureGhost);
+
+            if (suppressGhost) {
+                return;
+            }
 
             if (IsErasureGhost && !wasErasureGhost) {
                 wasErasureGhost = true;
-                EnsureDiceController();
                 diceController?.OnBecameErasureGhost();
             } else if (!IsErasureGhost && wasErasureGhost) {
                 wasErasureGhost = false;
-                EnsureDiceController();
                 diceController?.OnCeasedErasureGhost();
             }
         }
@@ -1958,7 +1989,11 @@ namespace DiceGame.View
         }
 
         void ComputeVerticalExtents(Board board, int topFace, float squash, out float minY, out float maxY) {
-            var halfSize = board.CellSize * 0.5f;
+            EnsureDiceController();
+            var footprintScale = diceController != null && diceController.Capabilities.HasExpandedFootprint
+                ? JumboFootprint.Size
+                : 1;
+            var halfSize = board.CellSize * footprintScale * 0.5f;
             var scale = GetDissolveLocalScale(topFace, squash);
             var rotation = rotationRoot.rotation;
             minY = float.PositiveInfinity;

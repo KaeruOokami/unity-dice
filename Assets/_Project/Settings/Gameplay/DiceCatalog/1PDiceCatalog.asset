@@ -41,3 +41,7 @@ MonoBehaviour:
     MeshPrefab: {fileID: 6801955793903224657, guid: 83ad0fc5358bb1f49a7a746398ad8aa0,
       type: 3}
     SpawnWeight: 0
+  - Kind: 7
+    MeshPrefab: {fileID: 6801955793903224657, guid: 8e6dd1dffeba6e543959e0363637cef1,
+      type: 3}
+    SpawnWeight: 0

@@ -1,5 +1,8 @@
+using System;
 using System.Collections.Generic;
 using DiceGame.Config;
+using DiceGame.Core;
+using DiceGame.Gameplay;
 using DiceGame.Grid;
 using DiceGame.Placement;
 using UnityEngine;
@@ -15,6 +18,8 @@ namespace DiceGame.Gameplay
 
         readonly HashSet<DiceController> subscribedDice = new();
         readonly List<CharacterController> characters = new();
+
+        public event Action<PlayerSlot> FaceOneVanished;
 
         public void Configure(
             Board targetBoard,
@@ -147,8 +152,17 @@ namespace DiceGame.Gameplay
             }
 
             var emissionColor = erasureSettings.GetPlayerEmissionColor(initiator);
+            var notified = false;
             foreach (var dice in targets) {
-                dice.BeginOneVanish(oneVanishSettings, emissionColor, null);
+                var slot = initiator;
+                dice.BeginOneVanish(oneVanishSettings, emissionColor, () => {
+                    if (notified) {
+                        return;
+                    }
+
+                    notified = true;
+                    FaceOneVanished?.Invoke(slot);
+                });
             }
         }
 

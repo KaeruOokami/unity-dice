@@ -213,5 +213,72 @@ namespace DiceGame.Placement
                 return;
             }
         }
+
+        /// <summary>
+        /// Picks a random 2x2 anchor in the player region that stays on floor cells
+        /// and does not overlap any blocked player cells.
+        /// </summary>
+        public static bool TryPickJumboSpawnAnchor(
+            Board board,
+            PlayerSlot targetSlot,
+            IReadOnlyList<Vector2Int> blockedCells,
+            System.Random random,
+            out Vector2Int anchor) {
+            anchor = default;
+            if (board == null || board.VersusLayout == null || random == null) {
+                return false;
+            }
+
+            var layout = board.VersusLayout;
+            layout.GetPlayerGridBounds(targetSlot, out var minCell, out var maxCell);
+            var candidates = new List<Vector2Int>();
+
+            for (var x = minCell.x; x <= maxCell.x - JumboFootprint.Size + 1; x++) {
+                for (var y = minCell.y; y <= maxCell.y - JumboFootprint.Size + 1; y++) {
+                    var candidate = new Vector2Int(x, y);
+                    if (!IsValidJumboAnchor(board, layout, targetSlot, candidate, blockedCells)) {
+                        continue;
+                    }
+
+                    candidates.Add(candidate);
+                }
+            }
+
+            if (candidates.Count == 0) {
+                return false;
+            }
+
+            anchor = candidates[random.Next(candidates.Count)];
+            return true;
+        }
+
+        static bool IsValidJumboAnchor(
+            Board board,
+            VersusArenaLayout layout,
+            PlayerSlot targetSlot,
+            Vector2Int anchor,
+            IReadOnlyList<Vector2Int> blockedCells) {
+            for (var dx = 0; dx < JumboFootprint.Size; dx++) {
+                for (var dy = 0; dy < JumboFootprint.Size; dy++) {
+                    var cell = new Vector2Int(anchor.x + dx, anchor.y + dy);
+                    if (!layout.IsInsidePlayerRegion(targetSlot, cell)
+                        || board.GetCell(cell) != CellType.Floor) {
+                        return false;
+                    }
+
+                    if (blockedCells == null) {
+                        continue;
+                    }
+
+                    for (var i = 0; i < blockedCells.Count; i++) {
+                        if (blockedCells[i] == cell) {
+                            return false;
+                        }
+                    }
+                }
+            }
+
+            return true;
+        }
     }
 }

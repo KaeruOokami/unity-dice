@@ -10,6 +10,7 @@ namespace DiceGame.Core
                 DiceKind.Ice => IceDiceBehavior.Instance,
                 DiceKind.Stone => StoneDiceBehavior.Instance,
                 DiceKind.Ghost => GhostDiceBehavior.Instance,
+                DiceKind.Jumbo => JumboDiceBehavior.Instance,
                 _ => NormalDiceBehavior.Instance
             };
         }

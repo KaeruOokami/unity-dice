@@ -52,6 +52,23 @@ namespace DiceGame.Core
         /// Covering this die (same cell, level above the player) crushes the player after settle.
         /// </summary>
         public bool CrushesPlayerOnCover { get; }
+        /// <summary>Occupies a multi-cell footprint (jumbo 2x2).</summary>
+        public bool HasExpandedFootprint { get; }
+        /// <summary>Sink erasure never becomes an erasure ghost.</summary>
+        public bool SuppressesErasureGhost { get; }
+        /// <summary>Jump landing must not accelerate this die's sink.</summary>
+        public bool BlocksJumpLandingSinkAdvance { get; }
+        /// <summary>Multiplier on sink erasure duration (jumbo = 2).</summary>
+        public float SinkDurationMultiplier { get; }
+        /// <summary>
+        /// Match weight per tier for expanded-footprint dice (jumbo = 4 on Bottom and Top).
+        /// 0 = treat as 1.
+        /// </summary>
+        public int SinkingMatchWeightPerTier { get; }
+        /// <summary>
+        /// Expanded-footprint die participates in both Bottom and Top match layers.
+        /// </summary>
+        public bool ParticipatesInBothTiersWhileSinking { get; }
 
         public DiceCapabilities(
             bool canBePushedByPlayer,
@@ -75,7 +92,13 @@ namespace DiceGame.Core
             bool transfersSlideOnCollision = false,
             bool ignoresPartitionBoundary = false,
             bool blocksAdjacentMagnet = false,
-            bool crushesPlayerOnCover = false) {
+            bool crushesPlayerOnCover = false,
+            bool hasExpandedFootprint = false,
+            bool suppressesErasureGhost = false,
+            bool blocksJumpLandingSinkAdvance = false,
+            float sinkDurationMultiplier = 1f,
+            int sinkingMatchWeightPerTier = 0,
+            bool participatesInBothTiersWhileSinking = false) {
             CanBePushedByPlayer = canBePushedByPlayer;
             CanBeLiftedByPlayer = canBeLiftedByPlayer;
             CanJumpCoupleWithPlayer = canJumpCoupleWithPlayer;
@@ -98,6 +121,12 @@ namespace DiceGame.Core
             IgnoresPartitionBoundary = ignoresPartitionBoundary;
             BlocksAdjacentMagnet = blocksAdjacentMagnet;
             CrushesPlayerOnCover = crushesPlayerOnCover;
+            HasExpandedFootprint = hasExpandedFootprint;
+            SuppressesErasureGhost = suppressesErasureGhost;
+            BlocksJumpLandingSinkAdvance = blocksJumpLandingSinkAdvance;
+            SinkDurationMultiplier = sinkDurationMultiplier <= 0f ? 1f : sinkDurationMultiplier;
+            SinkingMatchWeightPerTier = sinkingMatchWeightPerTier;
+            ParticipatesInBothTiersWhileSinking = participatesInBothTiersWhileSinking;
         }
 
         public int GetEffectiveMaxJumpGridMoveDistance() {

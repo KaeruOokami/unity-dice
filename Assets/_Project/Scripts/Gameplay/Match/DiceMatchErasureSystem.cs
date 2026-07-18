@@ -127,7 +127,7 @@ namespace DiceGame.Gameplay
 
             foreach (var cluster in clusters) {
                 if (!MatchAttackerResolver.TryResolveAttackerForTierFall(
-                    cluster,
+                    cluster.Members,
                     ownershipContext,
                     fallenDice,
                     out var attacker)) {
@@ -267,7 +267,7 @@ namespace DiceGame.Gameplay
             var clusters = DiceMatchFinder.FindMatchingClusters(registry.AllDice, participants);
             foreach (var cluster in clusters) {
                 if (!MatchAttackerResolver.TryResolveAttacker(
-                    cluster,
+                    cluster.Members,
                     action,
                     participants,
                     ownershipContext,
@@ -281,8 +281,8 @@ namespace DiceGame.Gameplay
             }
         }
 
-        void ProcessCluster(List<DiceController> cluster, PlayerSlot attacker) {
-            PartitionClusterMembers(cluster, out var newMembers, out var erasingMembers);
+        void ProcessCluster(DiceMatchCluster cluster, PlayerSlot attacker) {
+            PartitionClusterMembers(cluster.Members, out var newMembers, out var erasingMembers);
 
             if (newMembers.Count > 0) {
                 ApplyClusterErasure(cluster, newMembers, erasingMembers, attacker);
@@ -319,7 +319,7 @@ namespace DiceGame.Gameplay
         }
 
         void ApplyClusterErasure(
-            List<DiceController> cluster,
+            DiceMatchCluster cluster,
             List<DiceController> newMembers,
             List<DiceController> erasingMembers,
             PlayerSlot attacker) {
@@ -328,7 +328,13 @@ namespace DiceGame.Gameplay
             }
 
             var face = newMembers[0].CurrentState.Orientation.Top;
-            var chainResult = RegisterSinkingCluster(erasingMembers, newMembers, face, attacker, out var clusterSize);
+            var chainResult = RegisterSinkingCluster(
+                erasingMembers,
+                newMembers,
+                face,
+                attacker,
+                cluster.Weight,
+                out var clusterSize);
 
             foreach (var dice in erasingMembers) {
                 dice.RetreatErasure(chainRollbackAmount);
@@ -347,27 +353,28 @@ namespace DiceGame.Gameplay
             TryEmitVersusAttack(attacker, face, chainResult, clusterSize);
         }
 
-        void ProcessSinkingFollowUp(List<DiceController> cluster, PlayerSlot attacker) {
+        void ProcessSinkingFollowUp(DiceMatchCluster cluster, PlayerSlot attacker) {
             if (sinkingGroups == null) {
                 return;
             }
 
             var chainResult = sinkingGroups.RegisterFollowUpAttack(
-                cluster,
+                cluster.Members,
                 attacker,
                 out var face,
-                out var clusterSize);
+                out _,
+                cluster.Weight);
 
             if (chainResult.IsSnatch
                 && TryGetPlayerEmissionColor(attacker, out var emissionColor)) {
-                PartitionClusterMembers(cluster, out _, out var erasingMembers);
+                PartitionClusterMembers(cluster.Members, out _, out var erasingMembers);
                 AssignErasingOwners(erasingMembers, attacker);
                 for (var i = 0; i < erasingMembers.Count; i++) {
                     erasingMembers[i].SetErasureEmissionColor(emissionColor);
                 }
             }
 
-            TryEmitVersusAttack(attacker, face, chainResult, clusterSize);
+            TryEmitVersusAttack(attacker, face, chainResult, cluster.Weight);
         }
 
         SinkingChainResult RegisterSinkingCluster(
@@ -375,8 +382,9 @@ namespace DiceGame.Gameplay
             IReadOnlyList<DiceController> newMembers,
             int face,
             PlayerSlot attacker,
+            int matchWeight,
             out int clusterSize) {
-            clusterSize = newMembers.Count + erasingMembers.Count;
+            clusterSize = matchWeight;
             if (sinkingGroups == null) {
                 return new SinkingChainResult(0, false);
             }
@@ -386,7 +394,8 @@ namespace DiceGame.Gameplay
                 newMembers,
                 face,
                 attacker,
-                out clusterSize);
+                out clusterSize,
+                matchWeight);
         }
 
         void TryEmitVersusAttack(

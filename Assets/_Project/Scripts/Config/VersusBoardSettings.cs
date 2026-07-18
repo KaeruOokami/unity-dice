@@ -52,11 +52,13 @@ namespace DiceGame.Config
         [SerializeField] VersusInitialDicePlacementMode initialDicePlacementMode =
             VersusInitialDicePlacementMode.Mirrored;
         [SerializeField] AttackQueueUiSettings attackQueueUiSettings;
+        [SerializeField] JumboDiceSettings jumboDiceSettings;
 
         public PlayerBoardDefinition Player1 => player1;
         public PlayerBoardDefinition Player2 => player2;
         public VersusInitialDicePlacementMode InitialDicePlacementMode => initialDicePlacementMode;
         public AttackQueueUiSettings AttackQueueUiSettings => attackQueueUiSettings;
+        public JumboDiceSettings JumboDiceSettings => jumboDiceSettings;
 
         public VersusArenaLayout CreateLayout()
         {

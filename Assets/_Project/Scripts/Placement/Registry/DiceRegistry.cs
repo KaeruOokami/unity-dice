@@ -17,6 +17,8 @@ namespace DiceGame.Placement
         readonly Dictionary<Vector2Int, GridStack> byGrid = new();
         readonly Dictionary<Vector2Int, GridStack> pendingSpawns = new();
         readonly List<DiceController> allDice = new();
+        readonly List<Vector2Int> footprintCells = new(JumboFootprint.CellCount);
+        readonly List<DiceController> footprintClearBuffer = new();
 
         Board board;
 
@@ -131,6 +133,21 @@ namespace DiceGame.Placement
                 allDice.Add(dice);
             }
 
+            if (dice.Capabilities.HasExpandedFootprint) {
+                footprintCells.Clear();
+                JumboFootprint.AppendCells(gridPos, footprintCells);
+                for (var i = 0; i < footprintCells.Count; i++) {
+                    RegisterPendingSpawnAtCell(dice, footprintCells[i], DiceStackTier.Bottom);
+                    RegisterPendingSpawnAtCell(dice, footprintCells[i], DiceStackTier.Top);
+                }
+
+                return;
+            }
+
+            RegisterPendingSpawnAtCell(dice, gridPos, tier);
+        }
+
+        void RegisterPendingSpawnAtCell(DiceController dice, Vector2Int gridPos, DiceStackTier tier) {
             if (!pendingSpawns.TryGetValue(gridPos, out var stack)) {
                 stack = default;
             }
@@ -150,6 +167,12 @@ namespace DiceGame.Placement
             }
 
             ClearPendingSpawn(dice);
+
+            if (dice.Capabilities.HasExpandedFootprint) {
+                PlaceJumbo(dice, gridPos);
+                return;
+            }
+
             var resolvedTier = ResolveSpawnCommitTier(gridPos, tier);
             if (resolvedTier != tier) {
                 dice.ApplyExternalState(
@@ -196,6 +219,11 @@ namespace DiceGame.Placement
                 return;
             }
 
+            if (dice.Capabilities.HasExpandedFootprint) {
+                PlaceJumbo(dice, gridPos);
+                return;
+            }
+
             if (!allDice.Contains(dice)) {
                 allDice.Add(dice);
             }
@@ -227,6 +255,94 @@ namespace DiceGame.Placement
             }
 
             SetDiceAt(gridPos, dice, tier);
+        }
+
+        void PlaceJumbo(DiceController dice, Vector2Int anchor) {
+            if (!allDice.Contains(dice)) {
+                allDice.Add(dice);
+            }
+
+            ClearOccupantsForJumboLanding(anchor, excluding: dice);
+            footprintCells.Clear();
+            JumboFootprint.AppendCells(anchor, footprintCells);
+            for (var i = 0; i < footprintCells.Count; i++) {
+                var cell = footprintCells[i];
+                SetDiceAt(cell, dice, DiceStackTier.Bottom);
+                SetDiceAt(cell, dice, DiceStackTier.Top);
+            }
+
+            if (dice.CurrentState.GridPos != anchor
+                || dice.CurrentState.Tier != DiceStackTier.Bottom) {
+                dice.ApplyExternalState(
+                    new DiceState(
+                        anchor,
+                        dice.CurrentState.Orientation,
+                        DiceStackTier.Bottom,
+                        dice.Kind),
+                    snapVisual: true);
+            }
+        }
+
+        void ClearOccupantsForJumboLanding(Vector2Int anchor, DiceController excluding) {
+            footprintClearBuffer.Clear();
+            footprintCells.Clear();
+            JumboFootprint.AppendCells(anchor, footprintCells);
+
+            for (var i = 0; i < footprintCells.Count; i++) {
+                var cell = footprintCells[i];
+                if (TryGetBottomAt(cell, out var bottom)
+                    && bottom != null
+                    && bottom != excluding
+                    && !footprintClearBuffer.Contains(bottom)) {
+                    footprintClearBuffer.Add(bottom);
+                }
+
+                if (TryGetTopAt(cell, out var top)
+                    && top != null
+                    && top != excluding
+                    && !footprintClearBuffer.Contains(top)) {
+                    footprintClearBuffer.Add(top);
+                }
+            }
+
+            for (var i = 0; i < allDice.Count; i++) {
+                var dice = allDice[i];
+                if (dice == null || dice == excluding || footprintClearBuffer.Contains(dice)) {
+                    continue;
+                }
+
+                if (OccupiesAnyCellInAnchorFootprint(dice, anchor)) {
+                    footprintClearBuffer.Add(dice);
+                }
+            }
+
+            for (var i = 0; i < footprintClearBuffer.Count; i++) {
+                footprintClearBuffer[i].ForceDestroyForOverride();
+            }
+
+            footprintClearBuffer.Clear();
+        }
+
+        static bool OccupiesAnyCellInAnchorFootprint(DiceController dice, Vector2Int anchor) {
+            if (dice == null) {
+                return false;
+            }
+
+            if (!dice.Capabilities.HasExpandedFootprint) {
+                return JumboFootprint.Contains(anchor, dice.CurrentState.GridPos);
+            }
+
+            var otherAnchor = dice.CurrentState.GridPos;
+            for (var dx = 0; dx < JumboFootprint.Size; dx++) {
+                for (var dy = 0; dy < JumboFootprint.Size; dy++) {
+                    var cell = new Vector2Int(otherAnchor.x + dx, otherAnchor.y + dy);
+                    if (JumboFootprint.Contains(anchor, cell)) {
+                        return true;
+                    }
+                }
+            }
+
+            return false;
         }
 
         public bool TryApplyGhostLanding(
@@ -329,10 +445,21 @@ namespace DiceGame.Placement
                 return;
             }
 
+            if (dice.Capabilities.HasExpandedFootprint) {
+                footprintCells.Clear();
+                JumboFootprint.AppendCells(dice.CurrentState.GridPos, footprintCells);
+                for (var i = 0; i < footprintCells.Count; i++) {
+                    ClearDiceAt(footprintCells[i], dice, DiceStackTier.Bottom, notifySupportLoss: false);
+                    ClearDiceAt(footprintCells[i], dice, DiceStackTier.Top, notifySupportLoss: false);
+                }
+
+                return;
+            }
+
             ClearDiceAt(gridPos, dice, tier);
         }
 
-        public void Unregister(DiceController dice) {
+            public void Unregister(DiceController dice) {
             if (dice == null) {
                 return;
             }

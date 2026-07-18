@@ -8,6 +8,7 @@ namespace DiceGame.Core
         Magnet,
         Ice,
         Stone,
-        Ghost
+        Ghost,
+        Jumbo
     }
 }

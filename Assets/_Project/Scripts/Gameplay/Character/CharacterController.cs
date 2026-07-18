@@ -1910,7 +1910,8 @@ namespace DiceGame.Gameplay
                 || !registry.TryGetBottomAt(jumpStartGridCell, out var sinkBottom)
                 || sinkBottom == null
                 || sinkBottom == jumpStartDice
-                || !sinkBottom.IsSinkErasing) {
+                || !sinkBottom.IsSinkErasing
+                || sinkBottom.Capabilities.BlocksJumpLandingSinkAdvance) {
                 return;
             }
 

@@ -25,13 +25,14 @@ namespace DiceGame.Versus
             IReadOnlyList<DiceController> newMembers,
             int face,
             PlayerSlot attacker,
-            out int clusterSize) {
+            out int clusterSize,
+            int? matchWeight = null) {
             clusterSize = 0;
             if (newMembers == null || newMembers.Count == 0) {
                 return new SinkingChainResult(0, false);
             }
 
-            clusterSize = CountClusterSize(dissolvingMembers, newMembers);
+            clusterSize = matchWeight ?? CountClusterSize(dissolvingMembers, newMembers);
             var touchedGroupIds = CollectTouchedGroupIds(dissolvingMembers);
             var hasExistingSinking = touchedGroupIds.Count > 0;
 
@@ -79,7 +80,8 @@ namespace DiceGame.Versus
             IReadOnlyList<DiceController> cluster,
             PlayerSlot attacker,
             out int face,
-            out int clusterSize) {
+            out int clusterSize,
+            int? matchWeight = null) {
             face = 0;
             clusterSize = 0;
             if (cluster == null || cluster.Count == 0) {
@@ -92,7 +94,7 @@ namespace DiceGame.Versus
             }
 
             face = erasingMembers[0].CurrentState.Orientation.Top;
-            clusterSize = CountActiveClusterDice(cluster);
+            clusterSize = matchWeight ?? CountActiveClusterDice(cluster);
 
             var touchedGroupIds = CollectTouchedGroupIds(erasingMembers);
             var hasExistingSinking = touchedGroupIds.Count > 0;

@@ -84,7 +84,7 @@ namespace DiceGame.Editor
             var catalog = ScriptableObject.CreateInstance<DiceCatalog>();
             var serialized = new SerializedObject(catalog);
             var entries = serialized.FindProperty("entries");
-            entries.arraySize = 7;
+            entries.arraySize = 8;
             SetCatalogEntry(entries, 0, DiceKind.Normal, NormalDicePrefabPath, 5f);
             SetCatalogEntry(entries, 1, DiceKind.Wood, WoodDicePrefabPath, 2f);
             SetCatalogEntry(entries, 2, DiceKind.Iron, IronDicePrefabPath, 1f);
@@ -92,6 +92,7 @@ namespace DiceGame.Editor
             SetCatalogEntry(entries, 4, DiceKind.Ice, IceDicePrefabPath, 1.5f);
             SetCatalogEntry(entries, 5, DiceKind.Stone, StoneDicePrefabPath, 1.5f);
             SetCatalogEntry(entries, 6, DiceKind.Ghost, GhostDicePrefabPath, 1f);
+            SetCatalogEntry(entries, 7, DiceKind.Jumbo, NormalDicePrefabPath, 0f);
             serialized.ApplyModifiedPropertiesWithoutUndo();
 
             AssetDatabase.CreateAsset(catalog, DiceCatalogPath);

@@ -619,6 +619,72 @@ namespace DiceGame.Gameplay
             return diceController;
         }
 
+        public DiceController SpawnJumboDice(
+            PlayerSlot targetSlot,
+            int topFace,
+            DiceSpawnSettings spawnSettings,
+            IReadOnlyList<Vector2Int> blockedCells) {
+            var catalog = ResolveCatalog(targetSlot);
+            if (!gameplayEnabled
+                || spawnSettings == null
+                || board == null
+                || registry == null
+                || catalog == null
+                || !board.IsVersusArena) {
+                return null;
+            }
+
+            if (!catalog.TryGetMeshPrefab(DiceKind.Jumbo, out var meshPrefab)) {
+                // Fallback to Normal mesh so jumbo remains playable before catalog assets are filled.
+                if (!catalog.TryGetMeshPrefab(DiceKind.Normal, out meshPrefab)) {
+                    Debug.LogError("DiceSpawnSystem: Mesh prefab not found for Jumbo (or Normal fallback).");
+                    return null;
+                }
+            }
+
+            if (!DiceSpawnCellPicker.TryPickJumboSpawnAnchor(
+                    board,
+                    targetSlot,
+                    blockedCells,
+                    random,
+                    out var anchor)) {
+                Debug.LogError($"DiceSpawnSystem: No valid 2x2 jumbo spawn for {targetSlot}.");
+                return null;
+            }
+
+            var orientation = DiceOrientation.CreateWithTopFace(topFace);
+            var diceController = DiceSpawnFactory.TryCreate(
+                diceEntityPrefab,
+                spawnParent,
+                anchor,
+                DiceStackTier.Bottom,
+                DiceKind.Jumbo,
+                meshPrefab,
+                physicsSettings,
+                diceAnimationSettings,
+                diceErasureSettings);
+
+            if (diceController == null) {
+                return null;
+            }
+
+            diceController.ConfigureMatchActionContext(matchActionContext);
+            var diceView = diceController.View;
+            diceController.ConfigureWithSpawnAppear(
+                board,
+                diceView,
+                registry,
+                anchor,
+                orientation,
+                spawnSettings,
+                DiceStackTier.Bottom,
+                DiceKind.Jumbo,
+                forceFallFromAbove: true);
+
+            erasureSystem?.EnsureDiceSubscribed(diceController);
+            return diceController;
+        }
+
         bool TryPickAttackSpawnSlot(PlayerSlot targetSlot, out DiceSpawnSlot slot) {
             if (board != null && board.IsVersusArena) {
                 return DiceSpawnCellPicker.TryPickSequentialAttackSpawnSlot(

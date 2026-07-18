@@ -1,3 +1,4 @@
+using DiceGame.Core;
 using DiceGame.Grid;
 using UnityEngine;
 
@@ -29,7 +30,10 @@ namespace DiceGame.Gameplay
 
             boxCollider.isTrigger = true;
             var size = board.CellSize;
-            boxCollider.size = new Vector3(size, size, size);
+            var footprint = dice != null && dice.Capabilities.HasExpandedFootprint
+                ? JumboFootprint.Size
+                : 1;
+            boxCollider.size = new Vector3(size * footprint, size * footprint, size * footprint);
             boxCollider.center = Vector3.zero;
         }
 

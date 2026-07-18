@@ -42,6 +42,7 @@
      <Compile Include="Assets\_Project\Scripts\Placement\Interaction\PushContactEvaluator.cs" />
      <Compile Include="Assets\_Project\Scripts\Core\Model\DiceState.cs" />
      <Compile Include="Assets\_Project\Scripts\Config\DiceAnimationSettings.cs" />
+     <Compile Include="Assets\_Project\Scripts\Gameplay\Match\GameWorldVisibility.cs" />
      <Compile Include="Assets\_Project\Scripts\View\DiceIconGenerator.cs" />
      <Compile Include="Assets\_Project\Scripts\Config\DiceOneVanishSettings.cs" />
      <Compile Include="Assets\_Project\Scripts\Gameplay\Match\DiceMatchOwnershipContext.cs" />
@@ -81,6 +82,7 @@
      <Compile Include="Assets\_Project\Scripts\Gameplay\AI\Domain\SinkingChainEvaluator.cs" />
      <Compile Include="Assets\_Project\Scripts\Placement\Magnet\MagnetMoveExecutor.cs" />
      <Compile Include="Assets\_Project\Scripts\Session\Network\RemoteNetworkInputSource.cs" />
+     <Compile Include="Assets\_Project\Scripts\Gameplay\Match\MatchFlowFlags.cs" />
      <Compile Include="Assets\_Project\Scripts\Gameplay\Dice\DiceMoveVisualContext.cs" />
      <Compile Include="Assets\_Project\Scripts\Gameplay\Match\DiceOneVanishSystem.cs" />
      <Compile Include="Assets\_Project\Scripts\Placement\Support\CharacterSupportState.cs" />
@@ -107,12 +109,14 @@
      <Compile Include="Assets\_Project\Scripts\Core\Model\DiceOrientationMapper.cs" />
      <Compile Include="Assets\_Project\Scripts\Placement\Interaction\PushPassability.cs" />
      <Compile Include="Assets\_Project\Scripts\Gameplay\Match\ITierFallMatchNotifier.cs" />
+     <Compile Include="Assets\_Project\Scripts\Gameplay\AI\Domain\MatchGoalFailureMemory.cs" />
      <Compile Include="Assets\_Project\Scripts\Gameplay\Dice\DicePushBody.cs" />
      <Compile Include="Assets\_Project\Scripts\Gameplay\Match\PlayerMatchActionContext.cs" />
      <Compile Include="Assets\_Project\Scripts\Placement\Occupancy\NormalizedHeight.cs" />
      <Compile Include="Assets\_Project\Scripts\Board\VersusArenaLayout.cs" />
      <Compile Include="Assets\_Project\Scripts\Core\Motion\DiceGridMovePlanner.cs" />
      <Compile Include="Assets\_Project\Scripts\Versus\Core\SinkingChainResolver.cs" />
+     <Compile Include="Assets\_Project\Scripts\Session\Network\OnlineClientFlowAdapter.cs" />
      <Compile Include="Assets\_Project\Scripts\Placement\Rules\GhostPlacementRules.cs" />
      <Compile Include="Assets\_Project\Scripts\Placement\Movement\Jump\JumpInputPolicy.cs" />
      <Compile Include="Assets\_Project\Scripts\Gameplay\Match\MatchAttackerResolver.cs" />
@@ -194,6 +198,7 @@
      <Compile Include="Assets\_Project\Scripts\Board\IBoard.cs" />
      <Compile Include="Assets\_Project\Scripts\Core\Behavior\EffectiveDiceBehavior.cs" />
      <Compile Include="Assets\_Project\Scripts\Gameplay\Character\PlayerMotionGate.cs" />
+     <Compile Include="Assets\_Project\Scripts\Gameplay\Match\PauseMenuUi.cs" />
      <Compile Include="Assets\_Project\Scripts\Core\Behavior\DiceBehaviorBase.cs" />
      <Compile Include="Assets\_Project\Scripts\Placement\Support\SupportKind.cs" />
      <Compile Include="Assets\_Project\Scripts\Config\CharacterMovementSettings.cs" />
@@ -233,11 +238,10 @@
      <Compile Include="Assets\_Project\Scripts\Gameplay\AI\Domain\WorkDieRollPlanner.cs" />
      <Compile Include="Assets\_Project\Scripts\Placement\Rules\DiceEffectiveBehaviorFactory.cs" />
      <Compile Include="Assets\_Project\Scripts\Versus\Core\AttackKindBreakdown.cs" />
-     <Compile Include="Assets\_Project\Scripts\Gameplay\Match\MatchFlowFlags.cs" />
-     <Compile Include="Assets\_Project\Scripts\Session\Network\OnlineClientFlowAdapter.cs" />
-     <Compile Include="Assets\_Project\Scripts\Gameplay\Match\PauseMenuUi.cs" />
-     <Compile Include="Assets\_Project\Scripts\Gameplay\Match\GameWorldVisibility.cs" />
-     <Compile Include="Assets\_Project\Scripts\Gameplay\AI\Domain\MatchGoalFailureMemory.cs" />
+     <Compile Include="Assets\_Project\Scripts\Gameplay\Match\DiceMatchWeight.cs" />
+     <Compile Include="Assets\_Project\Scripts\Versus\JumboDiceSequenceController.cs" />
+     <Compile Include="Assets\_Project\Scripts\Config\JumboDiceSettings.cs" />
+     <Compile Include="Assets\_Project\Scripts\Core\Model\JumboFootprint.cs" />
      <None Include="Assets\Packages\Dice_6\Documentation\Readmy.txt" />
     <Reference Include="UnityEngine">
         <HintPath>D:\Program Files\Unity\Hub\Editor\2021.3.10f1\Editor\Data\Managed\UnityEngine\UnityEngine.dll</HintPath>

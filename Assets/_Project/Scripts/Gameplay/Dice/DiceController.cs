@@ -328,6 +328,11 @@ namespace DiceGame.Gameplay
                 return board != null ? board.FloorSurfaceWorldY : 0f;
             }
 
+            if (Capabilities.HasExpandedFootprint) {
+                return board.FloorSurfaceWorldY
+                    + JumboFootprint.GetTopSurfaceHeightAboveFloor(board.CellSize);
+            }
+
             // Bottom tier is always floor-anchored so stacked ghosts/tops never read animated fall Y.
             if (currentState.Tier == DiceStackTier.Bottom) {
                 return diceView.GetLogicalBottomTierTopSurfaceWorldY(board);
@@ -907,9 +912,9 @@ namespace DiceGame.Gameplay
         }
 
         public void BeginErasureForCurrentTier(Color? emissionColor, Action onComplete) {
-            var kind = currentState.Tier == DiceStackTier.Top
-                ? ErasureKind.Radiance
-                : ErasureKind.Sink;
+            var kind = Capabilities.HasExpandedFootprint || currentState.Tier != DiceStackTier.Top
+                ? ErasureKind.Sink
+                : ErasureKind.Radiance;
             BeginErasure(kind, emissionColor, onComplete);
         }
 
@@ -927,6 +932,10 @@ namespace DiceGame.Gameplay
 
         public void AdvanceErasure(float amount) {
             if (!IsSinkErasing || diceView == null) {
+                return;
+            }
+
+            if (Capabilities.BlocksJumpLandingSinkAdvance) {
                 return;
             }
 
@@ -1047,6 +1056,23 @@ namespace DiceGame.Gameplay
 
             diceView?.CancelErasure();
             erasureKind = ErasureKind.None;
+            registry?.Unregister(this);
+            Erased?.Invoke(this);
+            Destroy(gameObject);
+        }
+
+        /// <summary>
+        /// Immediately remove this die (including mid-erasure / vanish) for jumbo landing clears.
+        /// </summary>
+        public void ForceDestroyForOverride() {
+            if (IsErasing) {
+                CompleteErasureFromOverride();
+                return;
+            }
+
+            isVanishing = false;
+            isSpawning = false;
+            diceView?.CancelErasure();
             registry?.Unregister(this);
             Erased?.Invoke(this);
             Destroy(gameObject);

@@ -161,4 +161,31 @@ namespace DiceGame.Core
             isPlayerPassThrough: true,
             allowsDiceSwapThrough: true);
     }
+
+    public sealed class JumboDiceBehavior : DiceBehaviorBase
+    {
+        public static readonly JumboDiceBehavior Instance = new();
+
+        JumboDiceBehavior() {
+        }
+
+        public override DiceKind Kind => DiceKind.Jumbo;
+
+        public override DiceCapabilities Capabilities { get; } = new(
+            canBePushedByPlayer: false,
+            canBeLiftedByPlayer: false,
+            canJumpCoupleWithPlayer: false,
+            pushUsesRoll: false,
+            canGridRoll: false,
+            slideUntilBlocked: false,
+            hasMagnetCoupling: false,
+            hasSpawnBounce: true,
+            rollDurationMultiplier: DiceBehaviorConstants.DefaultRollDurationMultiplier,
+            hasExpandedFootprint: true,
+            suppressesErasureGhost: true,
+            blocksJumpLandingSinkAdvance: true,
+            sinkDurationMultiplier: DiceBehaviorConstants.JumboSinkDurationMultiplier,
+            sinkingMatchWeightPerTier: JumboFootprint.MatchWeightPerTier,
+            participatesInBothTiersWhileSinking: true);
+    }
 }
