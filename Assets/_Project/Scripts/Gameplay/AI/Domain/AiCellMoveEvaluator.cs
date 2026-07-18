@@ -53,7 +53,13 @@ namespace DiceGame.Gameplay.AI.Domain
                 maxSearchSteps,
                 constraints,
                 out var pathStep,
-                out var pathLog)) {
+                out var pathLog,
+                standOnDie)
+                && !AiCellPathfinder.IsCanRollIncompatibleWithStandOnDie(
+                    standOnDie,
+                    start.StandingDice,
+                    pathStep.EdgeKind,
+                    pathStep.NextCell)) {
                 var score = ScorePathStep(start.Cell, pathStep, goalCell, standOnDie);
                 best = new AdjacentCellCandidate(
                     pathStep.NextCell,
@@ -108,7 +114,9 @@ namespace DiceGame.Gameplay.AI.Domain
                 score -= 1f;
             }
 
-            if (standOnDie != null && step.NextCell == standOnDie.CurrentState.GridPos) {
+            if (standOnDie != null
+                && step.EdgeKind == MovementTransitionKind.Walkable
+                && step.NextCell == standOnDie.CurrentState.GridPos) {
                 score += 20f;
             }
 

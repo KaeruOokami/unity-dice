@@ -13,7 +13,8 @@ namespace DiceGame.Gameplay.AI.Domain
             GameStateSnapshot snapshot,
             CharacterController character,
             DiceRegistry registry,
-            AiPlayerSettings settings) {
+            AiPlayerSettings settings,
+            MatchGoalFailureMemory failureMemory = null) {
             if (snapshot == null || character == null || settings == null) {
                 return null;
             }
@@ -25,11 +26,11 @@ namespace DiceGame.Gameplay.AI.Domain
             var hasSinking = SinkingChainEvaluator.HasSinkingDiceOnBoard(snapshot.PlanningDice);
             var chainPriority = hasSinking && SinkingChainEvaluator.HasAnyChainPossibleFace(snapshot.PlanningDice);
             if (chainPriority
-                && TrySelectBestChainGoal(snapshot, registry, settings, out var chainGoal)) {
+                && TrySelectBestChainGoal(snapshot, registry, settings, failureMemory, out var chainGoal)) {
                 return chainGoal;
             }
 
-            TrySelectBestGoal(snapshot, registry, settings, chainPriority, out var bestGoal);
+            TrySelectBestGoal(snapshot, registry, settings, chainPriority, failureMemory, out var bestGoal);
             return bestGoal;
         }
 
@@ -37,9 +38,11 @@ namespace DiceGame.Gameplay.AI.Domain
             GameStateSnapshot snapshot,
             DiceRegistry registry,
             AiPlayerSettings settings,
+            MatchGoalFailureMemory failureMemory,
             out MatchGoal bestGoal) {
             bestGoal = null;
             var bestScore = float.MinValue;
+            var now = Time.time;
 
             for (var face = 2; face <= 6; face++) {
                 if (!SinkingChainEvaluator.IsChainPossible(face, snapshot.PlanningDice)) {
@@ -47,7 +50,7 @@ namespace DiceGame.Gameplay.AI.Domain
                 }
 
                 var goal = BuildGoalForChain(snapshot, face, registry, settings);
-                if (goal == null) {
+                if (goal == null || IsExcluded(goal, failureMemory, now)) {
                     continue;
                 }
 
@@ -65,6 +68,7 @@ namespace DiceGame.Gameplay.AI.Domain
             DiceRegistry registry,
             AiPlayerSettings settings,
             bool suppressChainFaces,
+            MatchGoalFailureMemory failureMemory,
             out MatchGoal bestGoal) {
             if (TrySelectBestGoalPass(
                 snapshot,
@@ -72,6 +76,7 @@ namespace DiceGame.Gameplay.AI.Domain
                 settings,
                 suppressChainFaces,
                 abandonStrandedIslands: true,
+                failureMemory,
                 out bestGoal)) {
                 return true;
             }
@@ -82,6 +87,7 @@ namespace DiceGame.Gameplay.AI.Domain
                 settings,
                 suppressChainFaces,
                 abandonStrandedIslands: false,
+                failureMemory,
                 out bestGoal);
         }
 
@@ -91,9 +97,11 @@ namespace DiceGame.Gameplay.AI.Domain
             AiPlayerSettings settings,
             bool suppressChainFaces,
             bool abandonStrandedIslands,
+            MatchGoalFailureMemory failureMemory,
             out MatchGoal bestGoal) {
             bestGoal = null;
             var bestScore = float.MinValue;
+            var now = Time.time;
 
             for (var face = 2; face <= 6; face++) {
                 if (suppressChainFaces
@@ -111,7 +119,7 @@ namespace DiceGame.Gameplay.AI.Domain
                         registry,
                         settings,
                         abandonStrandedIslands);
-                    if (goal == null) {
+                    if (goal == null || IsExcluded(goal, failureMemory, now)) {
                         continue;
                     }
 
@@ -123,6 +131,10 @@ namespace DiceGame.Gameplay.AI.Domain
             }
 
             return bestGoal != null;
+        }
+
+        static bool IsExcluded(MatchGoal goal, MatchGoalFailureMemory failureMemory, float nowSeconds) {
+            return failureMemory != null && failureMemory.IsExcluded(goal, nowSeconds);
         }
 
         static MatchGoal BuildGoalForChain(
@@ -146,7 +158,8 @@ namespace DiceGame.Gameplay.AI.Domain
                 snapshot.PlayerCell,
                 settings,
                 preferChain: true,
-                out var workDie)
+                out var workDie,
+                registry)
                 || workDie.Controller == null) {
                 return null;
             }
@@ -270,7 +283,16 @@ namespace DiceGame.Gameplay.AI.Domain
 
             var isImmediate = cluster.Count >= face;
             if (isImmediate) {
-                return BuildImmediateMatchGoal(snapshot, face, cluster, settings);
+                return BuildImmediateMatchGoal(snapshot, face, cluster, registry, settings);
+            }
+
+            if (registry != null
+                && ClusterSelectionEvaluator.ShouldDiscardIncompleteCluster(
+                    cluster,
+                    face,
+                    snapshot,
+                    registry)) {
+                return null;
             }
 
             // Incomplete isolated non-sinking island: prefer other clusters so CanRoll can leave.
@@ -286,8 +308,22 @@ namespace DiceGame.Gameplay.AI.Domain
                 snapshot.PlayerCell,
                 settings,
                 preferChain: false,
-                out var workDie)
+                out var workDie,
+                registry)
                 || workDie.Controller == null) {
+                return null;
+            }
+
+            if (registry == null
+                || !WorkDieSlidePlanner.TrySelectJoinTargetCell(
+                    cluster,
+                    workDie,
+                    snapshot.PlanningDice,
+                    registry,
+                    snapshot.VersusLayout,
+                    snapshot.PlayerSlot,
+                    out var joinCell,
+                    out var joinTier)) {
                 return null;
             }
 
@@ -300,22 +336,7 @@ namespace DiceGame.Gameplay.AI.Domain
                 subGoals.Add(AiSubGoal.OrientDie(workDie.Controller, face));
             }
 
-            if (registry != null
-                && WorkDieSlidePlanner.TrySelectJoinTargetCell(
-                    cluster,
-                    workDie,
-                    snapshot.PlanningDice,
-                    registry,
-                    snapshot.VersusLayout,
-                    snapshot.PlayerSlot,
-                    out var joinCell,
-                    out var joinTier)) {
-                subGoals.Add(AiSubGoal.JoinCluster(workDie.Controller, face, joinCell, joinTier));
-            }
-
-            if (subGoals.Count == 0) {
-                return null;
-            }
+            subGoals.Add(AiSubGoal.JoinCluster(workDie.Controller, face, joinCell, joinTier));
 
             var distanceToWorkDie = DiceBoardAnalyzer.ManhattanDistance(snapshot.PlayerCell, workDie.GridPos);
             var score = ClusterSelectionEvaluator.ScoreCluster(
@@ -339,8 +360,14 @@ namespace DiceGame.Gameplay.AI.Domain
             GameStateSnapshot snapshot,
             int face,
             List<DiceSnapshot> cluster,
+            DiceRegistry registry,
             AiPlayerSettings settings) {
-            var participant = SelectClusterParticipant(cluster, snapshot);
+            if (registry != null
+                && ClusterSelectionEvaluator.ShouldDiscardImmediateCluster(cluster, registry)) {
+                return null;
+            }
+
+            var participant = SelectClusterParticipant(cluster, snapshot, registry);
             if (participant.Controller == null) {
                 return null;
             }
@@ -370,19 +397,63 @@ namespace DiceGame.Gameplay.AI.Domain
 
         static DiceSnapshot SelectClusterParticipant(
             List<DiceSnapshot> cluster,
-            GameStateSnapshot snapshot) {
+            GameStateSnapshot snapshot,
+            DiceRegistry registry) {
             for (var i = 0; i < cluster.Count; i++) {
-                if (IsStandingOnDice(snapshot, cluster[i].Controller)) {
+                if (IsStandingOnDice(snapshot, cluster[i].Controller)
+                    && ClusterSelectionEvaluator.IsStandableWorkDie(
+                        cluster[i],
+                        snapshot.PlanningDice,
+                        registry)) {
                     return cluster[i];
                 }
             }
 
-            DiceSnapshot best = default;
+            var standingLevel = snapshot.StandingDice != null
+                ? SurfaceHeightLevel.FromDiceStackTier(snapshot.StandingDice.CurrentState.Tier)
+                : SurfaceHeightLevel.Floor;
+
+            // Prefer participants reachable without climbing (Bottom while on Bottom/Floor).
+            if (TrySelectNearestParticipantAtOrBelowLevel(
+                cluster,
+                snapshot,
+                standingLevel,
+                registry,
+                out var reachable)) {
+                return reachable;
+            }
+
+            return SelectNearestParticipant(cluster, snapshot, registry);
+        }
+
+        static bool TrySelectNearestParticipantAtOrBelowLevel(
+            List<DiceSnapshot> cluster,
+            GameStateSnapshot snapshot,
+            int maxLevel,
+            DiceRegistry registry,
+            out DiceSnapshot best) {
+            best = default;
             var bestDistance = int.MaxValue;
             var found = false;
 
             for (var i = 0; i < cluster.Count; i++) {
                 var candidate = cluster[i];
+                if (candidate.Controller == null) {
+                    continue;
+                }
+
+                if (!ClusterSelectionEvaluator.IsStandableWorkDie(
+                    candidate,
+                    snapshot.PlanningDice,
+                    registry)) {
+                    continue;
+                }
+
+                var candidateLevel = SurfaceHeightLevel.FromDiceStackTier(candidate.Tier);
+                if (candidateLevel > maxLevel) {
+                    continue;
+                }
+
                 var distance = DiceBoardAnalyzer.ManhattanDistance(snapshot.PlayerCell, candidate.GridPos);
                 if (distance < bestDistance) {
                     bestDistance = distance;
@@ -391,7 +462,35 @@ namespace DiceGame.Gameplay.AI.Domain
                 }
             }
 
-            return found ? best : cluster[0];
+            return found;
+        }
+
+        static DiceSnapshot SelectNearestParticipant(
+            List<DiceSnapshot> cluster,
+            GameStateSnapshot snapshot,
+            DiceRegistry registry) {
+            DiceSnapshot best = default;
+            var bestDistance = int.MaxValue;
+            var found = false;
+
+            for (var i = 0; i < cluster.Count; i++) {
+                var candidate = cluster[i];
+                if (!ClusterSelectionEvaluator.IsStandableWorkDie(
+                    candidate,
+                    snapshot.PlanningDice,
+                    registry)) {
+                    continue;
+                }
+
+                var distance = DiceBoardAnalyzer.ManhattanDistance(snapshot.PlayerCell, candidate.GridPos);
+                if (distance < bestDistance) {
+                    bestDistance = distance;
+                    best = candidate;
+                    found = true;
+                }
+            }
+
+            return found ? best : default;
         }
 
         static HashSet<Vector2Int> GetClusterAdjacentCells(List<DiceSnapshot> cluster) {

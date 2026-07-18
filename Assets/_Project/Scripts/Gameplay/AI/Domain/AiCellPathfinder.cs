@@ -50,12 +50,18 @@ namespace DiceGame.Gameplay.AI.Domain
             int maxSearchSteps,
             AiNavigationConstraints constraints,
             out AiCellPathStep step,
-            out string searchLog) {
+            out string searchLog,
+            DiceController standOnDie = null) {
             step = default;
             searchLog = string.Empty;
 
             if (passability == null) {
                 searchLog = "passability-null";
+                return false;
+            }
+
+            if (standOnDie != null && start.StandingDice == standOnDie) {
+                searchLog = "already-on-stand-on-die";
                 return false;
             }
 
@@ -110,6 +116,14 @@ namespace DiceGame.Gameplay.AI.Domain
                         continue;
                     }
 
+                    if (IsCanRollIncompatibleWithStandOnDie(
+                        standOnDie,
+                        node.State.StandingDice,
+                        edgeKind,
+                        neighborCell)) {
+                        continue;
+                    }
+
                     if (!constraints.IsTransitionAllowed(transition, node.State)) {
                         log += $" {neighborCell}:cluster-move-forbidden";
                         continue;
@@ -125,7 +139,10 @@ namespace DiceGame.Gameplay.AI.Domain
                     var firstEdgeKind = node.Depth == 0 ? edgeKind : node.FirstEdgeKind;
                     var pathLength = node.Depth + 1;
 
-                    if (neighborCell == goalCell) {
+                    var reachedGoal = standOnDie != null
+                        ? neighborState.StandingDice == standOnDie
+                        : neighborCell == goalCell;
+                    if (reachedGoal) {
                         step = new AiCellPathStep(firstCell, firstDirection, pathLength, firstEdgeKind);
                         searchLog = $"path-found length={pathLength} expanded={expanded}";
                         return true;
@@ -143,6 +160,26 @@ namespace DiceGame.Gameplay.AI.Domain
 
             searchLog = $"path-not-found expanded={expanded}";
             return false;
+        }
+
+        /// <summary>
+        /// CanRoll keeps the current standing die. Rolling onto <paramref name="standOnDie"/>'s cell
+        /// therefore cannot satisfy a StandOnDie mount goal.
+        /// </summary>
+        public static bool IsCanRollIncompatibleWithStandOnDie(
+            DiceController standOnDie,
+            DiceController currentStanding,
+            MovementTransitionKind edgeKind,
+            Vector2Int neighborCell) {
+            if (standOnDie == null || edgeKind != MovementTransitionKind.CanRoll) {
+                return false;
+            }
+
+            if (currentStanding == standOnDie) {
+                return false;
+            }
+
+            return neighborCell == standOnDie.CurrentState.GridPos;
         }
 
         public static bool TrySelectBestNavigableNeighbor(
@@ -184,6 +221,11 @@ namespace DiceGame.Gameplay.AI.Domain
                     out _,
                     out var edgeKind)) {
                     log += $" {start.Cell + direction.ToGridDelta()}:blocked({transition.Kind})";
+                    continue;
+                }
+
+                if (IsCanRollIncompatibleWithStandOnDie(standOnDie, start.StandingDice, edgeKind, neighborCell)) {
+                    log += $" {neighborCell}:can-roll-no-remount";
                     continue;
                 }
 
@@ -273,7 +315,10 @@ namespace DiceGame.Gameplay.AI.Domain
                 score -= 1f;
             }
 
-            if (standOnDie != null && neighborCell == standOnDie.CurrentState.GridPos) {
+            // Bonus only for walkable remount onto the target die cell.
+            if (standOnDie != null
+                && edgeKind == MovementTransitionKind.Walkable
+                && neighborCell == standOnDie.CurrentState.GridPos) {
                 score += 20f;
             }
 

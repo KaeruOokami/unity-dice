@@ -148,7 +148,7 @@ namespace DiceGame.Gameplay.AI.Domain
                     $"goal={targetCell}");
             }
 
-            var preferJump = subGoal.Kind != AiSubGoalKind.ReachWorkDie;
+            var preferJump = settings == null || settings.AllowJump;
 
             return SelectMovementAction(
                 targetCell,
@@ -158,6 +158,18 @@ namespace DiceGame.Gameplay.AI.Domain
                 preferJump,
                 standOnDie: targetDie,
                 constraints);
+        }
+
+        static bool RequiresJumpToStandOn(GameStateSnapshot snapshot, DiceController targetDie) {
+            if (snapshot == null || targetDie == null) {
+                return false;
+            }
+
+            var targetLevel = SurfaceHeightLevel.FromDiceStackTier(targetDie.CurrentState.Tier);
+            var standingLevel = snapshot.StandingDice != null
+                ? SurfaceHeightLevel.FromDiceStackTier(snapshot.StandingDice.CurrentState.Tier)
+                : SurfaceHeightLevel.Floor;
+            return targetLevel > standingLevel;
         }
 
         static bool TryBuildLeaveCellAction(
@@ -246,7 +258,7 @@ namespace DiceGame.Gameplay.AI.Domain
                     snapshot,
                     character,
                     settings,
-                    preferJump: false,
+                    preferJump: RequiresJumpToStandOn(snapshot, die),
                     standOnDie: die,
                     AiNavigationConstraints.None);
             }
@@ -403,7 +415,7 @@ namespace DiceGame.Gameplay.AI.Domain
                     snapshot,
                     character,
                     settings,
-                    preferJump: false,
+                    preferJump: RequiresJumpToStandOn(snapshot, die),
                     standOnDie: die,
                     AiNavigationConstraints.None);
             }
@@ -742,7 +754,11 @@ namespace DiceGame.Gameplay.AI.Domain
                         jumpDirection.Value,
                         targetCell,
                         settings.JumpMoveMaxFrames,
-                        standOnDie);
+                        standOnDie,
+                        releaseInputDuringRoll: false,
+                        expectedLandingTier: standOnDie != null
+                            ? standOnDie.CurrentState.Tier
+                            : (DiceStackTier?)null);
                 }
             }
 

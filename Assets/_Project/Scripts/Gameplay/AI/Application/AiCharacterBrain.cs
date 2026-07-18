@@ -9,8 +9,6 @@ namespace DiceGame.Gameplay.AI.Application
     [DefaultExecutionOrder(-50)]
     public sealed class AiCharacterBrain : MonoBehaviour
     {
-        const int StuckAttemptsBeforeGoalReset = 3;
-
         CharacterController character;
         DiceRegistry registry;
         AiCharacterInputSource inputSource;
@@ -18,6 +16,7 @@ namespace DiceGame.Gameplay.AI.Application
         AiActionExecutor executor;
         AiExecutionContext executionContext;
         MatchGoal activeGoal;
+        readonly MatchGoalFailureMemory failureMemory = new MatchGoalFailureMemory();
         AiFloorRecoverySession floorRecoverySession;
         int? pendingFloorRecoveryTrappedFace;
         float replanCooldown;
@@ -36,6 +35,8 @@ namespace DiceGame.Gameplay.AI.Application
             executionContext = new AiExecutionContext(character, registry, inputSource, settings);
             executor = new AiActionExecutor();
             executor.Configure(executionContext);
+            failureMemory.Clear();
+            stuckActionCount = 0;
         }
 
         void Update() {
@@ -44,6 +45,10 @@ namespace DiceGame.Gameplay.AI.Application
             }
 
             executor.Tick();
+
+            if (executor.TryConsumeCompletedAction(out var actionFailed)) {
+                HandleCompletedAction(actionFailed);
+            }
 
             if (!executor.IsReadyToPlan()) {
                 return;
@@ -100,17 +105,11 @@ namespace DiceGame.Gameplay.AI.Application
                     $"targetDie={(subGoal.TargetDie != null ? subGoal.TargetDie.name : "none")} " +
                     $"playerCell={snapshot.PlayerCell} stuck={stuckActionCount + 1}");
 
-                stuckActionCount++;
-                if (stuckActionCount >= StuckAttemptsBeforeGoalReset) {
-                    activeGoal = null;
-                    stuckActionCount = 0;
-                }
-
+                RegisterPlanningFailure(subGoal);
                 replanCooldown = settings.FailedReplanInterval;
                 return;
             }
 
-            stuckActionCount = 0;
             AiDebugLog.Log(
                 $"StartAction subGoal={subGoal.Kind} action={action.GetType().Name} " +
                 $"targetCell={subGoal.TargetCell} " +
@@ -119,6 +118,58 @@ namespace DiceGame.Gameplay.AI.Application
                 $"currentDice={(character.CurrentDice != null ? character.CurrentDice.name : "none")}");
             executor.StartAction(action);
             replanCooldown = settings.MinReplanInterval;
+        }
+
+        void HandleCompletedAction(bool failed) {
+            if (!failed) {
+                stuckActionCount = 0;
+                return;
+            }
+
+            stuckActionCount++;
+            AiDebugLog.Log(
+                $"ActionFailed stuck={stuckActionCount}/{GetStuckThreshold()} " +
+                $"goalFace={(activeGoal != null ? activeGoal.Face.ToString() : "none")}");
+
+            if (stuckActionCount >= GetStuckThreshold()) {
+                AbandonActiveGoal("action-timeout");
+            }
+        }
+
+        void RegisterPlanningFailure(AiSubGoal subGoal) {
+            stuckActionCount++;
+
+            // Orient/Join with no plan means this goal hand is currently unusable.
+            if (subGoal != null
+                && (subGoal.Kind == AiSubGoalKind.OrientDie || subGoal.Kind == AiSubGoalKind.JoinCluster)
+                && activeGoal != null) {
+                activeGoal.MarkUnplannable();
+            }
+
+            if (stuckActionCount >= GetStuckThreshold() || (activeGoal != null && activeGoal.IsMarkedUnplannable)) {
+                AbandonActiveGoal("build-failed");
+            }
+        }
+
+        void AbandonActiveGoal(string reason) {
+            if (activeGoal != null) {
+                activeGoal.MarkUnplannable();
+                failureMemory.RememberFailure(
+                    activeGoal,
+                    settings != null ? settings.GoalFailureBlacklistSeconds : 0f,
+                    Time.time);
+                AiDebugLog.Log(
+                    $"AbandonGoal reason={reason} face={activeGoal.Face} score={activeGoal.PriorityScore:F1} " +
+                    $"workDie={(activeGoal.ParticipantTarget != null ? activeGoal.ParticipantTarget.name : "none")} " +
+                    $"blacklistSec={(settings != null ? settings.GoalFailureBlacklistSeconds : 0f)}");
+            }
+
+            activeGoal = null;
+            stuckActionCount = 0;
+        }
+
+        int GetStuckThreshold() {
+            return settings != null ? Mathf.Max(1, settings.StuckAttemptsBeforeGoalReset) : 3;
         }
 
         bool TryHandleSinkingClusterEscape(GameStateSnapshot snapshot) {
@@ -238,21 +289,30 @@ namespace DiceGame.Gameplay.AI.Application
             if (activeGoal != null) {
                 MatchGoalProgressSync.Sync(activeGoal, snapshot);
 
-                if (!activeGoal.IsStale(snapshot, settings) && !activeGoal.AreAllSubGoalsComplete()) {
-                    var candidate = MatchGoalSelector.SelectBest(snapshot, character, registry, settings);
+                if (!activeGoal.IsStale(snapshot, settings, registry) && !activeGoal.AreAllSubGoalsComplete()) {
+                    var candidate = MatchGoalSelector.SelectBest(
+                        snapshot,
+                        character,
+                        registry,
+                        settings,
+                        failureMemory);
                     if (candidate != null && activeGoal.ShouldSwitchTo(candidate, settings.GoalSwitchMargin)) {
                         activeGoal = candidate;
+                        stuckActionCount = 0;
                     }
 
                     return activeGoal;
                 }
+
+                activeGoal = null;
             }
 
-            activeGoal = MatchGoalSelector.SelectBest(snapshot, character, registry, settings);
+            activeGoal = MatchGoalSelector.SelectBest(snapshot, character, registry, settings, failureMemory);
             if (activeGoal == null) {
                 return null;
             }
 
+            stuckActionCount = 0;
             AiDebugLog.Log($"NewGoal face={activeGoal.Face} score={activeGoal.PriorityScore:F1} immediate={activeGoal.IsImmediateMatch}");
             foreach (var subGoal in activeGoal.SubGoals) {
                 AiDebugLog.Log(
@@ -271,6 +331,7 @@ namespace DiceGame.Gameplay.AI.Application
             floorRecoverySession = null;
             pendingFloorRecoveryTrappedFace = null;
             stuckActionCount = 0;
+            failureMemory.Clear();
         }
 
         bool TryBuildImmediateMatchAction(MatchGoal goal, GameStateSnapshot snapshot, out AiDiscreteAction action) {

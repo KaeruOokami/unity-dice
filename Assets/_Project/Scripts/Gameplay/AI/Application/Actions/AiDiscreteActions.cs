@@ -37,6 +37,7 @@ namespace DiceGame.Gameplay.AI.Application.Actions
         }
 
         public override void Begin(AiExecutionContext context) {
+            ClearFailure();
             frameCount = 0;
             startedMotion = false;
 
@@ -60,6 +61,7 @@ namespace DiceGame.Gameplay.AI.Application.Actions
         public override bool IsComplete(AiExecutionContext context) {
             if (frameCount >= maxFrames) {
                 context.InputSource.SetMove(Vector2.zero);
+                MarkFailed();
                 LogComplete(context, "Timeout");
                 return true;
             }
@@ -194,6 +196,7 @@ namespace DiceGame.Gameplay.AI.Application.Actions
         }
 
         public override void Begin(AiExecutionContext context) {
+            ClearFailure();
             frameCount = 0;
             jumpPulsed = false;
             sawJumping = false;
@@ -230,6 +233,7 @@ namespace DiceGame.Gameplay.AI.Application.Actions
 
             if (jumpPulsed && !sawJumping && frameCount > 12) {
                 context.InputSource.SetMove(Vector2.zero);
+                MarkFailed();
                 LogComplete(context, "JumpNotStarted");
                 return true;
             }
@@ -242,6 +246,7 @@ namespace DiceGame.Gameplay.AI.Application.Actions
 
             if (frameCount >= maxFrames) {
                 context.InputSource.SetMove(Vector2.zero);
+                MarkFailed();
                 LogComplete(context, "Timeout");
                 return true;
             }
@@ -291,6 +296,7 @@ namespace DiceGame.Gameplay.AI.Application.Actions
         }
 
         public override void Begin(AiExecutionContext context) {
+            ClearFailure();
             phase = 0;
             moveFrames = 0;
             sawMotion = false;
@@ -311,8 +317,7 @@ namespace DiceGame.Gameplay.AI.Application.Actions
             }
 
             moveFrames++;
-            if (releaseInputDuringRoll
-                && (context.Character.IsBusy || context.Character.IsJumping)) {
+            if (context.Character.IsBusy || context.Character.IsJumping) {
                 sawMotion = true;
             }
 
@@ -328,9 +333,19 @@ namespace DiceGame.Gameplay.AI.Application.Actions
                 return false;
             }
 
+            // Prefer outcome over world-idle: JumpRoll can leave residual motion after a valid land.
+            if (HasSucceededStandOn(context)) {
+                context.InputSource.SetMove(Vector2.zero);
+                LogComplete(
+                    context,
+                    standOnDie.CurrentState.GridPos == targetCell ? "StandOnDie" : "RollWorkDie");
+                return true;
+            }
+
             if (!context.IsWorldIdle()) {
                 if (moveFrames >= moveMaxFrames) {
                     context.InputSource.SetMove(Vector2.zero);
+                    MarkFailed();
                     LogComplete(context, "Timeout");
                     return true;
                 }
@@ -338,19 +353,10 @@ namespace DiceGame.Gameplay.AI.Application.Actions
                 return false;
             }
 
-            if (standOnDie != null
-                && context.IsWorldIdle()
-                && context.Character.CurrentDice == standOnDie
-                && standOnDie.CurrentState.GridPos == targetCell
-                && MatchesExpectedLandingTier(standOnDie)) {
-                context.InputSource.SetMove(Vector2.zero);
-                LogComplete(context, "RollWorkDie");
-                return true;
-            }
-
             if (standOnDie != null) {
                 if (moveFrames >= moveMaxFrames) {
                     context.InputSource.SetMove(Vector2.zero);
+                    MarkFailed();
                     LogComplete(context, "Timeout");
                     return true;
                 }
@@ -372,11 +378,28 @@ namespace DiceGame.Gameplay.AI.Application.Actions
 
             if (moveFrames >= moveMaxFrames) {
                 context.InputSource.SetMove(Vector2.zero);
+                MarkFailed();
                 LogComplete(context, "Timeout");
                 return true;
             }
 
             return false;
+        }
+
+        bool HasSucceededStandOn(AiExecutionContext context) {
+            if (standOnDie == null
+                || context.Character.CurrentDice != standOnDie
+                || !MatchesExpectedLandingTier(standOnDie)) {
+                return false;
+            }
+
+            // JumpRoll: die must reach the planned cell (tier-only would pass before the roll starts).
+            if (expectedLandingTier.HasValue
+                && standOnDie.CurrentState.GridPos != targetCell) {
+                return false;
+            }
+
+            return true;
         }
 
         bool MatchesExpectedLandingTier(DiceController die) {

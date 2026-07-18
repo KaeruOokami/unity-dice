@@ -1,4 +1,3 @@
-using DiceGame.Core;
 using UnityEngine;
 
 namespace DiceGame.Gameplay.AI.Application
@@ -15,6 +14,8 @@ namespace DiceGame.Gameplay.AI.Application
         ExecutorPhase phase = ExecutorPhase.Idle;
         AiDiscreteAction currentAction;
         AiExecutionContext context;
+        bool hasCompletedAction;
+        bool lastActionFailed;
 
         public bool IsIdle => phase == ExecutorPhase.Idle;
         public bool IsWaitingForIdle => phase == ExecutorPhase.WaitingForIdle;
@@ -37,6 +38,18 @@ namespace DiceGame.Gameplay.AI.Application
             }
 
             return context.IsWorldIdle();
+        }
+
+        public bool TryConsumeCompletedAction(out bool failed) {
+            failed = false;
+            if (!hasCompletedAction) {
+                return false;
+            }
+
+            failed = lastActionFailed;
+            hasCompletedAction = false;
+            lastActionFailed = false;
+            return true;
         }
 
         public void StartAction(AiDiscreteAction action) {
@@ -64,6 +77,8 @@ namespace DiceGame.Gameplay.AI.Application
                     currentAction.Tick(context);
                     if (currentAction.IsComplete(context)) {
                         context.InputSource.SetMove(Vector2.zero);
+                        hasCompletedAction = true;
+                        lastActionFailed = currentAction.Failed;
                         phase = ExecutorPhase.WaitingForIdle;
                         currentAction = null;
                     }
@@ -80,6 +95,8 @@ namespace DiceGame.Gameplay.AI.Application
         public void Cancel() {
             currentAction = null;
             phase = ExecutorPhase.Idle;
+            hasCompletedAction = false;
+            lastActionFailed = false;
             context?.InputSource.SetMove(Vector2.zero);
         }
     }

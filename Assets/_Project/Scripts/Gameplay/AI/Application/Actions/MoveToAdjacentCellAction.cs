@@ -40,6 +40,7 @@ namespace DiceGame.Gameplay.AI.Application.Actions
         }
 
         public override void Begin(AiExecutionContext context) {
+            ClearFailure();
             frameCount = 0;
             sawBusy = false;
             startCell = context.Character.StandingGridCell;
@@ -84,6 +85,7 @@ namespace DiceGame.Gameplay.AI.Application.Actions
             var frameLimit = GetFrameLimit(context);
             if (frameCount >= frameLimit) {
                 context.InputSource.SetMove(Vector2.zero);
+                MarkFailed();
                 LogComplete(context, "Timeout");
                 return true;
             }
@@ -115,12 +117,17 @@ namespace DiceGame.Gameplay.AI.Application.Actions
             var atStepCenter = atStepCell && context.Character.IsNearCellCenter(nextCell, tolerance);
             var rollStepSettled = IsGroundRollEdge() && atStepCell;
 
-            if (purpose == MoveActionPurpose.StandOnDie
-                && standOnDie != null
-                && context.Character.CurrentDice == standOnDie
-                && (rollStepSettled || atStepCenter)) {
-                reason = "StandOnDie";
-                return true;
+            if (purpose == MoveActionPurpose.StandOnDie) {
+                // Mount only: cell arrival while on another die is not success.
+                // Center snap is not required once mounted on the target die.
+                if (standOnDie != null
+                    && context.Character.CurrentDice == standOnDie
+                    && atStepCell) {
+                    reason = "StandOnDie";
+                    return true;
+                }
+
+                return false;
             }
 
             if (purpose == MoveActionPurpose.RollWorkDie

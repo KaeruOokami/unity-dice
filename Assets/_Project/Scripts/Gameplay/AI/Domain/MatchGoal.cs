@@ -2,6 +2,7 @@ using System.Collections.Generic;
 using DiceGame.Config;
 using DiceGame.Core;
 using DiceGame.Gameplay;
+using DiceGame.Placement;
 using UnityEngine;
 
 namespace DiceGame.Gameplay.AI.Domain
@@ -147,6 +148,7 @@ namespace DiceGame.Gameplay.AI.Domain
         public IReadOnlyList<AiSubGoal> SubGoals { get; }
         public float PriorityScore { get; }
         public bool IsImmediateMatch { get; }
+        public bool IsMarkedUnplannable { get; private set; }
 
         public MatchGoal(
             int face,
@@ -163,6 +165,10 @@ namespace DiceGame.Gameplay.AI.Domain
             IsImmediateMatch = isImmediateMatch;
         }
 
+        public void MarkUnplannable() {
+            IsMarkedUnplannable = true;
+        }
+
         public AiSubGoal GetNextIncompleteSubGoal() {
             for (var i = 0; i < SubGoals.Count; i++) {
                 if (!SubGoals[i].IsComplete) {
@@ -177,8 +183,12 @@ namespace DiceGame.Gameplay.AI.Domain
             return GetNextIncompleteSubGoal() == null;
         }
 
-        public bool IsStale(GameStateSnapshot snapshot, AiPlayerSettings settings) {
+        public bool IsStale(GameStateSnapshot snapshot, AiPlayerSettings settings, DiceRegistry registry = null) {
             if (snapshot == null) {
+                return true;
+            }
+
+            if (IsMarkedUnplannable) {
                 return true;
             }
 
@@ -193,6 +203,30 @@ namespace DiceGame.Gameplay.AI.Domain
                 return true;
             }
 
+            if (registry != null && Face >= 2 && ClusterDice != null && ClusterDice.Count > 0) {
+                if (IsImmediateMatch
+                    && ClusterSelectionEvaluator.ShouldDiscardImmediateCluster(ClusterDice, registry)) {
+                    return true;
+                }
+
+                if (!IsImmediateMatch
+                    && ClusterSelectionEvaluator.ShouldDiscardIncompleteCluster(
+                        ClusterDice,
+                        Face,
+                        snapshot,
+                        registry)) {
+                    return true;
+                }
+            }
+
+            if (ParticipantTarget != null
+                && !ClusterSelectionEvaluator.IsStandableWorkDie(
+                    new DiceSnapshot(ParticipantTarget),
+                    snapshot.PlanningDice,
+                    registry)) {
+                return true;
+            }
+
             if (!IsImmediateMatch
                 && settings != null
                 && ClusterSelectionEvaluator.IsStrandedIsolatedNonSinkingCluster(
@@ -203,7 +237,8 @@ namespace DiceGame.Gameplay.AI.Domain
                     snapshot,
                     Face,
                     ClusterDice,
-                    settings)) {
+                    settings,
+                    registry)) {
                 return true;
             }
 

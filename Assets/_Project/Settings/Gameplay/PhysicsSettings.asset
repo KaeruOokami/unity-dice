@@ -20,7 +20,7 @@ MonoBehaviour:
   jumpGridMoveTierChangeMinTimeline: 0.3
   jumpGridMoveTierChangeMaxTimeline: 0.5
   bottomEmergenceDuration: 2.5
-  spawnHeight: 4
+  spawnHeight: 7
   bounceRestitution: 0.35
   maxBounceCount: 2
   minBounceVelocity: 2

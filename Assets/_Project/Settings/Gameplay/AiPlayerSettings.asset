@@ -35,4 +35,6 @@ MonoBehaviour:
   pathSearchMaxSteps: 64
   cellCenterTolerance: 0.08
   rollStepMaxFrames: 120
+  stuckAttemptsBeforeGoalReset: 3
+  goalFailureBlacklistSeconds: 12
   debugLog: 1

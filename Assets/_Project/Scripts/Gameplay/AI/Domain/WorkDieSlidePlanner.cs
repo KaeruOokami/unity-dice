@@ -26,8 +26,6 @@ namespace DiceGame.Gameplay.AI.Domain
 
     public static class WorkDieSlidePlanner
     {
-        const float PreferBottomJoinScoreBonus = 0.5f;
-
         public static bool IsJoinComplete(
             DiceState state,
             Vector2Int targetCell,
@@ -72,6 +70,8 @@ namespace DiceGame.Gameplay.AI.Domain
                 return false;
             }
 
+            // Join landings must match the cluster tier (same-tier expansion only).
+            var clusterTier = cluster[0].Tier;
             var clusterCells = ClusterSelectionEvaluator.GetClusterCells(cluster);
             var adjacent = CollectClusterAdjacentCells(clusterCells);
             var bestScore = float.MinValue;
@@ -86,24 +86,24 @@ namespace DiceGame.Gameplay.AI.Domain
                     continue;
                 }
 
-                if (!CarryPlacementPassability.TryResolveTarget(cell, registry, out var tier, out _)) {
+                if (!CarryPlacementPassability.CanPlaceAt(cell, clusterTier, registry, out _)) {
                     continue;
                 }
 
                 if (excludeCell.HasValue
                     && excludeTier.HasValue
                     && excludeCell.Value == cell
-                    && excludeTier.Value == tier) {
+                    && excludeTier.Value == clusterTier) {
                     continue;
                 }
 
-                if (!IsJoinLandingAvailable(registry, workDie.Controller, cell, tier)) {
+                if (!IsJoinLandingAvailable(registry, workDie.Controller, cell, clusterTier)) {
                     continue;
                 }
 
                 if (!ClusterSelectionEvaluator.HasMovableExternalNeighbor(
                     cell,
-                    tier,
+                    clusterTier,
                     cluster,
                     allDice,
                     workDie.Controller)) {
@@ -111,22 +111,17 @@ namespace DiceGame.Gameplay.AI.Domain
                 }
 
                 // Already parked on a valid join slot.
-                if (workDie.GridPos == cell && workDie.Tier == tier) {
+                if (workDie.GridPos == cell && workDie.Tier == clusterTier) {
                     targetCell = cell;
-                    targetTier = tier;
+                    targetTier = clusterTier;
                     return true;
                 }
 
                 var score = (float)(-DiceBoardAnalyzer.ManhattanDistance(workDie.GridPos, cell));
-                // Prefer Bottom landings while Top slots remain open (denser later).
-                if (tier == DiceStackTier.Bottom) {
-                    score += PreferBottomJoinScoreBonus;
-                }
-
                 if (score > bestScore) {
                     bestScore = score;
                     targetCell = cell;
-                    targetTier = tier;
+                    targetTier = clusterTier;
                     found = true;
                 }
             }

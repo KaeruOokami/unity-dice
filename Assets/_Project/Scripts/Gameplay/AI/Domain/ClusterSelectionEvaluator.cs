@@ -2,6 +2,7 @@ using System.Collections.Generic;
 using DiceGame.Config;
 using DiceGame.Core;
 using DiceGame.Gameplay;
+using DiceGame.Placement;
 using UnityEngine;
 
 namespace DiceGame.Gameplay.AI.Domain
@@ -102,7 +103,8 @@ namespace DiceGame.Gameplay.AI.Domain
             Vector2Int playerCell,
             AiPlayerSettings settings,
             bool preferChain,
-            out DiceSnapshot workDie) {
+            out DiceSnapshot workDie,
+            IDicePlacement placement = null) {
             workDie = default;
             var bestScore = float.MinValue;
             var found = false;
@@ -130,6 +132,11 @@ namespace DiceGame.Gameplay.AI.Domain
                     continue;
                 }
 
+                // Bottom under Top cannot be stood on for Reach/Orient.
+                if (!IsStandableWorkDie(candidate, allDice, placement)) {
+                    continue;
+                }
+
                 var distanceToCluster = GetDistanceToCluster(candidate.GridPos, cluster);
                 var distanceToPlayer = DiceBoardAnalyzer.ManhattanDistance(playerCell, candidate.GridPos);
                 var score = -distanceToCluster * 10f - distanceToPlayer;
@@ -152,6 +159,42 @@ namespace DiceGame.Gameplay.AI.Domain
             }
 
             return found;
+        }
+
+        public static bool IsStandableWorkDie(
+            DiceSnapshot die,
+            IReadOnlyList<DiceSnapshot> allDice,
+            IDicePlacement placement = null) {
+            if (die.Controller == null) {
+                return false;
+            }
+
+            if (die.Tier != DiceStackTier.Bottom) {
+                return true;
+            }
+
+            if (placement != null) {
+                return !placement.HasTopAt(die.GridPos);
+            }
+
+            if (allDice == null) {
+                return true;
+            }
+
+            for (var i = 0; i < allDice.Count; i++) {
+                var other = allDice[i];
+                if (other.Controller == null
+                    || other.Controller == die.Controller
+                    || other.IsErasing) {
+                    continue;
+                }
+
+                if (other.GridPos == die.GridPos && other.Tier == DiceStackTier.Top) {
+                    return false;
+                }
+            }
+
+            return true;
         }
 
         public static bool ClusterContains(IReadOnlyList<DiceSnapshot> cluster, DiceSnapshot candidate) {
@@ -236,7 +279,8 @@ namespace DiceGame.Gameplay.AI.Domain
             GameStateSnapshot snapshot,
             int excludeFace,
             IReadOnlyList<DiceSnapshot> excludeCluster,
-            AiPlayerSettings settings) {
+            AiPlayerSettings settings,
+            IDicePlacement placement = null) {
             if (snapshot?.PlanningDice == null || settings == null) {
                 return false;
             }
@@ -249,7 +293,20 @@ namespace DiceGame.Gameplay.AI.Domain
                         continue;
                     }
 
-                    if (cluster.Count >= face) {
+                    if (placement != null) {
+                        if (cluster.Count >= face) {
+                            if (!ShouldDiscardImmediateCluster(cluster, placement)) {
+                                return true;
+                            }
+
+                            continue;
+                        }
+
+                        if (ShouldDiscardIncompleteCluster(cluster, face, snapshot, placement)) {
+                            continue;
+                        }
+                    }
+                    else if (cluster.Count >= face) {
                         return true;
                     }
 
@@ -260,7 +317,8 @@ namespace DiceGame.Gameplay.AI.Domain
                         snapshot.PlayerCell,
                         settings,
                         preferChain: false,
-                        out _)) {
+                        out _,
+                        placement)) {
                         return true;
                     }
                 }
@@ -307,6 +365,107 @@ namespace DiceGame.Gameplay.AI.Domain
             }
 
             return cells;
+        }
+
+        public static bool ShouldDiscardImmediateCluster(
+            IReadOnlyList<DiceSnapshot> cluster,
+            IDicePlacement placement) {
+            if (cluster == null || cluster.Count == 0 || placement == null) {
+                return true;
+            }
+
+            // Top-tier members are standable; Bottom under full Tops is not.
+            if (GetClusterTier(cluster) == DiceStackTier.Top) {
+                return false;
+            }
+
+            for (var i = 0; i < cluster.Count; i++) {
+                if (!placement.HasTopAt(cluster[i].GridPos)) {
+                    return false;
+                }
+            }
+
+            return true;
+        }
+
+        public static bool ShouldDiscardIncompleteCluster(
+            IReadOnlyList<DiceSnapshot> cluster,
+            int face,
+            GameStateSnapshot snapshot,
+            IDicePlacement placement) {
+            if (cluster == null || cluster.Count == 0 || placement == null || face < 2) {
+                return true;
+            }
+
+            var need = face - cluster.Count;
+            if (need <= 0) {
+                return false;
+            }
+
+            return CountSameTierExpansionCapacity(cluster, snapshot, placement) < need;
+        }
+
+        public static int CountSameTierExpansionCapacity(
+            IReadOnlyList<DiceSnapshot> cluster,
+            GameStateSnapshot snapshot,
+            IDicePlacement placement) {
+            if (cluster == null || cluster.Count == 0 || placement == null) {
+                return 0;
+            }
+
+            var tier = GetClusterTier(cluster);
+            var clusterCells = GetClusterCells(cluster);
+            var visited = new HashSet<Vector2Int>();
+            var queue = new Queue<Vector2Int>();
+
+            foreach (var cell in clusterCells) {
+                foreach (var adjacent in DiceBoardAnalyzer.GetAdjacentCells(cell)) {
+                    if (clusterCells.Contains(adjacent) || visited.Contains(adjacent)) {
+                        continue;
+                    }
+
+                    if (!IsSameTierPlaceable(adjacent, tier, snapshot, placement)) {
+                        continue;
+                    }
+
+                    visited.Add(adjacent);
+                    queue.Enqueue(adjacent);
+                }
+            }
+
+            while (queue.Count > 0) {
+                var current = queue.Dequeue();
+                foreach (var adjacent in DiceBoardAnalyzer.GetAdjacentCells(current)) {
+                    if (clusterCells.Contains(adjacent) || visited.Contains(adjacent)) {
+                        continue;
+                    }
+
+                    if (!IsSameTierPlaceable(adjacent, tier, snapshot, placement)) {
+                        continue;
+                    }
+
+                    visited.Add(adjacent);
+                    queue.Enqueue(adjacent);
+                }
+            }
+
+            return visited.Count;
+        }
+
+        static DiceStackTier GetClusterTier(IReadOnlyList<DiceSnapshot> cluster) {
+            return cluster[0].Tier;
+        }
+
+        static bool IsSameTierPlaceable(
+            Vector2Int cell,
+            DiceStackTier tier,
+            GameStateSnapshot snapshot,
+            IDicePlacement placement) {
+            if (snapshot != null && !snapshot.IsInPlayerRegion(cell)) {
+                return false;
+            }
+
+            return CarryPlacementPassability.CanPlaceAt(cell, tier, placement, out _);
         }
 
         public static bool HasMovableExternalNeighbor(

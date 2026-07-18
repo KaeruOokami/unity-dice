@@ -28,6 +28,8 @@ namespace DiceGame.Config
         [SerializeField] int pathSearchMaxSteps = 64;
         [SerializeField] float cellCenterTolerance = 0.08f;
         [SerializeField] int rollStepMaxFrames = 120;
+        [SerializeField] int stuckAttemptsBeforeGoalReset = 3;
+        [SerializeField] float goalFailureBlacklistSeconds = 12f;
         [SerializeField] bool debugLog;
 
         public bool Player1IsAi => player1IsAi;
@@ -53,6 +55,8 @@ namespace DiceGame.Config
         public int PathSearchMaxSteps => pathSearchMaxSteps;
         public float CellCenterTolerance => cellCenterTolerance;
         public int RollStepMaxFrames => rollStepMaxFrames;
+        public int StuckAttemptsBeforeGoalReset => stuckAttemptsBeforeGoalReset;
+        public float GoalFailureBlacklistSeconds => goalFailureBlacklistSeconds;
         public bool DebugLog => debugLog;
 
         public bool IsAiControlled(PlayerSlot slot) {
