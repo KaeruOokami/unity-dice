@@ -950,7 +950,7 @@ namespace DiceGame.Gameplay
                     || bottom == null
                     || bottom == standingController.CurrentDice
                     || GhostPlacementRules.IsPlayerPassThrough(bottom)
-                    || (bottom.IsSpawning && !bottom.AllowsUnconditionalMount)) {
+                    || BlocksCoveringMountUntilSettled(bottom)) {
                     return false;
                 }
 
@@ -963,7 +963,7 @@ namespace DiceGame.Gameplay
                     || top == null
                     || top == standingController.CurrentDice
                     || GhostPlacementRules.IsPlayerPassThrough(top)
-                    || top.IsSpawning) {
+                    || BlocksCoveringMountUntilSettled(top)) {
                     return false;
                 }
 
@@ -972,6 +972,16 @@ namespace DiceGame.Gameplay
             }
 
             return false;
+        }
+
+        /// <summary>
+        /// Natural spawn fall / demote / roll: wait until motion ends, then mount if still same cell.
+        /// Bottom emergence allows mount immediately via <see cref="DiceController.AllowsUnconditionalMount"/>.
+        /// </summary>
+        static bool BlocksCoveringMountUntilSettled(DiceController dice) {
+            return dice != null
+                && dice.IsMotionFollowActive
+                && !dice.AllowsUnconditionalMount;
         }
 
         void MountOntoCoveringDice(DiceController coveringDice) {
@@ -1325,7 +1335,8 @@ namespace DiceGame.Gameplay
             }
 
             if (registry.TryGetBottomAt(gridCell, out var bottom)) {
-                if (GhostPlacementRules.IsPlayerPassThrough(bottom)) {
+                if (GhostPlacementRules.IsPlayerPassThrough(bottom)
+                    || BlocksCoveringMountUntilSettled(bottom)) {
                     ApplyFloorStanding(gridCell);
                     return;
                 }

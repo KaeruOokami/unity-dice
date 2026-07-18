@@ -168,6 +168,24 @@ namespace DiceGame.Placement
                 return true;
             }
 
+            // Ascent Bottom → Top ghost: diagonal swap (ghost to previous Bottom).
+            if (fromTier == DiceStackTier.Bottom
+                && landingTier == DiceStackTier.Top
+                && GhostPlacementRules.TryResolveAscentGhostSwap(
+                    fromState,
+                    landingGhost,
+                    out var ascentMoverTo,
+                    out var ascentGhostFrom,
+                    out var ascentGhostTo)) {
+                plan = new DiceSlidePlan(
+                    fromState,
+                    ascentMoverTo,
+                    GhostLandingMode.CellSwap,
+                    ascentGhostFrom,
+                    ascentGhostTo);
+                return true;
+            }
+
             var landingProbe = new DiceState(
                 fromState.GridPos,
                 fromState.Orientation,

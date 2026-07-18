@@ -55,11 +55,8 @@ namespace DiceGame.Placement
                     return false;
                 }
 
-                if (registry.HasTopAt(dice.CurrentState.GridPos)) {
-                    rejectReason = "floorRequiresNoTop";
-                    return false;
-                }
-
+                // Top may be present: pushing Bottom leaves Top unsupported and it demotes via
+                // MoveDice → TryResolveUnsupportedTopAt → OnBottomSupportLost.
                 return true;
             }
 

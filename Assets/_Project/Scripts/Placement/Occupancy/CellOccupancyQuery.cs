@@ -37,6 +37,7 @@ namespace DiceGame.Placement
 
         /// <summary>
         /// Occupancy for roll path ranks: pass-through dice do not count as solid.
+        /// Pending Top spawn reserves Top for dice landing (same as occupied Top).
         /// </summary>
         public bool TryGetOccupancyTier(Vector2Int cell, out CellOccupancyTier tier) {
             tier = CellOccupancyTier.Invalid;
@@ -44,7 +45,8 @@ namespace DiceGame.Placement
                 return false;
             }
 
-            if (GhostPlacementRules.HasSolidTopAt(registry, cell)) {
+            if (GhostPlacementRules.HasSolidTopAt(registry, cell)
+                || (registry != null && registry.HasPendingTopAt(cell))) {
                 tier = CellOccupancyTier.Top;
                 return true;
             }
@@ -59,6 +61,10 @@ namespace DiceGame.Placement
         }
 
         public bool CanOverwriteTopAt(Vector2Int cell) {
+            if (registry != null && registry.HasPendingTopAt(cell)) {
+                return false;
+            }
+
             return IsPassableCell(cell)
                 && placement.CanAcceptTopDiceAt(cell)
                 && !GhostPlacementRules.CanPlaceSolidTopAt(registry, cell);
@@ -122,7 +128,20 @@ namespace DiceGame.Placement
                 return true;
             }
 
-            // Horizontal (or stack): overlap landing slot ghost → CellSwap.
+            // Ascent Bottom → Top ghost: diagonal swap (ghost to previous Bottom, no Top intermediate).
+            if (fromTier == DiceStackTier.Bottom
+                && landingTier == DiceStackTier.Top
+                && GhostPlacementRules.TryResolveAscentGhostSwap(
+                    sameTierProbe,
+                    landingGhost,
+                    out _,
+                    out ghostFrom,
+                    out ghostTo)) {
+                ghostLanding = GhostLandingMode.CellSwap;
+                return true;
+            }
+
+            // Horizontal same-tier overlap → CellSwap.
             var landingProbe = new DiceState(fromCell, DiceOrientation.Default, landingTier, moverKind);
             if (GhostPlacementRules.TryResolveCellSwap(
                 landingProbe,

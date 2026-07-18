@@ -129,33 +129,50 @@ namespace DiceGame.Core
         }
 
         /// <summary>
+        /// Mutable spawn-fall target so landing height can change mid-animation
+        /// (e.g. pending Bottom retargeted to Top after an interrupt).
+        /// </summary>
+        public sealed class SpawnFallSession
+        {
+            public VerticalMotionState Motion;
+            public float GroundWorldY;
+        }
+
+        /// <summary>
         /// Spawn appearance only. Do not use for gameplay falls.
+        /// Reads <see cref="SpawnFallSession.GroundWorldY"/> each frame.
         /// </summary>
         public static IEnumerator AnimateSpawnBounceDropCoroutine(
-            VerticalMotionState state,
+            SpawnFallSession session,
             float gravity,
-            float groundWorldY,
             float restitution,
             int maxBounceCount,
             float minBounceVelocity,
             Func<float> getHorizontalX,
             Func<float> getHorizontalZ,
             Action<float, float, float> setWorldPosition) {
+            if (session == null) {
+                yield break;
+            }
+
             var bounceCount = 0;
-            while (!state.IsGrounded) {
-                state = StepSpawnBounce(
-                    state,
+            while (!session.Motion.IsGrounded) {
+                session.Motion = StepSpawnBounce(
+                    session.Motion,
                     gravity,
                     Time.deltaTime,
                     restitution,
                     maxBounceCount,
                     minBounceVelocity,
                     ref bounceCount);
-                setWorldPosition(getHorizontalX(), groundWorldY + state.Offset, getHorizontalZ());
+                setWorldPosition(
+                    getHorizontalX(),
+                    session.GroundWorldY + session.Motion.Offset,
+                    getHorizontalZ());
                 yield return null;
             }
 
-            setWorldPosition(getHorizontalX(), groundWorldY, getHorizontalZ());
+            setWorldPosition(getHorizontalX(), session.GroundWorldY, getHorizontalZ());
         }
     }
 }

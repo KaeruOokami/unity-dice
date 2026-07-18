@@ -61,10 +61,25 @@ namespace DiceGame.Placement
         }
 
         /// <summary>
-        /// Top slot is free for solid occupancy: solid Bottom present, no solid Top (ghost Top ignored).
+        /// Top slot is free for solid dice landing: solid Bottom present, no solid Top,
+        /// and no pending Top spawn (falling spawn reserves the slot for dice moves).
         /// </summary>
         public static bool CanPlaceSolidTopAt(DiceRegistry registry, Vector2Int cell) {
-            return HasSolidBottomAt(registry, cell) && !HasSolidTopAt(registry, cell);
+            return HasSolidBottomAt(registry, cell)
+                && !HasSolidTopAt(registry, cell)
+                && registry != null
+                && !registry.HasPendingTopAt(cell);
+        }
+
+        /// <summary>
+        /// Bottom is present and Top is reserved by a pending spawn.
+        /// Dice-coupled entry must not claim that Top; player-only transfer to Bottom remains allowed.
+        /// Committed Top (including Ghost) is not blocked here — landing / ghost-swap rules handle that.
+        /// </summary>
+        public static bool BlocksDiceCoupledStackEntry(DiceRegistry registry, Vector2Int cell) {
+            return registry != null
+                && registry.HasBottomAt(cell)
+                && registry.HasPendingTopAt(cell);
         }
 
         /// <summary>
@@ -82,7 +97,7 @@ namespace DiceGame.Placement
         }
 
         /// <summary>
-        /// Non-ghost moving onto a ghost bottom (same tier) → cell swap.
+        /// Same-tier ghost overlap → cell swap to previous cell (same tier).
         /// Pass-through movers cannot initiate: they are not player-movable.
         /// </summary>
         public static bool TryResolveCellSwap(
@@ -118,6 +133,51 @@ namespace DiceGame.Placement
                 moverFrom.GridPos,
                 ghostState.Orientation,
                 ghostState.Tier,
+                ghostState.Kind);
+            return true;
+        }
+
+        /// <summary>
+        /// Ascent (Bottom → Top ghost): diagonal swap with no intermediate.
+        /// Mover takes Top; ghost goes to the mover's previous cell as Bottom.
+        /// </summary>
+        public static bool TryResolveAscentGhostSwap(
+            DiceState moverFromBottom,
+            DiceController topGhost,
+            out DiceState moverTo,
+            out DiceState ghostFrom,
+            out DiceState ghostTo) {
+            moverTo = default;
+            ghostFrom = default;
+            ghostTo = default;
+
+            if (moverFromBottom.Tier != DiceStackTier.Bottom) {
+                return false;
+            }
+
+            if (!AllowsDiceSwapThrough(topGhost) || IsPassThroughKind(moverFromBottom.Kind)) {
+                return false;
+            }
+
+            var ghostState = topGhost.CurrentState;
+            if (ghostState.Tier != DiceStackTier.Top) {
+                return false;
+            }
+
+            if (topGhost.IsBusy || topGhost.IsErasing || topGhost.IsVanishing || topGhost.IsCarried) {
+                return false;
+            }
+
+            moverTo = new DiceState(
+                ghostState.GridPos,
+                moverFromBottom.Orientation,
+                DiceStackTier.Top,
+                moverFromBottom.Kind);
+            ghostFrom = ghostState;
+            ghostTo = new DiceState(
+                moverFromBottom.GridPos,
+                ghostState.Orientation,
+                DiceStackTier.Bottom,
                 ghostState.Kind);
             return true;
         }

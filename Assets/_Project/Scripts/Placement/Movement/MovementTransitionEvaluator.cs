@@ -457,7 +457,9 @@ namespace DiceGame.Placement
             }
 
             // Dice-coupled roll / ghost swap before player-only landing (ghost is not a solid obstacle).
-            if (evaluateDiceCoupledMovement) {
+            // Pending Top spawn on Bottom reserves the Top slot for dice; player-only Bottom transfer may follow.
+            if (evaluateDiceCoupledMovement
+                && !GhostPlacementRules.BlocksDiceCoupledStackEntry(registry, toCell)) {
                 if (registry.CanPlaceBottomDiceAt(toCell)
                     && TryEvaluateDiceCoupledMovementOnEmptyCell(
                         fromCell,

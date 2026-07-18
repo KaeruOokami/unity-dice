@@ -275,8 +275,28 @@ namespace DiceGame.Gameplay
                     board,
                     registry,
                     spawnSettings.BottomEmergenceDuration,
+                    Capabilities.FallGravityScale,
                     OnSpawnComplete);
             }
+        }
+
+        /// <summary>
+        /// Called by <see cref="DiceRegistry"/> when a committed Bottom claims this die's
+        /// pending Bottom cell — reservation is already moved to Top.
+        /// </summary>
+        public void NotifyPendingSpawnRetargetedToTop() {
+            if (!isSpawning || currentState.Tier == DiceStackTier.Top) {
+                return;
+            }
+
+            currentState = new DiceState(
+                currentState.GridPos,
+                currentState.Orientation,
+                DiceStackTier.Top,
+                currentState.Kind);
+            spawnAppearMode = DiceSpawnAppearMode.FallFromAbove;
+            diceView?.RetargetActiveSpawnLanding(currentState);
+            StateChanged?.Invoke(currentState);
         }
 
         void ConfigurePushBody() {
@@ -611,7 +631,50 @@ namespace DiceGame.Gameplay
                 return;
             }
 
-            registry.TryCompleteDeferredGhostLanding(ghostFrom, ghostTo, onComplete);
+            registry.TryCompleteDeferredGhostLanding(ghostFrom, ghostTo, ghost => {
+                RegisterDisplacedGhostForMatch(ghost);
+                // If a same-tier Top swap left the ghost unsupported, demote it now.
+                if (ghost != null) {
+                    registry.ResolveUnsupportedTopAt(ghost.CurrentState.GridPos);
+                }
+
+                onComplete?.Invoke();
+            });
+        }
+
+        /// <summary>
+        /// Ghost displace can form matches without the mover; register it as an action participant.
+        /// </summary>
+        void RegisterDisplacedGhostForMatch(DiceController ghost) {
+            if (ghost == null || matchActionContext == null) {
+                return;
+            }
+
+            if (!TryResolveDisplaceActionOwner(out var owner)) {
+                return;
+            }
+
+            matchActionContext.RegisterActionDice(ghost, owner);
+        }
+
+        bool TryResolveDisplaceActionOwner(out PlayerSlot owner) {
+            if (matchActionContext != null
+                && matchActionContext.TryGetActionOwner(this, out owner)) {
+                return true;
+            }
+
+            if (ownershipContext != null
+                && ownershipContext.TryGetTierFallSupportOwner(this, out owner)) {
+                return true;
+            }
+
+            if (ownershipContext != null
+                && ownershipContext.TryGetOwner(this, out owner)) {
+                return true;
+            }
+
+            owner = default;
+            return false;
         }
 
         void NotifyActionMoveCompleted(DiceState fromState, DiceState toState) {
@@ -967,6 +1030,8 @@ namespace DiceGame.Gameplay
                     () => {
                         isRolling = false;
                         tierFallMatchNotifier?.NotifyTierFallCompleted(this);
+                        // Flush pending player action so displaced ghosts are match triggers too.
+                        matchActionContext?.NotifyParticipantMoveCompleted(this);
                         StateChanged?.Invoke(currentState);
                     });
             });

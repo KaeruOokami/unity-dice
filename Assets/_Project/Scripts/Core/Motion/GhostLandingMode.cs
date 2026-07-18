@@ -3,10 +3,13 @@ namespace DiceGame.Core
     public enum GhostLandingMode
     {
         None,
-        /// <summary>Mover takes ghost cell; ghost takes mover's previous cell (same tiers). Horizontal overlap only.</summary>
+        /// <summary>
+        /// Mover takes ghost cell/slot; ghost is displaced.
+        /// Same-tier: previous cell same tier. Ascent onto Top ghost: previous cell as Bottom.
+        /// </summary>
         CellSwap,
         /// <summary>
-        /// Same cell after vertical fall onto ghost Bottom: mover becomes Bottom, ghost becomes Top.
+        /// Descent onto ghost Bottom after fall: same cell, mover Bottom, ghost Top.
         /// </summary>
         InCellPromoteGhost
     }

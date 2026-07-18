@@ -150,7 +150,45 @@ namespace DiceGame.Placement
             }
 
             ClearPendingSpawn(dice);
-            Place(dice, gridPos, tier);
+            var resolvedTier = ResolveSpawnCommitTier(gridPos, tier);
+            if (resolvedTier != tier) {
+                dice.ApplyExternalState(
+                    new DiceState(
+                        gridPos,
+                        dice.CurrentState.Orientation,
+                        resolvedTier,
+                        dice.Kind),
+                    snapVisual: true);
+            }
+
+            Place(dice, gridPos, resolvedTier);
+        }
+
+        /// <summary>
+        /// If Bottom was taken while a Bottom spawn was still pending, commit as Top when possible.
+        /// </summary>
+        DiceStackTier ResolveSpawnCommitTier(Vector2Int gridPos, DiceStackTier requestedTier) {
+            if (requestedTier == DiceStackTier.Bottom) {
+                if (!HasBottomAt(gridPos)) {
+                    return DiceStackTier.Bottom;
+                }
+
+                if (!HasTopAt(gridPos) && !HasPendingTopAt(gridPos)) {
+                    return DiceStackTier.Top;
+                }
+
+                Debug.LogError(
+                    $"DiceRegistry: spawn commit cannot place at ({gridPos.x},{gridPos.y}); " +
+                    "Bottom occupied and Top unavailable.");
+                return DiceStackTier.Top;
+            }
+
+            if (!HasBottomAt(gridPos) || HasTopAt(gridPos) || HasPendingTopAt(gridPos)) {
+                Debug.LogError(
+                    $"DiceRegistry: spawn commit Top unavailable at ({gridPos.x},{gridPos.y}).");
+            }
+
+            return DiceStackTier.Top;
         }
 
         public void Place(DiceController dice, Vector2Int gridPos, DiceStackTier tier) {
@@ -246,22 +284,22 @@ namespace DiceGame.Placement
             DiceController ghost,
             DiceState ghostFrom,
             DiceState ghostTo,
-            Action onComplete = null) {
+            Action<DiceController> onComplete = null) {
             if (ghost == null) {
-                onComplete?.Invoke();
+                onComplete?.Invoke(null);
                 return false;
             }
 
             SetDiceAt(ghostTo.GridPos, ghost, ghostTo.Tier);
             ghost.ApplyExternalState(ghostTo, snapVisual: false);
-            ghost.PlayGhostDisplaceVisual(ghostFrom, ghostTo, onComplete);
+            ghost.PlayGhostDisplaceVisual(ghostFrom, ghostTo, () => onComplete?.Invoke(ghost));
             return true;
         }
 
         public bool TryCompleteDeferredGhostLanding(
             DiceState ghostFrom,
             DiceState ghostTo,
-            Action onComplete = null) {
+            Action<DiceController> onComplete = null) {
             // Ghost was deferred: still holds ghostFrom in CurrentState, not in grid.
             DiceController ghost = null;
             foreach (var dice in allDice) {
@@ -279,7 +317,7 @@ namespace DiceGame.Placement
             if (ghost == null) {
                 Debug.LogError(
                     $"DiceRegistry: deferred ghost not found for complete at ({ghostFrom.GridPos.x},{ghostFrom.GridPos.y}) tier={ghostFrom.Tier}");
-                onComplete?.Invoke();
+                onComplete?.Invoke(null);
                 return false;
             }
 
@@ -384,12 +422,22 @@ namespace DiceGame.Placement
             return byGrid.TryGetValue(gridPos, out var stack) && stack.Bottom != null;
         }
 
-        bool HasPendingBottomAt(Vector2Int gridPos) {
+        public bool HasPendingBottomAt(Vector2Int gridPos) {
             return pendingSpawns.TryGetValue(gridPos, out var stack) && stack.Bottom != null;
         }
 
-        bool HasPendingTopAt(Vector2Int gridPos) {
+        public bool HasPendingTopAt(Vector2Int gridPos) {
             return pendingSpawns.TryGetValue(gridPos, out var stack) && stack.Top != null;
+        }
+
+        public bool TryGetPendingTopAt(Vector2Int gridPos, out DiceController dice) {
+            dice = null;
+            if (!pendingSpawns.TryGetValue(gridPos, out var stack) || stack.Top == null) {
+                return false;
+            }
+
+            dice = stack.Top;
+            return true;
         }
 
         void ClearPendingSpawn(DiceController dice) {
@@ -550,6 +598,37 @@ namespace DiceGame.Placement
             }
 
             byGrid[gridPos] = stack;
+
+            if (tier == DiceStackTier.Bottom) {
+                TryRetargetPendingBottomSpawnAt(gridPos, excluding: dice);
+            }
+        }
+
+        /// <summary>
+        /// When a committed Bottom claims a cell that still has a pending Bottom spawn,
+        /// retarget that spawn to Top immediately (reservation + spawning die state/visual).
+        /// Pending Top is never interrupted this way — coupled entry is blocked while Top is reserved.
+        /// </summary>
+        void TryRetargetPendingBottomSpawnAt(Vector2Int gridPos, DiceController excluding) {
+            if (!TryGetPendingBottomAt(gridPos, out var pending) || pending == null || pending == excluding) {
+                return;
+            }
+
+            if (HasTopAt(gridPos) || HasPendingTopAt(gridPos)) {
+                Debug.LogError(
+                    $"DiceRegistry: cannot retarget pending Bottom spawn at ({gridPos.x},{gridPos.y}); " +
+                    "Top already occupied.");
+                return;
+            }
+
+            if (!pendingSpawns.TryGetValue(gridPos, out var pendingStack)) {
+                return;
+            }
+
+            pendingStack.Bottom = null;
+            pendingStack.Top = pending;
+            pendingSpawns[gridPos] = pendingStack;
+            pending.NotifyPendingSpawnRetargetedToTop();
         }
 
         void ClearDiceAt(

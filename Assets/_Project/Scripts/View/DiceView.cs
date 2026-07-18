@@ -47,6 +47,15 @@ namespace DiceGame.View
         GameObject runtimeMeshPrefab;
         Texture dissolveEmissionMapOverride;
         Color? erasureEmissionColorOverride;
+        GravityMotion.SpawnFallSession activeSpawnFallSession;
+        DiceState activeSpawnState;
+        Board activeSpawnBoard;
+        DiceRegistry activeSpawnRegistry;
+        float activeSpawnBounceRestitution;
+        int activeSpawnMaxBounceCount;
+        float activeSpawnMinBounceVelocity;
+        float activeSpawnFallGravityScale;
+        Action activeSpawnOnComplete;
 
         // Dice mesh is visual-only. Gameplay uses `Board.CellSize` as the "logical dice cube" size.
         // So we measure the mesh's local bounds once, then scale/center it to match `Board.CellSize`.
@@ -492,6 +501,16 @@ namespace DiceGame.View
                 StopCoroutine(rollCoroutine);
             }
 
+            CacheSpawnFallParams(
+                state,
+                board,
+                registry,
+                bounceRestitution,
+                maxBounceCount,
+                minBounceVelocity,
+                fallGravityScale,
+                onComplete);
+
             rollCoroutine = StartCoroutine(SpawnAppearCoroutine(
                 state,
                 board,
@@ -509,6 +528,7 @@ namespace DiceGame.View
             Board board,
             DiceRegistry registry,
             float emergenceDuration,
+            float fallGravityScale,
             Action onComplete) {
             if (!HasGameplaySettings()) {
                 return;
@@ -522,12 +542,93 @@ namespace DiceGame.View
                 StopCoroutine(rollCoroutine);
             }
 
+            CacheSpawnFallParams(
+                state,
+                board,
+                registry,
+                bounceRestitution: 0f,
+                maxBounceCount: 0,
+                minBounceVelocity: 0f,
+                fallGravityScale,
+                onComplete);
+
             rollCoroutine = StartCoroutine(BottomEmergenceCoroutine(
                 state,
                 board,
                 registry,
                 emergenceDuration,
                 onComplete));
+        }
+
+        /// <summary>
+        /// Mid-spawn: Bottom landing was claimed — continue/fall toward Top height without a visual jump.
+        /// </summary>
+        public void RetargetActiveSpawnLanding(DiceState newState) {
+            if (positionRoot == null || activeSpawnBoard == null) {
+                return;
+            }
+
+            activeSpawnState = newState;
+            var worldY = positionRoot.position.y;
+            var targetGroundY = ResolveSpawnRestWorldY(newState, activeSpawnBoard, activeSpawnRegistry);
+
+            if (activeSpawnFallSession != null) {
+                activeSpawnFallSession.GroundWorldY = targetGroundY;
+                var motion = activeSpawnFallSession.Motion;
+                motion.Offset = worldY - targetGroundY;
+                if (motion.Offset <= 0f) {
+                    motion.Offset = 0f;
+                    motion.VelocityY = 0f;
+                    motion.IsGrounded = true;
+                }
+
+                activeSpawnFallSession.Motion = motion;
+                return;
+            }
+
+            // Bottom emergence has no fall session — convert to a fall toward Top.
+            if (rollCoroutine != null) {
+                StopCoroutine(rollCoroutine);
+            }
+
+            ApplyEmergenceVisual(activeSpawnBoard, 0f);
+            worldY = positionRoot.position.y;
+            targetGroundY = ResolveSpawnRestWorldY(newState, activeSpawnBoard, activeSpawnRegistry);
+            var startOffset = Mathf.Max(0f, worldY - targetGroundY);
+            activeSpawnFallSession = new GravityMotion.SpawnFallSession {
+                Motion = GravityMotion.CreateDrop(startOffset),
+                GroundWorldY = targetGroundY
+            };
+            isAnimating = true;
+            rollCoroutine = StartCoroutine(SpawnFallFromSessionCoroutine());
+        }
+
+        void CacheSpawnFallParams(
+            DiceState state,
+            Board board,
+            DiceRegistry registry,
+            float bounceRestitution,
+            int maxBounceCount,
+            float minBounceVelocity,
+            float fallGravityScale,
+            Action onComplete) {
+            activeSpawnState = state;
+            activeSpawnBoard = board;
+            activeSpawnRegistry = registry;
+            activeSpawnBounceRestitution = bounceRestitution;
+            activeSpawnMaxBounceCount = maxBounceCount;
+            activeSpawnMinBounceVelocity = minBounceVelocity;
+            activeSpawnFallGravityScale = fallGravityScale;
+            activeSpawnOnComplete = onComplete;
+            activeSpawnFallSession = null;
+        }
+
+        float ResolveSpawnRestWorldY(DiceState state, Board board, DiceRegistry registry) {
+            var saved = positionRoot.position;
+            CommitGridPlacement(state, board, registry);
+            var groundY = positionRoot.position.y;
+            positionRoot.position = saved;
+            return groundY;
         }
 
         public void SyncStackedSurface(DiceState state, Board board, DiceRegistry registry) {
@@ -1311,6 +1412,7 @@ namespace DiceGame.View
             if (dissolvePivot == null || rotationRoot == null || positionRoot == null) {
                 isAnimating = false;
                 rollCoroutine = null;
+                ClearActiveSpawnFall();
                 onComplete?.Invoke();
                 yield break;
             }
@@ -1329,16 +1431,18 @@ namespace DiceGame.View
             ApplyErasureVisual(board, 0f);
 
             var landedWorld = positionRoot.position;
-            var groundWorldY = landedWorld.y;
             positionRoot.position = landedWorld + Vector3.up * spawnHeightAboveSurface;
+
+            activeSpawnFallSession = new GravityMotion.SpawnFallSession {
+                Motion = GravityMotion.CreateDrop(spawnHeightAboveSurface),
+                GroundWorldY = landedWorld.y
+            };
 
             var gravity = physicsSettings.Gravity
                 * Mathf.Max(0.01f, fallGravityScale);
-            var motion = GravityMotion.CreateDrop(spawnHeightAboveSurface);
             yield return GravityMotion.AnimateSpawnBounceDropCoroutine(
-                motion,
+                activeSpawnFallSession,
                 gravity,
-                groundWorldY,
                 bounceRestitution,
                 maxBounceCount,
                 minBounceVelocity,
@@ -1346,10 +1450,48 @@ namespace DiceGame.View
                 () => positionRoot.position.z,
                 (x, y, z) => positionRoot.position = new Vector3(x, y, z));
 
-            SnapTo(state, board, registry);
+            SnapTo(activeSpawnState, board, registry);
             isAnimating = false;
             rollCoroutine = null;
+            ClearActiveSpawnFall();
             onComplete?.Invoke();
+        }
+
+        IEnumerator SpawnFallFromSessionCoroutine() {
+            if (activeSpawnFallSession == null || positionRoot == null || !HasGameplaySettings()) {
+                isAnimating = false;
+                rollCoroutine = null;
+                var onComplete = activeSpawnOnComplete;
+                ClearActiveSpawnFall();
+                onComplete?.Invoke();
+                yield break;
+            }
+
+            var gravity = physicsSettings.Gravity
+                * Mathf.Max(0.01f, activeSpawnFallGravityScale);
+            yield return GravityMotion.AnimateSpawnBounceDropCoroutine(
+                activeSpawnFallSession,
+                gravity,
+                activeSpawnBounceRestitution,
+                activeSpawnMaxBounceCount,
+                activeSpawnMinBounceVelocity,
+                () => positionRoot.position.x,
+                () => positionRoot.position.z,
+                (x, y, z) => positionRoot.position = new Vector3(x, y, z));
+
+            SnapTo(activeSpawnState, activeSpawnBoard, activeSpawnRegistry);
+            isAnimating = false;
+            rollCoroutine = null;
+            var complete = activeSpawnOnComplete;
+            ClearActiveSpawnFall();
+            complete?.Invoke();
+        }
+
+        void ClearActiveSpawnFall() {
+            activeSpawnFallSession = null;
+            activeSpawnOnComplete = null;
+            activeSpawnBoard = null;
+            activeSpawnRegistry = null;
         }
 
         IEnumerator BottomEmergenceCoroutine(
@@ -1386,9 +1528,10 @@ namespace DiceGame.View
                 yield return null;
             }
 
-            SnapTo(state, board, registry);
+            SnapTo(activeSpawnState, board, registry);
             isAnimating = false;
             rollCoroutine = null;
+            ClearActiveSpawnFall();
             onComplete?.Invoke();
         }
 
