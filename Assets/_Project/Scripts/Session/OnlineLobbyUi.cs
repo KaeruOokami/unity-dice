@@ -154,7 +154,7 @@ namespace DiceGame.Session
 
             try {
                 setupPanelUi = new MatchSetupPanelUi(registry, mode, setupContentRoot);
-                setupPanelUi.ApplyDefaults(registry.CreateDefaultSnapshot(mode));
+                setupPanelUi.ApplyDefaults(MatchSetupPersistence.LoadOrCreate(mode, registry));
             } catch (Exception ex) {
                 setupPanelUi = null;
                 Debug.LogError($"[OnlineLobbyUi] Failed to build match setup panel: {ex}");
@@ -202,6 +202,11 @@ namespace DiceGame.Session
 
             if (setupErrorText != null) {
                 setupErrorText.text = string.Empty;
+            }
+
+            var registry = presetRegistry ?? controller.MatchSetupPresetRegistry;
+            if (!MatchSetupPersistence.TrySave(snapshot, registry, out var saveError)) {
+                Debug.LogError($"[OnlineLobbyUi] Failed to save match setup: {saveError}");
             }
 
             controller.StartLocalPlay(snapshot);

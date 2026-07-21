@@ -41,7 +41,7 @@ namespace DiceGame.Config
                 return false;
             }
 
-            if (!System.Enum.IsDefined(typeof(GameMode), payload.GameMode)) {
+            if (!System.Enum.IsDefined(typeof(GameMode), (int)payload.GameMode)) {
                 errorMessage = "MatchSetupNetworkCodec: Unknown game mode.";
                 return false;
             }

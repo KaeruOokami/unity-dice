@@ -44,7 +44,7 @@ namespace DiceGame.Gameplay
             if (subtitleText != null) {
                 subtitleText.text = allowHostActions
                     ? string.Empty
-                    : "ホストがポーズ中です";
+                    : "Paused by host";
             }
         }
 
@@ -77,7 +77,7 @@ namespace DiceGame.Gameplay
             panel = CreatePanel(dim.transform, "Panel", new Color(0.12f, 0.12f, 0.14f, 0.95f));
             CenterPanel(panel.GetComponent<RectTransform>(), new Vector2(480f, 340f));
 
-            CreateText(panel.transform, "Title", "ポーズ", 40, TextAnchor.UpperCenter);
+            CreateText(panel.transform, "Title", "Pause", 40, TextAnchor.UpperCenter);
             subtitleText = CreateText(panel.transform, "Subtitle", string.Empty, 22, TextAnchor.UpperCenter);
             var subtitleRect = subtitleText.GetComponent<RectTransform>();
             subtitleRect.anchorMin = new Vector2(0.1f, 0.55f);
@@ -85,12 +85,12 @@ namespace DiceGame.Gameplay
             subtitleRect.offsetMin = Vector2.zero;
             subtitleRect.offsetMax = Vector2.zero;
 
-            resumeButton = CreateButton(panel.transform, "ResumeButton", "ゲームに戻る", new Vector2(0f, 10f), () => {
+            resumeButton = CreateButton(panel.transform, "ResumeButton", "Resume", new Vector2(0f, 10f), () => {
                 if (hostControlsEnabled) {
                     ResumeClicked?.Invoke();
                 }
             });
-            titleButton = CreateButton(panel.transform, "TitleButton", "タイトルに戻る", new Vector2(0f, -80f), () => {
+            titleButton = CreateButton(panel.transform, "TitleButton", "Return to Title", new Vector2(0f, -80f), () => {
                 if (hostControlsEnabled) {
                     ReturnToTitleClicked?.Invoke();
                 }

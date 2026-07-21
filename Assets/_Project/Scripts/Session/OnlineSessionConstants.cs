@@ -19,5 +19,6 @@ namespace DiceGame.Session
         public const float LobbyHeartbeatSeconds = 15f;
         public const float SnapshotSendIntervalSeconds = 0.05f;
         public const float InputSendIntervalSeconds = 0.05f;
+        public const string MatchSetupPersistDirectory = "MatchSetup";
     }
 }
