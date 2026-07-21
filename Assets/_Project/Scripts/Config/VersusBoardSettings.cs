@@ -45,7 +45,7 @@ namespace DiceGame.Config
     }
 
     [CreateAssetMenu(fileName = "VersusBoardSettings", menuName = "Dice/Versus Board Settings")]
-    public sealed class VersusBoardSettings : ScriptableObject
+    public sealed class VersusBoardSettings : ScriptableObject, IVersusBoardSettings
     {
         [SerializeField] PlayerBoardDefinition player1 = new(4, 6, null, null, null, null);
         [SerializeField] PlayerBoardDefinition player2 = new(4, 6, null, null, null, null);

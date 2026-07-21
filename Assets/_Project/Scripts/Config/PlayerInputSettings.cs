@@ -44,16 +44,25 @@ namespace DiceGame.Config
         public const string ResetAction = "Reset";
 
         [SerializeField] InputActionAsset inputActions;
-        [SerializeField] PlayerSlotInputConfig player1 = new(PlayerInputDeviceKind.Keyboard, 0);
-        [SerializeField] PlayerSlotInputConfig player2 = new(PlayerInputDeviceKind.Gamepad, 0);
+
+        [Header("Control Defaults")]
+        [SerializeField] PlayerSlotControlDefaults player1 =
+            PlayerSlotControlDefaults.Create(false, PlayerInputDeviceKind.Keyboard, 0);
+        [SerializeField] PlayerSlotControlDefaults player2 =
+            PlayerSlotControlDefaults.Create(true, PlayerInputDeviceKind.Gamepad, 0);
 
         public InputActionAsset InputActions => inputActions;
-        public PlayerSlotInputConfig Player1 => player1;
-        public PlayerSlotInputConfig Player2 => player2;
+        public PlayerSlotInputConfig Player1 => player1.InputConfig;
+        public PlayerSlotInputConfig Player2 => player2.InputConfig;
+
+        public PlayerSlotControlDefaults GetControlDefaults(PlayerSlot slot)
+        {
+            return slot == PlayerSlot.Player1 ? player1 : player2;
+        }
 
         public PlayerSlotInputConfig GetSlotConfig(PlayerSlot slot)
         {
-            return slot == PlayerSlot.Player1 ? player1 : player2;
+            return GetControlDefaults(slot).InputConfig;
         }
 
         public string GetActionMapName(PlayerSlot slot)
@@ -68,7 +77,10 @@ namespace DiceGame.Config
 
         public bool TryValidateStartup(
             int requiredPlayerCount,
-            AiPlayerSettings aiSettings,
+            bool player1IsAi,
+            bool player2IsAi,
+            PlayerSlotInputConfig player1Config,
+            PlayerSlotInputConfig player2Config,
             out string errorMessage)
         {
             if (inputActions == null)
@@ -78,25 +90,25 @@ namespace DiceGame.Config
             }
 
             if (requiredPlayerCount >= 1
-                && IsHumanControlled(PlayerSlot.Player1, aiSettings)
-                && !ValidateSlot(PlayerSlot.Player1, player1, out errorMessage))
+                && !player1IsAi
+                && !ValidateSlot(PlayerSlot.Player1, player1Config, out errorMessage))
             {
                 return false;
             }
 
             if (requiredPlayerCount >= 2
-                && IsHumanControlled(PlayerSlot.Player2, aiSettings)
-                && !ValidateSlot(PlayerSlot.Player2, player2, out errorMessage))
+                && !player2IsAi
+                && !ValidateSlot(PlayerSlot.Player2, player2Config, out errorMessage))
             {
                 return false;
             }
 
             if (requiredPlayerCount >= 2
-                && IsHumanControlled(PlayerSlot.Player1, aiSettings)
-                && IsHumanControlled(PlayerSlot.Player2, aiSettings)
-                && player1.DeviceKind == PlayerInputDeviceKind.Gamepad
-                && player2.DeviceKind == PlayerInputDeviceKind.Gamepad
-                && player1.GamepadIndex == player2.GamepadIndex)
+                && !player1IsAi
+                && !player2IsAi
+                && player1Config.DeviceKind == PlayerInputDeviceKind.Gamepad
+                && player2Config.DeviceKind == PlayerInputDeviceKind.Gamepad
+                && player1Config.GamepadIndex == player2Config.GamepadIndex)
             {
                 errorMessage = "PlayerInputSettings: Player 1 and Player 2 cannot share the same gamepad index.";
                 return false;
@@ -104,11 +116,6 @@ namespace DiceGame.Config
 
             errorMessage = null;
             return true;
-        }
-
-        static bool IsHumanControlled(PlayerSlot slot, AiPlayerSettings aiSettings)
-        {
-            return aiSettings == null || !aiSettings.IsAiControlled(slot);
         }
 
         static bool ValidateSlot(PlayerSlot slot, PlayerSlotInputConfig config, out string errorMessage)

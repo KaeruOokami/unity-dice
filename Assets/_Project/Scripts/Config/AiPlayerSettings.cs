@@ -5,8 +5,6 @@ namespace DiceGame.Config
     [CreateAssetMenu(fileName = "AiPlayerSettings", menuName = "Dice/AI Player Settings")]
     public sealed class AiPlayerSettings : ScriptableObject
     {
-        [SerializeField] bool player1IsAi;
-        [SerializeField] bool player2IsAi = true;
         [SerializeField] float minReplanInterval = 0.3f;
         [SerializeField] float idleReplanInterval = 0.8f;
         [SerializeField] float failedReplanInterval = 1.2f;
@@ -32,8 +30,6 @@ namespace DiceGame.Config
         [SerializeField] float goalFailureBlacklistSeconds = 12f;
         [SerializeField] bool debugLog;
 
-        public bool Player1IsAi => player1IsAi;
-        public bool Player2IsAi => player2IsAi;
         public float MinReplanInterval => minReplanInterval;
         public float IdleReplanInterval => idleReplanInterval;
         public float FailedReplanInterval => failedReplanInterval;
@@ -58,9 +54,5 @@ namespace DiceGame.Config
         public int StuckAttemptsBeforeGoalReset => stuckAttemptsBeforeGoalReset;
         public float GoalFailureBlacklistSeconds => goalFailureBlacklistSeconds;
         public bool DebugLog => debugLog;
-
-        public bool IsAiControlled(PlayerSlot slot) {
-            return slot == PlayerSlot.Player1 ? player1IsAi : player2IsAi;
-        }
     }
 }

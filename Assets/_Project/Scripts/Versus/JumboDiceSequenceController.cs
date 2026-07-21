@@ -15,7 +15,7 @@ namespace DiceGame.Versus
     /// </summary>
     public sealed class JumboDiceSequenceController : MonoBehaviour
     {
-        VersusBoardSettings versusSettings;
+        IVersusBoardSettings versusSettings;
         JumboDiceSettings jumboSettings;
         Board board;
         DiceSpawnSystem spawnSystem;
@@ -30,7 +30,7 @@ namespace DiceGame.Versus
         PlayerSlot lastJumboOwner;
 
         public void Configure(
-            VersusBoardSettings settings,
+            IVersusBoardSettings settings,
             Board targetBoard,
             DiceSpawnSystem targetSpawnSystem,
             DiceMatchOwnershipContext targetOwnership,

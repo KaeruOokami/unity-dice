@@ -22,6 +22,13 @@ namespace DiceGame.Config
             selectionWeight = 1f;
         }
 
+        public SendableKindLimit(DiceKind diceKind, int maxCount, float minPower, float weight) {
+            kind = diceKind;
+            maxCountPerVolley = maxCount;
+            minimumPower = minPower;
+            selectionWeight = weight;
+        }
+
         public DiceKind Kind => kind;
         public int MaxCountPerVolley => Mathf.Max(0, maxCountPerVolley);
         public float MinimumPower => Mathf.Clamp01(minimumPower);
@@ -198,6 +205,46 @@ namespace DiceGame.Config
 
             errorMessage = null;
             return true;
+        }
+
+        public static PlayerAttackSettings CreateRuntime(PlayerAttackSettingsData data) {
+            var instance = CreateInstance<PlayerAttackSettings>();
+            instance.Apply(data);
+            return instance;
+        }
+
+        public void Apply(PlayerAttackSettingsData data) {
+            attackMultiplier = Mathf.Max(0f, data.AttackMultiplier);
+            faceGain = Mathf.Max(0f, data.FaceGain);
+            chainGain = Mathf.Max(0f, data.ChainGain);
+            sizeGain = Mathf.Max(0f, data.SizeGain);
+            snatchMultiplier = Mathf.Max(0f, data.SnatchMultiplier);
+            face2Weight = Mathf.Max(0f, data.Face2Weight);
+            face3Weight = Mathf.Max(0f, data.Face3Weight);
+            face4Weight = Mathf.Max(0f, data.Face4Weight);
+            face5Weight = Mathf.Max(0f, data.Face5Weight);
+            face6Weight = Mathf.Max(0f, data.Face6Weight);
+            queueToBoardDelay = Mathf.Max(0f, data.QueueToBoardDelay);
+
+            var profiles = data.FaceSendProfiles ?? Array.Empty<FaceAttackSendProfileData>();
+            faceSendProfiles = new FaceAttackSendProfile[profiles.Length];
+            for (var i = 0; i < profiles.Length; i++) {
+                var source = profiles[i];
+                var kinds = source.SendableKinds ?? Array.Empty<SendableKindLimitData>();
+                var convertedKinds = new SendableKindLimit[kinds.Length];
+                for (var j = 0; j < kinds.Length; j++) {
+                    convertedKinds[j] = new SendableKindLimit(
+                        kinds[j].Kind,
+                        kinds[j].MaxCountPerVolley,
+                        kinds[j].MinimumPower,
+                        kinds[j].SelectionWeight);
+                }
+
+                var faces = source.TriggerFaces ?? Array.Empty<int>();
+                var copiedFaces = new int[faces.Length];
+                Array.Copy(faces, copiedFaces, faces.Length);
+                faceSendProfiles[i] = new FaceAttackSendProfile(copiedFaces, convertedKinds);
+            }
         }
     }
 }

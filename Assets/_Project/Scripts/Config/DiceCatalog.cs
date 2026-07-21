@@ -85,5 +85,27 @@ namespace DiceGame.Config
             entry = default;
             return false;
         }
+
+        public static DiceCatalog CreateRuntime(DiceCatalogData data) {
+            var instance = CreateInstance<DiceCatalog>();
+            instance.Apply(data);
+            return instance;
+        }
+
+        public void Apply(DiceCatalogData data) {
+            if (data.Entries == null || data.Entries.Length == 0) {
+                entries = Array.Empty<Entry>();
+                return;
+            }
+
+            entries = new Entry[data.Entries.Length];
+            for (var i = 0; i < data.Entries.Length; i++) {
+                entries[i] = new Entry {
+                    Kind = data.Entries[i].Kind,
+                    MeshPrefab = data.Entries[i].MeshPrefab,
+                    SpawnWeight = Mathf.Max(0f, data.Entries[i].SpawnWeight)
+                };
+            }
+        }
     }
 }

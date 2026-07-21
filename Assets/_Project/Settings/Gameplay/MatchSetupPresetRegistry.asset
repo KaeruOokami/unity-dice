@@ -1,0 +1,39 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: f1e2d3c4b5a6478990abcdef10000001, type: 3}
+  m_Name: MatchSetupPresetRegistry
+  m_EditorClassIdentifier: 
+  spawnPresets:
+  - {fileID: 11400000, guid: f6a7b8c9d0e14990aabbccddeeff3301, type: 2}
+  - {fileID: 11400000, guid: a1a2b3c4d5e6478899aabbccddeeff05, type: 2}
+  - {fileID: 11400000, guid: e1f2a3b4c5d6478899aabbccddeeff24, type: 2}
+  catalogPresets:
+  - {fileID: 11400000, guid: f8a9b0c1d2e3f4a5b6c7d8e9f0a1b2c3, type: 2}
+  - {fileID: 11400000, guid: a7b8c9d0e1f24990aabbccddeeff4401, type: 2}
+  - {fileID: 11400000, guid: b8c9d0e1f2a34990aabbccddeeff4402, type: 2}
+  attackPresets:
+  - {fileID: 11400000, guid: c3d4e5f6a7b84990aabbccddeeff3201, type: 2}
+  - {fileID: 11400000, guid: d4e5f6a7b8c94990aabbccddeeff3202, type: 2}
+  naturalSendPresets:
+  - {fileID: 11400000, guid: f6a7b8c9d0e14990aabbccddeeff4502, type: 2}
+  - {fileID: 11400000, guid: a7b8c9d0e1f24990aabbccddeeff4503, type: 2}
+  defaultPlayerInputSettings: {fileID: 11400000, guid: b2c3d4e5f6a7488990aabbccddeeff13, type: 2}
+  defaultSharedSpawn: {fileID: 11400000, guid: f6a7b8c9d0e14990aabbccddeeff3301, type: 2}
+  defaultSharedCatalog: {fileID: 11400000, guid: f8a9b0c1d2e3f4a5b6c7d8e9f0a1b2c3, type: 2}
+  defaultPlayer1Spawn: {fileID: 11400000, guid: a1a2b3c4d5e6478899aabbccddeeff05, type: 2}
+  defaultPlayer1Catalog: {fileID: 11400000, guid: a7b8c9d0e1f24990aabbccddeeff4401, type: 2}
+  defaultPlayer1Attack: {fileID: 11400000, guid: c3d4e5f6a7b84990aabbccddeeff3201, type: 2}
+  defaultPlayer1NaturalSend: {fileID: 11400000, guid: f6a7b8c9d0e14990aabbccddeeff4502, type: 2}
+  defaultPlayer2Spawn: {fileID: 11400000, guid: e1f2a3b4c5d6478899aabbccddeeff24, type: 2}
+  defaultPlayer2Catalog: {fileID: 11400000, guid: b8c9d0e1f2a34990aabbccddeeff4402, type: 2}
+  defaultPlayer2Attack: {fileID: 11400000, guid: d4e5f6a7b8c94990aabbccddeeff3202, type: 2}
+  defaultPlayer2NaturalSend: {fileID: 11400000, guid: a7b8c9d0e1f24990aabbccddeeff4503, type: 2}

@@ -78,7 +78,9 @@ namespace DiceGame.Session.Network
                     ApplyResumed();
                     break;
                 case OnlineSessionConstants.FlowResetMatch:
-                    MatchFlowFlags.ArmMatchRestart(OnlinePlayMode.OnlineClient);
+                    MatchFlowFlags.ArmMatchRestart(
+                        OnlinePlayMode.OnlineClient,
+                        OnlineSessionState.Instance?.CurrentSetup);
                     Time.timeScale = playingTimeScale;
                     UnityEngine.SceneManagement.SceneManager.LoadScene(
                         UnityEngine.SceneManagement.SceneManager.GetActiveScene().buildIndex);

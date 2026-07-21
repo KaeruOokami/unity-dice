@@ -13,7 +13,7 @@ namespace DiceGame.Versus
 {
     public sealed class VersusAttackController : MonoBehaviour
     {
-        VersusBoardSettings versusSettings;
+        IVersusBoardSettings versusSettings;
         DiceSpawnSystem spawnSystem;
         DiceMatchErasureSystem erasureSystem;
         AttackQueueView queueView;
@@ -24,7 +24,7 @@ namespace DiceGame.Versus
         bool gameplayEnabled = true;
 
         public void Configure(
-            VersusBoardSettings settings,
+            IVersusBoardSettings settings,
             Board board,
             DiceSpawnSystem targetSpawnSystem,
             DiceMatchErasureSystem targetErasureSystem,

@@ -22,7 +22,7 @@ namespace DiceGame.Gameplay
         readonly List<CharacterController> characters = new();
         readonly List<DiceController> pendingTierFallMatches = new();
 
-        VersusBoardSettings versusSettings;
+        IVersusBoardSettings versusSettings;
         DiceErasureSettings erasureSettings;
         SinkingGroupTracker sinkingGroups;
         DiceMatchOwnershipContext ownershipContext;
@@ -61,7 +61,7 @@ namespace DiceGame.Gameplay
             sinkingGroups = board != null ? new SinkingGroupTracker() : null;
         }
 
-        public void ConfigureVersusAttack(VersusBoardSettings settings) {
+        public void ConfigureVersusAttack(IVersusBoardSettings settings) {
             versusSettings = settings;
             versusAttackEnabled = settings != null && board != null && board.IsVersusArena;
             if (versusAttackEnabled && sinkingGroups == null) {

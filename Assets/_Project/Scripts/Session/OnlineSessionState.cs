@@ -13,6 +13,7 @@ namespace DiceGame.Session
         public string StatusMessage { get; private set; } = string.Empty;
         public bool IsMatchRunning { get; private set; }
         public int ConnectedPlayerCount { get; private set; }
+        public MatchSetupSnapshot CurrentSetup { get; private set; }
 
         public PlayerSlot LocalPlayerSlot =>
             PlayMode == OnlinePlayMode.OnlineClient ? PlayerSlot.Player2 : PlayerSlot.Player1;
@@ -60,6 +61,16 @@ namespace DiceGame.Session
 
         public void SetConnectedPlayerCount(int count) {
             ConnectedPlayerCount = Mathf.Max(0, count);
+            RaiseStateChanged();
+        }
+
+        public void SetCurrentSetup(MatchSetupSnapshot setup) {
+            CurrentSetup = setup?.Clone();
+            RaiseStateChanged();
+        }
+
+        public void ClearCurrentSetup() {
+            CurrentSetup = null;
             RaiseStateChanged();
         }
 

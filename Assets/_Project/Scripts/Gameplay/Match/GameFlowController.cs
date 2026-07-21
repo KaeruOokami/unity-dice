@@ -31,6 +31,8 @@ namespace DiceGame.Gameplay
         DiceSpawnSystem spawnSystem;
         VersusAttackController versusAttackController;
         GameSessionSettings sessionSettings;
+        GameMode activeGameMode;
+        int activeRequiredPlayerCount;
         GameFlowInputReader inputReader;
         PauseMenuUi pauseMenuUi;
         OnlineSessionController sessionController;
@@ -48,7 +50,8 @@ namespace DiceGame.Gameplay
             DiceSpawnSystem targetSpawnSystem,
             VersusAttackController targetVersusAttackController,
             GameSessionSettings targetSessionSettings,
-            PlayerInputSettings playerInputSettings)
+            PlayerInputSettings playerInputSettings,
+            ResolvedSessionSetup resolvedSetup = null)
         {
             if (targetBoard == null
                 || targetRegistry == null
@@ -71,6 +74,8 @@ namespace DiceGame.Gameplay
             spawnSystem = targetSpawnSystem;
             versusAttackController = targetVersusAttackController;
             sessionSettings = targetSessionSettings;
+            activeGameMode = resolvedSetup?.GameMode ?? targetSessionSettings.GameMode;
+            activeRequiredPlayerCount = resolvedSetup?.RequiredPlayerCount ?? targetSessionSettings.RequiredPlayerCount;
             playingTimeScale = Time.timeScale;
             sessionController = FindObjectOfType<OnlineSessionController>();
 
@@ -80,7 +85,7 @@ namespace DiceGame.Gameplay
                 inputReader = gameObject.AddComponent<GameFlowInputReader>();
             }
 
-            inputReader.Configure(playerInputSettings, sessionSettings.RequiredPlayerCount);
+            inputReader.Configure(playerInputSettings, activeRequiredPlayerCount);
 
             pauseMenuUi = GetComponent<PauseMenuUi>();
             if (pauseMenuUi == null)
@@ -152,7 +157,7 @@ namespace DiceGame.Gameplay
 
         void EvaluateGameOver()
         {
-            if (sessionSettings.GameMode != GameMode.Versus)
+            if (activeGameMode != GameMode.Versus)
             {
                 if (BoardFillEvaluator.IsStandardBottomFull(board, registry))
                 {
@@ -195,7 +200,7 @@ namespace DiceGame.Gameplay
                 return;
             }
 
-            if (sessionSettings.GameMode != GameMode.Versus)
+            if (activeGameMode != GameMode.Versus)
             {
                 EnterGameOver(StandardGameOverLog);
                 return;
@@ -307,7 +312,8 @@ namespace DiceGame.Gameplay
             var playMode = OnlineSessionState.Instance != null
                 ? OnlineSessionState.Instance.PlayMode
                 : OnlinePlayMode.Local;
-            MatchFlowFlags.ArmMatchRestart(playMode);
+            var setup = OnlineSessionState.Instance?.CurrentSetup;
+            MatchFlowFlags.ArmMatchRestart(playMode, setup);
             ReloadActiveScene();
         }
 

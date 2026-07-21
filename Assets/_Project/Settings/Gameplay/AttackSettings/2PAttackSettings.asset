@@ -15,19 +15,11 @@ MonoBehaviour:
   faceSendProfiles:
   - triggerFaces: 010000000200000003000000040000000500000006000000
     sendableKinds:
-    - kind: 2
+    - kind: 0
       maxCountPerVolley: 3
       minimumPower: 0
       selectionWeight: 1
-    - kind: 6
-      maxCountPerVolley: 3
-      minimumPower: 0
-      selectionWeight: 1
-    - kind: 5
-      maxCountPerVolley: 3
-      minimumPower: 0
-      selectionWeight: 1
-  attackMultiplier: 0.5
+  attackMultiplier: 0.1
   faceGain: 0.4
   chainGain: 0.1
   sizeGain: 0.3

@@ -10,6 +10,8 @@ namespace DiceGame.Gameplay.Input
         [SerializeField] PlayerInputSettings inputSettings;
 
         PlayerSlot playerSlot;
+        PlayerSlotInputConfig slotConfigOverride;
+        bool hasSlotConfigOverride;
         InputActionMap playerMap;
         InputAction moveAction;
         InputAction liftAction;
@@ -18,8 +20,29 @@ namespace DiceGame.Gameplay.Input
 
         public void Configure(PlayerSlot slot, PlayerInputSettings settings)
         {
+            ConfigureInternal(slot, settings, null);
+        }
+
+        public void Configure(
+            PlayerSlot slot,
+            PlayerInputSettings settings,
+            PlayerSlotInputConfig inputOverride)
+        {
+            ConfigureInternal(slot, settings, inputOverride);
+        }
+
+        void ConfigureInternal(
+            PlayerSlot slot,
+            PlayerInputSettings settings,
+            PlayerSlotInputConfig? inputOverride)
+        {
             playerSlot = slot;
             inputSettings = settings;
+            hasSlotConfigOverride = inputOverride.HasValue;
+            if (inputOverride.HasValue) {
+                slotConfigOverride = inputOverride.Value;
+            }
+
             BindActions();
             ApplySlotConfiguration();
             isConfigured = true;
@@ -64,7 +87,9 @@ namespace DiceGame.Gameplay.Input
                 return;
             }
 
-            var slotConfig = inputSettings.GetSlotConfig(playerSlot);
+            var slotConfig = hasSlotConfigOverride
+                ? slotConfigOverride
+                : inputSettings.GetSlotConfig(playerSlot);
             playerMap.bindingMask = InputBinding.MaskByGroup(PlayerInputSettings.GetControlScheme(slotConfig));
             ApplyDeviceFilter(slotConfig);
         }

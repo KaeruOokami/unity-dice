@@ -69,5 +69,24 @@ namespace DiceGame.Config
             errorMessage = null;
             return true;
         }
+
+        public static PlayerNaturalSendSettings CreateRuntime(PlayerNaturalSendSettingsData data) {
+            var instance = CreateInstance<PlayerNaturalSendSettings>();
+            instance.Apply(data);
+            return instance;
+        }
+
+        public void Apply(PlayerNaturalSendSettingsData data) {
+            enabled = data.Enabled;
+            diceCountPerVolley = Mathf.Max(1, data.DiceCountPerVolley);
+            var kinds = data.SendableKinds ?? Array.Empty<NaturalSendKindLimitData>();
+            sendableKinds = new NaturalSendKindLimit[kinds.Length];
+            for (var i = 0; i < kinds.Length; i++) {
+                sendableKinds[i] = new NaturalSendKindLimit(
+                    kinds[i].Kind,
+                    kinds[i].MaxCountPerVolley,
+                    kinds[i].SelectionWeight);
+            }
+        }
     }
 }

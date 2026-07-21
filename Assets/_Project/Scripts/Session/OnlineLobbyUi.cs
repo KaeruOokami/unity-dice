@@ -1,24 +1,46 @@
 using System;
+using DiceGame.Config;
+using TMPro;
 using UnityEngine;
 using UnityEngine.EventSystems;
+using UnityEngine.InputSystem.UI;
 using UnityEngine.UI;
 
 namespace DiceGame.Session
 {
     public sealed class OnlineLobbyUi : MonoBehaviour
     {
+        const string LobbyCanvasName = "OnlineLobbyCanvas";
+
         OnlineSessionController controller;
+        MatchSetupPresetRegistry presetRegistry;
         Canvas canvas;
         GameObject mainPanel;
+        GameObject localModePanel;
+        GameObject matchSetupPanel;
         GameObject hostPanel;
         GameObject clientPanel;
-        InputField joinCodeInput;
-        Text statusText;
-        Text hostCodeText;
-        Text clientStatusText;
+        TMP_InputField joinCodeInput;
+        TextMeshProUGUI statusText;
+        TextMeshProUGUI hostCodeText;
+        TextMeshProUGUI clientStatusText;
+        TextMeshProUGUI setupErrorText;
+        Transform setupContentRoot;
+        MatchSetupPanelUi setupPanelUi;
+        GameMode selectedMode;
 
-        public void Configure(OnlineSessionController sessionController) {
+        public void Configure(
+            OnlineSessionController sessionController,
+            MatchSetupPresetRegistry registry,
+            TMP_FontAsset font) {
+            if (font == null) {
+                Debug.LogError("[OnlineLobbyUi] lobbyUiFont is not assigned on OnlineSessionController.");
+                return;
+            }
+
             controller = sessionController;
+            presetRegistry = registry;
+            LobbyUiFactory.Configure(font);
             EnsureEventSystem();
             BuildUi();
             ShowMainPanel();
@@ -35,23 +57,37 @@ namespace DiceGame.Session
         }
 
         public void ShowMainPanel() {
-            SetPanel(main: true, host: false, client: false);
+            SetPanel(main: true, localMode: false, setup: false, host: false, client: false);
+            RefreshStatus();
+        }
+
+        public void ShowLocalModePanel() {
+            SetPanel(main: false, localMode: true, setup: false, host: false, client: false);
+            OnlineSessionState.Instance?.SetStatus("Select a mode.");
+            RefreshStatus();
+        }
+
+        public void ShowMatchSetupPanel(GameMode mode) {
+            selectedMode = mode;
+            SetPanel(main: false, localMode: false, setup: true, host: false, client: false);
+            RebuildMatchSetupPanel(mode);
+            OnlineSessionState.Instance?.SetStatus($"Configure {GameModeDisplayNames.GetDisplayName(mode)} settings.");
             RefreshStatus();
         }
 
         public void ShowHostPanel(string lobbyCode) {
-            SetPanel(main: false, host: true, client: false);
+            SetPanel(main: false, localMode: false, setup: false, host: true, client: false);
             if (hostCodeText != null) {
-                hostCodeText.text = $"参加コード\n{lobbyCode}";
+                hostCodeText.text = $"Join Code\n{lobbyCode}";
             }
 
             RefreshStatus();
         }
 
         public void ShowClientWaitingPanel(string lobbyCode) {
-            SetPanel(main: false, host: false, client: true);
+            SetPanel(main: false, localMode: false, setup: false, host: false, client: true);
             if (clientStatusText != null) {
-                clientStatusText.text = $"参加中: {lobbyCode}\nホストの開始待ち…";
+                clientStatusText.text = $"Joined: {lobbyCode}\nWaiting for host...";
             }
 
             RefreshStatus();
@@ -70,13 +106,21 @@ namespace DiceGame.Session
             }
         }
 
-        void SetPanel(bool main, bool host, bool client) {
+        void SetPanel(bool main, bool localMode, bool setup, bool host, bool client) {
             if (canvas != null) {
                 canvas.gameObject.SetActive(true);
             }
 
             if (mainPanel != null) {
                 mainPanel.SetActive(main);
+            }
+
+            if (localModePanel != null) {
+                localModePanel.SetActive(localMode);
+            }
+
+            if (matchSetupPanel != null) {
+                matchSetupPanel.SetActive(setup);
             }
 
             if (hostPanel != null) {
@@ -88,12 +132,90 @@ namespace DiceGame.Session
             }
         }
 
-        void BuildUi() {
-            if (canvas != null) {
+        void RebuildMatchSetupPanel(GameMode mode) {
+            TryResolveUiReferences();
+
+            var registry = presetRegistry ?? controller?.MatchSetupPresetRegistry;
+            if (setupContentRoot == null) {
+                Debug.LogError("[OnlineLobbyUi] setupContentRoot is null after UI resolution.");
+                OnlineSessionState.Instance?.SetStatus("Failed to initialize settings UI. Stop Play and try again.");
                 return;
             }
 
-            var canvasObject = new GameObject("OnlineLobbyCanvas");
+            if (registry == null) {
+                Debug.LogError("[OnlineLobbyUi] presetRegistry is null.");
+                OnlineSessionState.Instance?.SetStatus("Setup presets are not configured.");
+                return;
+            }
+
+            for (var i = setupContentRoot.childCount - 1; i >= 0; i--) {
+                Destroy(setupContentRoot.GetChild(i).gameObject);
+            }
+
+            try {
+                setupPanelUi = new MatchSetupPanelUi(registry, mode, setupContentRoot);
+                setupPanelUi.ApplyDefaults(registry.CreateDefaultSnapshot(mode));
+            } catch (Exception ex) {
+                setupPanelUi = null;
+                Debug.LogError($"[OnlineLobbyUi] Failed to build match setup panel: {ex}");
+                OnlineSessionState.Instance?.SetStatus("Failed to build settings UI. Check the Console.");
+                return;
+            }
+
+            if (setupErrorText != null) {
+                setupErrorText.text = string.Empty;
+            }
+        }
+
+        void OnLocalPlayClicked() {
+            ShowLocalModePanel();
+        }
+
+        void OnLocalModeSelected(GameMode mode) {
+            var registry = presetRegistry ?? controller?.MatchSetupPresetRegistry;
+            if (registry == null) {
+                OnlineSessionState.Instance?.SetStatus("Setup presets are not configured.");
+                return;
+            }
+
+            ShowMatchSetupPanel(mode);
+        }
+
+        void OnMatchSetupPlayClicked() {
+            if (setupPanelUi == null) {
+                OnlineSessionState.Instance?.SetStatus("Failed to initialize settings UI. Check MatchSetupPresetRegistry.");
+                return;
+            }
+
+            if (controller == null) {
+                return;
+            }
+
+            if (!setupPanelUi.TryBuildSnapshot(out var snapshot, out var error)) {
+                if (setupErrorText != null) {
+                    setupErrorText.text = error ?? "Invalid settings.";
+                }
+
+                OnlineSessionState.Instance?.SetStatus(error ?? "Invalid settings.");
+                return;
+            }
+
+            if (setupErrorText != null) {
+                setupErrorText.text = string.Empty;
+            }
+
+            controller.StartLocalPlay(snapshot);
+        }
+
+        void BuildUi() {
+            if (IsUiBuilt()) {
+                return;
+            }
+
+            DestroyStaleLobbyCanvases();
+            ResetUiReferences();
+
+            var canvasObject = new GameObject(LobbyCanvasName);
             canvasObject.transform.SetParent(transform, false);
             canvas = canvasObject.AddComponent<Canvas>();
             canvas.renderMode = RenderMode.ScreenSpaceOverlay;
@@ -103,45 +225,168 @@ namespace DiceGame.Session
             scaler.referenceResolution = new Vector2(1920f, 1080f);
             canvasObject.AddComponent<GraphicRaycaster>();
 
-            var root = CreatePanel(canvasObject.transform, "Root", new Color(0f, 0f, 0f, 0.65f));
-            StretchFull(root.GetComponent<RectTransform>());
+            var root = LobbyUiFactory.CreatePanel(canvasObject.transform, "Root", new Color(0f, 0f, 0f, 0.65f));
+            LobbyUiFactory.StretchFull(root.GetComponent<RectTransform>());
 
-            statusText = CreateText(root.transform, "Status", string.Empty, 28, TextAnchor.LowerCenter);
+            statusText = LobbyUiFactory.CreateText(root.transform, "Status", string.Empty, 28, TextAnchor.LowerCenter);
             var statusRect = statusText.GetComponent<RectTransform>();
             statusRect.anchorMin = new Vector2(0.1f, 0.05f);
             statusRect.anchorMax = new Vector2(0.9f, 0.15f);
             statusRect.offsetMin = Vector2.zero;
             statusRect.offsetMax = Vector2.zero;
 
-            mainPanel = CreatePanel(root.transform, "MainPanel", new Color(0.12f, 0.12f, 0.14f, 0.95f));
-            CenterPanel(mainPanel.GetComponent<RectTransform>(), new Vector2(520f, 420f));
-            CreateText(mainPanel.transform, "Title", "オンライン対戦", 40, TextAnchor.UpperCenter);
-            CreateButton(mainPanel.transform, "LocalButton", "ローカルプレイ", new Vector2(0f, 80f), () => {
-                controller?.StartLocalPlay();
-            });
-            CreateButton(mainPanel.transform, "HostButton", "ルーム作成（ホスト）", new Vector2(0f, 0f), () => {
+            BuildMainPanel(root.transform);
+            BuildLocalModePanel(root.transform);
+            BuildMatchSetupPanel(root.transform);
+            BuildHostPanel(root.transform);
+            BuildClientPanel(root.transform);
+        }
+
+        bool IsUiBuilt() {
+            return canvas != null && setupContentRoot != null && matchSetupPanel != null;
+        }
+
+        void DestroyStaleLobbyCanvases() {
+            for (var i = transform.childCount - 1; i >= 0; i--) {
+                var child = transform.GetChild(i);
+                if (child.name == LobbyCanvasName) {
+                    Destroy(child.gameObject);
+                }
+            }
+        }
+
+        void ResetUiReferences() {
+            canvas = null;
+            mainPanel = null;
+            localModePanel = null;
+            matchSetupPanel = null;
+            hostPanel = null;
+            clientPanel = null;
+            joinCodeInput = null;
+            statusText = null;
+            hostCodeText = null;
+            clientStatusText = null;
+            setupErrorText = null;
+            setupContentRoot = null;
+            setupPanelUi = null;
+        }
+
+        void TryResolveUiReferences() {
+            if (canvas == null) {
+                var canvasTransform = transform.Find(LobbyCanvasName);
+                if (canvasTransform != null) {
+                    canvas = canvasTransform.GetComponent<Canvas>();
+                }
+            }
+
+            if (canvas == null) {
+                return;
+            }
+
+            if (matchSetupPanel == null) {
+                var panelTransform = canvas.transform.Find("Root/MatchSetupPanel");
+                if (panelTransform != null) {
+                    matchSetupPanel = panelTransform.gameObject;
+                }
+            }
+
+            if (setupContentRoot == null && matchSetupPanel != null) {
+                var contentTransform = matchSetupPanel.transform.Find("SetupScroll/Viewport/Content");
+                if (contentTransform != null) {
+                    setupContentRoot = contentTransform;
+                }
+            }
+        }
+
+        void BuildMainPanel(Transform root) {
+            mainPanel = LobbyUiFactory.CreatePanel(root, "MainPanel", new Color(0.12f, 0.12f, 0.14f, 0.95f));
+            LobbyUiFactory.CenterPanel(mainPanel.GetComponent<RectTransform>(), new Vector2(520f, 420f));
+            LobbyUiFactory.CreateText(mainPanel.transform, "Title", "Dice Game", 40, TextAnchor.UpperCenter);
+            LobbyUiFactory.CreateButton(mainPanel.transform, "LocalButton", "Local Play", new Vector2(0f, 80f), OnLocalPlayClicked);
+            LobbyUiFactory.CreateButton(mainPanel.transform, "HostButton", "Create Room (Host)", new Vector2(0f, 0f), () => {
                 controller?.CreateHostLobby();
             });
 
-            joinCodeInput = CreateInputField(mainPanel.transform, "JoinCodeInput", "参加コード", new Vector2(0f, -90f));
-            CreateButton(mainPanel.transform, "JoinButton", "コードで参加", new Vector2(0f, -170f), () => {
+            joinCodeInput = LobbyUiFactory.CreateInputField(mainPanel.transform, "JoinCodeInput", "Join code", new Vector2(0f, -90f));
+            LobbyUiFactory.CreateButton(mainPanel.transform, "JoinButton", "Join by Code", new Vector2(0f, -170f), () => {
                 controller?.JoinLobbyByCode(joinCodeInput != null ? joinCodeInput.text : string.Empty);
             });
+        }
 
-            hostPanel = CreatePanel(root.transform, "HostPanel", new Color(0.12f, 0.12f, 0.14f, 0.95f));
-            CenterPanel(hostPanel.GetComponent<RectTransform>(), new Vector2(520f, 360f));
-            hostCodeText = CreateText(hostPanel.transform, "HostCode", "参加コード", 36, TextAnchor.UpperCenter);
-            CreateButton(hostPanel.transform, "StartMatchButton", "試合開始", new Vector2(0f, -40f), () => {
+        void BuildLocalModePanel(Transform root) {
+            localModePanel = LobbyUiFactory.CreatePanel(root, "LocalModePanel", new Color(0.12f, 0.12f, 0.14f, 0.95f));
+            LobbyUiFactory.CenterPanel(localModePanel.GetComponent<RectTransform>(), new Vector2(520f, 420f));
+            LobbyUiFactory.CreateText(localModePanel.transform, "Title", "Mode Select", 36, TextAnchor.UpperCenter);
+            LobbyUiFactory.CreateButton(localModePanel.transform, "SingleButton", "Single", new Vector2(0f, 70f), () => {
+                OnLocalModeSelected(GameMode.Single);
+            });
+            LobbyUiFactory.CreateButton(localModePanel.transform, "CoopButton", "Co-op", new Vector2(0f, 0f), () => {
+                OnLocalModeSelected(GameMode.Coop);
+            });
+            LobbyUiFactory.CreateButton(localModePanel.transform, "VersusButton", "Versus", new Vector2(0f, -70f), () => {
+                OnLocalModeSelected(GameMode.Versus);
+            });
+            LobbyUiFactory.CreateButton(localModePanel.transform, "LocalModeBackButton", "Back", new Vector2(0f, -170f), ShowMainPanel);
+        }
+
+        void BuildMatchSetupPanel(Transform root) {
+            matchSetupPanel = LobbyUiFactory.CreatePanel(root, "MatchSetupPanel", new Color(0.12f, 0.12f, 0.14f, 0.95f));
+            LobbyUiFactory.CenterPanel(matchSetupPanel.GetComponent<RectTransform>(), new Vector2(760f, 860f));
+            LobbyUiFactory.CreateText(matchSetupPanel.transform, "Title", "Settings", 36, TextAnchor.UpperCenter);
+
+            var scrollGo = new GameObject("SetupScroll");
+            scrollGo.transform.SetParent(matchSetupPanel.transform, false);
+            var scrollRect = scrollGo.AddComponent<RectTransform>();
+            scrollRect.anchorMin = new Vector2(0.08f, 0.22f);
+            scrollRect.anchorMax = new Vector2(0.92f, 0.82f);
+            scrollRect.offsetMin = Vector2.zero;
+            scrollRect.offsetMax = Vector2.zero;
+            var scroll = scrollGo.AddComponent<ScrollRect>();
+            scroll.horizontal = false;
+
+            var viewport = LobbyUiFactory.CreatePanel(scrollGo.transform, "Viewport", new Color(0f, 0f, 0f, 0.15f));
+            LobbyUiFactory.StretchFull(viewport.GetComponent<RectTransform>());
+            viewport.AddComponent<Mask>().showMaskGraphic = false;
+
+            var content = new GameObject("Content");
+            content.transform.SetParent(viewport.transform, false);
+            setupContentRoot = content.transform;
+            var contentRect = content.AddComponent<RectTransform>();
+            LobbyUiFactory.ConfigureVerticalScrollContent(contentRect);
+            scroll.viewport = viewport.GetComponent<RectTransform>();
+            scroll.content = contentRect;
+
+            setupErrorText = LobbyUiFactory.CreateText(matchSetupPanel.transform, "SetupError", string.Empty, 22, TextAnchor.LowerCenter);
+            var errorRect = setupErrorText.GetComponent<RectTransform>();
+            errorRect.anchorMin = new Vector2(0.08f, 0.14f);
+            errorRect.anchorMax = new Vector2(0.92f, 0.2f);
+            errorRect.offsetMin = Vector2.zero;
+            errorRect.offsetMax = Vector2.zero;
+            setupErrorText.color = new Color(1f, 0.45f, 0.45f, 1f);
+
+            LobbyUiFactory.CreateButton(matchSetupPanel.transform, "PlayButton", "Play", new Vector2(0f, -320f), OnMatchSetupPlayClicked);
+            LobbyUiFactory.CreateButton(matchSetupPanel.transform, "SetupBackButton", "Back", new Vector2(0f, -390f), () => {
+                ShowLocalModePanel();
+            });
+        }
+
+        void BuildHostPanel(Transform root) {
+            hostPanel = LobbyUiFactory.CreatePanel(root, "HostPanel", new Color(0.12f, 0.12f, 0.14f, 0.95f));
+            LobbyUiFactory.CenterPanel(hostPanel.GetComponent<RectTransform>(), new Vector2(520f, 360f));
+            hostCodeText = LobbyUiFactory.CreateText(hostPanel.transform, "HostCode", "Join Code", 36, TextAnchor.UpperCenter);
+            LobbyUiFactory.CreateButton(hostPanel.transform, "StartMatchButton", "Start Match", new Vector2(0f, -40f), () => {
                 controller?.StartOnlineMatchAsHost();
             });
-            CreateButton(hostPanel.transform, "HostLeaveButton", "キャンセル", new Vector2(0f, -130f), () => {
+            LobbyUiFactory.CreateButton(hostPanel.transform, "HostLeaveButton", "Cancel", new Vector2(0f, -130f), () => {
                 controller?.LeaveSession();
             });
+        }
 
-            clientPanel = CreatePanel(root.transform, "ClientPanel", new Color(0.12f, 0.12f, 0.14f, 0.95f));
-            CenterPanel(clientPanel.GetComponent<RectTransform>(), new Vector2(520f, 300f));
-            clientStatusText = CreateText(clientPanel.transform, "ClientStatus", "接続中…", 32, TextAnchor.MiddleCenter);
-            CreateButton(clientPanel.transform, "ClientLeaveButton", "キャンセル", new Vector2(0f, -100f), () => {
+        void BuildClientPanel(Transform root) {
+            clientPanel = LobbyUiFactory.CreatePanel(root, "ClientPanel", new Color(0.12f, 0.12f, 0.14f, 0.95f));
+            LobbyUiFactory.CenterPanel(clientPanel.GetComponent<RectTransform>(), new Vector2(520f, 300f));
+            clientStatusText = LobbyUiFactory.CreateText(clientPanel.transform, "ClientStatus", "Connecting...", 32, TextAnchor.MiddleCenter);
+            LobbyUiFactory.CreateButton(clientPanel.transform, "ClientLeaveButton", "Cancel", new Vector2(0f, -100f), () => {
                 controller?.LeaveSession();
             });
         }
@@ -153,122 +398,7 @@ namespace DiceGame.Session
 
             var eventSystem = new GameObject("EventSystem");
             eventSystem.AddComponent<EventSystem>();
-            eventSystem.AddComponent<StandaloneInputModule>();
-        }
-
-        static GameObject CreatePanel(Transform parent, string name, Color color) {
-            var panel = new GameObject(name);
-            panel.transform.SetParent(parent, false);
-            var image = panel.AddComponent<Image>();
-            image.color = color;
-            panel.AddComponent<RectTransform>();
-            return panel;
-        }
-
-        static Text CreateText(
-            Transform parent,
-            string name,
-            string content,
-            int fontSize,
-            TextAnchor anchor) {
-            var go = new GameObject(name);
-            go.transform.SetParent(parent, false);
-            var rect = go.AddComponent<RectTransform>();
-            StretchFull(rect);
-            var text = go.AddComponent<Text>();
-            text.text = content;
-            text.font = Resources.GetBuiltinResource<Font>("Arial.ttf");
-            text.fontSize = fontSize;
-            text.alignment = anchor;
-            text.color = Color.white;
-            text.horizontalOverflow = HorizontalWrapMode.Wrap;
-            text.verticalOverflow = VerticalWrapMode.Overflow;
-            return text;
-        }
-
-        static Button CreateButton(
-            Transform parent,
-            string name,
-            string label,
-            Vector2 anchoredPosition,
-            Action onClick) {
-            var go = new GameObject(name);
-            go.transform.SetParent(parent, false);
-            var rect = go.AddComponent<RectTransform>();
-            rect.sizeDelta = new Vector2(360f, 56f);
-            rect.anchoredPosition = anchoredPosition;
-
-            var image = go.AddComponent<Image>();
-            image.color = new Color(0.2f, 0.45f, 0.85f, 1f);
-            var button = go.AddComponent<Button>();
-            button.targetGraphic = image;
-            button.onClick.AddListener(() => onClick?.Invoke());
-
-            var labelText = CreateText(go.transform, "Label", label, 26, TextAnchor.MiddleCenter);
-            labelText.color = Color.white;
-            return button;
-        }
-
-        static InputField CreateInputField(
-            Transform parent,
-            string name,
-            string placeholder,
-            Vector2 anchoredPosition) {
-            var go = new GameObject(name);
-            go.transform.SetParent(parent, false);
-            var rect = go.AddComponent<RectTransform>();
-            rect.sizeDelta = new Vector2(360f, 48f);
-            rect.anchoredPosition = anchoredPosition;
-
-            var image = go.AddComponent<Image>();
-            image.color = new Color(0.18f, 0.18f, 0.2f, 1f);
-
-            var input = go.AddComponent<InputField>();
-            var textGo = new GameObject("Text");
-            textGo.transform.SetParent(go.transform, false);
-            var textRect = textGo.AddComponent<RectTransform>();
-            StretchFull(textRect);
-            textRect.offsetMin = new Vector2(12f, 6f);
-            textRect.offsetMax = new Vector2(-12f, -6f);
-            var text = textGo.AddComponent<Text>();
-            text.font = Resources.GetBuiltinResource<Font>("Arial.ttf");
-            text.fontSize = 24;
-            text.color = Color.white;
-            text.supportRichText = false;
-
-            var placeholderGo = new GameObject("Placeholder");
-            placeholderGo.transform.SetParent(go.transform, false);
-            var placeholderRect = placeholderGo.AddComponent<RectTransform>();
-            StretchFull(placeholderRect);
-            placeholderRect.offsetMin = new Vector2(12f, 6f);
-            placeholderRect.offsetMax = new Vector2(-12f, -6f);
-            var placeholderText = placeholderGo.AddComponent<Text>();
-            placeholderText.font = Resources.GetBuiltinResource<Font>("Arial.ttf");
-            placeholderText.fontSize = 24;
-            placeholderText.fontStyle = FontStyle.Italic;
-            placeholderText.color = new Color(1f, 1f, 1f, 0.45f);
-            placeholderText.text = placeholder;
-
-            input.textComponent = text;
-            input.placeholder = placeholderText;
-            input.characterLimit = 8;
-            input.contentType = InputField.ContentType.Alphanumeric;
-            return input;
-        }
-
-        static void StretchFull(RectTransform rect) {
-            rect.anchorMin = Vector2.zero;
-            rect.anchorMax = Vector2.one;
-            rect.offsetMin = Vector2.zero;
-            rect.offsetMax = Vector2.zero;
-        }
-
-        static void CenterPanel(RectTransform rect, Vector2 size) {
-            rect.anchorMin = new Vector2(0.5f, 0.5f);
-            rect.anchorMax = new Vector2(0.5f, 0.5f);
-            rect.pivot = new Vector2(0.5f, 0.5f);
-            rect.sizeDelta = size;
-            rect.anchoredPosition = Vector2.zero;
+            eventSystem.AddComponent<InputSystemUIInputModule>();
         }
     }
 }

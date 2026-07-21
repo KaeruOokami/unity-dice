@@ -146,7 +146,8 @@ namespace DiceGame.Gameplay
             PhysicsSettings physics,
             PlayerSlot slot,
             PlayerInputSettings inputSettings,
-            PlayerMatchActionContext actionContext = null) {
+            PlayerMatchActionContext actionContext = null,
+            PlayerSlotInputConfig? inputConfigOverride = null) {
             board = targetBoard;
             placement = targetPlacement;
             registry = targetPlacement.Dice;
@@ -160,7 +161,11 @@ namespace DiceGame.Gameplay
             }
 
             if (inputSettings != null && inputReader != null && inputSource == null) {
-                inputReader.Configure(slot, inputSettings);
+                if (inputConfigOverride.HasValue) {
+                    inputReader.Configure(slot, inputSettings, inputConfigOverride.Value);
+                } else {
+                    inputReader.Configure(slot, inputSettings);
+                }
             }
             standingController = new CharacterStandingController();
             coupling = new DiceCharacterCoupling();

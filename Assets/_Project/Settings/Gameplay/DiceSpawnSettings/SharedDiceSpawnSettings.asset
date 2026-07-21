@@ -17,4 +17,4 @@ MonoBehaviour:
   continuousSpawnEnabled: 1
   spawnInterval: 4
   spawnIntervalJitter: 1
-  bottomSpawnWeight: 0.612
+  bottomSpawnWeight: 0.95

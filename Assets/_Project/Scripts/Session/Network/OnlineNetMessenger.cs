@@ -13,6 +13,7 @@ namespace DiceGame.Session.Network
         public event Action<ulong, OnlineInputPayload> InputReceived;
         public event Action<OnlineMatchSnapshot> SnapshotReceived;
         public event Action MatchStartReceived;
+        public event Action<MatchSetupNetworkPayload> MatchSetupReceived;
         public event Action<byte> FlowCommandReceived;
         public event Action<ulong, byte> FlowRequestReceived;
 
@@ -89,12 +90,13 @@ namespace DiceGame.Session.Network
                 NetworkDelivery.UnreliableSequenced);
         }
 
-        public void SendMatchStartToClients() {
+        public void SendMatchStartToClients(MatchSetupNetworkPayload setupPayload) {
             if (networkManager == null || !networkManager.IsServer) {
                 return;
             }
 
-            using var writer = new FastBufferWriter(8, Allocator.Temp);
+            using var writer = new FastBufferWriter(64, Allocator.Temp);
+            writer.WriteNetworkSerializable(setupPayload);
             writer.WriteValueSafe(1);
             networkManager.CustomMessagingManager.SendNamedMessageToAll(
                 OnlineSessionConstants.MessageMatchStart,
@@ -148,7 +150,9 @@ namespace DiceGame.Session.Network
         }
 
         void OnMatchStartMessage(ulong senderClientId, FastBufferReader reader) {
+            reader.ReadNetworkSerializable(out MatchSetupNetworkPayload setupPayload);
             reader.ReadValueSafe(out int _);
+            MatchSetupReceived?.Invoke(setupPayload);
             MatchStartReceived?.Invoke();
         }
 

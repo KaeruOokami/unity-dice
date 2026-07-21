@@ -24,5 +24,20 @@ namespace DiceGame.Config
         public float SpawnIntervalJitter => spawnIntervalJitter;
         public float BottomSpawnWeight => bottomSpawnWeight;
         public float TopSpawnWeight => 1f - bottomSpawnWeight;
+
+        public static DiceSpawnSettings CreateRuntime(DiceSpawnSettingsData data) {
+            var instance = CreateInstance<DiceSpawnSettings>();
+            instance.Apply(data);
+            return instance;
+        }
+
+        public void Apply(DiceSpawnSettingsData data) {
+            initialDiceCount = Mathf.Max(1, data.InitialDiceCount);
+            animateInitialDiceSpawn = data.AnimateInitialDiceSpawn;
+            continuousSpawnEnabled = data.ContinuousSpawnEnabled;
+            spawnInterval = Mathf.Max(0f, data.SpawnInterval);
+            spawnIntervalJitter = Mathf.Max(0f, data.SpawnIntervalJitter);
+            bottomSpawnWeight = Mathf.Clamp01(data.BottomSpawnWeight);
+        }
     }
 }
