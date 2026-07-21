@@ -933,6 +933,7 @@ namespace DiceGame.Gameplay
         /// If a dice occupies the level directly above the player on the same cell,
         /// crush (Iron / Stone) or mount onto that dice. Visual follow reuses DiceCharacterCoupling.
         /// Crush waits for full settle (spawn / demote / roll), including BottomEmergence.
+        /// Erasing dice (sink / radiance) never crush — the player may occupy the same cell.
         /// </summary>
         void TryMountOntoCoveringDiceIfNeeded() {
             if (registry == null
@@ -950,7 +951,8 @@ namespace DiceGame.Gameplay
 
             if (coveringDice.CrushesPlayerOnCover) {
                 // Do not crush mid-motion (spawn / demote / roll), including BottomEmergence.
-                if (coveringDice.IsMotionFollowActive) {
+                // Do not crush while erasing (sink / radiance) — player may clip into that die.
+                if (coveringDice.IsMotionFollowActive || coveringDice.IsErasing) {
                     return;
                 }
 

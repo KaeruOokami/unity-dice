@@ -50,6 +50,7 @@ namespace DiceGame.Core
         public bool BlocksAdjacentMagnet { get; }
         /// <summary>
         /// Covering this die (same cell, level above the player) crushes the player after settle.
+        /// Erasing dice are excluded at the crush call site.
         /// </summary>
         public bool CrushesPlayerOnCover { get; }
         /// <summary>Occupies a multi-cell footprint (jumbo 2x2).</summary>
