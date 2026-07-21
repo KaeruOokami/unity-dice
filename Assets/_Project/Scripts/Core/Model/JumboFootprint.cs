@@ -7,8 +7,10 @@ namespace DiceGame.Core
     {
         public const int Size = 2;
         public const int CellCount = Size * Size;
-        /// <summary>Match weight contributed on each of Bottom and Top.</summary>
-        public const int MatchWeightPerTier = 4;
+        /// <summary>Match weight before sink erasure (one logical die).</summary>
+        public const int MatchWeightBeforeErasure = 1;
+        /// <summary>Match weight per tier while sink-erasing (Bottom 4 / Top 4).</summary>
+        public const int MatchWeightPerTierWhileErasing = 4;
 
         public static void AppendCells(Vector2Int anchor, List<Vector2Int> results) {
             if (results == null) {

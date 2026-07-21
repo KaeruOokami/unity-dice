@@ -61,12 +61,12 @@ namespace DiceGame.Core
         /// <summary>Multiplier on sink erasure duration (jumbo = 2).</summary>
         public float SinkDurationMultiplier { get; }
         /// <summary>
-        /// Match weight per tier for expanded-footprint dice (jumbo = 4 on Bottom and Top).
-        /// 0 = treat as 1.
+        /// While sink-erasing, match weight per tier for expanded-footprint dice.
+        /// 0 = treat as 1. Jumbo uses 4 (Bottom 4 / Top 4).
         /// </summary>
         public int SinkingMatchWeightPerTier { get; }
         /// <summary>
-        /// Expanded-footprint die participates in both Bottom and Top match layers.
+        /// While sink-erasing, participate in both Bottom and Top match layers.
         /// </summary>
         public bool ParticipatesInBothTiersWhileSinking { get; }
 

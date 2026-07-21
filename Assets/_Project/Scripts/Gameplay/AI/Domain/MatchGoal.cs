@@ -203,6 +203,11 @@ namespace DiceGame.Gameplay.AI.Domain
                 return true;
             }
 
+            // Lift-Join / clearance place in progress: don't discard while carrying the planned die.
+            if (snapshot.PlayerIsCarrying && HasIncompleteSubGoalOfKind(AiSubGoalKind.PlaceCarriedDie)) {
+                return false;
+            }
+
             if (registry != null && Face >= 2 && ClusterDice != null && ClusterDice.Count > 0) {
                 if (IsImmediateMatch
                     && ClusterSelectionEvaluator.ShouldDiscardImmediateCluster(ClusterDice, registry)) {

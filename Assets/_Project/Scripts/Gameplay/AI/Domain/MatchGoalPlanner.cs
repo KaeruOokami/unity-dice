@@ -9,10 +9,6 @@ namespace DiceGame.Gameplay.AI.Domain
 {
     public static class MatchGoalPlanner
     {
-        static readonly Direction[] Directions = {
-            Direction.East, Direction.West, Direction.North, Direction.South
-        };
-
         public static Application.AiDiscreteAction BuildAction(
             MatchGoal goal,
             AiSubGoal subGoal,
@@ -29,12 +25,12 @@ namespace DiceGame.Gameplay.AI.Domain
             }
 
             return subGoal.Kind switch {
-                AiSubGoalKind.ReachParticipant => BuildReachAction(goal, subGoal, snapshot, character, settings),
-                AiSubGoalKind.ReachWorkDie => BuildReachAction(goal, subGoal, snapshot, character, settings),
-                AiSubGoalKind.OrientDie => BuildOrientAction(subGoal, snapshot, character, settings),
+                AiSubGoalKind.ReachParticipant => BuildReachAction(goal, subGoal, snapshot, character, registry, settings),
+                AiSubGoalKind.ReachWorkDie => BuildReachAction(goal, subGoal, snapshot, character, registry, settings),
+                AiSubGoalKind.OrientDie => BuildOrientAction(subGoal, snapshot, character, registry, settings),
                 AiSubGoalKind.JoinCluster => BuildJoinClusterAction(goal, subGoal, snapshot, character, registry, settings),
-                AiSubGoalKind.LiftDie => BuildLiftAction(subGoal, snapshot, character),
-                _ => BuildReachAction(goal, subGoal, snapshot, character, settings)
+                AiSubGoalKind.LiftDie => BuildLiftAction(goal, subGoal, snapshot, character, registry, settings),
+                _ => BuildReachAction(goal, subGoal, snapshot, character, registry, settings)
             };
         }
 
@@ -54,24 +50,13 @@ namespace DiceGame.Gameplay.AI.Domain
             }
 
             if (!placeDirection.HasValue || !character.CanPlaceCarriedAt(placeDirection.Value)) {
-                placeDirection = FindBestPlaceDirection(character);
-            }
-
-            if (!placeDirection.HasValue) {
+                Application.AiDebugLog.Log(
+                    $"PlaceCarried FAILED origin={origin} target={subGoal.TargetCell} " +
+                    $"dir={(placeDirection.HasValue ? placeDirection.Value.ToString() : "none")}");
                 return null;
             }
 
             return new Application.Actions.PlaceCarriedDiceAction(placeDirection.Value);
-        }
-
-        static Direction? FindBestPlaceDirection(CharacterController character) {
-            for (var i = 0; i < Directions.Length; i++) {
-                if (character.CanPlaceCarriedAt(Directions[i])) {
-                    return Directions[i];
-                }
-            }
-
-            return null;
         }
 
         static Application.AiDiscreteAction BuildReachAction(
@@ -79,6 +64,7 @@ namespace DiceGame.Gameplay.AI.Domain
             AiSubGoal subGoal,
             GameStateSnapshot snapshot,
             CharacterController character,
+            DiceRegistry registry,
             AiPlayerSettings settings) {
             var targetDie = subGoal.TargetDie;
             if (IsStandingOnTarget(snapshot, targetDie)) {
@@ -148,12 +134,62 @@ namespace DiceGame.Gameplay.AI.Domain
                     $"goal={targetCell}");
             }
 
+            return BuildStandOnDieMovement(
+                targetDie,
+                snapshot,
+                character,
+                registry,
+                settings,
+                constraints);
+        }
+
+        /// <summary>
+        /// Climbing onto a higher-tier die while standing on another die cannot be done by Jump.
+        /// Leave the current die first; if leave is impossible, fail planning instead of Jump-looping.
+        /// </summary>
+        static Application.AiDiscreteAction BuildStandOnDieMovement(
+            DiceController targetDie,
+            GameStateSnapshot snapshot,
+            CharacterController character,
+            DiceRegistry registry,
+            AiPlayerSettings settings,
+            AiNavigationConstraints constraints) {
+            if (targetDie == null || snapshot == null) {
+                return null;
+            }
+
+            var standingOnOtherDie = snapshot.StandingDice != null
+                && snapshot.StandingDice != targetDie;
+            var needsClimb = RequiresJumpToStandOn(snapshot, targetDie);
+
+            if (needsClimb && standingOnOtherDie) {
+                if (TryBuildLeaveCellAction(
+                    snapshot,
+                    character,
+                    settings,
+                    snapshot.PlayerCell,
+                    out var leaveAction)) {
+                    Application.AiDebugLog.Log(
+                        $"ReachClimbLeave from={snapshot.PlayerCell} " +
+                        $"standOn={snapshot.StandingDice.name} target={targetDie.name} " +
+                        $"targetTier={targetDie.CurrentState.Tier}");
+                    return leaveAction;
+                }
+
+                Application.AiDebugLog.Log(
+                    $"ReachClimbBlocked from={snapshot.PlayerCell} " +
+                    $"standOn={snapshot.StandingDice.name} target={targetDie.name} " +
+                    $"targetTier={targetDie.CurrentState.Tier} reason=no-leave");
+                return null;
+            }
+
             var preferJump = settings == null || settings.AllowJump;
 
             return SelectMovementAction(
-                targetCell,
+                targetDie.CurrentState.GridPos,
                 snapshot,
                 character,
+                registry,
                 settings,
                 preferJump,
                 standOnDie: targetDie,
@@ -240,6 +276,7 @@ namespace DiceGame.Gameplay.AI.Domain
             AiSubGoal subGoal,
             GameStateSnapshot snapshot,
             CharacterController character,
+            DiceRegistry registry,
             AiPlayerSettings settings) {
             var die = subGoal.TargetDie;
             if (die == null) {
@@ -253,13 +290,12 @@ namespace DiceGame.Gameplay.AI.Domain
             }
 
             if (!IsStandingOnTarget(snapshot, die)) {
-                return SelectMovementAction(
-                    die.CurrentState.GridPos,
+                return BuildStandOnDieMovement(
+                    die,
                     snapshot,
                     character,
+                    registry,
                     settings,
-                    preferJump: RequiresJumpToStandOn(snapshot, die),
-                    standOnDie: die,
                     AiNavigationConstraints.None);
             }
 
@@ -410,13 +446,12 @@ namespace DiceGame.Gameplay.AI.Domain
                     return null;
                 }
 
-                return SelectMovementAction(
-                    die.CurrentState.GridPos,
+                return BuildStandOnDieMovement(
+                    die,
                     snapshot,
                     character,
+                    registry,
                     settings,
-                    preferJump: RequiresJumpToStandOn(snapshot, die),
-                    standOnDie: die,
                     AiNavigationConstraints.None);
             }
 
@@ -428,7 +463,7 @@ namespace DiceGame.Gameplay.AI.Domain
             subGoal.TryAdvanceJoinSlideStep(state);
 
             if (!subGoal.HasJoinSlidePlan && state.Orientation.Top != subGoal.TargetFace) {
-                return BuildOrientAction(subGoal, snapshot, character, settings);
+                return BuildOrientAction(subGoal, snapshot, character, registry, settings);
             }
 
             if (!TryEnsureJoinSlidePlan(subGoal, state, passability, character, footingWorldY, settings)) {
@@ -642,31 +677,128 @@ namespace DiceGame.Gameplay.AI.Domain
         }
 
         static Application.AiDiscreteAction BuildLiftAction(
+            MatchGoal goal,
             AiSubGoal subGoal,
             GameStateSnapshot snapshot,
-            CharacterController character) {
+            CharacterController character,
+            DiceRegistry registry,
+            AiPlayerSettings settings) {
             var die = subGoal.TargetDie;
             if (die == null) {
                 return null;
             }
 
-            if (!IsAdjacentToDice(snapshot, die)) {
+            if (snapshot.StandingDice == die) {
+                if (TryBuildLeaveCellAction(
+                    snapshot,
+                    character,
+                    settings,
+                    snapshot.PlayerCell,
+                    out var leaveAction)) {
+                    Application.AiDebugLog.Log(
+                        $"LiftLeaveStandingDie die={die.name} from={snapshot.PlayerCell}");
+                    return leaveAction;
+                }
+
+                Application.AiDebugLog.Log(
+                    $"LiftLeaveStandingDie FAILED die={die.name} from={snapshot.PlayerCell}");
+                return null;
+            }
+
+            Vector2Int? placeCell = null;
+            if (TryGetFollowingPlaceCell(goal, subGoal, out var plannedPlace)) {
+                placeCell = plannedPlace;
+            }
+
+            if (placeCell.HasValue
+                && LiftJoinPlanner.TrySelectStanceCell(
+                    snapshot,
+                    registry,
+                    die,
+                    die.CurrentState.GridPos,
+                    placeCell.Value,
+                    out var stanceCell)) {
+                var needsReposition = snapshot.PlayerCell != stanceCell
+                    || (IsAdjacentToDice(snapshot, die)
+                        && DiceBoardAnalyzer.ManhattanDistance(snapshot.PlayerCell, placeCell.Value) != 1);
+
+                if (needsReposition) {
+                    Application.AiDebugLog.Log(
+                        $"LiftApproachStance die={die.name} stance={stanceCell} place={placeCell.Value}");
+                    return SelectMovementAction(
+                        stanceCell,
+                        snapshot,
+                        character,
+                        registry,
+                        settings,
+                        preferJump: false,
+                        standOnDie: null,
+                        AiNavigationConstraints.None);
+                }
+            } else if (!IsAdjacentToDice(snapshot, die)) {
                 return SelectMovementAction(
                     die.CurrentState.GridPos,
                     snapshot,
                     character,
-                    null,
+                    registry,
+                    settings,
                     preferJump: false,
                     standOnDie: null,
                     AiNavigationConstraints.None);
             }
 
+            if (!IsAdjacentToDice(snapshot, die)) {
+                return null;
+            }
+
+            if (placeCell.HasValue
+                && DiceBoardAnalyzer.ManhattanDistance(snapshot.PlayerCell, placeCell.Value) != 1) {
+                Application.AiDebugLog.Log(
+                    $"LiftStanceMismatch die={die.name} player={snapshot.PlayerCell} place={placeCell.Value}");
+                return null;
+            }
+
             var faceDirection = GetFacingDirectionTowardDie(snapshot, die);
             if (!faceDirection.HasValue || !character.CanLiftTarget(die)) {
+                Application.AiDebugLog.Log(
+                    $"Lift FAILED die={die.name} player={snapshot.PlayerCell} " +
+                    $"canLift={character.CanLiftTarget(die)}");
                 return null;
             }
 
             return new Application.Actions.PulseLiftAction(faceDirection.Value);
+        }
+
+        static bool TryGetFollowingPlaceCell(MatchGoal goal, AiSubGoal liftSubGoal, out Vector2Int placeCell) {
+            placeCell = default;
+            if (goal?.SubGoals == null || liftSubGoal == null) {
+                return false;
+            }
+
+            var foundLift = false;
+            for (var i = 0; i < goal.SubGoals.Count; i++) {
+                var candidate = goal.SubGoals[i];
+                if (!foundLift) {
+                    if (candidate == liftSubGoal) {
+                        foundLift = true;
+                    }
+
+                    continue;
+                }
+
+                if (candidate.IsComplete) {
+                    continue;
+                }
+
+                if (candidate.Kind == AiSubGoalKind.PlaceCarriedDie) {
+                    placeCell = candidate.TargetCell;
+                    return true;
+                }
+
+                break;
+            }
+
+            return false;
         }
 
         public static Application.AiDiscreteAction BuildNavigateToTarget(
@@ -675,11 +807,13 @@ namespace DiceGame.Gameplay.AI.Domain
             CharacterController character,
             AiPlayerSettings settings,
             DiceController standOnDie = null,
-            bool preferJump = true) {
+            bool preferJump = true,
+            DiceRegistry registry = null) {
             return SelectMovementAction(
                 targetCell,
                 snapshot,
                 character,
+                registry,
                 settings,
                 preferJump,
                 standOnDie,
@@ -690,6 +824,7 @@ namespace DiceGame.Gameplay.AI.Domain
             Vector2Int targetCell,
             GameStateSnapshot snapshot,
             CharacterController character,
+            DiceRegistry registry,
             AiPlayerSettings settings,
             bool preferJump,
             DiceController standOnDie,
@@ -743,7 +878,8 @@ namespace DiceGame.Gameplay.AI.Domain
             if (preferJump
                 && !character.IsJumping
                 && settings != null
-                && settings.AllowJump) {
+                && settings.AllowJump
+                && !IsUnsafeClimbJump(snapshot, standOnDie)) {
                 var jumpDirection = DiceBoardAnalyzer.GetPrimaryDirectionToward(snapshot.PlayerCell, targetCell);
                 if (jumpDirection.HasValue) {
                     Application.AiDebugLog.Log(
@@ -762,11 +898,36 @@ namespace DiceGame.Gameplay.AI.Domain
                 }
             }
 
+            if (registry != null
+                && LiftClearancePlanner.TryPlan(snapshot, registry, targetCell, out var clearance)) {
+                Application.AiDebugLog.Log(
+                    $"LiftClearance die={clearance.BlockDie.name} place={clearance.PlaceCell} " +
+                    $"dir={clearance.FaceDirection} goal={targetCell}");
+                return new Application.Actions.LiftSequenceAction(
+                    clearance.FaceDirection,
+                    clearance.PlaceCell);
+            }
+
             Application.AiDebugLog.Log(
                 $"SelectCellStep FAILED purpose={purpose} player={snapshot.PlayerCell} goal={targetCell} " +
                 $"detail={candidateLog}");
 
             return null;
+        }
+
+        /// <summary>
+        /// Jumping from another die onto a higher-tier target does not remount; leave first instead.
+        /// </summary>
+        static bool IsUnsafeClimbJump(GameStateSnapshot snapshot, DiceController standOnDie) {
+            if (snapshot?.StandingDice == null || standOnDie == null) {
+                return false;
+            }
+
+            if (snapshot.StandingDice == standOnDie) {
+                return false;
+            }
+
+            return RequiresJumpToStandOn(snapshot, standOnDie);
         }
 
         // Legacy scoring removed — cell steps use AiCellMoveEvaluator.

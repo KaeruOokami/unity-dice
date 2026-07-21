@@ -185,7 +185,7 @@ namespace DiceGame.Core
             suppressesErasureGhost: true,
             blocksJumpLandingSinkAdvance: true,
             sinkDurationMultiplier: DiceBehaviorConstants.JumboSinkDurationMultiplier,
-            sinkingMatchWeightPerTier: JumboFootprint.MatchWeightPerTier,
+            sinkingMatchWeightPerTier: JumboFootprint.MatchWeightPerTierWhileErasing,
             participatesInBothTiersWhileSinking: true);
     }
 }

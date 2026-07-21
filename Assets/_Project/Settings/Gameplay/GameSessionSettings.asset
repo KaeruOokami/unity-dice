@@ -12,6 +12,6 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: e1f2a3b4c5d6478899aabbccddeeff20, type: 3}
   m_Name: GameSessionSettings
   m_EditorClassIdentifier: 
-  gameMode: 2
+  gameMode: 0
   versusBoardSettings: {fileID: 11400000, guid: e1f2a3b4c5d6478899aabbccddeeff25,
     type: 2}
