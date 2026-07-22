@@ -14,17 +14,20 @@ namespace DiceGame.Config
             PlayerSlotSetup player1Setup,
             PlayerSlotSetup player2Setup) {
             this.template = template;
+            var sharedInitialDiceCount = Mathf.Max(1, player1Setup.Spawn.InitialDiceCount);
+            var player1Spawn = player1Setup.Spawn.WithInitialDiceCount(sharedInitialDiceCount);
+            var player2Spawn = player2Setup.Spawn.WithInitialDiceCount(sharedInitialDiceCount);
             player1 = new PlayerBoardDefinition(
                 template.Player1.Width,
                 template.Player1.Height,
-                player1Setup.Spawn.ToRuntimeAsset(),
+                player1Spawn.ToRuntimeAsset(),
                 player1Setup.Catalog.ToRuntimeAsset(),
                 player1Setup.Attack.ToRuntimeAsset(),
                 player1Setup.NaturalSend.ToRuntimeAsset());
             player2 = new PlayerBoardDefinition(
                 template.Player2.Width,
                 template.Player2.Height,
-                player2Setup.Spawn.ToRuntimeAsset(),
+                player2Spawn.ToRuntimeAsset(),
                 player2Setup.Catalog.ToRuntimeAsset(),
                 player2Setup.Attack.ToRuntimeAsset(),
                 player2Setup.NaturalSend.ToRuntimeAsset());
@@ -68,16 +71,16 @@ namespace DiceGame.Config
                 return false;
             }
 
+            if (player1.SpawnSettings.InitialDiceCount != player2.SpawnSettings.InitialDiceCount) {
+                errorMessage =
+                    "RuntimeVersusBoardSettings: InitialDiceCount must be shared between Player1 and Player2.";
+                return false;
+            }
+
             if (InitialDicePlacementMode == VersusInitialDicePlacementMode.Mirrored) {
                 if (player1.Width != player2.Width || player1.Height != player2.Height) {
                     errorMessage =
                         "RuntimeVersusBoardSettings: Mirrored initial dice placement requires matching board sizes.";
-                    return false;
-                }
-
-                if (player1.SpawnSettings.InitialDiceCount != player2.SpawnSettings.InitialDiceCount) {
-                    errorMessage =
-                        "RuntimeVersusBoardSettings: Mirrored initial dice placement requires matching InitialDiceCount.";
                     return false;
                 }
             }

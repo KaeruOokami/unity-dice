@@ -84,6 +84,7 @@
      <Compile Include="Assets\_Project\Scripts\Placement\Occupancy\CellOccupancyTier.cs" />
      <Compile Include="Assets\_Project\Scripts\Gameplay\AI\Domain\SinkingChainEvaluator.cs" />
      <Compile Include="Assets\_Project\Scripts\Placement\Magnet\MagnetMoveExecutor.cs" />
+     <Compile Include="Assets\_Project\Scripts\Session\MatchSetupPersistDto.cs" />
      <Compile Include="Assets\_Project\Scripts\Session\Network\RemoteNetworkInputSource.cs" />
      <Compile Include="Assets\_Project\Scripts\Config\MatchSetup\PlayerSlotControlDefaults.cs" />
      <Compile Include="Assets\_Project\Scripts\Gameplay\Match\MatchFlowFlags.cs" />
@@ -150,6 +151,7 @@
      <Compile Include="Assets\_Project\Scripts\Gameplay\AI\Domain\AiCellMoveEvaluator.cs" />
      <Compile Include="Assets\_Project\Scripts\Core\Behavior\DiceEffectiveBehaviorResolver.cs" />
      <Compile Include="Assets\_Project\Scripts\Gameplay\Input\CharacterInputReader.cs" />
+     <Compile Include="Assets\_Project\Scripts\Session\MatchSetupPersistence.cs" />
      <Compile Include="Assets\_Project\Scripts\Session\UnityGamingServicesAuth.cs" />
      <Compile Include="Assets\_Project\Scripts\Core\Model\DiceSpawnAppearMode.cs" />
      <Compile Include="Assets\_Project\Scripts\Session\OnlineRelayFacade.cs" />
@@ -264,8 +266,6 @@
      <Compile Include="Assets\_Project\Scripts\Gameplay\AI\Domain\WorkDieRollPlanner.cs" />
      <Compile Include="Assets\_Project\Scripts\Placement\Rules\DiceEffectiveBehaviorFactory.cs" />
      <Compile Include="Assets\_Project\Scripts\Versus\Core\AttackKindBreakdown.cs" />
-     <Compile Include="Assets\_Project\Scripts\Session\MatchSetupPersistence.cs" />
-     <Compile Include="Assets\_Project\Scripts\Session\MatchSetupPersistDto.cs" />
      <None Include="Assets\TextMesh Pro\Shaders\TMPro.cginc" />
      <None Include="Assets\TextMesh Pro\Shaders\TMP_SDF-Mobile Overlay.shader" />
      <None Include="Assets\TextMesh Pro\Shaders\TMP_Bitmap.shader" />

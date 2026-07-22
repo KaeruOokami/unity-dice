@@ -6,6 +6,7 @@ namespace DiceGame.Config
     public class DiceSpawnSettings : ScriptableObject
     {
         [Header("Initial (random Bottom / Top placement)")]
+        [Tooltip("For Versus, prefer VersusBoardSettings.Shared Initial Dice Count (synced to 1P/2P).")]
         [Min(1)]
         [SerializeField] int initialDiceCount = 3;
         [SerializeField] bool animateInitialDiceSpawn = true;
@@ -32,12 +33,16 @@ namespace DiceGame.Config
         }
 
         public void Apply(DiceSpawnSettingsData data) {
-            initialDiceCount = Mathf.Max(1, data.InitialDiceCount);
+            SetInitialDiceCount(data.InitialDiceCount);
             animateInitialDiceSpawn = data.AnimateInitialDiceSpawn;
             continuousSpawnEnabled = data.ContinuousSpawnEnabled;
             spawnInterval = Mathf.Max(0f, data.SpawnInterval);
             spawnIntervalJitter = Mathf.Max(0f, data.SpawnIntervalJitter);
             bottomSpawnWeight = Mathf.Clamp01(data.BottomSpawnWeight);
+        }
+
+        public void SetInitialDiceCount(int count) {
+            initialDiceCount = Mathf.Max(1, count);
         }
     }
 }

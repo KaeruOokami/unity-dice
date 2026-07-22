@@ -42,6 +42,8 @@ namespace DiceGame.Config
         }
 
         bool TryValidateVersus(out string errorMessage) {
+            NormalizeVersusSharedInitialDiceCount();
+
             if (!TryValidatePlayerSlot(PlayerSlot.Player1, requireVersusAssets: true, out errorMessage)) {
                 return false;
             }
@@ -50,8 +52,33 @@ namespace DiceGame.Config
                 return false;
             }
 
+            if (Player1.Spawn.InitialDiceCount != Player2.Spawn.InitialDiceCount) {
+                errorMessage =
+                    "MatchSetupSnapshot: Versus InitialDiceCount must be shared between Player1 and Player2.";
+                return false;
+            }
+
             errorMessage = null;
             return true;
+        }
+
+        public void NormalizeVersusSharedInitialDiceCount() {
+            if (GameMode != GameMode.Versus) {
+                return;
+            }
+
+            var count = UnityEngine.Mathf.Max(1, Player1.Spawn.InitialDiceCount);
+            Player1 = WithSpawnInitialDiceCount(Player1, count);
+            Player2 = WithSpawnInitialDiceCount(Player2, count);
+        }
+
+        public int GetVersusSharedInitialDiceCount() {
+            return UnityEngine.Mathf.Max(1, Player1.Spawn.InitialDiceCount);
+        }
+
+        static PlayerSlotSetup WithSpawnInitialDiceCount(PlayerSlotSetup setup, int count) {
+            setup.Spawn = setup.Spawn.WithInitialDiceCount(count);
+            return setup;
         }
 
         bool TryValidatePlayerSlot(PlayerSlot slot, bool requireVersusAssets, out string errorMessage) {

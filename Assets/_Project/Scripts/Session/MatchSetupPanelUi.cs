@@ -12,6 +12,7 @@ namespace DiceGame.Session
 
         DiceSpawnSettingsPanelUi.Bindings sharedSpawnUi;
         DiceCatalogPanelUi.Bindings sharedCatalogUi;
+        TMP_InputField versusSharedInitialDiceCount;
         PlayerSlotUi player1Ui;
         PlayerSlotUi player2Ui;
 
@@ -46,6 +47,9 @@ namespace DiceGame.Session
             var defaults = registry.CreateDefaultSnapshot(mode);
 
             if (mode == GameMode.Versus) {
+                versusSharedInitialDiceCount = LobbyUiFactory.CreateLabeledIntInput(
+                    contentRoot,
+                    "Initial Dice Count (1P/2P Shared)");
                 CreatePlayerSlotSwitcher();
                 player1Ui = CreatePlayerSection("1P", true, defaults.Player1);
                 player2Ui = CreatePlayerSection("2P", true, defaults.Player2);
@@ -108,7 +112,8 @@ namespace DiceGame.Session
             if (versus) {
                 section.SpawnUi = DiceSpawnSettingsPanelUi.Build(
                     root,
-                    $"{slotLabel} Dice Spawn Settings");
+                    $"{slotLabel} Dice Spawn Settings",
+                    includeInitialDiceCount: false);
                 section.CatalogUi = DiceCatalogPanelUi.Build(
                     root,
                     $"{slotLabel} Dice Catalog",
@@ -143,7 +148,13 @@ namespace DiceGame.Session
                 return;
             }
 
-            if (mode != GameMode.Versus) {
+            if (mode == GameMode.Versus) {
+                snapshot.NormalizeVersusSharedInitialDiceCount();
+                if (versusSharedInitialDiceCount != null) {
+                    versusSharedInitialDiceCount.SetTextWithoutNotify(
+                        snapshot.GetVersusSharedInitialDiceCount().ToString());
+                }
+            } else {
                 DiceSpawnSettingsPanelUi.Apply(sharedSpawnUi, snapshot.SharedSpawn);
                 DiceCatalogPanelUi.Apply(sharedCatalogUi, snapshot.SharedCatalog);
             }
@@ -179,18 +190,36 @@ namespace DiceGame.Session
             };
 
             if (mode == GameMode.Versus) {
-                if (!TryBuildPlayerSetup(player1Ui, true, out var player1, out errorMessage)) {
+                if (versusSharedInitialDiceCount == null
+                    || !int.TryParse(versusSharedInitialDiceCount.text, out var sharedInitialDiceCount)) {
+                    snapshot = null;
+                    errorMessage = "Initial Dice Count must be an integer.";
+                    return false;
+                }
+
+                if (!TryBuildPlayerSetup(
+                        player1Ui,
+                        true,
+                        sharedInitialDiceCount,
+                        out var player1,
+                        out errorMessage)) {
                     snapshot = null;
                     return false;
                 }
 
-                if (!TryBuildPlayerSetup(player2Ui, true, out var player2, out errorMessage)) {
+                if (!TryBuildPlayerSetup(
+                        player2Ui,
+                        true,
+                        sharedInitialDiceCount,
+                        out var player2,
+                        out errorMessage)) {
                     snapshot = null;
                     return false;
                 }
 
                 snapshot.Player1 = player1;
                 snapshot.Player2 = player2;
+                snapshot.NormalizeVersusSharedInitialDiceCount();
             } else {
                 if (!DiceSpawnSettingsPanelUi.TryRead(sharedSpawnUi, out var sharedSpawn, out errorMessage)) {
                     snapshot = null;
@@ -204,14 +233,14 @@ namespace DiceGame.Session
 
                 snapshot.SharedSpawn = sharedSpawn;
                 snapshot.SharedCatalog = sharedCatalog;
-                if (!TryBuildPlayerSetup(player1Ui, false, out var player1, out errorMessage)) {
+                if (!TryBuildPlayerSetup(player1Ui, false, null, out var player1, out errorMessage)) {
                     snapshot = null;
                     return false;
                 }
 
                 snapshot.Player1 = player1;
                 if (mode == GameMode.Coop) {
-                    if (!TryBuildPlayerSetup(player2Ui, false, out var player2, out errorMessage)) {
+                    if (!TryBuildPlayerSetup(player2Ui, false, null, out var player2, out errorMessage)) {
                         snapshot = null;
                         return false;
                     }
@@ -234,6 +263,7 @@ namespace DiceGame.Session
         bool TryBuildPlayerSetup(
             PlayerSlotUi section,
             bool versus,
+            int? sharedInitialDiceCount,
             out PlayerSlotSetup setup,
             out string errorMessage) {
             setup = default;
@@ -252,7 +282,11 @@ namespace DiceGame.Session
             PlayerAttackSettingsData attack = default;
             PlayerNaturalSendSettingsData naturalSend = PlayerNaturalSendSettingsData.Empty();
             if (versus) {
-                if (!DiceSpawnSettingsPanelUi.TryRead(section.SpawnUi, out spawn, out errorMessage)) {
+                if (!DiceSpawnSettingsPanelUi.TryRead(
+                        section.SpawnUi,
+                        out spawn,
+                        out errorMessage,
+                        sharedInitialDiceCount)) {
                     return false;
                 }
 

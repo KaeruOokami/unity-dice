@@ -7,6 +7,9 @@ namespace DiceGame.Session.Network
 {
     public sealed class OnlineNetMessenger : IDisposable
     {
+        const int MatchSetupWriterSize = 8192;
+        const int IdentityWriterSize = 256;
+
         readonly NetworkManager networkManager;
         bool registered;
 
@@ -14,6 +17,10 @@ namespace DiceGame.Session.Network
         public event Action<OnlineMatchSnapshot> SnapshotReceived;
         public event Action MatchStartReceived;
         public event Action<MatchSetupNetworkPayload> MatchSetupReceived;
+        public event Action<MatchSetupNetworkPayload> MatchSetupBroadcastReceived;
+        public event Action<ulong, MatchSetupNetworkPayload> MatchSetupUpdateReceived;
+        public event Action<ulong, string> PlayerIdentityReceived;
+        public event Action PlayerIdentityRequestReceived;
         public event Action<byte> FlowCommandReceived;
         public event Action<ulong, byte> FlowRequestReceived;
 
@@ -36,6 +43,18 @@ namespace DiceGame.Session.Network
                 OnlineSessionConstants.MessageMatchStart,
                 OnMatchStartMessage);
             networkManager.CustomMessagingManager.RegisterNamedMessageHandler(
+                OnlineSessionConstants.MessageMatchSetupBroadcast,
+                OnMatchSetupBroadcastMessage);
+            networkManager.CustomMessagingManager.RegisterNamedMessageHandler(
+                OnlineSessionConstants.MessageMatchSetupUpdate,
+                OnMatchSetupUpdateMessage);
+            networkManager.CustomMessagingManager.RegisterNamedMessageHandler(
+                OnlineSessionConstants.MessagePlayerIdentity,
+                OnPlayerIdentityMessage);
+            networkManager.CustomMessagingManager.RegisterNamedMessageHandler(
+                OnlineSessionConstants.MessagePlayerIdentityRequest,
+                OnPlayerIdentityRequestMessage);
+            networkManager.CustomMessagingManager.RegisterNamedMessageHandler(
                 OnlineSessionConstants.MessageFlowCommand,
                 OnFlowCommandMessage);
             networkManager.CustomMessagingManager.RegisterNamedMessageHandler(
@@ -55,6 +74,14 @@ namespace DiceGame.Session.Network
                 OnlineSessionConstants.MessageSnapshot);
             networkManager.CustomMessagingManager.UnregisterNamedMessageHandler(
                 OnlineSessionConstants.MessageMatchStart);
+            networkManager.CustomMessagingManager.UnregisterNamedMessageHandler(
+                OnlineSessionConstants.MessageMatchSetupBroadcast);
+            networkManager.CustomMessagingManager.UnregisterNamedMessageHandler(
+                OnlineSessionConstants.MessageMatchSetupUpdate);
+            networkManager.CustomMessagingManager.UnregisterNamedMessageHandler(
+                OnlineSessionConstants.MessagePlayerIdentity);
+            networkManager.CustomMessagingManager.UnregisterNamedMessageHandler(
+                OnlineSessionConstants.MessagePlayerIdentityRequest);
             networkManager.CustomMessagingManager.UnregisterNamedMessageHandler(
                 OnlineSessionConstants.MessageFlowCommand);
             networkManager.CustomMessagingManager.UnregisterNamedMessageHandler(
@@ -95,11 +122,81 @@ namespace DiceGame.Session.Network
                 return;
             }
 
-            using var writer = new FastBufferWriter(64, Allocator.Temp);
+            using var writer = new FastBufferWriter(MatchSetupWriterSize, Allocator.Temp);
             writer.WriteNetworkSerializable(setupPayload);
             writer.WriteValueSafe(1);
             networkManager.CustomMessagingManager.SendNamedMessageToAll(
                 OnlineSessionConstants.MessageMatchStart,
+                writer,
+                NetworkDelivery.Reliable);
+        }
+
+        public void BroadcastMatchSetup(MatchSetupNetworkPayload setupPayload) {
+            if (networkManager == null || !networkManager.IsServer) {
+                return;
+            }
+
+            using var writer = new FastBufferWriter(MatchSetupWriterSize, Allocator.Temp);
+            writer.WriteNetworkSerializable(setupPayload);
+            networkManager.CustomMessagingManager.SendNamedMessageToAll(
+                OnlineSessionConstants.MessageMatchSetupBroadcast,
+                writer,
+                NetworkDelivery.Reliable);
+        }
+
+        public void SendMatchSetupUpdateToServer(MatchSetupNetworkPayload setupPayload) {
+            if (networkManager == null || !networkManager.IsConnectedClient || networkManager.IsServer) {
+                return;
+            }
+
+            using var writer = new FastBufferWriter(MatchSetupWriterSize, Allocator.Temp);
+            writer.WriteNetworkSerializable(setupPayload);
+            networkManager.CustomMessagingManager.SendNamedMessage(
+                OnlineSessionConstants.MessageMatchSetupUpdate,
+                NetworkManager.ServerClientId,
+                writer,
+                NetworkDelivery.Reliable);
+        }
+
+        public bool TrySendPlayerIdentityToServer(string playerId) {
+            if (networkManager == null
+                || !networkManager.IsConnectedClient
+                || networkManager.IsServer
+                || networkManager.CustomMessagingManager == null) {
+                return false;
+            }
+
+            if (string.IsNullOrEmpty(playerId)) {
+                return false;
+            }
+
+            var fixedId = new FixedString128Bytes(playerId);
+            using var writer = new FastBufferWriter(IdentityWriterSize, Allocator.Temp);
+            writer.WriteValueSafe(fixedId);
+            networkManager.CustomMessagingManager.SendNamedMessage(
+                OnlineSessionConstants.MessagePlayerIdentity,
+                NetworkManager.ServerClientId,
+                writer,
+                NetworkDelivery.Reliable);
+            return true;
+        }
+
+        public void RequestPlayerIdentityFromClient(ulong clientId) {
+            if (networkManager == null
+                || !networkManager.IsServer
+                || networkManager.CustomMessagingManager == null) {
+                return;
+            }
+
+            if (clientId == NetworkManager.ServerClientId) {
+                return;
+            }
+
+            using var writer = new FastBufferWriter(8, Allocator.Temp);
+            writer.WriteValueSafe((byte)1);
+            networkManager.CustomMessagingManager.SendNamedMessage(
+                OnlineSessionConstants.MessagePlayerIdentityRequest,
+                clientId,
                 writer,
                 NetworkDelivery.Reliable);
         }
@@ -118,7 +215,7 @@ namespace DiceGame.Session.Network
         }
 
         public void SendFlowRequestToServer(byte command) {
-            if (networkManager == null || !networkManager.IsClient || networkManager.IsServer) {
+            if (networkManager == null || !networkManager.IsConnectedClient || networkManager.IsServer) {
                 return;
             }
 
@@ -154,6 +251,34 @@ namespace DiceGame.Session.Network
             reader.ReadValueSafe(out int _);
             MatchSetupReceived?.Invoke(setupPayload);
             MatchStartReceived?.Invoke();
+        }
+
+        void OnMatchSetupBroadcastMessage(ulong senderClientId, FastBufferReader reader) {
+            reader.ReadNetworkSerializable(out MatchSetupNetworkPayload setupPayload);
+            MatchSetupBroadcastReceived?.Invoke(setupPayload);
+        }
+
+        void OnMatchSetupUpdateMessage(ulong senderClientId, FastBufferReader reader) {
+            if (!networkManager.IsServer) {
+                return;
+            }
+
+            reader.ReadNetworkSerializable(out MatchSetupNetworkPayload setupPayload);
+            MatchSetupUpdateReceived?.Invoke(senderClientId, setupPayload);
+        }
+
+        void OnPlayerIdentityMessage(ulong senderClientId, FastBufferReader reader) {
+            if (!networkManager.IsServer) {
+                return;
+            }
+
+            reader.ReadValueSafe(out FixedString128Bytes fixedId);
+            PlayerIdentityReceived?.Invoke(senderClientId, fixedId.ToString());
+        }
+
+        void OnPlayerIdentityRequestMessage(ulong senderClientId, FastBufferReader reader) {
+            reader.ReadValueSafe(out byte _);
+            PlayerIdentityRequestReceived?.Invoke();
         }
 
         void OnFlowCommandMessage(ulong senderClientId, FastBufferReader reader) {

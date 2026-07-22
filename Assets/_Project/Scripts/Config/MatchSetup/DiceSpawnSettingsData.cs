@@ -41,6 +41,12 @@ namespace DiceGame.Config
             return DiceSpawnSettings.CreateRuntime(this);
         }
 
+        public DiceSpawnSettingsData WithInitialDiceCount(int count) {
+            var copy = this;
+            copy.InitialDiceCount = Mathf.Max(1, count);
+            return copy;
+        }
+
         public bool TryValidate(out string errorMessage) {
             if (InitialDiceCount < 1) {
                 errorMessage = "DiceSpawnSettings: InitialDiceCount must be at least 1.";

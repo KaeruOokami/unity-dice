@@ -1,5 +1,6 @@
 using System;
 using DiceGame.Config;
+using DiceGame.Session.Network;
 using TMPro;
 using UnityEngine;
 using UnityEngine.EventSystems;
@@ -17,6 +18,7 @@ namespace DiceGame.Session
         Canvas canvas;
         GameObject mainPanel;
         GameObject localModePanel;
+        GameObject onlineModePanel;
         GameObject matchSetupPanel;
         GameObject hostPanel;
         GameObject clientPanel;
@@ -25,9 +27,17 @@ namespace DiceGame.Session
         TextMeshProUGUI hostCodeText;
         TextMeshProUGUI clientStatusText;
         TextMeshProUGUI setupErrorText;
+        TextMeshProUGUI setupTitleText;
+        Button setupPrimaryButton;
+        Button setupBackButton;
         Transform setupContentRoot;
         MatchSetupPanelUi setupPanelUi;
         GameMode selectedMode;
+        bool onlineSharedSetupActive;
+        bool onlineSetupIsHost;
+        bool applyingRemoteSetup;
+        float onlineSetupSyncTimer;
+        string lastSyncedSetupJson = string.Empty;
 
         public void Configure(
             OnlineSessionController sessionController,
@@ -56,44 +66,94 @@ namespace DiceGame.Session
             }
         }
 
+        void Update() {
+            TickOnlineSetupSync();
+        }
+
         public void ShowMainPanel() {
-            SetPanel(main: true, localMode: false, setup: false, host: false, client: false);
+            onlineSharedSetupActive = false;
+            SetPanel(main: true, localMode: false, onlineMode: false, setup: false, host: false, client: false);
             RefreshStatus();
         }
 
         public void ShowLocalModePanel() {
-            SetPanel(main: false, localMode: true, setup: false, host: false, client: false);
+            onlineSharedSetupActive = false;
+            SetPanel(main: false, localMode: true, onlineMode: false, setup: false, host: false, client: false);
             OnlineSessionState.Instance?.SetStatus("Select a mode.");
             RefreshStatus();
         }
 
+        public void ShowOnlineModePanel() {
+            onlineSharedSetupActive = false;
+            SetPanel(main: false, localMode: false, onlineMode: true, setup: false, host: false, client: false);
+            OnlineSessionState.Instance?.SetStatus("Select online mode (Co-op or Versus).");
+            RefreshStatus();
+        }
+
         public void ShowMatchSetupPanel(GameMode mode) {
+            onlineSharedSetupActive = false;
             selectedMode = mode;
-            SetPanel(main: false, localMode: false, setup: true, host: false, client: false);
-            RebuildMatchSetupPanel(mode);
+            ConfigureSetupChrome(isOnline: false, isHost: false);
+            SetPanel(main: false, localMode: false, onlineMode: false, setup: true, host: false, client: false);
+            RebuildMatchSetupPanel(mode, MatchSetupPersistence.LoadOrCreate(mode, GetRegistry()));
             OnlineSessionState.Instance?.SetStatus($"Configure {GameModeDisplayNames.GetDisplayName(mode)} settings.");
             RefreshStatus();
         }
 
+        public void ShowOnlineSharedSetupPanel(MatchSetupSnapshot snapshot, bool isHost) {
+            if (snapshot == null) {
+                return;
+            }
+
+            onlineSetupIsHost = isHost;
+            onlineSharedSetupActive = true;
+            selectedMode = snapshot.GameMode;
+            ConfigureSetupChrome(isOnline: true, isHost: isHost);
+            SetPanel(main: false, localMode: false, onlineMode: false, setup: true, host: false, client: false);
+            RebuildMatchSetupPanel(snapshot.GameMode, snapshot);
+            lastSyncedSetupJson = BuildSetupJson(snapshot);
+            onlineSetupSyncTimer = OnlineSessionConstants.OnlineSetupSyncIntervalSeconds;
+            OnlineSessionState.Instance?.SetStatus(
+                isHost
+                    ? "Shared settings (Host = 1P). Edit anytime, then Start Match."
+                    : "Shared settings (Client = 2P). Edits sync to host.");
+            RefreshStatus();
+        }
+
+        public void ApplyOnlineSetupFromRemote(MatchSetupSnapshot snapshot) {
+            if (!onlineSharedSetupActive || snapshot == null || setupPanelUi == null) {
+                return;
+            }
+
+            applyingRemoteSetup = true;
+            setupPanelUi.ApplyDefaults(snapshot);
+            lastSyncedSetupJson = BuildSetupJson(snapshot);
+            onlineSetupSyncTimer = OnlineSessionConstants.OnlineSetupSyncIntervalSeconds;
+            applyingRemoteSetup = false;
+        }
+
         public void ShowHostPanel(string lobbyCode) {
-            SetPanel(main: false, localMode: false, setup: false, host: true, client: false);
+            onlineSharedSetupActive = false;
+            SetPanel(main: false, localMode: false, onlineMode: false, setup: false, host: true, client: false);
             if (hostCodeText != null) {
-                hostCodeText.text = $"Join Code\n{lobbyCode}";
+                hostCodeText.text = $"Join Code\n{lobbyCode}\n\nWaiting for player...";
             }
 
             RefreshStatus();
         }
 
         public void ShowClientWaitingPanel(string lobbyCode) {
-            SetPanel(main: false, localMode: false, setup: false, host: false, client: true);
+            onlineSharedSetupActive = false;
+            SetPanel(main: false, localMode: false, onlineMode: false, setup: false, host: false, client: true);
             if (clientStatusText != null) {
-                clientStatusText.text = $"Joined: {lobbyCode}\nWaiting for host...";
+                clientStatusText.text = $"Joined: {lobbyCode}\nWaiting for shared settings...";
             }
 
             RefreshStatus();
         }
 
         public void Hide() {
+            onlineSharedSetupActive = false;
             if (canvas != null) {
                 canvas.gameObject.SetActive(false);
             }
@@ -106,7 +166,7 @@ namespace DiceGame.Session
             }
         }
 
-        void SetPanel(bool main, bool localMode, bool setup, bool host, bool client) {
+        void SetPanel(bool main, bool localMode, bool onlineMode, bool setup, bool host, bool client) {
             if (canvas != null) {
                 canvas.gameObject.SetActive(true);
             }
@@ -117,6 +177,10 @@ namespace DiceGame.Session
 
             if (localModePanel != null) {
                 localModePanel.SetActive(localMode);
+            }
+
+            if (onlineModePanel != null) {
+                onlineModePanel.SetActive(onlineMode);
             }
 
             if (matchSetupPanel != null) {
@@ -132,10 +196,10 @@ namespace DiceGame.Session
             }
         }
 
-        void RebuildMatchSetupPanel(GameMode mode) {
+        void RebuildMatchSetupPanel(GameMode mode, MatchSetupSnapshot defaults) {
             TryResolveUiReferences();
 
-            var registry = presetRegistry ?? controller?.MatchSetupPresetRegistry;
+            var registry = GetRegistry();
             if (setupContentRoot == null) {
                 Debug.LogError("[OnlineLobbyUi] setupContentRoot is null after UI resolution.");
                 OnlineSessionState.Instance?.SetStatus("Failed to initialize settings UI. Stop Play and try again.");
@@ -154,7 +218,7 @@ namespace DiceGame.Session
 
             try {
                 setupPanelUi = new MatchSetupPanelUi(registry, mode, setupContentRoot);
-                setupPanelUi.ApplyDefaults(MatchSetupPersistence.LoadOrCreate(mode, registry));
+                setupPanelUi.ApplyDefaults(defaults);
             } catch (Exception ex) {
                 setupPanelUi = null;
                 Debug.LogError($"[OnlineLobbyUi] Failed to build match setup panel: {ex}");
@@ -167,13 +231,71 @@ namespace DiceGame.Session
             }
         }
 
+        void ConfigureSetupChrome(bool isOnline, bool isHost) {
+            if (setupTitleText != null) {
+                setupTitleText.text = isOnline ? "Shared Settings" : "Settings";
+            }
+
+            if (setupPrimaryButton != null) {
+                setupPrimaryButton.gameObject.SetActive(!isOnline || isHost);
+                var label = setupPrimaryButton.GetComponentInChildren<TextMeshProUGUI>();
+                if (label != null) {
+                    label.text = isOnline ? "Start Match" : "Play";
+                }
+            }
+
+            if (setupBackButton != null) {
+                var label = setupBackButton.GetComponentInChildren<TextMeshProUGUI>();
+                if (label != null) {
+                    label.text = isOnline ? "Leave" : "Back";
+                }
+            }
+        }
+
+        void TickOnlineSetupSync() {
+            if (!onlineSharedSetupActive || applyingRemoteSetup || setupPanelUi == null || controller == null) {
+                return;
+            }
+
+            if (controller.IsBusy || !controller.IsOnlineSharedSetupReady) {
+                return;
+            }
+
+            onlineSetupSyncTimer -= Time.unscaledDeltaTime;
+            if (onlineSetupSyncTimer > 0f) {
+                return;
+            }
+
+            onlineSetupSyncTimer = OnlineSessionConstants.OnlineSetupSyncIntervalSeconds;
+            if (!setupPanelUi.TryBuildSnapshot(out var snapshot, out _)) {
+                return;
+            }
+
+            var json = BuildSetupJson(snapshot);
+            if (json == lastSyncedSetupJson) {
+                return;
+            }
+
+            if (!controller.TrySubmitOnlineSetupDraft(snapshot, out var error)) {
+                if (!string.IsNullOrEmpty(error) && setupErrorText != null) {
+                    setupErrorText.text = error;
+                }
+
+                return;
+            }
+
+            lastSyncedSetupJson = json;
+            if (setupErrorText != null) {
+                setupErrorText.text = string.Empty;
+            }
+        }
+
         void OnLocalPlayClicked() {
             ShowLocalModePanel();
         }
 
         void OnLocalModeSelected(GameMode mode) {
-            var registry = presetRegistry ?? controller?.MatchSetupPresetRegistry;
-            if (registry == null) {
+            if (GetRegistry() == null) {
                 OnlineSessionState.Instance?.SetStatus("Setup presets are not configured.");
                 return;
             }
@@ -181,7 +303,52 @@ namespace DiceGame.Session
             ShowMatchSetupPanel(mode);
         }
 
-        void OnMatchSetupPlayClicked() {
+        void OnOnlineModeSelected(GameMode mode) {
+            controller?.CreateHostLobby(mode);
+        }
+
+        void OnMatchSetupPrimaryClicked() {
+            if (onlineSharedSetupActive) {
+                if (!onlineSetupIsHost) {
+                    return;
+                }
+
+                FlushOnlineSetupBeforeStart();
+                controller?.StartOnlineMatchAsHost();
+                return;
+            }
+
+            OnLocalMatchSetupPlayClicked();
+        }
+
+        void OnMatchSetupBackClicked() {
+            if (onlineSharedSetupActive) {
+                onlineSharedSetupActive = false;
+                controller?.LeaveSession();
+                return;
+            }
+
+            ShowLocalModePanel();
+        }
+
+        void FlushOnlineSetupBeforeStart() {
+            if (setupPanelUi == null || controller == null) {
+                return;
+            }
+
+            if (!setupPanelUi.TryBuildSnapshot(out var snapshot, out var error)) {
+                if (setupErrorText != null) {
+                    setupErrorText.text = error ?? "Invalid settings.";
+                }
+
+                return;
+            }
+
+            controller.TrySubmitOnlineSetupDraft(snapshot, out _);
+            lastSyncedSetupJson = BuildSetupJson(snapshot);
+        }
+
+        void OnLocalMatchSetupPlayClicked() {
             if (setupPanelUi == null) {
                 OnlineSessionState.Instance?.SetStatus("Failed to initialize settings UI. Check MatchSetupPresetRegistry.");
                 return;
@@ -204,12 +371,27 @@ namespace DiceGame.Session
                 setupErrorText.text = string.Empty;
             }
 
-            var registry = presetRegistry ?? controller.MatchSetupPresetRegistry;
+            var registry = GetRegistry();
             if (!MatchSetupPersistence.TrySave(snapshot, registry, out var saveError)) {
                 Debug.LogError($"[OnlineLobbyUi] Failed to save match setup: {saveError}");
             }
 
             controller.StartLocalPlay(snapshot);
+        }
+
+        MatchSetupPresetRegistry GetRegistry() {
+            return presetRegistry ?? controller?.MatchSetupPresetRegistry;
+        }
+
+        string BuildSetupJson(MatchSetupSnapshot snapshot) {
+            var registry = GetRegistry();
+            if (snapshot == null || registry == null) {
+                return string.Empty;
+            }
+
+            var payload = MatchSetupNetworkCodec.ToPayload(snapshot, registry);
+            var file = MatchSetupPersistMapper.FromNetworkPayload(payload);
+            return JsonUtility.ToJson(file);
         }
 
         void BuildUi() {
@@ -242,13 +424,14 @@ namespace DiceGame.Session
 
             BuildMainPanel(root.transform);
             BuildLocalModePanel(root.transform);
+            BuildOnlineModePanel(root.transform);
             BuildMatchSetupPanel(root.transform);
             BuildHostPanel(root.transform);
             BuildClientPanel(root.transform);
         }
 
         bool IsUiBuilt() {
-            return canvas != null && setupContentRoot != null && matchSetupPanel != null;
+            return canvas != null && setupContentRoot != null && matchSetupPanel != null && onlineModePanel != null;
         }
 
         void DestroyStaleLobbyCanvases() {
@@ -264,6 +447,7 @@ namespace DiceGame.Session
             canvas = null;
             mainPanel = null;
             localModePanel = null;
+            onlineModePanel = null;
             matchSetupPanel = null;
             hostPanel = null;
             clientPanel = null;
@@ -272,8 +456,13 @@ namespace DiceGame.Session
             hostCodeText = null;
             clientStatusText = null;
             setupErrorText = null;
+            setupTitleText = null;
+            setupPrimaryButton = null;
+            setupBackButton = null;
             setupContentRoot = null;
             setupPanelUi = null;
+            onlineSharedSetupActive = false;
+            lastSyncedSetupJson = string.Empty;
         }
 
         void TryResolveUiReferences() {
@@ -308,9 +497,7 @@ namespace DiceGame.Session
             LobbyUiFactory.CenterPanel(mainPanel.GetComponent<RectTransform>(), new Vector2(520f, 420f));
             LobbyUiFactory.CreateText(mainPanel.transform, "Title", "Dice Game", 40, TextAnchor.UpperCenter);
             LobbyUiFactory.CreateButton(mainPanel.transform, "LocalButton", "Local Play", new Vector2(0f, 80f), OnLocalPlayClicked);
-            LobbyUiFactory.CreateButton(mainPanel.transform, "HostButton", "Create Room (Host)", new Vector2(0f, 0f), () => {
-                controller?.CreateHostLobby();
-            });
+            LobbyUiFactory.CreateButton(mainPanel.transform, "HostButton", "Create Room (Host)", new Vector2(0f, 0f), ShowOnlineModePanel);
 
             joinCodeInput = LobbyUiFactory.CreateInputField(mainPanel.transform, "JoinCodeInput", "Join code", new Vector2(0f, -90f));
             LobbyUiFactory.CreateButton(mainPanel.transform, "JoinButton", "Join by Code", new Vector2(0f, -170f), () => {
@@ -334,10 +521,23 @@ namespace DiceGame.Session
             LobbyUiFactory.CreateButton(localModePanel.transform, "LocalModeBackButton", "Back", new Vector2(0f, -170f), ShowMainPanel);
         }
 
+        void BuildOnlineModePanel(Transform root) {
+            onlineModePanel = LobbyUiFactory.CreatePanel(root, "OnlineModePanel", new Color(0.12f, 0.12f, 0.14f, 0.95f));
+            LobbyUiFactory.CenterPanel(onlineModePanel.GetComponent<RectTransform>(), new Vector2(520f, 360f));
+            LobbyUiFactory.CreateText(onlineModePanel.transform, "Title", "Online Mode", 36, TextAnchor.UpperCenter);
+            LobbyUiFactory.CreateButton(onlineModePanel.transform, "OnlineCoopButton", "Co-op", new Vector2(0f, 40f), () => {
+                OnOnlineModeSelected(GameMode.Coop);
+            });
+            LobbyUiFactory.CreateButton(onlineModePanel.transform, "OnlineVersusButton", "Versus", new Vector2(0f, -40f), () => {
+                OnOnlineModeSelected(GameMode.Versus);
+            });
+            LobbyUiFactory.CreateButton(onlineModePanel.transform, "OnlineModeBackButton", "Back", new Vector2(0f, -140f), ShowMainPanel);
+        }
+
         void BuildMatchSetupPanel(Transform root) {
             matchSetupPanel = LobbyUiFactory.CreatePanel(root, "MatchSetupPanel", new Color(0.12f, 0.12f, 0.14f, 0.95f));
             LobbyUiFactory.CenterPanel(matchSetupPanel.GetComponent<RectTransform>(), new Vector2(760f, 860f));
-            LobbyUiFactory.CreateText(matchSetupPanel.transform, "Title", "Settings", 36, TextAnchor.UpperCenter);
+            setupTitleText = LobbyUiFactory.CreateText(matchSetupPanel.transform, "Title", "Settings", 36, TextAnchor.UpperCenter);
 
             var scrollGo = new GameObject("SetupScroll");
             scrollGo.transform.SetParent(matchSetupPanel.transform, false);
@@ -369,20 +569,25 @@ namespace DiceGame.Session
             errorRect.offsetMax = Vector2.zero;
             setupErrorText.color = new Color(1f, 0.45f, 0.45f, 1f);
 
-            LobbyUiFactory.CreateButton(matchSetupPanel.transform, "PlayButton", "Play", new Vector2(0f, -320f), OnMatchSetupPlayClicked);
-            LobbyUiFactory.CreateButton(matchSetupPanel.transform, "SetupBackButton", "Back", new Vector2(0f, -390f), () => {
-                ShowLocalModePanel();
-            });
+            setupPrimaryButton = LobbyUiFactory.CreateButton(
+                matchSetupPanel.transform,
+                "PlayButton",
+                "Play",
+                new Vector2(0f, -320f),
+                OnMatchSetupPrimaryClicked);
+            setupBackButton = LobbyUiFactory.CreateButton(
+                matchSetupPanel.transform,
+                "SetupBackButton",
+                "Back",
+                new Vector2(0f, -390f),
+                OnMatchSetupBackClicked);
         }
 
         void BuildHostPanel(Transform root) {
             hostPanel = LobbyUiFactory.CreatePanel(root, "HostPanel", new Color(0.12f, 0.12f, 0.14f, 0.95f));
-            LobbyUiFactory.CenterPanel(hostPanel.GetComponent<RectTransform>(), new Vector2(520f, 360f));
-            hostCodeText = LobbyUiFactory.CreateText(hostPanel.transform, "HostCode", "Join Code", 36, TextAnchor.UpperCenter);
-            LobbyUiFactory.CreateButton(hostPanel.transform, "StartMatchButton", "Start Match", new Vector2(0f, -40f), () => {
-                controller?.StartOnlineMatchAsHost();
-            });
-            LobbyUiFactory.CreateButton(hostPanel.transform, "HostLeaveButton", "Cancel", new Vector2(0f, -130f), () => {
+            LobbyUiFactory.CenterPanel(hostPanel.GetComponent<RectTransform>(), new Vector2(520f, 300f));
+            hostCodeText = LobbyUiFactory.CreateText(hostPanel.transform, "HostCode", "Join Code", 32, TextAnchor.UpperCenter);
+            LobbyUiFactory.CreateButton(hostPanel.transform, "HostLeaveButton", "Cancel", new Vector2(0f, -100f), () => {
                 controller?.LeaveSession();
             });
         }

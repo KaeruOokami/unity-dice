@@ -35,7 +35,7 @@ namespace DiceGame.Config
                 Debug.LogError("[MatchSetupPresetRegistry] defaultPlayerInputSettings is not assigned.");
             }
 
-            return new MatchSetupSnapshot {
+            var snapshot = new MatchSetupSnapshot {
                 GameMode = mode,
                 SharedSpawn = DiceSpawnSettingsData.FromTemplate(defaultSharedSpawn),
                 SharedCatalog = DiceCatalogData.FromTemplate(defaultSharedCatalog),
@@ -52,6 +52,8 @@ namespace DiceGame.Config
                     defaultPlayer2Attack,
                     defaultPlayer2NaturalSend)
             };
+            snapshot.NormalizeVersusSharedInitialDiceCount();
+            return snapshot;
         }
 
         public PlayerSlotControlDefaults GetControlDefaults(PlayerSlot slot) {

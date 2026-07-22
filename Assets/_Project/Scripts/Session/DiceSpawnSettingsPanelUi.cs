@@ -18,11 +18,16 @@ namespace DiceGame.Session
             public TextMeshProUGUI BottomSpawnWeightLabel;
         }
 
-        public static Bindings Build(Transform parent, string sectionLabel) {
+        public static Bindings Build(
+            Transform parent,
+            string sectionLabel,
+            bool includeInitialDiceCount = true) {
             var section = LobbyUiFactory.CreateVerticalSection(parent, sectionLabel);
             LobbyUiFactory.CreateLayoutLabel(section, sectionLabel, 20, 28f);
             var bindings = new Bindings {
-                InitialDiceCount = LobbyUiFactory.CreateLabeledIntInput(section, "Initial Dice Count"),
+                InitialDiceCount = includeInitialDiceCount
+                    ? LobbyUiFactory.CreateLabeledIntInput(section, "Initial Dice Count")
+                    : null,
                 AnimateInitialDiceSpawn = LobbyUiFactory.CreateLabeledToggle(section, "Animate Initial Spawn"),
                 ContinuousSpawnEnabled = LobbyUiFactory.CreateLabeledToggle(section, "Continuous Spawn Enabled"),
                 SpawnInterval = LobbyUiFactory.CreateLabeledFloatInput(section, "Spawn Interval"),
@@ -44,7 +49,10 @@ namespace DiceGame.Session
                 return;
             }
 
-            SetInputText(bindings.InitialDiceCount, data.InitialDiceCount.ToString());
+            if (bindings.InitialDiceCount != null) {
+                SetInputText(bindings.InitialDiceCount, data.InitialDiceCount.ToString());
+            }
+
             bindings.AnimateInitialDiceSpawn.isOn = data.AnimateInitialDiceSpawn;
             bindings.ContinuousSpawnEnabled.isOn = data.ContinuousSpawnEnabled;
             SetInputText(bindings.SpawnInterval, data.SpawnInterval.ToString("0.###"));
@@ -55,15 +63,26 @@ namespace DiceGame.Session
             }
         }
 
-        public static bool TryRead(Bindings bindings, out DiceSpawnSettingsData data, out string errorMessage) {
+        public static bool TryRead(
+            Bindings bindings,
+            out DiceSpawnSettingsData data,
+            out string errorMessage,
+            int? sharedInitialDiceCount = null) {
             data = default;
             if (bindings == null) {
                 errorMessage = "Dice spawn settings UI is not initialized.";
                 return false;
             }
 
-            if (!TryParseInt(bindings.InitialDiceCount, out data.InitialDiceCount)) {
-                errorMessage = "Initial Dice Count must be an integer.";
+            if (bindings.InitialDiceCount != null) {
+                if (!TryParseInt(bindings.InitialDiceCount, out data.InitialDiceCount)) {
+                    errorMessage = "Initial Dice Count must be an integer.";
+                    return false;
+                }
+            } else if (sharedInitialDiceCount.HasValue) {
+                data.InitialDiceCount = sharedInitialDiceCount.Value;
+            } else {
+                errorMessage = "Initial Dice Count is missing.";
                 return false;
             }
 

@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
+using DiceGame.Config;
 using Unity.Services.Lobbies;
 using Unity.Services.Lobbies.Models;
 using UnityEngine;
@@ -17,7 +18,7 @@ namespace DiceGame.Session
         public string LobbyCode => ActiveLobby?.LobbyCode ?? string.Empty;
         public bool IsHost => hostLobby != null;
 
-        public async Task<Lobby> CreateLobbyAsync(string relayJoinCode, string relayRegion) {
+        public async Task<Lobby> CreateLobbyAsync(string relayJoinCode, string relayRegion, GameMode gameMode) {
             await UnityGamingServicesAuth.EnsureSignedInAsync();
 
             var options = new CreateLobbyOptions {
@@ -30,6 +31,10 @@ namespace DiceGame.Session
                     {
                         OnlineSessionConstants.LobbyDataRelayRegion,
                         new DataObject(DataObject.VisibilityOptions.Member, relayRegion ?? string.Empty)
+                    },
+                    {
+                        OnlineSessionConstants.LobbyDataGameMode,
+                        new DataObject(DataObject.VisibilityOptions.Member, gameMode.ToString())
                     }
                 }
             };
@@ -41,6 +46,25 @@ namespace DiceGame.Session
             joinedLobby = null;
             heartbeatTimer = 0f;
             return hostLobby;
+        }
+
+        public bool TryGetGameMode(out GameMode gameMode) {
+            gameMode = GameMode.Versus;
+            var lobby = ActiveLobby;
+            if (lobby?.Data == null) {
+                return false;
+            }
+
+            if (!lobby.Data.TryGetValue(OnlineSessionConstants.LobbyDataGameMode, out var data)
+                || string.IsNullOrEmpty(data?.Value)) {
+                return false;
+            }
+
+            if (!Enum.TryParse(data.Value, ignoreCase: true, out gameMode)) {
+                return false;
+            }
+
+            return gameMode == GameMode.Coop || gameMode == GameMode.Versus;
         }
 
         public async Task<Lobby> JoinLobbyByCodeAsync(string lobbyCode) {
