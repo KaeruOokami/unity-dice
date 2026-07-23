@@ -147,7 +147,8 @@ namespace DiceGame.Gameplay
             PlayerSlot slot,
             PlayerInputSettings inputSettings,
             PlayerMatchActionContext actionContext = null,
-            PlayerSlotInputConfig? inputConfigOverride = null) {
+            PlayerSlotInputConfig? inputConfigOverride = null,
+            PlayerSlot? inputBindingSlot = null) {
             board = targetBoard;
             placement = targetPlacement;
             registry = targetPlacement.Dice;
@@ -161,10 +162,11 @@ namespace DiceGame.Gameplay
             }
 
             if (inputSettings != null && inputReader != null && inputSource == null) {
+                var bindSlot = inputBindingSlot ?? slot;
                 if (inputConfigOverride.HasValue) {
-                    inputReader.Configure(slot, inputSettings, inputConfigOverride.Value);
+                    inputReader.Configure(bindSlot, inputSettings, inputConfigOverride.Value);
                 } else {
-                    inputReader.Configure(slot, inputSettings);
+                    inputReader.Configure(bindSlot, inputSettings);
                 }
             }
             standingController = new CharacterStandingController();

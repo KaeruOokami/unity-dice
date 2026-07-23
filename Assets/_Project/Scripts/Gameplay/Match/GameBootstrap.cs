@@ -650,18 +650,22 @@ namespace DiceGame.Gameplay
 
                 var inputSettingsForSlot = playerInputSettings;
                 var sessionForSpawn = OnlineSessionState.Instance;
+                PlayerSlot? inputBindingSlot = null;
                 if (sessionForSpawn != null && sessionForSpawn.IsOnline) {
                     // Only the local seat gets device input; the remote seat is driven by network.
                     if (slot != sessionForSpawn.LocalPlayerSlot) {
                         inputSettingsForSlot = null;
+                    } else {
+                        // Online local control always uses Player1 action map / keybinds (WASD etc.).
+                        inputBindingSlot = PlayerSlot.Player1;
                     }
                 }
 
                 PlayerSlotInputConfig? inputOverride = null;
                 if (inputSettingsForSlot != null && !resolvedSetup.IsAiControlled(slot)) {
-                    // Online: each seat uses its own slot config (P1/P2).
-                    // For dual keyboard, set both seats to Keyboard in match setup.
-                    inputOverride = resolvedSetup.GetInputConfig(slot);
+                    inputOverride = inputBindingSlot.HasValue
+                        ? resolvedSetup.GetInputConfig(inputBindingSlot.Value)
+                        : resolvedSetup.GetInputConfig(slot);
                 }
 
                 characterController.Configure(
@@ -673,7 +677,8 @@ namespace DiceGame.Gameplay
                     slot,
                     inputSettingsForSlot,
                     matchActionContext,
-                    inputOverride);
+                    inputOverride,
+                    inputBindingSlot);
                 TryConfigureAiControl(characterObject, characterController, slot);
                 spawnedCharacters.Add(characterController);
             }
