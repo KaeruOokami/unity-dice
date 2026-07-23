@@ -271,6 +271,12 @@ namespace DiceGame.Gameplay
                     characterMovementSettings.MaxJumpStepCoupled));
             spawnRandom = ResolveMatchRandom(out var matchSeed);
             UnityEngine.Random.InitState(matchSeed);
+            if (session != null && session.IsOnline) {
+                Debug.Log(
+                    $"GameBootstrap: online match seed={matchSeed} " +
+                    $"role={(session.IsHost ? "Host" : "Client")} " +
+                    $"(initial board = local generate from seed; later spawns = host results)");
+            }
 
             spawnSystem = GetComponent<DiceSpawnSystem>();
             if (spawnSystem == null) {
@@ -284,6 +290,8 @@ namespace DiceGame.Gameplay
             }
 
             spawnSystem.ConfigureOwnership(ownershipContext);
+            // Hybrid: initial board is seed-local on both peers (do not emit spawn commands yet).
+            spawnSystem.EmitNetworkSpawns = false;
 
             var playerCount = resolvedSetup.RequiredPlayerCount;
             var startDice = spawnSystem.SpawnInitialPlayerDice(playerCount);
@@ -386,6 +394,9 @@ namespace DiceGame.Gameplay
             }
 
             if (session != null && session.IsOnline) {
+                // Hybrid online sync:
+                // - Initial dice: already spawned above from shared MatchSeed (both peers).
+                // - Continuous / attack / jumbo: host RNG + OnlineDiceSpawnCommand to client.
                 BindOnlineFullSimSync(session.IsHost);
                 if (session.IsHost) {
                     spawnSystem.EmitNetworkSpawns = true;
@@ -405,8 +416,14 @@ namespace DiceGame.Gameplay
 
         System.Random ResolveMatchRandom(out int usedSeed) {
             var session = OnlineSessionState.Instance;
-            if (session != null && session.IsOnline && session.MatchSeed != 0) {
-                usedSeed = session.MatchSeed;
+            if (session != null && session.IsOnline) {
+                if (session.MatchSeed == 0) {
+                    Debug.LogError(
+                        "GameBootstrap: online MatchSeed is 0; peers will diverge. " +
+                        "Ensure MatchStart trailing seed was applied before BeginSession.");
+                }
+
+                usedSeed = session.MatchSeed != 0 ? session.MatchSeed : 1;
                 return new System.Random(usedSeed);
             }
 
@@ -642,12 +659,9 @@ namespace DiceGame.Gameplay
 
                 PlayerSlotInputConfig? inputOverride = null;
                 if (inputSettingsForSlot != null && !resolvedSetup.IsAiControlled(slot)) {
-                    // Client controls P2 but typically uses the same physical device layout as P1.
-                    inputOverride = sessionForSpawn != null
-                        && sessionForSpawn.PlayMode == OnlinePlayMode.OnlineClient
-                        && slot == PlayerSlot.Player2
-                        ? resolvedSetup.GetInputConfig(PlayerSlot.Player1)
-                        : resolvedSetup.GetInputConfig(slot);
+                    // Online: each seat uses its own slot config (P1/P2).
+                    // For dual keyboard, set both seats to Keyboard in match setup.
+                    inputOverride = resolvedSetup.GetInputConfig(slot);
                 }
 
                 characterController.Configure(
