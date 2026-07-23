@@ -24,6 +24,11 @@ namespace DiceGame.Session
         public const float LobbyHeartbeatSeconds = 15f;
         public const float SnapshotSendIntervalSeconds = 0.05f;
         public const float InputSendIntervalSeconds = 0.05f;
+        /// <summary>
+        /// Keep each snapshot chunk under NGO's non-fragmented MTU (~1264 bytes).
+        /// Use Unreliable (not Sequenced) so sibling chunks do not invalidate each other.
+        /// </summary>
+        public const int SnapshotMaxEntitiesPerChunk = 20;
         public const float OnlineSetupSyncIntervalSeconds = 0.35f;
         public const float OnlineIdentityRetryIntervalSeconds = 0.5f;
         public const string MatchSetupPersistDirectory = "MatchSetup";

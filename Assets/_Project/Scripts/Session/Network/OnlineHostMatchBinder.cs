@@ -1,4 +1,3 @@
-using System;
 using System.Collections.Generic;
 using DiceGame.Config;
 using DiceGame.Core;
@@ -122,7 +121,11 @@ namespace DiceGame.Session.Network
                     Position = character.transform.position,
                     Rotation = character.transform.rotation,
                     Kind = (byte)character.PlayerSlot,
-                    Flags = (byte)(OnlineTransformSnapshot.FlagCharacter | OnlineTransformSnapshot.FlagActive)
+                    Flags = (byte)(OnlineTransformSnapshot.FlagCharacter | OnlineTransformSnapshot.FlagActive),
+                    VisualKind = OnlineTransformSnapshot.VisualNone,
+                    TopFace = 0,
+                    VisualProgress = 0f,
+                    EmissionColor = default
                 });
             }
 
@@ -139,16 +142,47 @@ namespace DiceGame.Session.Network
                     }
 
                     var view = dice.View;
-                    var syncTransform = view != null && view.DiceTransform != null
+                    var positionTransform = view != null && view.DiceTransform != null
                         ? view.DiceTransform
                         : dice.transform;
+                    // Face orientation lives on RotationRoot, not PositionRoot.
+                    var rotation = view != null && view.DiceRotationTransform != null
+                        ? view.DiceRotationTransform.rotation
+                        : positionTransform.rotation;
+
+                    byte flags = OnlineTransformSnapshot.FlagDice | OnlineTransformSnapshot.FlagActive;
+                    byte visualKind = OnlineTransformSnapshot.VisualNone;
+                    var visualProgress = 0f;
+                    var topFace = (byte)Mathf.Clamp(dice.CurrentState.Orientation.Top, 1, 6);
+                    Color32 emissionColor = default;
+
+                    if (view != null) {
+                        if (dice.IsErasing) {
+                            visualKind = dice.ErasureKind == ErasureKind.Radiance
+                                ? OnlineTransformSnapshot.VisualRadiance
+                                : OnlineTransformSnapshot.VisualSink;
+                            visualProgress = view.ErasureProgress;
+                        } else if (view.IsOneVanishing) {
+                            visualKind = OnlineTransformSnapshot.VisualOneVanish;
+                            visualProgress = view.OneVanishProgress;
+                        }
+
+                        if (view.ErasureEmissionColorOverride.HasValue) {
+                            flags |= OnlineTransformSnapshot.FlagHasEmissionOverride;
+                            emissionColor = view.ErasureEmissionColorOverride.Value;
+                        }
+                    }
 
                     entities.Add(new OnlineTransformSnapshot {
                         Id = id,
-                        Position = syncTransform.position,
-                        Rotation = syncTransform.rotation,
+                        Position = positionTransform.position,
+                        Rotation = rotation,
                         Kind = (byte)dice.Kind,
-                        Flags = (byte)(OnlineTransformSnapshot.FlagDice | OnlineTransformSnapshot.FlagActive)
+                        Flags = flags,
+                        VisualKind = visualKind,
+                        TopFace = topFace,
+                        VisualProgress = visualProgress,
+                        EmissionColor = emissionColor
                     });
                 }
             }

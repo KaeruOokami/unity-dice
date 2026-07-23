@@ -66,6 +66,10 @@ namespace DiceGame.View
         public bool IsAnimating => isAnimating;
         public float ErasureProgress => erasureProgress;
         public float GroundRollProgress => groundRollProgress;
+        public float OneVanishProgress => oneVanishProgress;
+        public bool IsOneVanishing => oneVanishCoroutine != null;
+        public ErasureKind ActiveErasureKind => activeErasureKind;
+        public Color? ErasureEmissionColorOverride => erasureEmissionColorOverride;
         public bool IsErasureGhost =>
             activeErasureKind == ErasureKind.Sink
             && erasureSettings != null
@@ -73,6 +77,12 @@ namespace DiceGame.View
             && (diceController == null || !diceController.Capabilities.SuppressesErasureGhost);
 
         public Transform DiceTransform => positionRoot;
+        public Transform DiceRotationTransform => rotationRoot;
+
+        // Must match OnlineTransformSnapshot.VisualOneVanish.
+        const byte NetworkVisualOneVanish = 3;
+
+        float oneVanishProgress;
 
         public void Configure(
             PhysicsSettings physics,
@@ -199,14 +209,19 @@ namespace DiceGame.View
         }
 
         void ApplyMeshVisualScale(Board board) {
-            if (meshInstance == null || board == null) {
-                return;
-            }
-
             EnsureDiceController();
             var footprintScale = diceController != null && diceController.Capabilities.HasExpandedFootprint
                 ? JumboFootprint.Size
                 : 1;
+            ApplyMeshVisualScale(board, footprintScale);
+        }
+
+        void ApplyMeshVisualScale(Board board, int footprintScale) {
+            if (meshInstance == null || board == null) {
+                return;
+            }
+
+            footprintScale = Mathf.Max(1, footprintScale);
             var targetLogicalSize = board.CellSize * footprintScale;
             if (!float.IsNaN(appliedCellSize) && Mathf.Abs(appliedCellSize - targetLogicalSize) < 0.0001f) {
                 return;
@@ -226,6 +241,26 @@ namespace DiceGame.View
             // Center mesh geometry on the rotationRoot origin.
             meshInstance.localPosition = -cachedMeshLocalBoundsCenter * scale;
             appliedCellSize = targetLogicalSize;
+        }
+
+        /// <summary>
+        /// Client presentation: apply kind mesh and footprint scale without gameplay controller state.
+        /// </summary>
+        public void ApplyNetworkKindPresentation(Board board, DiceKind kind, GameObject meshPrefab) {
+            if (meshPrefab != null) {
+                SetMeshPrefab(meshPrefab);
+            } else {
+                EnsureMesh();
+            }
+
+            if (board == null) {
+                return;
+            }
+
+            var footprintScale = DiceBehaviorResolver.GetCapabilities(kind).HasExpandedFootprint
+                ? JumboFootprint.Size
+                : 1;
+            ApplyMeshVisualScale(board, footprintScale);
         }
 
         Vector3 ResolveGridWorldPosition(DiceState state, Board board) {
@@ -698,6 +733,79 @@ namespace DiceGame.View
             if (erasureProgress > 0f) {
                 ApplyErasureEmission(erasureProgress);
             }
+        }
+
+        /// <summary>
+        /// Client presentation only. Applies erasure / one-vanish materials without driving gameplay.
+        /// World position / rotation are expected to come from the network snapshot separately.
+        /// </summary>
+        public void ApplyNetworkVisualPresentation(
+            byte visualKind,
+            float progress,
+            int topFace,
+            Color? emissionColor,
+            DiceOneVanishSettings oneVanishSettings) {
+            EnsureMesh();
+            ResolveHierarchy();
+            if (dissolvePivot == null || erasureSettings == null) {
+                return;
+            }
+
+            progress = Mathf.Clamp01(progress);
+            currentTopFace = topFace is >= 1 and <= 6 ? topFace : currentTopFace;
+            erasureEmissionColorOverride = emissionColor;
+
+            if (visualKind == 0 || progress <= 0f) {
+                ClearNetworkVisualPresentation();
+                return;
+            }
+
+            if (visualKind == (byte)ErasureKind.Radiance) {
+                activeErasureKind = ErasureKind.Radiance;
+                erasureProgress = progress;
+                oneVanishProgress = 0f;
+                dissolvePivot.localScale = GetDissolveLocalScale(currentTopFace, 1f);
+                ApplyErasureAlpha(0f, allowGhostAlpha: false);
+                ApplyErasureEmission(GetRadianceEmissionFactor(progress));
+                return;
+            }
+
+            if (visualKind == NetworkVisualOneVanish) {
+                activeErasureKind = ErasureKind.None;
+                erasureProgress = 0f;
+                oneVanishProgress = progress;
+                dissolvePivot.localScale = GetDissolveLocalScale(currentTopFace, 1f);
+                ApplyErasureAlpha(0f, allowGhostAlpha: false);
+                if (oneVanishSettings != null) {
+                    ApplyOneVanishEmission(oneVanishSettings, progress);
+                } else {
+                    ApplyErasureEmission(progress);
+                }
+
+                return;
+            }
+
+            // Sink (and any other squash-based erasure).
+            activeErasureKind = ErasureKind.Sink;
+            erasureProgress = progress;
+            oneVanishProgress = 0f;
+            var squash = 1f - progress;
+            dissolvePivot.localScale = GetDissolveLocalScale(currentTopFace, squash);
+            ApplyErasureAlpha(progress, allowGhostAlpha: true);
+            ApplyErasureEmission(progress);
+        }
+
+        public void ClearNetworkVisualPresentation() {
+            if (dissolvePivot != null) {
+                dissolvePivot.localScale = GetDissolveLocalScale(
+                    currentTopFace is >= 1 and <= 6 ? currentTopFace : 1,
+                    1f);
+            }
+
+            erasureProgress = 0f;
+            oneVanishProgress = 0f;
+            ResetErasureVisuals();
+            ResetOneVanishVisuals();
         }
 
         public void RetreatErasure(float amount) {
@@ -1556,12 +1664,15 @@ namespace DiceGame.View
 
             var elapsed = 0f;
             var vanishDuration = Mathf.Max(0.01f, settings.VanishDuration);
+            oneVanishProgress = 0f;
             while (elapsed < vanishDuration) {
                 elapsed += Time.deltaTime;
-                ApplyOneVanishEmission(settings, GetOneVanishEmissionFactor(elapsed, settings));
+                oneVanishProgress = GetOneVanishEmissionFactor(elapsed, settings);
+                ApplyOneVanishEmission(settings, oneVanishProgress);
                 yield return null;
             }
 
+            oneVanishProgress = 0f;
             ResetOneVanishVisuals();
             isAnimating = false;
             oneVanishCoroutine = null;

@@ -8,6 +8,7 @@ namespace DiceGame.Session
     {
         public static NetworkManager EnsureNetworkManager() {
             if (NetworkManager.Singleton != null) {
+                ApplyDiagnosticNetworkSettings(NetworkManager.Singleton);
                 return NetworkManager.Singleton;
             }
 
@@ -25,7 +26,17 @@ namespace DiceGame.Session
             networkManager.NetworkConfig.TickRate = 30;
             networkManager.NetworkConfig.EnableSceneManagement = false;
             networkManager.NetworkConfig.PlayerPrefab = null;
+            ApplyDiagnosticNetworkSettings(networkManager);
+            Debug.Log(
+                $"OnlineNetworkHost: created NetworkManager (LogLevel={networkManager.LogLevel}).");
             return networkManager;
+        }
+
+        static void ApplyDiagnosticNetworkSettings(NetworkManager networkManager) {
+            networkManager.LogLevel = LogLevel.Normal;
+            if (networkManager.NetworkConfig?.NetworkTransport is UnityTransport transport) {
+                transport.MaxPayloadSize = 16 * 1024;
+            }
         }
 
         public static void Shutdown() {

@@ -413,7 +413,12 @@ namespace DiceGame.Gameplay
                 onlineController.Messenger,
                 diceEntityPrefab,
                 characterPrefab,
-                playerInputSettings);
+                playerInputSettings,
+                diceErasureSettings,
+                diceOneVanishSettings,
+                board,
+                ResolveClientPresentationCatalog(out var alternateCatalog),
+                alternateCatalog);
 
             var flowAdapter = GetComponent<OnlineClientFlowAdapter>();
             if (flowAdapter == null) {
@@ -422,6 +427,26 @@ namespace DiceGame.Gameplay
 
             flowAdapter.Configure(onlineController.Messenger, playerInputSettings);
             return true;
+        }
+
+        DiceCatalog ResolveClientPresentationCatalog(out DiceCatalog alternateCatalog) {
+            alternateCatalog = null;
+            if (resolvedSetup == null) {
+                return diceCatalog;
+            }
+
+            if (resolvedSetup.GameMode == GameMode.Versus
+                && resolvedSetup.VersusBoardSettings != null) {
+                var versus = resolvedSetup.VersusBoardSettings;
+                alternateCatalog = versus.Player2.DiceCatalog;
+                return versus.Player1.DiceCatalog != null
+                    ? versus.Player1.DiceCatalog
+                    : diceCatalog;
+            }
+
+            return resolvedSetup.SharedDiceCatalog != null
+                ? resolvedSetup.SharedDiceCatalog
+                : diceCatalog;
         }
 
         void BindOnlineHostAuthority() {

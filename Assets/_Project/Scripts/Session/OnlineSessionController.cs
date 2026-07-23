@@ -713,13 +713,21 @@ namespace DiceGame.Session
         }
 
         void RefreshConnectedCount() {
-            if (NetworkManager.Singleton == null || !NetworkManager.Singleton.IsListening) {
+            var networkManager = NetworkManager.Singleton;
+            if (networkManager == null || !networkManager.IsListening) {
                 OnlineSessionState.Instance?.SetConnectedPlayerCount(0);
                 return;
             }
 
+            // ConnectedClientsList is server-only in Netcode for GameObjects.
+            if (!networkManager.IsServer) {
+                OnlineSessionState.Instance?.SetConnectedPlayerCount(
+                    networkManager.IsConnectedClient ? OnlineSessionConstants.MaxPlayers : 0);
+                return;
+            }
+
             OnlineSessionState.Instance?.SetConnectedPlayerCount(
-                NetworkManager.Singleton.ConnectedClientsList.Count);
+                networkManager.ConnectedClientsList.Count);
         }
 
         async Task SafeLeaveAsync() {

@@ -51,6 +51,7 @@ namespace DiceGame.Session
             }
 
             networkManager.NetworkConfig.NetworkTransport = transport;
+            transport.MaxPayloadSize = Mathf.Max(transport.MaxPayloadSize, 16 * 1024);
             return transport;
         }
 
