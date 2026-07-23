@@ -231,13 +231,21 @@ namespace DiceGame.Versus
         }
 
         void RefreshQueueView() {
-            if (queueView == null) {
-                return;
+            if (queueView != null) {
+                queueView.RenderAll(
+                    incomingQueues[PlayerSlot.Player1].GetPendingVolleys(),
+                    incomingQueues[PlayerSlot.Player2].GetPendingVolleys());
             }
 
-            queueView.RenderAll(
-                incomingQueues[PlayerSlot.Player1].GetPendingVolleys(),
-                incomingQueues[PlayerSlot.Player2].GetPendingVolleys());
+            QueuePresentationChanged?.Invoke();
+        }
+
+        public event Action QueuePresentationChanged;
+
+        public IReadOnlyList<AttackVolley> GetPendingVolleys(PlayerSlot slot) {
+            return incomingQueues.TryGetValue(slot, out var queue)
+                ? queue.GetPendingVolleys()
+                : Array.Empty<AttackVolley>();
         }
     }
 }

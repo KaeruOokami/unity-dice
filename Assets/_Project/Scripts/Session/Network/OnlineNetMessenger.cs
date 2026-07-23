@@ -15,9 +15,12 @@ namespace DiceGame.Session.Network
         uint snapshotSequence;
         float nextSnapshotSendLogTime;
         float nextSnapshotReceiveLogTime;
+        float nextAttackQueueSendLogTime;
 
         public event Action<ulong, OnlineInputPayload> InputReceived;
         public event Action<OnlineMatchSnapshotChunk> SnapshotChunkReceived;
+        public event Action<OnlineDiceMotionEvent> DiceMotionReceived;
+        public event Action<OnlineAttackQueueSnapshot> AttackQueueReceived;
         public event Action MatchStartReceived;
         public event Action<MatchSetupNetworkPayload> MatchSetupReceived;
         public event Action<MatchSetupNetworkPayload> MatchSetupBroadcastReceived;
@@ -42,6 +45,12 @@ namespace DiceGame.Session.Network
             networkManager.CustomMessagingManager.RegisterNamedMessageHandler(
                 OnlineSessionConstants.MessageSnapshot,
                 OnSnapshotMessage);
+            networkManager.CustomMessagingManager.RegisterNamedMessageHandler(
+                OnlineSessionConstants.MessageDiceMotion,
+                OnDiceMotionMessage);
+            networkManager.CustomMessagingManager.RegisterNamedMessageHandler(
+                OnlineSessionConstants.MessageAttackQueue,
+                OnAttackQueueMessage);
             networkManager.CustomMessagingManager.RegisterNamedMessageHandler(
                 OnlineSessionConstants.MessageMatchStart,
                 OnMatchStartMessage);
@@ -75,6 +84,10 @@ namespace DiceGame.Session.Network
                 OnlineSessionConstants.MessageInput);
             networkManager.CustomMessagingManager.UnregisterNamedMessageHandler(
                 OnlineSessionConstants.MessageSnapshot);
+            networkManager.CustomMessagingManager.UnregisterNamedMessageHandler(
+                OnlineSessionConstants.MessageDiceMotion);
+            networkManager.CustomMessagingManager.UnregisterNamedMessageHandler(
+                OnlineSessionConstants.MessageAttackQueue);
             networkManager.CustomMessagingManager.UnregisterNamedMessageHandler(
                 OnlineSessionConstants.MessageMatchStart);
             networkManager.CustomMessagingManager.UnregisterNamedMessageHandler(
@@ -124,55 +137,87 @@ namespace DiceGame.Session.Network
             }
 
             var entities = snapshot.Entities ?? System.Array.Empty<OnlineTransformSnapshot>();
-            var maxPerChunk = Mathf.Max(1, OnlineSessionConstants.SnapshotMaxEntitiesPerChunk);
-            var chunkCount = entities.Length == 0
-                ? 1
-                : (entities.Length + maxPerChunk - 1) / maxPerChunk;
-            while (chunkCount > 64) {
-                maxPerChunk++;
-                chunkCount = (entities.Length + maxPerChunk - 1) / maxPerChunk;
-            }
-
             snapshotSequence++;
-            var sequence = snapshotSequence;
-            var offset = 0;
-            // UnreliableSequenced drops sibling chunks; use unordered Unreliable + sequence/mask reassembly.
-            const NetworkDelivery delivery = NetworkDelivery.Unreliable;
-            for (var chunkIndex = 0; chunkIndex < chunkCount; chunkIndex++) {
-                var count = entities.Length == 0
-                    ? 0
-                    : Mathf.Min(maxPerChunk, entities.Length - offset);
-                var chunkEntities = count > 0
-                    ? new OnlineTransformSnapshot[count]
-                    : System.Array.Empty<OnlineTransformSnapshot>();
-                if (count > 0) {
-                    System.Array.Copy(entities, offset, chunkEntities, 0, count);
-                    offset += count;
-                }
+            var chunk = new OnlineMatchSnapshotChunk {
+                Sequence = snapshotSequence,
+                ChunkIndex = 0,
+                ChunkCount = 1,
+                Entities = entities
+            };
 
-                var chunk = new OnlineMatchSnapshotChunk {
-                    Sequence = sequence,
-                    ChunkIndex = (ushort)chunkIndex,
-                    ChunkCount = (ushort)chunkCount,
-                    Entities = chunkEntities
-                };
-
-                using var writer = new FastBufferWriter(512, Allocator.Temp, 2048);
-                writer.WriteNetworkSerializable(chunk);
-                if (writer.Length > 1200) {
-                    Debug.LogWarning(
-                        $"OnlineNetMessenger.SendSnapshotToClients: chunk {chunkIndex}/{chunkCount} is {writer.Length} bytes (may exceed Unreliable MTU).");
-                }
-
-                customMessaging.SendNamedMessageToAll(
-                    OnlineSessionConstants.MessageSnapshot,
-                    writer,
-                    delivery);
+            // Single Reliable datagram only — never split (multi-chunk incompleteness froze clients).
+            using var writer = new FastBufferWriter(1024, Allocator.Temp, 8192);
+            writer.WriteNetworkSerializable(chunk);
+            if (writer.Length > OnlineSessionConstants.SnapshotReliableSoftBytes) {
+                Debug.LogWarning(
+                    $"OnlineNetMessenger.SendSnapshotToClients: snapshot is {writer.Length} bytes " +
+                    $"(soft limit {OnlineSessionConstants.SnapshotReliableSoftBytes}). Keep shrinking payload.");
             }
+
+            customMessaging.SendNamedMessageToAll(
+                OnlineSessionConstants.MessageSnapshot,
+                writer,
+                NetworkDelivery.Reliable);
 
             LogSnapshotSendThrottled(
-                $"send ToAll entities={entities.Length} chunks={chunkCount} perChunk={maxPerChunk} " +
-                $"seq={sequence} delivery={delivery} interval={OnlineSessionConstants.SnapshotSendIntervalSeconds:0.###}s");
+                $"send ToAll entities={entities.Length} chunks=1 bytes={writer.Length} " +
+                $"seq={snapshotSequence} delivery=Reliable " +
+                $"interval={OnlineSessionConstants.SnapshotSendIntervalSeconds:0.###}s");
+        }
+
+        public void SendDiceMotionToClients(OnlineDiceMotionEvent motionEvent) {
+            if (networkManager == null || !networkManager.IsServer) {
+                return;
+            }
+
+            var customMessaging = networkManager.CustomMessagingManager;
+            if (customMessaging == null) {
+                return;
+            }
+
+            if (!networkManager.IsListening || networkManager.ConnectedClientsIds.Count <= 1) {
+                return;
+            }
+
+            using var writer = new FastBufferWriter(128, Allocator.Temp, 512);
+            writer.WriteNetworkSerializable(motionEvent);
+            customMessaging.SendNamedMessageToAll(
+                OnlineSessionConstants.MessageDiceMotion,
+                writer,
+                NetworkDelivery.Reliable);
+            Debug.Log(
+                $"OnlineNetMessenger.SendDiceMotionToClients: entity={motionEvent.EntityId} " +
+                $"kind={motionEvent.Kind} catalogSide={motionEvent.CatalogSide}");
+        }
+
+        public void SendAttackQueueToClients(OnlineAttackQueueSnapshot queueSnapshot) {
+            if (networkManager == null || !networkManager.IsServer) {
+                return;
+            }
+
+            var customMessaging = networkManager.CustomMessagingManager;
+            if (customMessaging == null) {
+                return;
+            }
+
+            if (!networkManager.IsListening || networkManager.ConnectedClientsIds.Count <= 1) {
+                return;
+            }
+
+            using var writer = new FastBufferWriter(256, Allocator.Temp, 2048);
+            writer.WriteNetworkSerializable(queueSnapshot);
+            customMessaging.SendNamedMessageToAll(
+                OnlineSessionConstants.MessageAttackQueue,
+                writer,
+                NetworkDelivery.Reliable);
+
+            var now = Time.realtimeSinceStartup;
+            if (now >= nextAttackQueueSendLogTime) {
+                nextAttackQueueSendLogTime = now + 2f;
+                Debug.Log(
+                    $"OnlineNetMessenger.SendAttackQueueToClients: " +
+                    $"p1={queueSnapshot.Player1Volleys?.Length ?? 0} p2={queueSnapshot.Player2Volleys?.Length ?? 0}");
+            }
         }
 
         void LogSnapshotSendThrottled(string message) {
@@ -324,6 +369,30 @@ namespace DiceGame.Session.Network
             }
 
             SnapshotChunkReceived?.Invoke(chunk);
+        }
+
+        void OnDiceMotionMessage(ulong senderClientId, FastBufferReader reader) {
+            if (networkManager != null && networkManager.IsServer) {
+                return;
+            }
+
+            reader.ReadNetworkSerializable(out OnlineDiceMotionEvent motionEvent);
+            Debug.Log(
+                $"OnlineNetMessenger.OnDiceMotionMessage: entity={motionEvent.EntityId} " +
+                $"kind={motionEvent.Kind} catalogSide={motionEvent.CatalogSide}");
+            DiceMotionReceived?.Invoke(motionEvent);
+        }
+
+        void OnAttackQueueMessage(ulong senderClientId, FastBufferReader reader) {
+            if (networkManager != null && networkManager.IsServer) {
+                return;
+            }
+
+            reader.ReadNetworkSerializable(out OnlineAttackQueueSnapshot queueSnapshot);
+            Debug.Log(
+                $"OnlineNetMessenger.OnAttackQueueMessage: " +
+                $"p1={queueSnapshot.Player1Volleys?.Length ?? 0} p2={queueSnapshot.Player2Volleys?.Length ?? 0}");
+            AttackQueueReceived?.Invoke(queueSnapshot);
         }
 
         void OnMatchStartMessage(ulong senderClientId, FastBufferReader reader) {

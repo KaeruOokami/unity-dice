@@ -73,8 +73,10 @@ namespace DiceGame.Gameplay
 
         DiceRegistry registry;
         PlayerMatchActionContext matchActionContext;
+        DiceMatchOwnershipContext ownershipContext;
         PlacementService placement;
         DiceSpawnSystem spawnSystem;
+        VersusAttackController attackController;
         System.Random spawnRandom;
         readonly List<CharacterController> characters = new();
         bool sessionStarted;
@@ -260,7 +262,7 @@ namespace DiceGame.Gameplay
                 matchActionContext = gameObject.AddComponent<PlayerMatchActionContext>();
             }
 
-            var ownershipContext = GetComponent<DiceMatchOwnershipContext>();
+            ownershipContext = GetComponent<DiceMatchOwnershipContext>();
             if (ownershipContext == null) {
                 ownershipContext = gameObject.AddComponent<DiceMatchOwnershipContext>();
             }
@@ -286,6 +288,8 @@ namespace DiceGame.Gameplay
                 AbortPendingSessionStart();
                 return;
             }
+
+            spawnSystem.ConfigureOwnership(ownershipContext);
 
             var playerCount = resolvedSetup.RequiredPlayerCount;
             var startDice = spawnSystem.SpawnInitialPlayerDice(playerCount);
@@ -332,7 +336,7 @@ namespace DiceGame.Gameplay
 
             erasureSystem.ConfigureSinkingChain();
 
-            VersusAttackController attackController = null;
+            attackController = null;
             if (resolvedSetup.GameMode == GameMode.Versus) {
                 var versusSettings = resolvedSetup.VersusBoardSettings;
                 erasureSystem.ConfigureVersusAttack(versusSettings);
@@ -414,11 +418,14 @@ namespace DiceGame.Gameplay
                 diceEntityPrefab,
                 characterPrefab,
                 playerInputSettings,
+                physicsSettings,
+                diceAnimationSettings,
                 diceErasureSettings,
                 diceOneVanishSettings,
                 board,
                 ResolveClientPresentationCatalog(out var alternateCatalog),
-                alternateCatalog);
+                alternateCatalog,
+                ResolveClientAttackQueueUiSettings());
 
             var flowAdapter = GetComponent<OnlineClientFlowAdapter>();
             if (flowAdapter == null) {
@@ -449,6 +456,15 @@ namespace DiceGame.Gameplay
                 : diceCatalog;
         }
 
+        AttackQueueUiSettings ResolveClientAttackQueueUiSettings() {
+            if (resolvedSetup?.GameMode == GameMode.Versus
+                && resolvedSetup.VersusBoardSettings != null) {
+                return resolvedSetup.VersusBoardSettings.AttackQueueUiSettings;
+            }
+
+            return null;
+        }
+
         void BindOnlineHostAuthority() {
             var onlineController = FindObjectOfType<OnlineSessionController>();
             if (onlineController?.Messenger == null) {
@@ -461,7 +477,12 @@ namespace DiceGame.Gameplay
                 binder = gameObject.AddComponent<OnlineHostMatchBinder>();
             }
 
-            binder.Configure(onlineController.Messenger, registry, characters);
+            binder.Configure(
+                onlineController.Messenger,
+                registry,
+                ownershipContext,
+                characters,
+                attackController);
         }
 
         MatchSetupPresetRegistry FindPresetRegistry() {

@@ -1,8 +1,10 @@
+using System;
 using System.Collections.Generic;
 using DiceGame.Config;
 using DiceGame.Core;
 using DiceGame.Gameplay.Input;
 using DiceGame.Grid;
+using DiceGame.Versus.Core;
 using DiceGame.View;
 using Unity.Netcode;
 using UnityEngine;
@@ -11,47 +13,101 @@ namespace DiceGame.Session.Network
 {
     public sealed class OnlineClientMatchView : MonoBehaviour
     {
+        sealed class ProxyMotionState
+        {
+            public Transform PositionTransform;
+            public Transform RotationTransform;
+            public Vector3 TargetPosition;
+            public Quaternion TargetRotation;
+            public Vector3 CurrentPosition;
+            public Quaternion CurrentRotation;
+            public Vector3 PositionVelocity;
+            public bool Initialized;
+            public bool IsCharacter;
+        }
+
+        sealed class SyntheticJumpMotion
+        {
+            VerticalMotionState state;
+            readonly float gravity;
+            float lastSampleTime;
+            bool started;
+
+            public SyntheticJumpMotion(float jumpHeight, float gravityStrength) {
+                gravity = Mathf.Max(0.01f, gravityStrength);
+                state = GravityMotion.CreateLaunch(Mathf.Max(0f, jumpHeight), gravity);
+            }
+
+            public VerticalMotionState Sample() {
+                var now = Time.time;
+                if (!started) {
+                    started = true;
+                    lastSampleTime = now;
+                    return state;
+                }
+
+                var delta = now - lastSampleTime;
+                lastSampleTime = now;
+                if (delta > 0f) {
+                    state = GravityMotion.Step(state, gravity, delta);
+                }
+
+                return state;
+            }
+        }
+
         OnlineNetMessenger messenger;
         GameObject dicePrefab;
         GameObject characterPrefab;
         DiceCatalog primaryCatalog;
         DiceCatalog secondaryCatalog;
         Board board;
+        PhysicsSettings physicsSettings;
+        DiceAnimationSettings animationSettings;
         DiceErasureSettings erasureSettings;
         DiceOneVanishSettings oneVanishSettings;
         Transform proxyRoot;
         readonly Dictionary<uint, Transform> proxies = new();
         readonly Dictionary<uint, DiceView> diceViews = new();
-        readonly Dictionary<uint, byte> lastVisualKinds = new();
+        readonly Dictionary<uint, ProxyMotionState> motionStates = new();
         readonly Dictionary<uint, byte> lastMeshKinds = new();
+        readonly Dictionary<uint, byte> lastCatalogSides = new();
         readonly HashSet<uint> sequenceSeenIds = new();
+        readonly HashSet<uint> retainUntilSnapshot = new();
+        AttackQueueView attackQueueView;
+        AttackQueueUiSettings attackQueueUiSettings;
+        readonly Dictionary<uint, DiceState> logicalStates = new();
         CharacterInputReader localInputReader;
         float inputTimer;
         Vector2 lastMove;
         Direction? pendingDirection;
         float nextSnapshotReceivedLogTime;
         uint activeSnapshotSequence;
-        ushort activeChunkCount;
-        ulong receivedChunkMask;
 
         public void Configure(
             OnlineNetMessenger netMessenger,
             GameObject diceEntityPrefab,
             GameObject characterEntityPrefab,
             PlayerInputSettings playerInputSettings,
+            PhysicsSettings matchPhysicsSettings,
+            DiceAnimationSettings matchAnimationSettings,
             DiceErasureSettings diceErasureSettings,
             DiceOneVanishSettings diceOneVanishSettings,
             Board matchBoard,
             DiceCatalog catalog,
-            DiceCatalog alternateCatalog = null) {
+            DiceCatalog alternateCatalog = null,
+            AttackQueueUiSettings queueUiSettings = null) {
             messenger = netMessenger;
             dicePrefab = diceEntityPrefab;
             characterPrefab = characterEntityPrefab;
+            physicsSettings = matchPhysicsSettings;
+            animationSettings = matchAnimationSettings;
             erasureSettings = diceErasureSettings;
             oneVanishSettings = diceOneVanishSettings;
             board = matchBoard;
             primaryCatalog = catalog;
             secondaryCatalog = alternateCatalog;
+            attackQueueUiSettings = queueUiSettings;
 
             if (proxyRoot == null) {
                 var rootObject = new GameObject("OnlineClientProxies");
@@ -62,8 +118,17 @@ namespace DiceGame.Session.Network
             if (messenger != null) {
                 messenger.SnapshotChunkReceived -= OnSnapshotChunkReceived;
                 messenger.SnapshotChunkReceived += OnSnapshotChunkReceived;
+                messenger.DiceMotionReceived -= OnDiceMotionReceived;
+                messenger.DiceMotionReceived += OnDiceMotionReceived;
+                messenger.AttackQueueReceived -= OnAttackQueueReceived;
+                messenger.AttackQueueReceived += OnAttackQueueReceived;
             } else {
                 Debug.LogError("OnlineClientMatchView.Configure: messenger is null.");
+            }
+
+            if (physicsSettings == null || animationSettings == null) {
+                Debug.LogError(
+                    "OnlineClientMatchView.Configure: physics/animation settings missing; dice motion events cannot play.");
             }
 
             if (primaryCatalog == null && secondaryCatalog == null) {
@@ -74,17 +139,21 @@ namespace DiceGame.Session.Network
                 Debug.LogError("OnlineClientMatchView.Configure: Board is null; jumbo scale cannot be applied.");
             }
 
+            EnsureAttackQueueView();
             SetupLocalInputCapture(playerInputSettings);
         }
 
         void OnDestroy() {
             if (messenger != null) {
                 messenger.SnapshotChunkReceived -= OnSnapshotChunkReceived;
+                messenger.DiceMotionReceived -= OnDiceMotionReceived;
+                messenger.AttackQueueReceived -= OnAttackQueueReceived;
             }
         }
 
         void Update() {
             CaptureAndSendInput();
+            TickCharacterInterpolation();
         }
 
         void SetupLocalInputCapture(PlayerInputSettings settings) {
@@ -96,7 +165,6 @@ namespace DiceGame.Session.Network
             inputObject.transform.SetParent(transform, false);
             localInputReader = inputObject.AddComponent<CharacterInputReader>();
             if (settings != null) {
-                // Client controls Player2 on the host; locally read Player1 bindings for comfort.
                 localInputReader.Configure(PlayerSlot.Player1, settings);
             }
         }
@@ -140,27 +208,140 @@ namespace DiceGame.Session.Network
             messenger.SendInputToServer(payload);
         }
 
-        void OnSnapshotChunkReceived(OnlineMatchSnapshotChunk chunk) {
-            if (chunk.ChunkCount == 0 || chunk.ChunkIndex >= chunk.ChunkCount || chunk.ChunkCount > 64) {
+        void OnDiceMotionReceived(OnlineDiceMotionEvent motionEvent) {
+            retainUntilSnapshot.Add(motionEvent.EntityId);
+            var diceView = GetOrCreateDiceViewForMotion(motionEvent);
+            if (diceView == null || board == null) {
                 Debug.LogError(
-                    $"OnlineClientMatchView: invalid chunk header seq={chunk.Sequence} " +
-                    $"index={chunk.ChunkIndex} count={chunk.ChunkCount}");
+                    $"OnlineClientMatchView: cannot play motion kind={motionEvent.Kind} entity={motionEvent.EntityId}");
                 return;
             }
 
-            if (chunk.Sequence != activeSnapshotSequence) {
-                activeSnapshotSequence = chunk.Sequence;
-                activeChunkCount = chunk.ChunkCount;
-                receivedChunkMask = 0;
-                sequenceSeenIds.Clear();
-            } else if (chunk.ChunkCount != activeChunkCount) {
-                activeChunkCount = chunk.ChunkCount;
-                receivedChunkMask = 0;
-                sequenceSeenIds.Clear();
+            ApplyKindMesh(
+                diceView,
+                motionEvent.EntityId,
+                motionEvent.ToState.Kind,
+                (PlayerSlot)motionEvent.CatalogSide);
+
+            diceView.SetNetworkSurfaceOverride(
+                motionEvent.FromSurfaceWorldY,
+                motionEvent.ToSurfaceWorldY,
+                motionEvent.ToState.GridPos);
+
+            void ClearOverride() {
+                diceView.ClearNetworkSurfaceOverride();
             }
+
+            switch (motionEvent.MotionKind) {
+                case DiceVisualMotionKind.JumpRoll:
+                    PlayJumpRollMotion(diceView, motionEvent, ClearOverride);
+                    break;
+                case DiceVisualMotionKind.Transition:
+                    PlayTransitionMotion(diceView, motionEvent, ClearOverride);
+                    break;
+                case DiceVisualMotionKind.SpawnFall:
+                    diceView.PlaySpawnAppear(
+                        motionEvent.ToState,
+                        board,
+                        registry: null,
+                        (motionEvent.Flags & OnlineDiceMotionEvent.FlagEnableSpawnBounce) != 0,
+                        motionEvent.FallGravityScale,
+                        ClearOverride);
+                    break;
+                case DiceVisualMotionKind.SpawnEmerge:
+                    diceView.PlayBottomEmergenceAppear(
+                        motionEvent.ToState,
+                        board,
+                        registry: null,
+                        motionEvent.FallGravityScale,
+                        ClearOverride);
+                    break;
+                case DiceVisualMotionKind.Erasure:
+                    Color? emission = (motionEvent.Flags & OnlineDiceMotionEvent.FlagHasEmissionOverride) != 0
+                        ? (Color)motionEvent.EmissionColor
+                        : null;
+                    diceView.PlayErasure(
+                        (ErasureKind)motionEvent.ErasureKind,
+                        board,
+                        motionEvent.TopFace,
+                        emission,
+                        ClearOverride);
+                    break;
+                case DiceVisualMotionKind.OneVanish:
+                    if (oneVanishSettings == null) {
+                        Debug.LogError("OnlineClientMatchView: OneVanish settings missing.");
+                        ClearOverride();
+                        return;
+                    }
+
+                    diceView.PlayOneVanish(oneVanishSettings, ClearOverride);
+                    break;
+                default:
+                    ClearOverride();
+                    break;
+            }
+        }
+
+        void PlayJumpRollMotion(DiceView diceView, OnlineDiceMotionEvent motionEvent, Action onComplete) {
+            Func<VerticalMotionState> jumpProvider = null;
+            if ((motionEvent.Flags & OnlineDiceMotionEvent.FlagUseArcJump) != 0
+                && physicsSettings != null
+                && board != null) {
+                var jumpHeight = board.CellSize * physicsSettings.JumpHeightDiceMultiplier;
+                var synthetic = new SyntheticJumpMotion(jumpHeight, physicsSettings.Gravity);
+                jumpProvider = synthetic.Sample;
+            }
+
+            diceView.PlayJumpRoll(
+                (Direction)motionEvent.Direction,
+                motionEvent.FromState,
+                motionEvent.ToState,
+                motionEvent.JumpYOffset,
+                Mathf.Max(1, motionEvent.RollDistance),
+                board,
+                registry: null,
+                onComplete,
+                (motionEvent.Flags & OnlineDiceMotionEvent.FlagFallBeforeSnap) != 0,
+                jumpProvider);
+        }
+
+        void PlayTransitionMotion(DiceView diceView, OnlineDiceMotionEvent motionEvent, Action onComplete) {
+            var transition = new DiceTransition {
+                From = motionEvent.FromState,
+                To = motionEvent.ToState,
+                Path = (DiceTransitionPath)motionEvent.TransitionPath,
+                RollDirection = (Direction)motionEvent.Direction,
+                SnapToGridOnComplete = (motionEvent.Flags & OnlineDiceMotionEvent.FlagSnapToGridOnComplete) != 0,
+                FromWorldOverride = (motionEvent.Flags & OnlineDiceMotionEvent.FlagHasFromWorldOverride) != 0
+                    ? motionEvent.FromWorldOverride
+                    : null,
+                ToWorldOverride = (motionEvent.Flags & OnlineDiceMotionEvent.FlagHasToWorldOverride) != 0
+                    ? motionEvent.ToWorldOverride
+                    : null
+            };
+            diceView.PlayTransition(
+                transition,
+                board,
+                registry: null,
+                onComplete,
+                Mathf.Max(1, motionEvent.SlideCellDistance));
+        }
+
+        void OnSnapshotChunkReceived(OnlineMatchSnapshotChunk chunk) {
+            // Snapshots are always a single Reliable packet (ChunkCount == 1).
+            if (chunk.ChunkCount != 1 || chunk.ChunkIndex != 0) {
+                Debug.LogError(
+                    $"OnlineClientMatchView: expected single-chunk snapshot, got " +
+                    $"{chunk.ChunkIndex}/{chunk.ChunkCount} seq={chunk.Sequence}");
+                return;
+            }
+
+            activeSnapshotSequence = chunk.Sequence;
+            sequenceSeenIds.Clear();
 
             var entities = chunk.Entities;
             if (entities != null) {
+                // Pass 1: create proxies and cache logical dice states (so Top can resolve Bottom height).
                 for (var i = 0; i < entities.Length; i++) {
                     var entity = entities[i];
                     if (!entity.IsActive) {
@@ -168,44 +349,132 @@ namespace DiceGame.Session.Network
                     }
 
                     sequenceSeenIds.Add(entity.Id);
-                    var proxy = GetOrCreateProxy(entity);
-                    if (proxy == null) {
+                    retainUntilSnapshot.Remove(entity.Id);
+                    if (GetOrCreateProxy(entity) == null) {
                         continue;
                     }
 
-                    ApplyEntityTransform(proxy, entity);
-                    ApplyDicePresentation(entity);
+                    if (entity.IsDice) {
+                        logicalStates[entity.Id] = entity.ToDiceState();
+                        if (diceViews.TryGetValue(entity.Id, out var diceView) && diceView != null) {
+                            ApplyKindMesh(
+                                diceView,
+                                entity.Id,
+                                (DiceKind)entity.Kind,
+                                entity.CatalogPlayerSlot);
+                        }
+                    } else {
+                        SetCharacterProxyTarget(entity);
+                    }
+                }
+
+                // Pass 2: idle dice SnapTo from logical state (skip while local Play* owns motion).
+                for (var i = 0; i < entities.Length; i++) {
+                    var entity = entities[i];
+                    if (!entity.IsActive || !entity.IsDice) {
+                        continue;
+                    }
+
+                    SnapIdleDiceToLogicalState(entity.Id);
                 }
             }
-
-            receivedChunkMask |= 1UL << chunk.ChunkIndex;
-            var completeMask = activeChunkCount >= 64
-                ? ulong.MaxValue
-                : (1UL << activeChunkCount) - 1UL;
-            var isComplete = (receivedChunkMask & completeMask) == completeMask;
 
             var now = Time.realtimeSinceStartup;
             if (now >= nextSnapshotReceivedLogTime) {
                 nextSnapshotReceivedLogTime = now + 2f;
                 Debug.Log(
                     $"OnlineClientMatchView.OnSnapshotChunkReceived: seq={chunk.Sequence} " +
-                    $"chunk={chunk.ChunkIndex}/{chunk.ChunkCount} " +
-                    $"chunkEntities={entities?.Length ?? 0} seen={sequenceSeenIds.Count} complete={isComplete}");
-            }
-
-            if (!isComplete) {
-                return;
+                    $"entities={entities?.Length ?? 0} complete=True");
             }
 
             RemoveStaleProxies();
         }
 
+        void OnAttackQueueReceived(OnlineAttackQueueSnapshot queueSnapshot) {
+            EnsureAttackQueueView();
+            if (attackQueueView == null) {
+                return;
+            }
+
+            attackQueueView.RenderAll(
+                ToVolleys(queueSnapshot.Player1Volleys),
+                ToVolleys(queueSnapshot.Player2Volleys));
+        }
+
+        void EnsureAttackQueueView() {
+            if (attackQueueView != null) {
+                return;
+            }
+
+            var viewObject = new GameObject("OnlineClientAttackQueueView");
+            viewObject.transform.SetParent(transform, false);
+            attackQueueView = viewObject.AddComponent<AttackQueueView>();
+            attackQueueView.Configure(
+                primaryCatalog,
+                secondaryCatalog,
+                attackQueueUiSettings);
+        }
+
+        static List<AttackVolley> ToVolleys(OnlineAttackVolleyPayload[] payloads) {
+            var result = new List<AttackVolley>(payloads?.Length ?? 0);
+            if (payloads == null) {
+                return result;
+            }
+
+            for (var i = 0; i < payloads.Length; i++) {
+                result.Add(payloads[i].ToVolley());
+            }
+
+            return result;
+        }
+
+        void TickCharacterInterpolation() {
+            var smoothTime = OnlineSessionConstants.SnapshotInterpSmoothTimeSeconds;
+            var delta = Time.unscaledDeltaTime;
+            if (delta <= 0f) {
+                return;
+            }
+
+            var rotationBlend = 1f - Mathf.Exp(-delta / Mathf.Max(0.0001f, smoothTime));
+            foreach (var pair in motionStates) {
+                var state = pair.Value;
+                if (state?.PositionTransform == null || !state.Initialized || !state.IsCharacter) {
+                    continue;
+                }
+
+                state.CurrentPosition = Vector3.SmoothDamp(
+                    state.CurrentPosition,
+                    state.TargetPosition,
+                    ref state.PositionVelocity,
+                    smoothTime,
+                    Mathf.Infinity,
+                    delta);
+                state.CurrentRotation = Quaternion.Slerp(
+                    state.CurrentRotation,
+                    state.TargetRotation,
+                    rotationBlend);
+
+                state.PositionTransform.position = state.CurrentPosition;
+                if (state.RotationTransform != null) {
+                    state.RotationTransform.rotation = state.CurrentRotation;
+                } else {
+                    state.PositionTransform.rotation = state.CurrentRotation;
+                }
+            }
+        }
+
         void RemoveStaleProxies() {
             var stale = new List<uint>();
             foreach (var pair in proxies) {
-                if (!sequenceSeenIds.Contains(pair.Key)) {
-                    stale.Add(pair.Key);
+                if (sequenceSeenIds.Contains(pair.Key)) {
+                    continue;
                 }
+
+                if (retainUntilSnapshot.Contains(pair.Key) || IsDiceDrivenByLocalMotion(pair.Key)) {
+                    continue;
+                }
+
+                stale.Add(pair.Key);
             }
 
             for (var i = 0; i < stale.Count; i++) {
@@ -216,9 +485,35 @@ namespace DiceGame.Session.Network
 
                 proxies.Remove(id);
                 diceViews.Remove(id);
-                lastVisualKinds.Remove(id);
+                motionStates.Remove(id);
                 lastMeshKinds.Remove(id);
+                lastCatalogSides.Remove(id);
+                logicalStates.Remove(id);
+                retainUntilSnapshot.Remove(id);
             }
+        }
+
+        DiceView GetOrCreateDiceViewForMotion(OnlineDiceMotionEvent motionEvent) {
+            if (diceViews.TryGetValue(motionEvent.EntityId, out var existing) && existing != null) {
+                return existing;
+            }
+
+            var entity = new OnlineTransformSnapshot {
+                Id = motionEvent.EntityId,
+                Kind = (byte)motionEvent.ToState.Kind,
+                Flags = (byte)(OnlineTransformSnapshot.FlagDice | OnlineTransformSnapshot.FlagActive),
+                CatalogSide = motionEvent.CatalogSide,
+                GridX = (short)motionEvent.ToState.GridPos.x,
+                GridY = (short)motionEvent.ToState.GridPos.y,
+                Tier = (byte)motionEvent.ToState.Tier,
+                TopFace = (byte)motionEvent.ToState.Orientation.Top,
+                NorthFace = (byte)motionEvent.ToState.Orientation.North,
+                EastFace = (byte)motionEvent.ToState.Orientation.East,
+                Position = Vector3.zero,
+                Rotation = Quaternion.identity
+            };
+            GetOrCreateProxy(entity);
+            return diceViews.TryGetValue(motionEvent.EntityId, out var created) ? created : null;
         }
 
         Transform GetOrCreateProxy(OnlineTransformSnapshot entity) {
@@ -236,9 +531,10 @@ namespace DiceGame.Session.Network
                 instance.name = $"ProxyDice_{entity.Id}_{((DiceKind)entity.Kind)}";
                 var diceView = instance.GetComponentInChildren<DiceView>(true);
                 if (diceView != null) {
-                    diceView.Configure(null, null, erasureSettings);
+                    diceView.Configure(physicsSettings, animationSettings, erasureSettings);
+                    diceView.SetEmitVisualMotionEvents(false);
                     diceViews[entity.Id] = diceView;
-                    ApplyKindMesh(diceView, entity.Id, (DiceKind)entity.Kind);
+                    ApplyKindMesh(diceView, entity.Id, (DiceKind)entity.Kind, entity.CatalogPlayerSlot);
                 }
 
                 DisableGameplayBehaviours(instance);
@@ -252,13 +548,53 @@ namespace DiceGame.Session.Network
             return instance.transform;
         }
 
-        void ApplyDicePresentation(OnlineTransformSnapshot entity) {
-            if (!entity.IsDice) {
+        void SetCharacterProxyTarget(OnlineTransformSnapshot entity) {
+            if (!proxies.TryGetValue(entity.Id, out var proxy) || proxy == null) {
                 return;
             }
 
-            if (!diceViews.TryGetValue(entity.Id, out var diceView) || diceView == null) {
-                if (!proxies.TryGetValue(entity.Id, out var proxy) || proxy == null) {
+            if (!TryResolveMotionTransforms(proxy, entity, out var positionTransform, out var rotationTransform)) {
+                return;
+            }
+
+            if (!motionStates.TryGetValue(entity.Id, out var state) || state == null) {
+                state = new ProxyMotionState();
+                motionStates[entity.Id] = state;
+            }
+
+            state.PositionTransform = positionTransform;
+            state.RotationTransform = rotationTransform;
+            state.TargetPosition = entity.Position;
+            state.TargetRotation = entity.Rotation;
+            state.IsCharacter = true;
+
+            var snapDistance = OnlineSessionConstants.SnapshotInterpSnapDistance;
+            var shouldSnap = !state.Initialized
+                || (state.CurrentPosition - state.TargetPosition).sqrMagnitude >= snapDistance * snapDistance
+                || Quaternion.Angle(state.CurrentRotation, state.TargetRotation) > 90f;
+
+            if (shouldSnap) {
+                state.CurrentPosition = state.TargetPosition;
+                state.CurrentRotation = state.TargetRotation;
+                state.PositionVelocity = Vector3.zero;
+                positionTransform.position = state.TargetPosition;
+                if (rotationTransform != null) {
+                    rotationTransform.rotation = state.TargetRotation;
+                } else {
+                    positionTransform.rotation = state.TargetRotation;
+                }
+            }
+
+            state.Initialized = true;
+        }
+
+        void SnapIdleDiceToLogicalState(uint entityId) {
+            if (!logicalStates.TryGetValue(entityId, out var state)) {
+                return;
+            }
+
+            if (!diceViews.TryGetValue(entityId, out var diceView) || diceView == null) {
+                if (!proxies.TryGetValue(entityId, out var proxy) || proxy == null) {
                     return;
                 }
 
@@ -267,91 +603,124 @@ namespace DiceGame.Session.Network
                     return;
                 }
 
-                diceView.Configure(null, null, erasureSettings);
-                diceViews[entity.Id] = diceView;
+                diceView.Configure(physicsSettings, animationSettings, erasureSettings);
+                diceView.SetEmitVisualMotionEvents(false);
+                diceViews[entityId] = diceView;
             }
 
-            var kind = (DiceKind)entity.Kind;
-            if (!lastMeshKinds.TryGetValue(entity.Id, out var previousMeshKind)
-                || previousMeshKind != entity.Kind) {
-                ApplyKindMesh(diceView, entity.Id, kind);
-            }
-
-            Color? emission = entity.HasEmissionOverride
-                ? (Color)entity.EmissionColor
-                : null;
-
-            var previousKind = lastVisualKinds.TryGetValue(entity.Id, out var visualKind)
-                ? visualKind
-                : OnlineTransformSnapshot.VisualNone;
-            if (entity.VisualKind == OnlineTransformSnapshot.VisualNone
-                && previousKind == OnlineTransformSnapshot.VisualNone) {
+            if (IsDiceDrivenByLocalMotion(entityId) || board == null) {
                 return;
             }
 
-            diceView.ApplyNetworkVisualPresentation(
-                entity.VisualKind,
-                entity.VisualProgress,
-                entity.TopFace,
-                emission,
-                oneVanishSettings);
-            lastVisualKinds[entity.Id] = entity.VisualKind;
+            // Local Play* owns motion. Idle correction uses logical SnapTo (no world-pose chase).
+            var surfaceY = ResolvePresentationSurfaceWorldY(state);
+            diceView.SetNetworkSurfaceOverride(surfaceY, surfaceY, state.GridPos);
+            diceView.SnapTo(state, board, registry: null);
+            diceView.ClearNetworkSurfaceOverride();
         }
 
-        void ApplyKindMesh(DiceView diceView, uint entityId, DiceKind kind) {
+        float ResolvePresentationSurfaceWorldY(DiceState state) {
+            if (board == null) {
+                return 0f;
+            }
+
+            if (state.Tier != DiceStackTier.Top) {
+                return board.FloorSurfaceWorldY;
+            }
+
+            foreach (var pair in logicalStates) {
+                if (pair.Value.GridPos != state.GridPos || pair.Value.Tier != DiceStackTier.Bottom) {
+                    continue;
+                }
+
+                if (!diceViews.TryGetValue(pair.Key, out var bottomView) || bottomView == null) {
+                    continue;
+                }
+
+                return bottomView.GetLogicalBottomTierTopSurfaceWorldY(board);
+            }
+
+            return board.FloorSurfaceWorldY + board.CellSize;
+        }
+
+        bool IsDiceDrivenByLocalMotion(uint entityId) {
+            if (!diceViews.TryGetValue(entityId, out var diceView) || diceView == null) {
+                return false;
+            }
+
+            return diceView.IsAnimating
+                || diceView.IsOneVanishing
+                || diceView.ErasureProgress > 0f;
+        }
+
+        static bool TryResolveMotionTransforms(
+            Transform proxy,
+            OnlineTransformSnapshot entity,
+            out Transform positionTransform,
+            out Transform rotationTransform) {
+            positionTransform = null;
+            rotationTransform = null;
+            if (proxy == null) {
+                return false;
+            }
+
+            if (!entity.IsDice) {
+                positionTransform = proxy;
+                rotationTransform = proxy;
+                return true;
+            }
+
+            var diceView = proxy.GetComponentInChildren<DiceView>(true);
+            positionTransform = diceView != null && diceView.DiceTransform != null
+                ? diceView.DiceTransform
+                : proxy.Find("PositionRoot");
+            rotationTransform = diceView != null && diceView.DiceRotationTransform != null
+                ? diceView.DiceRotationTransform
+                : positionTransform != null
+                    ? positionTransform.Find("RotationRoot")
+                    : null;
+
+            if (positionTransform == null) {
+                positionTransform = proxy;
+                rotationTransform = proxy;
+            }
+
+            return positionTransform != null;
+        }
+
+        void ApplyKindMesh(DiceView diceView, uint entityId, DiceKind kind, PlayerSlot catalogSide) {
             if (diceView == null) {
                 return;
             }
 
-            TryResolveMeshPrefab(kind, out var meshPrefab);
+            var sideByte = (byte)catalogSide;
+            if (lastMeshKinds.TryGetValue(entityId, out var previousKind)
+                && previousKind == (byte)kind
+                && lastCatalogSides.TryGetValue(entityId, out var previousSide)
+                && previousSide == sideByte) {
+                return;
+            }
+
+            TryResolveMeshPrefab(kind, catalogSide, out var meshPrefab);
             diceView.ApplyNetworkKindPresentation(board, kind, meshPrefab);
             lastMeshKinds[entityId] = (byte)kind;
+            lastCatalogSides[entityId] = sideByte;
         }
 
-        bool TryResolveMeshPrefab(DiceKind kind, out GameObject meshPrefab) {
-            if (primaryCatalog != null && primaryCatalog.TryGetMeshPrefab(kind, out meshPrefab)) {
+        bool TryResolveMeshPrefab(DiceKind kind, PlayerSlot catalogSide, out GameObject meshPrefab) {
+            var preferred = catalogSide == PlayerSlot.Player2 ? secondaryCatalog : primaryCatalog;
+            var fallback = catalogSide == PlayerSlot.Player2 ? primaryCatalog : secondaryCatalog;
+
+            if (preferred != null && preferred.TryGetMeshPrefab(kind, out meshPrefab)) {
                 return true;
             }
 
-            if (secondaryCatalog != null && secondaryCatalog.TryGetMeshPrefab(kind, out meshPrefab)) {
+            if (fallback != null && fallback.TryGetMeshPrefab(kind, out meshPrefab)) {
                 return true;
             }
 
             meshPrefab = null;
             return false;
-        }
-
-        static void ApplyEntityTransform(Transform proxy, OnlineTransformSnapshot entity) {
-            if (proxy == null) {
-                return;
-            }
-
-            if (!entity.IsDice) {
-                proxy.SetPositionAndRotation(entity.Position, entity.Rotation);
-                return;
-            }
-
-            var diceView = proxy.GetComponentInChildren<DiceView>(true);
-            var positionRoot = diceView != null && diceView.DiceTransform != null
-                ? diceView.DiceTransform
-                : proxy.Find("PositionRoot");
-            var rotationRoot = diceView != null && diceView.DiceRotationTransform != null
-                ? diceView.DiceRotationTransform
-                : positionRoot != null
-                    ? positionRoot.Find("RotationRoot")
-                    : null;
-
-            if (positionRoot == null) {
-                proxy.SetPositionAndRotation(entity.Position, entity.Rotation);
-                return;
-            }
-
-            positionRoot.position = entity.Position;
-            if (rotationRoot != null) {
-                rotationRoot.rotation = entity.Rotation;
-            } else {
-                positionRoot.rotation = entity.Rotation;
-            }
         }
 
         static void DisableGameplayBehaviours(GameObject instance) {

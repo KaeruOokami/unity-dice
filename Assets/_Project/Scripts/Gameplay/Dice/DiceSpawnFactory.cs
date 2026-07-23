@@ -85,6 +85,7 @@ namespace DiceGame.Gameplay
         DiceAnimationSettings diceAnimationSettings;
         DiceErasureSettings diceErasureSettings;
         PlayerMatchActionContext matchActionContext;
+        DiceMatchOwnershipContext ownershipContext;
         DiceMatchErasureSystem erasureSystem;
         DiceSpawnSettings spawnSettings;
         System.Random random;
@@ -120,6 +121,10 @@ namespace DiceGame.Gameplay
             random = spawnRandom;
             versusChannels.Clear();
             gameplayEnabled = true;
+        }
+
+        public void ConfigureOwnership(DiceMatchOwnershipContext matchOwnership) {
+            ownershipContext = matchOwnership;
         }
 
         public void ConfigureVersusSpawns(
@@ -323,7 +328,8 @@ namespace DiceGame.Gameplay
                     slots[i].Tier,
                     player1Channel.Settings,
                     player1Channel.Catalog,
-                    useSpawnAppear: player1Channel.Settings.AnimateInitialDiceSpawn);
+                    useSpawnAppear: player1Channel.Settings.AnimateInitialDiceSpawn,
+                    catalogOwner: PlayerSlot.Player1);
                 if (diceController == null) {
                     continue;
                 }
@@ -369,7 +375,8 @@ namespace DiceGame.Gameplay
                     useSpawnAppear: player2Channel.Settings.AnimateInitialDiceSpawn,
                     onComplete: null,
                     fixedKind: spec.Kind,
-                    fixedOrientation: spec.Orientation);
+                    fixedOrientation: spec.Orientation,
+                    catalogOwner: PlayerSlot.Player2);
                 if (diceController == null) {
                     Debug.LogError(
                         $"DiceSpawnSystem: Failed to spawn mirrored dice at {mirroredCell} for Player2.");
@@ -445,7 +452,8 @@ namespace DiceGame.Gameplay
                     slots[j].Tier,
                     channel.Settings,
                     channel.Catalog,
-                    useSpawnAppear: channel.Settings.AnimateInitialDiceSpawn);
+                    useSpawnAppear: channel.Settings.AnimateInitialDiceSpawn,
+                    catalogOwner: channel.Slot);
                 if (diceController == null) {
                     continue;
                 }
@@ -484,7 +492,8 @@ namespace DiceGame.Gameplay
             bool useSpawnAppear,
             Action onComplete = null,
             DiceKind? fixedKind = null,
-            DiceOrientation? fixedOrientation = null) {
+            DiceOrientation? fixedOrientation = null,
+            PlayerSlot? catalogOwner = null) {
             if (catalog == null) {
                 Debug.LogError("DiceSpawnSystem: DiceCatalog is not assigned.");
                 return null;
@@ -520,6 +529,12 @@ namespace DiceGame.Gameplay
             }
 
             diceController.ConfigureMatchActionContext(matchActionContext);
+            if (ownershipContext != null) {
+                diceController.ConfigureOwnershipContext(ownershipContext);
+                if (catalogOwner.HasValue) {
+                    ownershipContext.SetOwner(diceController, catalogOwner.Value);
+                }
+            }
 
             var diceView = diceController.View;
             if (useSpawnAppear) {
@@ -559,7 +574,8 @@ namespace DiceGame.Gameplay
                 activeSpawnSettings,
                 ResolveCatalog(ownerSlot),
                 useSpawnAppear: true,
-                onComplete);
+                onComplete,
+                catalogOwner: ownerSlot);
         }
 
         public DiceController SpawnAttackDice(
@@ -603,6 +619,11 @@ namespace DiceGame.Gameplay
             }
 
             diceController.ConfigureMatchActionContext(matchActionContext);
+            if (ownershipContext != null) {
+                diceController.ConfigureOwnershipContext(ownershipContext);
+                ownershipContext.SetOwner(diceController, targetSlot);
+            }
+
             var diceView = diceController.View;
             diceController.ConfigureWithSpawnAppear(
                 board,

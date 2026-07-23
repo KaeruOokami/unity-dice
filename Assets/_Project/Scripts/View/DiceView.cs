@@ -27,6 +27,11 @@ namespace DiceGame.View
         Coroutine erasureCoroutine;
         Coroutine oneVanishCoroutine;
         bool isAnimating;
+        bool emitVisualMotionEvents = true;
+        bool useNetworkSurfaceOverride;
+        float networkFromSurfaceY;
+        float networkToSurfaceY;
+        Vector2Int networkToGrid;
         float erasureProgress;
         ErasureKind activeErasureKind = ErasureKind.None;
         float groundRollProgress;
@@ -91,6 +96,21 @@ namespace DiceGame.View
             physicsSettings = physics;
             animationSettings = animation;
             erasureSettings = erasure;
+        }
+
+        public void SetEmitVisualMotionEvents(bool enabled) {
+            emitVisualMotionEvents = enabled;
+        }
+
+        public void SetNetworkSurfaceOverride(float fromSurfaceWorldY, float toSurfaceWorldY, Vector2Int toGrid) {
+            useNetworkSurfaceOverride = true;
+            networkFromSurfaceY = fromSurfaceWorldY;
+            networkToSurfaceY = toSurfaceWorldY;
+            networkToGrid = toGrid;
+        }
+
+        public void ClearNetworkSurfaceOverride() {
+            useNetworkSurfaceOverride = false;
         }
 
         public void SetMeshPrefab(GameObject prefab) {
@@ -474,6 +494,19 @@ namespace DiceGame.View
                 StopCoroutine(rollCoroutine);
             }
 
+            RaiseVisualMotion(new DiceVisualMotionRequest {
+                Kind = DiceVisualMotionKind.JumpRoll,
+                Direction = direction,
+                FromState = fromState,
+                ToState = toState,
+                JumpYOffset = jumpYOffset,
+                RollDistance = rollDistance,
+                FallBeforeSnap = fallBeforeSnap,
+                UseArcJump = jumpMotionProvider != null,
+                FromSurfaceWorldY = ResolveSurfaceBaseWorldY(fromState, board, registry),
+                ToSurfaceWorldY = ResolveSurfaceBaseWorldY(toState, board, registry)
+            });
+
             rollCoroutine = StartCoroutine(JumpRollCoroutine(
                 direction,
                 fromState,
@@ -500,6 +533,22 @@ namespace DiceGame.View
             if (rollCoroutine != null) {
                 StopCoroutine(rollCoroutine);
             }
+
+            RaiseVisualMotion(new DiceVisualMotionRequest {
+                Kind = DiceVisualMotionKind.Transition,
+                Direction = transition.RollDirection,
+                FromState = transition.From,
+                ToState = transition.To,
+                TransitionPath = transition.Path,
+                SlideCellDistance = slideCellDistance,
+                FromSurfaceWorldY = ResolveSurfaceBaseWorldY(transition.From, board, registry),
+                ToSurfaceWorldY = ResolveSurfaceBaseWorldY(transition.To, board, registry),
+                HasFromWorldOverride = transition.FromWorldOverride.HasValue,
+                FromWorldOverride = transition.FromWorldOverride ?? default,
+                HasToWorldOverride = transition.ToWorldOverride.HasValue,
+                ToWorldOverride = transition.ToWorldOverride ?? default,
+                SnapToGridOnComplete = transition.SnapToGridOnComplete
+            });
 
             rollCoroutine = StartCoroutine(
                 TransitionCoroutine(transition, board, registry, onComplete, slideCellDistance));
@@ -531,6 +580,16 @@ namespace DiceGame.View
             if (rollCoroutine != null) {
                 StopCoroutine(rollCoroutine);
             }
+
+            RaiseVisualMotion(new DiceVisualMotionRequest {
+                Kind = DiceVisualMotionKind.SpawnFall,
+                FromState = state,
+                ToState = state,
+                EnableSpawnBounce = enableSpawnBounce,
+                FallGravityScale = fallGravityScale,
+                FromSurfaceWorldY = ResolveSurfaceBaseWorldY(state, board, registry),
+                ToSurfaceWorldY = ResolveSurfaceBaseWorldY(state, board, registry)
+            });
 
             var bounceRestitution = enableSpawnBounce ? physicsSettings.BounceRestitution : 0f;
             var maxBounceCount = enableSpawnBounce ? physicsSettings.MaxBounceCount : 0;
@@ -574,6 +633,15 @@ namespace DiceGame.View
             if (rollCoroutine != null) {
                 StopCoroutine(rollCoroutine);
             }
+
+            RaiseVisualMotion(new DiceVisualMotionRequest {
+                Kind = DiceVisualMotionKind.SpawnEmerge,
+                FromState = state,
+                ToState = state,
+                FallGravityScale = fallGravityScale,
+                FromSurfaceWorldY = ResolveSurfaceBaseWorldY(state, board, registry),
+                ToSurfaceWorldY = ResolveSurfaceBaseWorldY(state, board, registry)
+            });
 
             CacheSpawnFallParams(
                 state,
@@ -721,6 +789,14 @@ namespace DiceGame.View
                 StopCoroutine(erasureCoroutine);
             }
 
+            RaiseVisualMotion(new DiceVisualMotionRequest {
+                Kind = DiceVisualMotionKind.Erasure,
+                ErasureKind = kind,
+                TopFace = topFace,
+                HasEmissionOverride = emissionColorOverride.HasValue,
+                EmissionColor = emissionColorOverride ?? default
+            });
+
             activeErasureKind = kind;
             erasureEmissionColorOverride = emissionColorOverride;
             currentTopFace = topFace;
@@ -852,6 +928,10 @@ namespace DiceGame.View
                 StopCoroutine(oneVanishCoroutine);
             }
 
+            RaiseVisualMotion(new DiceVisualMotionRequest {
+                Kind = DiceVisualMotionKind.OneVanish
+            });
+
             EnsureMesh();
             oneVanishCoroutine = StartCoroutine(OneVanishCoroutine(settings, onComplete));
         }
@@ -978,7 +1058,13 @@ namespace DiceGame.View
             surfaceBaseWorldY = ResolveSurfaceBaseWorldY(state, board, registry);
         }
 
-        static float ResolveSurfaceBaseWorldY(DiceState state, Board board, DiceRegistry registry) {
+        float ResolveSurfaceBaseWorldY(DiceState state, Board board, DiceRegistry registry) {
+            if (useNetworkSurfaceOverride) {
+                return state.GridPos == networkToGrid
+                    ? networkToSurfaceY
+                    : networkFromSurfaceY;
+            }
+
             var baseY = board.FloorSurfaceWorldY;
             if (state.Tier == DiceStackTier.Top
                 && registry != null
@@ -989,6 +1075,14 @@ namespace DiceGame.View
             }
 
             return baseY;
+        }
+
+        void RaiseVisualMotion(DiceVisualMotionRequest request) {
+            if (!emitVisualMotionEvents) {
+                return;
+            }
+
+            DiceVisualMotionHub.Raise(this, request);
         }
 
         static DiceState BuildParallelRollStepState(DiceState fromState, Direction direction, int step) {
