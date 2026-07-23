@@ -7,7 +7,6 @@ using DiceGame.Grid;
 using DiceGame.Placement;
 using DiceGame.View;
 using UnityEngine;
-using Random = UnityEngine.Random;
 
 namespace DiceGame.Gameplay
 {
@@ -53,13 +52,14 @@ namespace DiceGame.Gameplay
             return diceController;
         }
 
-        public static DiceOrientation CreateRandomOrientation() {
+        public static DiceOrientation CreateRandomOrientation(System.Random random) {
             var orientation = DiceOrientation.Default;
             var directions = new[] { Direction.East, Direction.West, Direction.North, Direction.South };
-            var steps = Random.Range(0, 12);
+            var rng = random ?? new System.Random();
+            var steps = rng.Next(0, 12);
 
             for (var i = 0; i < steps; i++) {
-                orientation = orientation.Roll(directions[Random.Range(0, directions.Length)]);
+                orientation = orientation.Roll(directions[rng.Next(0, directions.Length)]);
             }
 
             return orientation;
@@ -95,6 +95,31 @@ namespace DiceGame.Gameplay
 
         Coroutine spawnCoroutine;
         bool gameplayEnabled = true;
+        bool emitNetworkSpawns;
+        bool allowAutonomousSpawning = true;
+
+        /// <summary>
+        /// When false, <see cref="StartSpawning"/> is a no-op (online client follower).
+        /// </summary>
+        public bool AllowAutonomousSpawning {
+            get => allowAutonomousSpawning;
+            set => allowAutonomousSpawning = value;
+        }
+
+        /// <summary>
+        /// When true, successful continuous/attack/jumbo spawns raise <see cref="NetworkSpawnEmitted"/>.
+        /// Initial board spawn should leave this false so both peers can seed-spawn locally.
+        /// </summary>
+        public bool EmitNetworkSpawns {
+            get => emitNetworkSpawns;
+            set => emitNetworkSpawns = value;
+        }
+
+        /// <summary>
+        /// Args: dice, reason code, useSpawnAppear, forceFallFromAbove.
+        /// Reason: 1=continuous, 2=attack, 3=jumbo.
+        /// </summary>
+        public event Action<DiceController, byte, bool, bool> NetworkSpawnEmitted;
 
         public void Configure(
             Board targetBoard,
@@ -155,7 +180,7 @@ namespace DiceGame.Gameplay
         public void StartSpawning() {
             StopSpawning();
 
-            if (!gameplayEnabled) {
+            if (!gameplayEnabled || !allowAutonomousSpawning) {
                 return;
             }
 
@@ -484,6 +509,19 @@ namespace DiceGame.Gameplay
             return diceCatalog;
         }
 
+        public bool TryGetSpawnSettings(PlayerSlot ownerSlot, out DiceSpawnSettings settings) {
+            for (var i = 0; i < versusChannels.Count; i++) {
+                var channel = versusChannels[i];
+                if (channel.Slot == ownerSlot) {
+                    settings = channel.Settings;
+                    return settings != null;
+                }
+            }
+
+            settings = spawnSettings;
+            return settings != null;
+        }
+
         DiceController SpawnDiceAt(
             Vector2Int gridPos,
             DiceStackTier tier,
@@ -512,7 +550,7 @@ namespace DiceGame.Gameplay
                 return null;
             }
 
-            var orientation = fixedOrientation ?? DiceSpawnFactory.CreateRandomOrientation();
+            var orientation = fixedOrientation ?? DiceSpawnFactory.CreateRandomOrientation(random);
             var diceController = DiceSpawnFactory.TryCreate(
                 diceEntityPrefab,
                 spawnParent,
@@ -553,6 +591,10 @@ namespace DiceGame.Gameplay
             }
 
             erasureSystem?.EnsureDiceSubscribed(diceController);
+            if (emitNetworkSpawns) {
+                NetworkSpawnEmitted?.Invoke(diceController, 1, useSpawnAppear, false);
+            }
+
             return diceController;
         }
 
@@ -637,6 +679,10 @@ namespace DiceGame.Gameplay
                 forceFallFromAbove: true);
 
             erasureSystem?.EnsureDiceSubscribed(diceController);
+            if (emitNetworkSpawns) {
+                NetworkSpawnEmitted?.Invoke(diceController, 2, true, true);
+            }
+
             return diceController;
         }
 
@@ -703,6 +749,88 @@ namespace DiceGame.Gameplay
                 forceFallFromAbove: true);
 
             erasureSystem?.EnsureDiceSubscribed(diceController);
+            if (emitNetworkSpawns) {
+                NetworkSpawnEmitted?.Invoke(diceController, 3, true, true);
+            }
+
+            return diceController;
+        }
+
+        /// <summary>
+        /// Client full-sim experiment: apply a host-authoritative spawn without local RNG.
+        /// </summary>
+        public DiceController ApplyNetworkSpawn(
+            Vector2Int gridPos,
+            DiceStackTier tier,
+            DiceKind kind,
+            DiceOrientation orientation,
+            PlayerSlot ownerSlot,
+            DiceSpawnSettings activeSpawnSettings,
+            bool useSpawnAppear,
+            bool forceFallFromAbove) {
+            var catalog = ResolveCatalog(ownerSlot);
+            if (!gameplayEnabled
+                || activeSpawnSettings == null
+                || board == null
+                || registry == null
+                || catalog == null) {
+                return null;
+            }
+
+            if (!catalog.TryGetMeshPrefab(kind, out var meshPrefab)) {
+                if (kind == DiceKind.Jumbo
+                    && catalog.TryGetMeshPrefab(DiceKind.Normal, out meshPrefab)) {
+                    // Jumbo mesh fallback
+                } else {
+                    Debug.LogError($"DiceSpawnSystem.ApplyNetworkSpawn: mesh missing for kind={kind}.");
+                    return null;
+                }
+            }
+
+            var previousEmit = emitNetworkSpawns;
+            emitNetworkSpawns = false;
+
+            var diceController = DiceSpawnFactory.TryCreate(
+                diceEntityPrefab,
+                spawnParent,
+                gridPos,
+                tier,
+                kind,
+                meshPrefab,
+                physicsSettings,
+                diceAnimationSettings,
+                diceErasureSettings);
+
+            if (diceController == null) {
+                emitNetworkSpawns = previousEmit;
+                return null;
+            }
+
+            diceController.ConfigureMatchActionContext(matchActionContext);
+            if (ownershipContext != null) {
+                diceController.ConfigureOwnershipContext(ownershipContext);
+                ownershipContext.SetOwner(diceController, ownerSlot);
+            }
+
+            var diceView = diceController.View;
+            if (useSpawnAppear) {
+                diceController.ConfigureWithSpawnAppear(
+                    board,
+                    diceView,
+                    registry,
+                    gridPos,
+                    orientation,
+                    activeSpawnSettings,
+                    tier,
+                    kind,
+                    forceFallFromAbove,
+                    onComplete: null);
+            } else {
+                diceController.Configure(board, diceView, registry, gridPos, orientation, tier, kind);
+            }
+
+            erasureSystem?.EnsureDiceSubscribed(diceController);
+            emitNetworkSpawns = previousEmit;
             return diceController;
         }
 
@@ -726,8 +854,9 @@ namespace DiceGame.Gameplay
 
         IEnumerator SpawnLoop(DiceSpawnSettings activeSpawnSettings, PlayerSlot? ownerSlot) {
             while (enabled && gameplayEnabled) {
+                var jitter = activeSpawnSettings.SpawnIntervalJitter;
                 var delay = activeSpawnSettings.SpawnInterval
-                    + Random.Range(-activeSpawnSettings.SpawnIntervalJitter, activeSpawnSettings.SpawnIntervalJitter);
+                    + (float)((random.NextDouble() * 2.0 - 1.0) * jitter);
                 yield return new WaitForSeconds(Mathf.Max(0.01f, delay));
 
                 if (!DiceSpawnCellPicker.TryPickRandomSpawnSlot(

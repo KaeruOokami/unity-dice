@@ -298,6 +298,10 @@ namespace DiceGame.Gameplay
             ownsTimeScale = false;
             spawnSystem.SetGameplayEnabled(true);
             versusAttackController?.SetGameplayEnabled(true);
+            if (OnlineSessionState.Instance != null
+                && OnlineSessionState.Instance.PlayMode == OnlinePlayMode.OnlineClient) {
+                versusAttackController?.SetNetworkFollowerMode(true);
+            }
             inputReader.SetGameplayInputEnabled(true);
             State = GameFlowState.Playing;
         }

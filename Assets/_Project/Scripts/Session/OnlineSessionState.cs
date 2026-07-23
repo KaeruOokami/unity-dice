@@ -16,6 +16,7 @@ namespace DiceGame.Session
         public MatchSetupSnapshot CurrentSetup { get; private set; }
         public GameMode OnlineGameMode { get; private set; } = GameMode.Versus;
         public string RemotePeerPlayerId { get; private set; } = string.Empty;
+        public int MatchSeed { get; private set; }
 
         public PlayerSlot LocalPlayerSlot =>
             PlayMode == OnlinePlayMode.OnlineClient ? PlayerSlot.Player2 : PlayerSlot.Player1;
@@ -78,6 +79,11 @@ namespace DiceGame.Session
 
         public void SetOnlineGameMode(GameMode mode) {
             OnlineGameMode = mode;
+            RaiseStateChanged();
+        }
+
+        public void SetMatchSeed(int seed) {
+            MatchSeed = seed;
             RaiseStateChanged();
         }
 

@@ -7,7 +7,6 @@ using DiceGame.Grid;
 using DiceGame.View;
 using DiceGame.Versus.Core;
 using UnityEngine;
-using Random = UnityEngine.Random;
 
 namespace DiceGame.Versus
 {
@@ -22,6 +21,8 @@ namespace DiceGame.Versus
         readonly Dictionary<PlayerSlot, AttackQueue> incomingQueues = new();
         readonly Dictionary<PlayerSlot, Coroutine> naturalSendCoroutines = new();
         bool gameplayEnabled = true;
+        bool generateAttacks = true;
+        bool applyQueuedSpawns = true;
 
         public void Configure(
             IVersusBoardSettings settings,
@@ -35,6 +36,8 @@ namespace DiceGame.Versus
             erasureSystem = targetErasureSystem;
             random = attackRandom ?? new System.Random();
             gameplayEnabled = true;
+            generateAttacks = true;
+            applyQueuedSpawns = true;
 
             if (erasureSystem != null) {
                 erasureSystem.ErasureResolved -= OnErasureResolved;
@@ -46,6 +49,29 @@ namespace DiceGame.Versus
             StartNaturalSendLoops();
         }
 
+        /// <summary>
+        /// Online client full-sim experiment: do not generate volleys or spawn from queue.
+        /// Host sends spawn commands; queue UI can still be updated via <see cref="ApplyNetworkQueuePresentation"/>.
+        /// </summary>
+        public void SetNetworkFollowerMode(bool follower) {
+            generateAttacks = !follower;
+            applyQueuedSpawns = !follower;
+            if (follower) {
+                StopNaturalSendLoops();
+            } else if (gameplayEnabled) {
+                StartNaturalSendLoops();
+            }
+        }
+
+        public void ApplyNetworkQueuePresentation(
+            IReadOnlyList<AttackVolley> player1Volleys,
+            IReadOnlyList<AttackVolley> player2Volleys) {
+            EnsureQueues();
+            if (queueView != null) {
+                queueView.RenderAll(player1Volleys, player2Volleys);
+            }
+        }
+
         void OnDisable() {
             StopNaturalSendLoops();
 
@@ -55,7 +81,7 @@ namespace DiceGame.Versus
         }
 
         void Update() {
-            if (!gameplayEnabled || versusSettings == null || spawnSystem == null) {
+            if (!gameplayEnabled || !applyQueuedSpawns || versusSettings == null || spawnSystem == null) {
                 return;
             }
 
@@ -110,7 +136,7 @@ namespace DiceGame.Versus
 
         void StartNaturalSendLoops() {
             StopNaturalSendLoops();
-            if (!gameplayEnabled) {
+            if (!gameplayEnabled || !generateAttacks) {
                 return;
             }
 
@@ -149,9 +175,10 @@ namespace DiceGame.Versus
             PlayerSlot sender,
             DiceSpawnSettings spawnSettings,
             PlayerNaturalSendSettings naturalSendSettings) {
-            while (enabled && gameplayEnabled) {
+            while (enabled && gameplayEnabled && generateAttacks) {
+                var jitter = spawnSettings.SpawnIntervalJitter;
                 var delay = spawnSettings.SpawnInterval
-                    + Random.Range(-spawnSettings.SpawnIntervalJitter, spawnSettings.SpawnIntervalJitter);
+                    + (float)((random.NextDouble() * 2.0 - 1.0) * jitter);
                 yield return new WaitForSeconds(Mathf.Max(0.01f, delay));
 
                 if (!NaturalSendVolleyBuilder.TryBuild(naturalSendSettings, random, out var volley)) {
@@ -168,7 +195,7 @@ namespace DiceGame.Versus
         }
 
         void OnErasureResolved(ErasureResolvedEvent e) {
-            if (!gameplayEnabled || versusSettings == null) {
+            if (!gameplayEnabled || !generateAttacks || versusSettings == null) {
                 return;
             }
 

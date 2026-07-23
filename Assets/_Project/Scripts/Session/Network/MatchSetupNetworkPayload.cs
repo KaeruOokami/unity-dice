@@ -195,6 +195,10 @@ namespace DiceGame.Session.Network
         public DiceCatalogNetworkPayload Player2Catalog;
         public PlayerAttackSettingsNetworkPayload Player2Attack;
         public PlayerNaturalSendSettingsNetworkPayload Player2NaturalSend;
+        /// <summary>
+        /// Shared match RNG seed (host-generated on MatchStart). 0 = unset.
+        /// </summary>
+        public int MatchSeed;
 
         public void NetworkSerialize<T>(BufferSerializer<T> serializer) where T : IReaderWriter {
             serializer.SerializeValue(ref GameMode);
@@ -214,6 +218,7 @@ namespace DiceGame.Session.Network
             Player2Catalog.NetworkSerialize(serializer);
             Player2Attack.NetworkSerialize(serializer);
             Player2NaturalSend.NetworkSerialize(serializer);
+            serializer.SerializeValue(ref MatchSeed);
         }
     }
 }

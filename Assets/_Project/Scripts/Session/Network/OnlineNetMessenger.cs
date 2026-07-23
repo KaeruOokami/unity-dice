@@ -18,9 +18,11 @@ namespace DiceGame.Session.Network
         float nextAttackQueueSendLogTime;
 
         public event Action<ulong, OnlineInputPayload> InputReceived;
+        public event Action<OnlineInputPayload> HostInputReceived;
         public event Action<OnlineMatchSnapshotChunk> SnapshotChunkReceived;
         public event Action<OnlineDiceMotionEvent> DiceMotionReceived;
         public event Action<OnlineAttackQueueSnapshot> AttackQueueReceived;
+        public event Action<OnlineDiceSpawnCommand> DiceSpawnReceived;
         public event Action MatchStartReceived;
         public event Action<MatchSetupNetworkPayload> MatchSetupReceived;
         public event Action<MatchSetupNetworkPayload> MatchSetupBroadcastReceived;
@@ -51,6 +53,9 @@ namespace DiceGame.Session.Network
             networkManager.CustomMessagingManager.RegisterNamedMessageHandler(
                 OnlineSessionConstants.MessageAttackQueue,
                 OnAttackQueueMessage);
+            networkManager.CustomMessagingManager.RegisterNamedMessageHandler(
+                OnlineSessionConstants.MessageDiceSpawn,
+                OnDiceSpawnMessage);
             networkManager.CustomMessagingManager.RegisterNamedMessageHandler(
                 OnlineSessionConstants.MessageMatchStart,
                 OnMatchStartMessage);
@@ -89,6 +94,8 @@ namespace DiceGame.Session.Network
             networkManager.CustomMessagingManager.UnregisterNamedMessageHandler(
                 OnlineSessionConstants.MessageAttackQueue);
             networkManager.CustomMessagingManager.UnregisterNamedMessageHandler(
+                OnlineSessionConstants.MessageDiceSpawn);
+            networkManager.CustomMessagingManager.UnregisterNamedMessageHandler(
                 OnlineSessionConstants.MessageMatchStart);
             networkManager.CustomMessagingManager.UnregisterNamedMessageHandler(
                 OnlineSessionConstants.MessageMatchSetupBroadcast);
@@ -117,6 +124,57 @@ namespace DiceGame.Session.Network
                 NetworkManager.ServerClientId,
                 writer,
                 NetworkDelivery.UnreliableSequenced);
+        }
+
+        public void SendInputToClients(OnlineInputPayload payload) {
+            if (networkManager == null || !networkManager.IsServer) {
+                return;
+            }
+
+            var customMessaging = networkManager.CustomMessagingManager;
+            if (customMessaging == null || !networkManager.IsListening) {
+                return;
+            }
+
+            var localId = networkManager.LocalClientId;
+            foreach (var clientId in networkManager.ConnectedClientsIds) {
+                if (clientId == localId) {
+                    continue;
+                }
+
+                using var writer = new FastBufferWriter(64, Allocator.Temp);
+                writer.WriteNetworkSerializable(payload);
+                customMessaging.SendNamedMessage(
+                    OnlineSessionConstants.MessageInput,
+                    clientId,
+                    writer,
+                    NetworkDelivery.UnreliableSequenced);
+            }
+        }
+
+        public void SendDiceSpawnToClients(OnlineDiceSpawnCommand command) {
+            if (networkManager == null || !networkManager.IsServer) {
+                return;
+            }
+
+            var customMessaging = networkManager.CustomMessagingManager;
+            if (customMessaging == null) {
+                return;
+            }
+
+            if (!networkManager.IsListening || networkManager.ConnectedClientsIds.Count <= 1) {
+                return;
+            }
+
+            using var writer = new FastBufferWriter(64, Allocator.Temp, 256);
+            writer.WriteNetworkSerializable(command);
+            customMessaging.SendNamedMessageToAll(
+                OnlineSessionConstants.MessageDiceSpawn,
+                writer,
+                NetworkDelivery.Reliable);
+            Debug.Log(
+                $"OnlineNetMessenger.SendDiceSpawnToClients: reason={command.Reason} " +
+                $"kind={command.Kind} cell=({command.GridX},{command.GridY}) owner={command.OwnerSlot}");
         }
 
         public void SendSnapshotToClients(OnlineMatchSnapshot snapshot) {
@@ -342,12 +400,13 @@ namespace DiceGame.Session.Network
         }
 
         void OnInputMessage(ulong senderClientId, FastBufferReader reader) {
-            if (!networkManager.IsServer) {
+            reader.ReadNetworkSerializable(out OnlineInputPayload payload);
+            if (networkManager.IsServer) {
+                InputReceived?.Invoke(senderClientId, payload);
                 return;
             }
 
-            reader.ReadNetworkSerializable(out OnlineInputPayload payload);
-            InputReceived?.Invoke(senderClientId, payload);
+            HostInputReceived?.Invoke(payload);
         }
 
         void OnSnapshotMessage(ulong senderClientId, FastBufferReader reader) {
@@ -393,6 +452,18 @@ namespace DiceGame.Session.Network
                 $"OnlineNetMessenger.OnAttackQueueMessage: " +
                 $"p1={queueSnapshot.Player1Volleys?.Length ?? 0} p2={queueSnapshot.Player2Volleys?.Length ?? 0}");
             AttackQueueReceived?.Invoke(queueSnapshot);
+        }
+
+        void OnDiceSpawnMessage(ulong senderClientId, FastBufferReader reader) {
+            if (networkManager != null && networkManager.IsServer) {
+                return;
+            }
+
+            reader.ReadNetworkSerializable(out OnlineDiceSpawnCommand command);
+            Debug.Log(
+                $"OnlineNetMessenger.OnDiceSpawnMessage: reason={command.Reason} kind={command.Kind} " +
+                $"cell=({command.GridX},{command.GridY})");
+            DiceSpawnReceived?.Invoke(command);
         }
 
         void OnMatchStartMessage(ulong senderClientId, FastBufferReader reader) {

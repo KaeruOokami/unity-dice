@@ -279,6 +279,8 @@ namespace DiceGame.Session
 
             OnlineSessionState.Instance.SetCurrentSetup(setup);
             var payload = MatchSetupNetworkCodec.ToPayload(setup, matchSetupPresetRegistry);
+            payload.MatchSeed = UnityEngine.Random.Range(1, int.MaxValue);
+            OnlineSessionState.Instance.SetMatchSeed(payload.MatchSeed);
             messenger?.SendMatchStartToClients(payload);
             onlineSharedSetupReady = false;
             OnlineSessionState.Instance.SetStatus("Match starting");
@@ -411,6 +413,10 @@ namespace DiceGame.Session
 
             OnlineSessionState.Instance.SetCurrentSetup(snapshot);
             OnlineSessionState.Instance.SetOnlineGameMode(snapshot.GameMode);
+            if (payload.MatchSeed != 0) {
+                OnlineSessionState.Instance.SetMatchSeed(payload.MatchSeed);
+            }
+
             OnlineSessionState.Instance.SetStatus("Received host settings.");
         }
 

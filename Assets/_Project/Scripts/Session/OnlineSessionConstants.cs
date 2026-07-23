@@ -10,6 +10,7 @@ namespace DiceGame.Session
         public const string MessageSnapshot = "DiceOnlineSnapshot";
         public const string MessageDiceMotion = "DiceOnlineDiceMotion";
         public const string MessageAttackQueue = "DiceOnlineAttackQueue";
+        public const string MessageDiceSpawn = "DiceOnlineDiceSpawn";
         public const string MessageMatchStart = "DiceOnlineMatchStart";
         public const string MessageMatchSetupBroadcast = "DiceOnlineMatchSetupBroadcast";
         public const string MessageMatchSetupUpdate = "DiceOnlineMatchSetupUpdate";

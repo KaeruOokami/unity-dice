@@ -241,15 +241,8 @@ namespace DiceGame.Gameplay
                 cameraSetup.Apply(board);
             }
 
-            if (session != null && session.PlayMode == OnlinePlayMode.OnlineClient) {
-                if (!TryBeginOnlineClientPresentation()) {
-                    AbortPendingSessionStart();
-                    return;
-                }
-
-                sessionStarted = true;
-                return;
-            }
+            // Full-sim online experiment: both host and client run local simulation.
+            // (Presentation-only OnlineClientMatchView path is intentionally skipped.)
 
             registry = GetComponent<DiceRegistry>();
             if (registry == null) {
@@ -276,7 +269,8 @@ namespace DiceGame.Gameplay
                     characterMovementSettings.MaxWalkStep,
                     characterMovementSettings.MaxJumpStepPlayerOnly,
                     characterMovementSettings.MaxJumpStepCoupled));
-            spawnRandom = randomSeed != 0 ? new System.Random(randomSeed) : new System.Random();
+            spawnRandom = ResolveMatchRandom(out var matchSeed);
+            UnityEngine.Random.InitState(matchSeed);
 
             spawnSystem = GetComponent<DiceSpawnSystem>();
             if (spawnSystem == null) {
@@ -290,10 +284,6 @@ namespace DiceGame.Gameplay
             }
 
             spawnSystem.ConfigureOwnership(ownershipContext);
-
-            if (session != null && session.PlayMode == OnlinePlayMode.OnlineHost) {
-                BeginOnlineHostMotionRelay();
-            }
 
             var playerCount = resolvedSetup.RequiredPlayerCount;
             var startDice = spawnSystem.SpawnInitialPlayerDice(playerCount);
@@ -370,6 +360,11 @@ namespace DiceGame.Gameplay
                     ownershipContext,
                     oneVanishSystem,
                     characters);
+
+                // Client follows host jumbo spawns via OnlineDiceSpawnCommand.
+                if (session != null && session.PlayMode == OnlinePlayMode.OnlineClient) {
+                    jumboSequence.enabled = false;
+                }
             }
 
             var gameFlowController = GetComponent<GameFlowController>();
@@ -390,13 +385,37 @@ namespace DiceGame.Gameplay
                 characters[i].BindCrushOutcome(gameFlowController);
             }
 
-            spawnSystem.StartSpawning();
-
-            if (session != null && session.PlayMode == OnlinePlayMode.OnlineHost) {
-                BindOnlineHostAuthority();
+            if (session != null && session.IsOnline) {
+                BindOnlineFullSimSync(session.IsHost);
+                if (session.IsHost) {
+                    spawnSystem.EmitNetworkSpawns = true;
+                    spawnSystem.StartSpawning();
+                } else {
+                    spawnSystem.EmitNetworkSpawns = false;
+                    spawnSystem.AllowAutonomousSpawning = false;
+                    attackController?.SetNetworkFollowerMode(true);
+                    EnsureOnlineClientFlowAdapter();
+                }
+            } else {
+                spawnSystem.StartSpawning();
             }
 
             sessionStarted = true;
+        }
+
+        System.Random ResolveMatchRandom(out int usedSeed) {
+            var session = OnlineSessionState.Instance;
+            if (session != null && session.IsOnline && session.MatchSeed != 0) {
+                usedSeed = session.MatchSeed;
+                return new System.Random(usedSeed);
+            }
+
+            usedSeed = randomSeed != 0 ? randomSeed : Environment.TickCount;
+            if (usedSeed == 0) {
+                usedSeed = 1;
+            }
+
+            return new System.Random(usedSeed);
         }
 
         static void AbortPendingSessionStart() {
@@ -470,39 +489,40 @@ namespace DiceGame.Gameplay
             return null;
         }
 
-        void BeginOnlineHostMotionRelay() {
+        void EnsureOnlineClientFlowAdapter() {
             var onlineController = FindObjectOfType<OnlineSessionController>();
             if (onlineController?.Messenger == null) {
-                Debug.LogError("GameBootstrap: Online host matched without messenger (motion relay).");
+                Debug.LogError("GameBootstrap: Online client matched without messenger.");
                 return;
             }
 
-            var binder = GetComponent<OnlineHostMatchBinder>();
-            if (binder == null) {
-                binder = gameObject.AddComponent<OnlineHostMatchBinder>();
+            var flowAdapter = GetComponent<OnlineClientFlowAdapter>();
+            if (flowAdapter == null) {
+                flowAdapter = gameObject.AddComponent<OnlineClientFlowAdapter>();
             }
 
-            binder.BeginMotionRelay(onlineController.Messenger, registry, ownershipContext);
+            flowAdapter.Configure(onlineController.Messenger, playerInputSettings);
         }
 
-        void BindOnlineHostAuthority() {
+        void BindOnlineFullSimSync(bool isHost) {
             var onlineController = FindObjectOfType<OnlineSessionController>();
             if (onlineController?.Messenger == null) {
-                Debug.LogError("GameBootstrap: Online host matched without messenger.");
+                Debug.LogError("GameBootstrap: Online full-sim sync requires messenger.");
                 return;
             }
 
-            var binder = GetComponent<OnlineHostMatchBinder>();
+            var binder = GetComponent<OnlineSimSyncBinder>();
             if (binder == null) {
-                binder = gameObject.AddComponent<OnlineHostMatchBinder>();
+                binder = gameObject.AddComponent<OnlineSimSyncBinder>();
             }
 
             binder.Configure(
                 onlineController.Messenger,
-                registry,
+                spawnSystem,
                 ownershipContext,
+                attackController,
                 characters,
-                attackController);
+                isHost);
         }
 
         MatchSetupPresetRegistry FindPresetRegistry() {
@@ -600,15 +620,21 @@ namespace DiceGame.Gameplay
 
                 var inputSettingsForSlot = playerInputSettings;
                 var sessionForSpawn = OnlineSessionState.Instance;
-                if (sessionForSpawn != null
-                    && sessionForSpawn.PlayMode == OnlinePlayMode.OnlineHost
-                    && slot == PlayerSlot.Player2) {
-                    inputSettingsForSlot = null;
+                if (sessionForSpawn != null && sessionForSpawn.IsOnline) {
+                    // Only the local seat gets device input; the remote seat is driven by network.
+                    if (slot != sessionForSpawn.LocalPlayerSlot) {
+                        inputSettingsForSlot = null;
+                    }
                 }
 
                 PlayerSlotInputConfig? inputOverride = null;
                 if (inputSettingsForSlot != null && !resolvedSetup.IsAiControlled(slot)) {
-                    inputOverride = resolvedSetup.GetInputConfig(slot);
+                    // Client controls P2 but typically uses the same physical device layout as P1.
+                    inputOverride = sessionForSpawn != null
+                        && sessionForSpawn.PlayMode == OnlinePlayMode.OnlineClient
+                        && slot == PlayerSlot.Player2
+                        ? resolvedSetup.GetInputConfig(PlayerSlot.Player1)
+                        : resolvedSetup.GetInputConfig(slot);
                 }
 
                 characterController.Configure(
