@@ -511,6 +511,19 @@ namespace DiceGame.Gameplay
                 return;
             }
 
+            // Disable legacy presentation / snapshot binders if present on the same object.
+            var legacyHostBinder = GetComponent<OnlineHostMatchBinder>();
+            if (legacyHostBinder != null) {
+                legacyHostBinder.enabled = false;
+                Destroy(legacyHostBinder);
+            }
+
+            var legacyClientView = GetComponent<OnlineClientMatchView>();
+            if (legacyClientView != null) {
+                legacyClientView.enabled = false;
+                Destroy(legacyClientView);
+            }
+
             var binder = GetComponent<OnlineSimSyncBinder>();
             if (binder == null) {
                 binder = gameObject.AddComponent<OnlineSimSyncBinder>();

@@ -89,6 +89,11 @@ namespace DiceGame.Session.Network
         }
 
         void Update() {
+            // Full-sim experiment uses OnlineSimSyncBinder; skip legacy snapshot path.
+            if (GetComponent<OnlineSimSyncBinder>() != null || !enabled) {
+                return;
+            }
+
             if (messenger == null || registry == null) {
                 return;
             }
@@ -183,6 +188,10 @@ namespace DiceGame.Session.Network
         }
 
         void OnDiceVisualMotionStarted(DiceView view, DiceVisualMotionRequest request) {
+            if (GetComponent<OnlineSimSyncBinder>() != null || !enabled) {
+                return;
+            }
+
             if (messenger == null || view == null) {
                 return;
             }

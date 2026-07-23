@@ -196,7 +196,8 @@ namespace DiceGame.Session.Network
         public PlayerAttackSettingsNetworkPayload Player2Attack;
         public PlayerNaturalSendSettingsNetworkPayload Player2NaturalSend;
         /// <summary>
-        /// Shared match RNG seed (host-generated on MatchStart). 0 = unset.
+        /// In-memory only. Wire format keeps lobby/setup payloads unchanged;
+        /// MatchStart carries the seed as a trailing int after this payload.
         /// </summary>
         public int MatchSeed;
 
@@ -218,7 +219,7 @@ namespace DiceGame.Session.Network
             Player2Catalog.NetworkSerialize(serializer);
             Player2Attack.NetworkSerialize(serializer);
             Player2NaturalSend.NetworkSerialize(serializer);
-            serializer.SerializeValue(ref MatchSeed);
+            // Intentionally do not serialize MatchSeed here (breaks lobby setup broadcasts).
         }
     }
 }

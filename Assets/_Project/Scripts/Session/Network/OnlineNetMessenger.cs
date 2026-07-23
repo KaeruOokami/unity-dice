@@ -293,9 +293,13 @@ namespace DiceGame.Session.Network
                 return;
             }
 
+            var matchSeed = setupPayload.MatchSeed != 0
+                ? setupPayload.MatchSeed
+                : 1;
             using var writer = new FastBufferWriter(MatchSetupWriterSize, Allocator.Temp);
             writer.WriteNetworkSerializable(setupPayload);
-            writer.WriteValueSafe(1);
+            // Trailing int: match RNG seed (previously a unused constant 1).
+            writer.WriteValueSafe(matchSeed);
             networkManager.CustomMessagingManager.SendNamedMessageToAll(
                 OnlineSessionConstants.MessageMatchStart,
                 writer,
@@ -468,7 +472,11 @@ namespace DiceGame.Session.Network
 
         void OnMatchStartMessage(ulong senderClientId, FastBufferReader reader) {
             reader.ReadNetworkSerializable(out MatchSetupNetworkPayload setupPayload);
-            reader.ReadValueSafe(out int _);
+            reader.ReadValueSafe(out int matchSeed);
+            if (matchSeed != 0) {
+                setupPayload.MatchSeed = matchSeed;
+            }
+
             MatchSetupReceived?.Invoke(setupPayload);
             MatchStartReceived?.Invoke();
         }
