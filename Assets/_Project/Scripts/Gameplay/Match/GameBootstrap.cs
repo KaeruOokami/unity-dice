@@ -291,6 +291,10 @@ namespace DiceGame.Gameplay
 
             spawnSystem.ConfigureOwnership(ownershipContext);
 
+            if (session != null && session.PlayMode == OnlinePlayMode.OnlineHost) {
+                BeginOnlineHostMotionRelay();
+            }
+
             var playerCount = resolvedSetup.RequiredPlayerCount;
             var startDice = spawnSystem.SpawnInitialPlayerDice(playerCount);
             if (startDice.Count < playerCount) {
@@ -425,7 +429,8 @@ namespace DiceGame.Gameplay
                 board,
                 ResolveClientPresentationCatalog(out var alternateCatalog),
                 alternateCatalog,
-                ResolveClientAttackQueueUiSettings());
+                ResolveClientAttackQueueUiSettings(),
+                characterMovementSettings);
 
             var flowAdapter = GetComponent<OnlineClientFlowAdapter>();
             if (flowAdapter == null) {
@@ -463,6 +468,21 @@ namespace DiceGame.Gameplay
             }
 
             return null;
+        }
+
+        void BeginOnlineHostMotionRelay() {
+            var onlineController = FindObjectOfType<OnlineSessionController>();
+            if (onlineController?.Messenger == null) {
+                Debug.LogError("GameBootstrap: Online host matched without messenger (motion relay).");
+                return;
+            }
+
+            var binder = GetComponent<OnlineHostMatchBinder>();
+            if (binder == null) {
+                binder = gameObject.AddComponent<OnlineHostMatchBinder>();
+            }
+
+            binder.BeginMotionRelay(onlineController.Messenger, registry, ownershipContext);
         }
 
         void BindOnlineHostAuthority() {

@@ -42,6 +42,12 @@ namespace DiceGame.View
         Board erasureBoard;
         DicePushBody pushBody;
         DiceController diceController;
+        /// <summary>
+        /// Presentation Kind for footprint/scale. Prefer this over DiceController so online
+        /// proxies (controller never initialized) still render Jumbo correctly.
+        /// </summary>
+        DiceKind visualKind = DiceKind.Normal;
+        bool hasVisualKind;
         bool wasErasureGhost;
         readonly List<Material> dissolveMaterials = new();
         readonly List<Color> dissolveMaterialBaseColors = new();
@@ -79,7 +85,7 @@ namespace DiceGame.View
             activeErasureKind == ErasureKind.Sink
             && erasureSettings != null
             && erasureProgress >= erasureSettings.SinkGhostThreshold
-            && (diceController == null || !diceController.Capabilities.SuppressesErasureGhost);
+            && !ResolveVisualCapabilities().SuppressesErasureGhost;
 
         public Transform DiceTransform => positionRoot;
         public Transform DiceRotationTransform => rotationRoot;
@@ -229,8 +235,7 @@ namespace DiceGame.View
         }
 
         void ApplyMeshVisualScale(Board board) {
-            EnsureDiceController();
-            var footprintScale = diceController != null && diceController.Capabilities.HasExpandedFootprint
+            var footprintScale = ResolveVisualCapabilities().HasExpandedFootprint
                 ? JumboFootprint.Size
                 : 1;
             ApplyMeshVisualScale(board, footprintScale);
@@ -267,6 +272,7 @@ namespace DiceGame.View
         /// Client presentation: apply kind mesh and footprint scale without gameplay controller state.
         /// </summary>
         public void ApplyNetworkKindPresentation(Board board, DiceKind kind, GameObject meshPrefab) {
+            SetVisualKind(kind);
             if (meshPrefab != null) {
                 SetMeshPrefab(meshPrefab);
             } else {
@@ -283,14 +289,32 @@ namespace DiceGame.View
             ApplyMeshVisualScale(board, footprintScale);
         }
 
+        void SetVisualKind(DiceKind kind) {
+            visualKind = kind;
+            hasVisualKind = true;
+        }
+
+        DiceCapabilities ResolveVisualCapabilities() {
+            if (hasVisualKind) {
+                return DiceBehaviorResolver.GetCapabilities(visualKind);
+            }
+
+            EnsureDiceController();
+            if (diceController != null) {
+                return diceController.Capabilities;
+            }
+
+            return DiceBehaviorResolver.GetCapabilities(DiceKind.Normal);
+        }
+
         Vector3 ResolveGridWorldPosition(DiceState state, Board board) {
             if (board == null) {
                 return Vector3.zero;
             }
 
-            EnsureDiceController();
+            SetVisualKind(state.Kind);
             var origin = board.GridToWorld(state.GridPos);
-            if (diceController != null && diceController.Capabilities.HasExpandedFootprint) {
+            if (ResolveVisualCapabilities().HasExpandedFootprint) {
                 return origin + JumboFootprint.GetCenterWorldOffset(board.CellSize);
             }
 
@@ -1583,9 +1607,7 @@ namespace DiceGame.View
                 yield break;
             }
 
-            var gravityScale = diceController != null
-                ? Mathf.Max(0.01f, diceController.Capabilities.FallGravityScale)
-                : DiceBehaviorConstants.DefaultFallGravityScale;
+            var gravityScale = Mathf.Max(0.01f, ResolveVisualCapabilities().FallGravityScale);
             var startOffset = positionRoot.position.y - targetWorld.y;
             var state = GravityMotion.CreateDrop(startOffset);
             yield return GravityMotion.AnimateVerticalDropCoroutine(
@@ -1841,11 +1863,11 @@ namespace DiceGame.View
             var duration = kind == ErasureKind.Radiance
                 ? erasureSettings.RadianceDuration
                 : erasureSettings.SinkDuration;
-            EnsureDiceController();
-            if (kind == ErasureKind.Sink
-                && diceController != null
-                && diceController.Capabilities.SinkDurationMultiplier > 0f) {
-                duration *= diceController.Capabilities.SinkDurationMultiplier;
+            if (kind == ErasureKind.Sink) {
+                var sinkMultiplier = ResolveVisualCapabilities().SinkDurationMultiplier;
+                if (sinkMultiplier > 0f) {
+                    duration *= sinkMultiplier;
+                }
             }
 
             while (erasureProgress < 1f) {
@@ -1948,8 +1970,7 @@ namespace DiceGame.View
         }
 
         void ApplySinkGhostVisual(float progress) {
-            EnsureDiceController();
-            var suppressGhost = diceController != null && diceController.Capabilities.SuppressesErasureGhost;
+            var suppressGhost = ResolveVisualCapabilities().SuppressesErasureGhost;
             ApplyErasureAlpha(progress, allowGhostAlpha: !suppressGhost);
             ApplyErasureEmission(progress);
             EnsurePushBody();
@@ -1960,6 +1981,7 @@ namespace DiceGame.View
                 return;
             }
 
+            EnsureDiceController();
             if (IsErasureGhost && !wasErasureGhost) {
                 wasErasureGhost = true;
                 diceController?.OnBecameErasureGhost();
@@ -2044,10 +2066,7 @@ namespace DiceGame.View
         }
 
         float GetRollDurationMultiplier() {
-            EnsureDiceController();
-            return diceController != null
-                ? diceController.Capabilities.RollDurationMultiplier
-                : DiceBehaviorConstants.DefaultRollDurationMultiplier;
+            return ResolveVisualCapabilities().RollDurationMultiplier;
         }
 
         static Texture ResolveBaseMapFromPrefab(GameObject prefab) {
@@ -2194,8 +2213,7 @@ namespace DiceGame.View
         }
 
         void ComputeVerticalExtents(Board board, int topFace, float squash, out float minY, out float maxY) {
-            EnsureDiceController();
-            var footprintScale = diceController != null && diceController.Capabilities.HasExpandedFootprint
+            var footprintScale = ResolveVisualCapabilities().HasExpandedFootprint
                 ? JumboFootprint.Size
                 : 1;
             var halfSize = board.CellSize * footprintScale * 0.5f;

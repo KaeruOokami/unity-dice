@@ -27,6 +27,19 @@ namespace DiceGame.Session.Network
         readonly Dictionary<int, uint> diceIds = new();
         readonly Dictionary<PlayerSlot, uint> characterIds = new();
 
+        public void BeginMotionRelay(
+            OnlineNetMessenger netMessenger,
+            DiceRegistry diceRegistry,
+            DiceMatchOwnershipContext matchOwnership) {
+            messenger = netMessenger;
+            registry = diceRegistry;
+            ownershipContext = matchOwnership;
+
+            // Subscribe before initial spawn so SpawnEmerge/Fall events are not dropped.
+            DiceVisualMotionHub.MotionStarted -= OnDiceVisualMotionStarted;
+            DiceVisualMotionHub.MotionStarted += OnDiceVisualMotionStarted;
+        }
+
         public void Configure(
             OnlineNetMessenger netMessenger,
             DiceRegistry diceRegistry,
@@ -42,6 +55,7 @@ namespace DiceGame.Session.Network
             }
 
             if (messenger != null) {
+                messenger.InputReceived -= OnInputReceived;
                 messenger.InputReceived += OnInputReceived;
             }
 

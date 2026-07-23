@@ -76,6 +76,7 @@ namespace DiceGame.Session.Network
         readonly HashSet<uint> retainUntilSnapshot = new();
         AttackQueueView attackQueueView;
         AttackQueueUiSettings attackQueueUiSettings;
+        CharacterMovementSettings movementSettings;
         readonly Dictionary<uint, DiceState> logicalStates = new();
         CharacterInputReader localInputReader;
         float inputTimer;
@@ -83,6 +84,11 @@ namespace DiceGame.Session.Network
         Direction? pendingDirection;
         float nextSnapshotReceivedLogTime;
         uint activeSnapshotSequence;
+        uint localCharacterEntityId;
+        bool hasLocalCharacterEntity;
+        float localMoveSpeed;
+        Vector3 localPredictedPosition;
+        bool localPredictionInitialized;
 
         public void Configure(
             OnlineNetMessenger netMessenger,
@@ -96,7 +102,8 @@ namespace DiceGame.Session.Network
             Board matchBoard,
             DiceCatalog catalog,
             DiceCatalog alternateCatalog = null,
-            AttackQueueUiSettings queueUiSettings = null) {
+            AttackQueueUiSettings queueUiSettings = null,
+            CharacterMovementSettings characterMovement = null) {
             messenger = netMessenger;
             dicePrefab = diceEntityPrefab;
             characterPrefab = characterEntityPrefab;
@@ -108,6 +115,7 @@ namespace DiceGame.Session.Network
             primaryCatalog = catalog;
             secondaryCatalog = alternateCatalog;
             attackQueueUiSettings = queueUiSettings;
+            movementSettings = characterMovement;
 
             if (proxyRoot == null) {
                 var rootObject = new GameObject("OnlineClientProxies");
@@ -153,6 +161,7 @@ namespace DiceGame.Session.Network
 
         void Update() {
             CaptureAndSendInput();
+            TickLocalCharacterPrediction();
             TickCharacterInterpolation();
         }
 
@@ -363,6 +372,8 @@ namespace DiceGame.Session.Network
                                 (DiceKind)entity.Kind,
                                 entity.CatalogPlayerSlot);
                         }
+                    } else if (IsLocalPlayerCharacter(entity)) {
+                        ApplyLocalCharacterAuthority(entity);
                     } else {
                         SetCharacterProxyTarget(entity);
                     }
@@ -437,6 +448,10 @@ namespace DiceGame.Session.Network
 
             var rotationBlend = 1f - Mathf.Exp(-delta / Mathf.Max(0.0001f, smoothTime));
             foreach (var pair in motionStates) {
+                if (hasLocalCharacterEntity && pair.Key == localCharacterEntityId) {
+                    continue;
+                }
+
                 var state = pair.Value;
                 if (state?.PositionTransform == null || !state.Initialized || !state.IsCharacter) {
                     continue;
@@ -461,6 +476,98 @@ namespace DiceGame.Session.Network
                     state.PositionTransform.rotation = state.CurrentRotation;
                 }
             }
+        }
+
+        static bool IsLocalPlayerCharacter(OnlineTransformSnapshot entity) {
+            // Host snapshot stores PlayerSlot in Kind for characters. Online client controls Player2.
+            return entity.IsCharacter && (PlayerSlot)entity.Kind == PlayerSlot.Player2;
+        }
+
+        void ApplyLocalCharacterAuthority(OnlineTransformSnapshot entity) {
+            localCharacterEntityId = entity.Id;
+            hasLocalCharacterEntity = true;
+
+            if (!proxies.TryGetValue(entity.Id, out var proxy) || proxy == null) {
+                return;
+            }
+
+            if (!TryResolveMotionTransforms(proxy, entity, out var positionTransform, out _)) {
+                return;
+            }
+
+            // Drop SmoothDamp state so remote interp never fights prediction.
+            motionStates.Remove(entity.Id);
+
+            if (!localPredictionInitialized) {
+                localPredictedPosition = entity.Position;
+                positionTransform.position = entity.Position;
+                positionTransform.rotation = entity.Rotation;
+                localPredictionInitialized = true;
+                localMoveSpeed = 0f;
+                return;
+            }
+
+            var error = entity.Position - localPredictedPosition;
+            var snapDistance = OnlineSessionConstants.SnapshotInterpSnapDistance;
+            if (error.sqrMagnitude >= snapDistance * snapDistance) {
+                localPredictedPosition = entity.Position;
+                localMoveSpeed = 0f;
+            } else {
+                // Soft reconcile: pull toward host without waiting a full RTT to start moving.
+                localPredictedPosition = Vector3.Lerp(
+                    localPredictedPosition,
+                    entity.Position,
+                    OnlineSessionConstants.LocalCharacterReconcileBlend);
+            }
+
+            positionTransform.position = localPredictedPosition;
+            // Face from host when nearly idle; prediction updates yaw while moving.
+            if (localMoveSpeed < 0.05f) {
+                positionTransform.rotation = entity.Rotation;
+            }
+        }
+
+        void TickLocalCharacterPrediction() {
+            if (!hasLocalCharacterEntity
+                || !localPredictionInitialized
+                || localInputReader == null
+                || movementSettings == null) {
+                return;
+            }
+
+            if (NetworkManager.Singleton == null
+                || !NetworkManager.Singleton.IsClient
+                || NetworkManager.Singleton.IsServer) {
+                return;
+            }
+
+            if (!proxies.TryGetValue(localCharacterEntityId, out var proxy) || proxy == null) {
+                return;
+            }
+
+            var delta = Time.unscaledDeltaTime;
+            if (delta <= 0f) {
+                return;
+            }
+
+            var input = localInputReader.ReadMove();
+            var inputMagnitude = Mathf.Clamp01(input.magnitude);
+            var targetSpeed = movementSettings.MaxMoveSpeed * inputMagnitude;
+            localMoveSpeed = Mathf.MoveTowards(
+                localMoveSpeed,
+                targetSpeed,
+                movementSettings.MoveAcceleration * delta);
+
+            if (localMoveSpeed > 0.0001f && inputMagnitude > 0.0001f) {
+                var moveDir = new Vector3(input.x, 0f, input.y);
+                if (moveDir.sqrMagnitude > 0.0001f) {
+                    moveDir.Normalize();
+                    localPredictedPosition += moveDir * (localMoveSpeed * delta);
+                    proxy.rotation = Quaternion.LookRotation(moveDir, Vector3.up);
+                }
+            }
+
+            proxy.position = localPredictedPosition;
         }
 
         void RemoveStaleProxies() {
@@ -490,6 +597,12 @@ namespace DiceGame.Session.Network
                 lastCatalogSides.Remove(id);
                 logicalStates.Remove(id);
                 retainUntilSnapshot.Remove(id);
+
+                if (hasLocalCharacterEntity && id == localCharacterEntityId) {
+                    hasLocalCharacterEntity = false;
+                    localPredictionInitialized = false;
+                    localMoveSpeed = 0f;
+                }
             }
         }
 

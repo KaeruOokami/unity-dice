@@ -40,6 +40,10 @@ namespace DiceGame.Session
         /// Beyond this world distance, snap character instead of interpolating.
         /// </summary>
         public const float SnapshotInterpSnapDistance = 2f;
+        /// <summary>
+        /// Soft blend toward host pose each snapshot for the locally predicted character (0..1).
+        /// </summary>
+        public const float LocalCharacterReconcileBlend = 0.35f;
         public const float OnlineSetupSyncIntervalSeconds = 0.35f;
         public const float OnlineIdentityRetryIntervalSeconds = 0.5f;
         public const string MatchSetupPersistDirectory = "MatchSetup";
