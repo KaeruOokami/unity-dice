@@ -11,9 +11,8 @@ using GameCharacterController = DiceGame.Gameplay.CharacterController;
 namespace DiceGame.Session.Network
 {
     /// <summary>
-    /// Hybrid full-sim online sync:
-    /// initial board from shared seed (local generate); later random spawns via host results;
-    /// bidirectional character input; no board pose snapshots.
+    /// Deprecated full-sim dual-peer experiment. Prefer host-authoritative
+    /// <see cref="OnlineHostMatchBinder"/> + client <see cref="OnlineClientMatchView"/>.
     /// </summary>
     public sealed class OnlineSimSyncBinder : MonoBehaviour
     {

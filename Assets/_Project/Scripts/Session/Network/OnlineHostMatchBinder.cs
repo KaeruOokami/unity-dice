@@ -75,6 +75,8 @@ namespace DiceGame.Session.Network
 
             BindRemotePlayerInput();
             AssignIds();
+            snapshotTimer = OnlineSessionConstants.SnapshotSendIntervalSeconds;
+            attackQueueResyncTimer = 0f;
         }
 
         void OnDestroy() {
@@ -89,8 +91,7 @@ namespace DiceGame.Session.Network
         }
 
         void Update() {
-            // Full-sim experiment uses OnlineSimSyncBinder; skip legacy snapshot path.
-            if (GetComponent<OnlineSimSyncBinder>() != null || !enabled) {
+            if (!enabled) {
                 return;
             }
 
@@ -188,11 +189,7 @@ namespace DiceGame.Session.Network
         }
 
         void OnDiceVisualMotionStarted(DiceView view, DiceVisualMotionRequest request) {
-            if (GetComponent<OnlineSimSyncBinder>() != null || !enabled) {
-                return;
-            }
-
-            if (messenger == null || view == null) {
+            if (!enabled || messenger == null || view == null) {
                 return;
             }
 

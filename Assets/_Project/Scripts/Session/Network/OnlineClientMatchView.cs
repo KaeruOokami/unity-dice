@@ -512,8 +512,8 @@ namespace DiceGame.Session.Network
             if (error.sqrMagnitude >= snapDistance * snapDistance) {
                 localPredictedPosition = entity.Position;
                 localMoveSpeed = 0f;
-            } else {
-                // Soft reconcile: pull toward host without waiting a full RTT to start moving.
+            } else if (localMoveSpeed <= OnlineSessionConstants.LocalCharacterReconcileIdleSpeed) {
+                // Idle-only soft reconcile — do not tug while the player is actively predicting.
                 localPredictedPosition = Vector3.Lerp(
                     localPredictedPosition,
                     entity.Position,

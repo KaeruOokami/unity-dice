@@ -241,8 +241,16 @@ namespace DiceGame.Gameplay
                 cameraSetup.Apply(board);
             }
 
-            // Full-sim online experiment: both host and client run local simulation.
-            // (Presentation-only OnlineClientMatchView path is intentionally skipped.)
+            // Online client: presentation only (predict local character; dice via motion + logical snapshots).
+            if (session != null && session.IsOnline && !session.IsHost) {
+                if (!TryBeginOnlineClientPresentation()) {
+                    AbortPendingSessionStart();
+                    return;
+                }
+
+                sessionStarted = true;
+                return;
+            }
 
             registry = GetComponent<DiceRegistry>();
             if (registry == null) {
@@ -273,9 +281,8 @@ namespace DiceGame.Gameplay
             UnityEngine.Random.InitState(matchSeed);
             if (session != null && session.IsOnline) {
                 Debug.Log(
-                    $"GameBootstrap: online match seed={matchSeed} " +
-                    $"role={(session.IsHost ? "Host" : "Client")} " +
-                    $"(initial board = local generate from seed; later spawns = host results)");
+                    $"GameBootstrap: online host match seed={matchSeed} " +
+                    "(host-authoritative sim; client uses presentation + prediction)");
             }
 
             spawnSystem = GetComponent<DiceSpawnSystem>();
@@ -290,8 +297,13 @@ namespace DiceGame.Gameplay
             }
 
             spawnSystem.ConfigureOwnership(ownershipContext);
-            // Hybrid: initial board is seed-local on both peers (do not emit spawn commands yet).
+            // Presentation client gets dice via motion events + snapshots (not spawn commands).
             spawnSystem.EmitNetworkSpawns = false;
+
+            OnlineHostMatchBinder hostMotionBinder = null;
+            if (session != null && session.IsOnline && session.IsHost) {
+                hostMotionBinder = BeginOnlineHostMotionRelay();
+            }
 
             var playerCount = resolvedSetup.RequiredPlayerCount;
             var startDice = spawnSystem.SpawnInitialPlayerDice(playerCount);
@@ -368,11 +380,6 @@ namespace DiceGame.Gameplay
                     ownershipContext,
                     oneVanishSystem,
                     characters);
-
-                // Client follows host jumbo spawns via OnlineDiceSpawnCommand.
-                if (session != null && session.PlayMode == OnlinePlayMode.OnlineClient) {
-                    jumboSequence.enabled = false;
-                }
             }
 
             var gameFlowController = GetComponent<GameFlowController>();
@@ -393,24 +400,11 @@ namespace DiceGame.Gameplay
                 characters[i].BindCrushOutcome(gameFlowController);
             }
 
-            if (session != null && session.IsOnline) {
-                // Hybrid online sync:
-                // - Initial dice: already spawned above from shared MatchSeed (both peers).
-                // - Continuous / attack / jumbo: host RNG + OnlineDiceSpawnCommand to client.
-                BindOnlineFullSimSync(session.IsHost);
-                if (session.IsHost) {
-                    spawnSystem.EmitNetworkSpawns = true;
-                    spawnSystem.StartSpawning();
-                } else {
-                    spawnSystem.EmitNetworkSpawns = false;
-                    spawnSystem.AllowAutonomousSpawning = false;
-                    attackController?.SetNetworkFollowerMode(true);
-                    EnsureOnlineClientFlowAdapter();
-                }
-            } else {
-                spawnSystem.StartSpawning();
+            if (session != null && session.IsOnline && session.IsHost) {
+                BindOnlineHostAuthority(hostMotionBinder);
             }
 
+            spawnSystem.StartSpawning();
             sessionStarted = true;
         }
 
@@ -506,53 +500,62 @@ namespace DiceGame.Gameplay
             return null;
         }
 
-        void EnsureOnlineClientFlowAdapter() {
+        OnlineHostMatchBinder BeginOnlineHostMotionRelay() {
             var onlineController = FindObjectOfType<OnlineSessionController>();
             if (onlineController?.Messenger == null) {
-                Debug.LogError("GameBootstrap: Online client matched without messenger.");
-                return;
+                Debug.LogError("GameBootstrap: Online host motion relay requires messenger.");
+                return null;
             }
 
-            var flowAdapter = GetComponent<OnlineClientFlowAdapter>();
-            if (flowAdapter == null) {
-                flowAdapter = gameObject.AddComponent<OnlineClientFlowAdapter>();
+            DestroyOnlineSimSyncBinderIfPresent();
+
+            var hostBinder = GetComponent<OnlineHostMatchBinder>();
+            if (hostBinder == null) {
+                hostBinder = gameObject.AddComponent<OnlineHostMatchBinder>();
             }
 
-            flowAdapter.Configure(onlineController.Messenger, playerInputSettings);
+            hostBinder.enabled = true;
+            hostBinder.BeginMotionRelay(
+                onlineController.Messenger,
+                registry,
+                ownershipContext);
+            return hostBinder;
         }
 
-        void BindOnlineFullSimSync(bool isHost) {
+        void BindOnlineHostAuthority(OnlineHostMatchBinder hostBinder) {
             var onlineController = FindObjectOfType<OnlineSessionController>();
             if (onlineController?.Messenger == null) {
-                Debug.LogError("GameBootstrap: Online full-sim sync requires messenger.");
+                Debug.LogError("GameBootstrap: Online host authority requires messenger.");
                 return;
             }
 
-            // Disable legacy presentation / snapshot binders if present on the same object.
-            var legacyHostBinder = GetComponent<OnlineHostMatchBinder>();
-            if (legacyHostBinder != null) {
-                legacyHostBinder.enabled = false;
-                Destroy(legacyHostBinder);
+            DestroyOnlineSimSyncBinderIfPresent();
+
+            if (hostBinder == null) {
+                hostBinder = GetComponent<OnlineHostMatchBinder>();
             }
 
-            var legacyClientView = GetComponent<OnlineClientMatchView>();
-            if (legacyClientView != null) {
-                legacyClientView.enabled = false;
-                Destroy(legacyClientView);
+            if (hostBinder == null) {
+                hostBinder = gameObject.AddComponent<OnlineHostMatchBinder>();
             }
 
-            var binder = GetComponent<OnlineSimSyncBinder>();
-            if (binder == null) {
-                binder = gameObject.AddComponent<OnlineSimSyncBinder>();
-            }
-
-            binder.Configure(
+            hostBinder.enabled = true;
+            hostBinder.Configure(
                 onlineController.Messenger,
-                spawnSystem,
+                registry,
                 ownershipContext,
-                attackController,
                 characters,
-                isHost);
+                attackController);
+        }
+
+        void DestroyOnlineSimSyncBinderIfPresent() {
+            var fullSim = GetComponent<OnlineSimSyncBinder>();
+            if (fullSim == null) {
+                return;
+            }
+
+            fullSim.enabled = false;
+            Destroy(fullSim);
         }
 
         MatchSetupPresetRegistry FindPresetRegistry() {

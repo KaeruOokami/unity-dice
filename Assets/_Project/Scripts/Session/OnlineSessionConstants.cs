@@ -25,7 +25,10 @@ namespace DiceGame.Session
         public const byte FlowResetMatch = 3;
         public const byte FlowReturnToTitle = 4;
         public const float LobbyHeartbeatSeconds = 15f;
-        public const float SnapshotSendIntervalSeconds = 0.1f;
+        /// <summary>
+        /// Host → client logical board + character pose. Keep modest; dice motion is event-driven.
+        /// </summary>
+        public const float SnapshotSendIntervalSeconds = 0.15f;
         public const float AttackQueueResyncIntervalSeconds = 1f;
         public const float InputSendIntervalSeconds = 0.05f;
         /// <summary>
@@ -33,18 +36,23 @@ namespace DiceGame.Session
         /// </summary>
         public const int SnapshotReliableSoftBytes = 3500;
         /// <summary>
-        /// Character presentation only: SmoothDamp time toward latest snapshot targets.
-        /// Dice use local Play* animations + logical SnapTo; no pose chase.
+        /// Remote character only: SmoothDamp time toward latest snapshot targets.
+        /// Local character uses prediction; dice use Play* + logical SnapTo.
         /// </summary>
-        public const float SnapshotInterpSmoothTimeSeconds = 0.06f;
+        public const float SnapshotInterpSmoothTimeSeconds = 0.1f;
         /// <summary>
-        /// Beyond this world distance, snap character instead of interpolating.
+        /// Beyond this world distance, snap character instead of interpolating / soft reconcile.
         /// </summary>
         public const float SnapshotInterpSnapDistance = 2f;
         /// <summary>
-        /// Soft blend toward host pose each snapshot for the locally predicted character (0..1).
+        /// Soft blend toward host pose when the local predicted character is nearly idle (0..1).
+        /// Kept low so moving prediction is not constantly tugged.
         /// </summary>
-        public const float LocalCharacterReconcileBlend = 0.35f;
+        public const float LocalCharacterReconcileBlend = 0.08f;
+        /// <summary>
+        /// Soft reconcile applies only while predicted move speed is at or below this.
+        /// </summary>
+        public const float LocalCharacterReconcileIdleSpeed = 0.2f;
         public const float OnlineSetupSyncIntervalSeconds = 0.35f;
         public const float OnlineIdentityRetryIntervalSeconds = 0.5f;
         public const string MatchSetupPersistDirectory = "MatchSetup";
