@@ -27,7 +27,7 @@ namespace DiceGame.Session
         public const byte FlowReturnToTitle = 4;
         public const float LobbyHeartbeatSeconds = 15f;
         /// <summary>
-        /// Host → client logical board + character pose. Keep modest; dice motion is event-driven.
+        /// Host → client character poses (Phase A). Full board is event-driven + one-shot initial dump.
         /// </summary>
         public const float SnapshotSendIntervalSeconds = 0.15f;
         public const float AttackQueueResyncIntervalSeconds = 1f;
@@ -41,9 +41,9 @@ namespace DiceGame.Session
         /// </summary>
         public const int CharacterRollbackHistorySize = 64;
         /// <summary>
-        /// Soft warning threshold for one Reliable snapshot datagram (must remain a single packet).
+        /// Soft warning for large board dumps (initial / rare resync). Fragmented delivery allows larger than MTU.
         /// </summary>
-        public const int SnapshotReliableSoftBytes = 3500;
+        public const int SnapshotReliableSoftBytes = 8000;
         /// <summary>
         /// Remote character only: SmoothDamp time toward latest snapshot targets.
         /// Local character uses prediction; dice use Play* + logical SnapTo.

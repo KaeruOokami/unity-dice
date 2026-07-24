@@ -349,6 +349,7 @@ namespace DiceGame.Session.Network
             sequenceSeenIds.Clear();
 
             var entities = chunk.Entities;
+            var snapshotContainsDice = false;
             if (entities != null) {
                 // Pass 1: create proxies and cache logical dice states (so Top can resolve Bottom height).
                 for (var i = 0; i < entities.Length; i++) {
@@ -364,6 +365,7 @@ namespace DiceGame.Session.Network
                     }
 
                     if (entity.IsDice) {
+                        snapshotContainsDice = true;
                         logicalStates[entity.Id] = entity.ToDiceState();
                         if (diceViews.TryGetValue(entity.Id, out var diceView) && diceView != null) {
                             ApplyKindMesh(
@@ -395,10 +397,13 @@ namespace DiceGame.Session.Network
                 nextSnapshotReceivedLogTime = now + 2f;
                 Debug.Log(
                     $"OnlineClientMatchView.OnSnapshotChunkReceived: seq={chunk.Sequence} " +
-                    $"entities={entities?.Length ?? 0} complete=True");
+                    $"entities={entities?.Length ?? 0} containsDice={snapshotContainsDice} complete=True");
             }
 
-            RemoveStaleProxies();
+            // Character-only snapshots must not prune dice created by motion events / initial board.
+            if (snapshotContainsDice) {
+                RemoveStaleProxies();
+            }
         }
 
         void OnAttackQueueReceived(OnlineAttackQueueSnapshot queueSnapshot) {

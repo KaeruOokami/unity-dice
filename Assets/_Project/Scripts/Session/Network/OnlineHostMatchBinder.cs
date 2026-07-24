@@ -13,6 +13,10 @@ using GameCharacterController = DiceGame.Gameplay.CharacterController;
 
 namespace DiceGame.Session.Network
 {
+    /// <summary>
+    /// Phase A host authority: Reliable dice motion/spawn-appear events, attack queue,
+    /// one-shot full board snapshot, then character-only pose updates (no periodic full board).
+    /// </summary>
     public sealed class OnlineHostMatchBinder : MonoBehaviour
     {
         OnlineNetMessenger messenger;
@@ -21,8 +25,9 @@ namespace DiceGame.Session.Network
         DiceMatchOwnershipContext ownershipContext;
         VersusAttackController attackController;
         readonly List<GameCharacterController> characters = new();
-        float snapshotTimer;
+        float characterSnapshotTimer;
         float attackQueueResyncTimer;
+        bool sentInitialBoardSnapshot;
         uint nextEntityId = 1;
         readonly Dictionary<int, uint> diceIds = new();
         readonly Dictionary<PlayerSlot, uint> characterIds = new();
@@ -75,8 +80,10 @@ namespace DiceGame.Session.Network
 
             BindRemotePlayerInput();
             AssignIds();
-            snapshotTimer = OnlineSessionConstants.SnapshotSendIntervalSeconds;
+            sentInitialBoardSnapshot = false;
+            characterSnapshotTimer = 0f;
             attackQueueResyncTimer = 0f;
+            TrySendInitialBoardSnapshot();
         }
 
         void OnDestroy() {
@@ -99,13 +106,17 @@ namespace DiceGame.Session.Network
                 return;
             }
 
-            snapshotTimer += Time.unscaledDeltaTime;
-            if (snapshotTimer >= OnlineSessionConstants.SnapshotSendIntervalSeconds) {
-                snapshotTimer = 0f;
-                messenger.SendSnapshotToClients(BuildSnapshot());
+            if (!sentInitialBoardSnapshot) {
+                TrySendInitialBoardSnapshot();
             }
 
-            // Resync so clients that subscribed after the last change still get the queue UI.
+            // Character poses only after the board is seeded on the client (small payload).
+            characterSnapshotTimer += Time.unscaledDeltaTime;
+            if (characterSnapshotTimer >= OnlineSessionConstants.SnapshotSendIntervalSeconds) {
+                characterSnapshotTimer = 0f;
+                messenger.SendSnapshotToClients(BuildCharacterSnapshot());
+            }
+
             if (attackController != null) {
                 attackQueueResyncTimer += Time.unscaledDeltaTime;
                 if (attackQueueResyncTimer >= OnlineSessionConstants.AttackQueueResyncIntervalSeconds) {
@@ -113,6 +124,20 @@ namespace DiceGame.Session.Network
                     OnAttackQueueChanged();
                 }
             }
+        }
+
+        void TrySendInitialBoardSnapshot() {
+            if (messenger == null || sentInitialBoardSnapshot) {
+                return;
+            }
+
+            if (!messenger.HasRemoteClients()) {
+                return;
+            }
+
+            messenger.SendSnapshotToClients(BuildFullBoardSnapshot());
+            sentInitialBoardSnapshot = true;
+            characterSnapshotTimer = 0f;
         }
 
         void BindRemotePlayerInput() {
@@ -231,9 +256,22 @@ namespace DiceGame.Session.Network
             return id;
         }
 
-        OnlineMatchSnapshot BuildSnapshot() {
-            var entities = new List<OnlineTransformSnapshot>(64);
+        OnlineMatchSnapshot BuildCharacterSnapshot() {
+            return new OnlineMatchSnapshot {
+                Entities = BuildCharacterEntities().ToArray()
+            };
+        }
 
+        OnlineMatchSnapshot BuildFullBoardSnapshot() {
+            var entities = BuildCharacterEntities();
+            AppendDiceEntities(entities);
+            return new OnlineMatchSnapshot {
+                Entities = entities.ToArray()
+            };
+        }
+
+        List<OnlineTransformSnapshot> BuildCharacterEntities() {
+            var entities = new List<OnlineTransformSnapshot>(characters.Count);
             foreach (var character in characters) {
                 if (character == null) {
                     continue;
@@ -254,34 +292,36 @@ namespace DiceGame.Session.Network
                 });
             }
 
-            if (registry != null) {
-                foreach (var dice in registry.AllDice) {
-                    if (dice == null) {
-                        continue;
-                    }
+            return entities;
+        }
 
-                    var id = EnsureDiceId(dice);
-                    var state = dice.CurrentState;
-                    var catalogSide = ResolveCatalogSide(dice);
-
-                    entities.Add(new OnlineTransformSnapshot {
-                        Id = id,
-                        Kind = (byte)state.Kind,
-                        Flags = (byte)(OnlineTransformSnapshot.FlagDice | OnlineTransformSnapshot.FlagActive),
-                        CatalogSide = (byte)catalogSide,
-                        GridX = (short)state.GridPos.x,
-                        GridY = (short)state.GridPos.y,
-                        Tier = (byte)state.Tier,
-                        TopFace = (byte)Mathf.Clamp(state.Orientation.Top, 1, 6),
-                        NorthFace = (byte)Mathf.Clamp(state.Orientation.North, 1, 6),
-                        EastFace = (byte)Mathf.Clamp(state.Orientation.East, 1, 6)
-                    });
-                }
+        void AppendDiceEntities(List<OnlineTransformSnapshot> entities) {
+            if (registry == null) {
+                return;
             }
 
-            return new OnlineMatchSnapshot {
-                Entities = entities.ToArray()
-            };
+            foreach (var dice in registry.AllDice) {
+                if (dice == null) {
+                    continue;
+                }
+
+                var id = EnsureDiceId(dice);
+                var state = dice.CurrentState;
+                var catalogSide = ResolveCatalogSide(dice);
+
+                entities.Add(new OnlineTransformSnapshot {
+                    Id = id,
+                    Kind = (byte)state.Kind,
+                    Flags = (byte)(OnlineTransformSnapshot.FlagDice | OnlineTransformSnapshot.FlagActive),
+                    CatalogSide = (byte)catalogSide,
+                    GridX = (short)state.GridPos.x,
+                    GridY = (short)state.GridPos.y,
+                    Tier = (byte)state.Tier,
+                    TopFace = (byte)Mathf.Clamp(state.Orientation.Top, 1, 6),
+                    NorthFace = (byte)Mathf.Clamp(state.Orientation.North, 1, 6),
+                    EastFace = (byte)Mathf.Clamp(state.Orientation.East, 1, 6)
+                });
+            }
         }
     }
 }

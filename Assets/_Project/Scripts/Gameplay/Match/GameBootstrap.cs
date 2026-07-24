@@ -241,6 +241,17 @@ namespace DiceGame.Gameplay
                 cameraSetup.Apply(board);
             }
 
+            // Phase A: client is presentation-only (events + local character prediction).
+            if (session != null && session.IsOnline && !session.IsHost) {
+                if (!TryBeginOnlineClientPresentation()) {
+                    AbortPendingSessionStart();
+                    return;
+                }
+
+                sessionStarted = true;
+                return;
+            }
+
             registry = GetComponent<DiceRegistry>();
             if (registry == null) {
                 registry = gameObject.AddComponent<DiceRegistry>();
@@ -270,9 +281,8 @@ namespace DiceGame.Gameplay
             UnityEngine.Random.InitState(matchSeed);
             if (session != null && session.IsOnline) {
                 Debug.Log(
-                    $"GameBootstrap: online match seed={matchSeed} " +
-                    $"role={(session.IsHost ? "Host" : "Client")} " +
-                    "(full-sim + character rollback; initial board from seed; later spawns from host)");
+                    $"GameBootstrap: online host match seed={matchSeed} " +
+                    "(Phase A: host-authoritative events; client presentation)");
             }
 
             spawnSystem = GetComponent<DiceSpawnSystem>();
@@ -287,7 +297,13 @@ namespace DiceGame.Gameplay
             }
 
             spawnSystem.ConfigureOwnership(ownershipContext);
+            // Board changes reach the client via Reliable motion events (not spawn-command full-sim).
             spawnSystem.EmitNetworkSpawns = false;
+
+            OnlineHostMatchBinder hostMotionBinder = null;
+            if (session != null && session.IsOnline && session.IsHost) {
+                hostMotionBinder = BeginOnlineHostMotionRelay();
+            }
 
             var playerCount = resolvedSetup.RequiredPlayerCount;
             var startDice = spawnSystem.SpawnInitialPlayerDice(playerCount);
@@ -364,10 +380,6 @@ namespace DiceGame.Gameplay
                     ownershipContext,
                     oneVanishSystem,
                     characters);
-
-                if (session != null && session.PlayMode == OnlinePlayMode.OnlineClient) {
-                    jumboSequence.enabled = false;
-                }
             }
 
             var gameFlowController = GetComponent<GameFlowController>();
@@ -388,21 +400,11 @@ namespace DiceGame.Gameplay
                 characters[i].BindCrushOutcome(gameFlowController);
             }
 
-            if (session != null && session.IsOnline) {
-                BindOnlineFullSimSync(session.IsHost);
-                if (session.IsHost) {
-                    spawnSystem.EmitNetworkSpawns = true;
-                    spawnSystem.StartSpawning();
-                } else {
-                    spawnSystem.EmitNetworkSpawns = false;
-                    spawnSystem.AllowAutonomousSpawning = false;
-                    attackController?.SetNetworkFollowerMode(true);
-                    EnsureOnlineClientFlowAdapter();
-                }
-            } else {
-                spawnSystem.StartSpawning();
+            if (session != null && session.IsOnline && session.IsHost) {
+                BindOnlineHostAuthority(hostMotionBinder);
             }
 
+            spawnSystem.StartSpawning();
             sessionStarted = true;
         }
 
@@ -513,38 +515,62 @@ namespace DiceGame.Gameplay
             flowAdapter.Configure(onlineController.Messenger, playerInputSettings);
         }
 
-        void BindOnlineFullSimSync(bool isHost) {
+        OnlineHostMatchBinder BeginOnlineHostMotionRelay() {
             var onlineController = FindObjectOfType<OnlineSessionController>();
             if (onlineController?.Messenger == null) {
-                Debug.LogError("GameBootstrap: Online full-sim sync requires messenger.");
+                Debug.LogError("GameBootstrap: Online host motion relay requires messenger.");
+                return null;
+            }
+
+            DestroyOnlineSimSyncBinderIfPresent();
+
+            var hostBinder = GetComponent<OnlineHostMatchBinder>();
+            if (hostBinder == null) {
+                hostBinder = gameObject.AddComponent<OnlineHostMatchBinder>();
+            }
+
+            hostBinder.enabled = true;
+            hostBinder.BeginMotionRelay(
+                onlineController.Messenger,
+                registry,
+                ownershipContext);
+            return hostBinder;
+        }
+
+        void BindOnlineHostAuthority(OnlineHostMatchBinder hostBinder) {
+            var onlineController = FindObjectOfType<OnlineSessionController>();
+            if (onlineController?.Messenger == null) {
+                Debug.LogError("GameBootstrap: Online host authority requires messenger.");
                 return;
             }
 
-            var legacyHostBinder = GetComponent<OnlineHostMatchBinder>();
-            if (legacyHostBinder != null) {
-                legacyHostBinder.enabled = false;
-                Destroy(legacyHostBinder);
+            DestroyOnlineSimSyncBinderIfPresent();
+
+            if (hostBinder == null) {
+                hostBinder = GetComponent<OnlineHostMatchBinder>();
             }
 
-            var legacyClientView = GetComponent<OnlineClientMatchView>();
-            if (legacyClientView != null) {
-                legacyClientView.enabled = false;
-                Destroy(legacyClientView);
+            if (hostBinder == null) {
+                hostBinder = gameObject.AddComponent<OnlineHostMatchBinder>();
             }
 
-            var binder = GetComponent<OnlineSimSyncBinder>();
-            if (binder == null) {
-                binder = gameObject.AddComponent<OnlineSimSyncBinder>();
-            }
-
-            binder.enabled = true;
-            binder.Configure(
+            hostBinder.enabled = true;
+            hostBinder.Configure(
                 onlineController.Messenger,
-                spawnSystem,
+                registry,
                 ownershipContext,
-                attackController,
                 characters,
-                isHost);
+                attackController);
+        }
+
+        void DestroyOnlineSimSyncBinderIfPresent() {
+            var fullSim = GetComponent<OnlineSimSyncBinder>();
+            if (fullSim == null) {
+                return;
+            }
+
+            fullSim.enabled = false;
+            Destroy(fullSim);
         }
 
         MatchSetupPresetRegistry FindPresetRegistry() {

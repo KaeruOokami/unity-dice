@@ -183,6 +183,12 @@ namespace DiceGame.Session.Network
                 $"kind={command.Kind} cell=({command.GridX},{command.GridY}) owner={command.OwnerSlot}");
         }
 
+        public bool HasRemoteClients() {
+            return networkManager != null
+                && networkManager.IsListening
+                && networkManager.ConnectedClientsIds.Count > 1;
+        }
+
         public void SendCharacterStateToClients(OnlineCharacterStateBatch batch) {
             if (networkManager == null || !networkManager.IsServer) {
                 return;
@@ -240,14 +246,16 @@ namespace DiceGame.Session.Network
                     $"(soft limit {OnlineSessionConstants.SnapshotReliableSoftBytes}). Keep shrinking payload.");
             }
 
+            // Phase A: full board may exceed non-fragmented Reliable MTU (~1264).
+            // Use fragmented reliable so the initial board dump is not dropped.
             customMessaging.SendNamedMessageToAll(
                 OnlineSessionConstants.MessageSnapshot,
                 writer,
-                NetworkDelivery.Reliable);
+                NetworkDelivery.ReliableFragmentedSequenced);
 
             LogSnapshotSendThrottled(
                 $"send ToAll entities={entities.Length} chunks=1 bytes={writer.Length} " +
-                $"seq={snapshotSequence} delivery=Reliable " +
+                $"seq={snapshotSequence} delivery=ReliableFragmentedSequenced " +
                 $"interval={OnlineSessionConstants.SnapshotSendIntervalSeconds:0.###}s");
         }
 
