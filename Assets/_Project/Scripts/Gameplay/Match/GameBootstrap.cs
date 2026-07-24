@@ -437,16 +437,6 @@ namespace DiceGame.Gameplay
 
             EnsureOnlineClientFlowAdapter();
 
-            var inputRelay = GetComponent<OnlineClientInputRelay>();
-            if (inputRelay == null) {
-                inputRelay = gameObject.AddComponent<OnlineClientInputRelay>();
-            }
-
-            var localSlot = OnlineSessionState.Instance != null
-                ? OnlineSessionState.Instance.LocalPlayerSlot
-                : PlayerSlot.Player2;
-            inputRelay.Configure(onlineController.Messenger, characters, localSlot);
-
             spawnSystem.AllowAutonomousSpawning = false;
             spawnSystem.EmitNetworkSpawns = false;
 
@@ -482,6 +472,24 @@ namespace DiceGame.Gameplay
                 physicsSettings,
                 diceOneVanishSettings,
                 characters);
+
+            var localSlot = OnlineSessionState.Instance != null
+                ? OnlineSessionState.Instance.LocalPlayerSlot
+                : PlayerSlot.Player2;
+
+            // Replace legacy input-only relay with Phase C character sync.
+            var legacyInputRelay = GetComponent<OnlineClientInputRelay>();
+            if (legacyInputRelay != null) {
+                legacyInputRelay.enabled = false;
+                Destroy(legacyInputRelay);
+            }
+
+            var characterBinder = GetComponent<OnlineClientCharacterBinder>();
+            if (characterBinder == null) {
+                characterBinder = gameObject.AddComponent<OnlineClientCharacterBinder>();
+            }
+
+            characterBinder.Configure(onlineController.Messenger, characters, localSlot);
 
             // Presentation: characters may walk locally, but must not mutate the board.
             for (var i = 0; i < characters.Count; i++) {

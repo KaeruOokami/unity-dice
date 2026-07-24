@@ -276,6 +276,7 @@
      <Compile Include="Assets\_Project\Scripts\Session\Network\OnlineClientInputRelay.cs" />
      <Compile Include="Assets\_Project\Scripts\Session\Network\OnlineEntityIdMap.cs" />
      <Compile Include="Assets\_Project\Scripts\Session\Network\OnlineClientEventBinder.cs" />
+     <Compile Include="Assets\_Project\Scripts\Session\Network\OnlineClientCharacterBinder.cs" />
      <None Include="Assets\TextMesh Pro\Shaders\TMPro.cginc" />
      <None Include="Assets\TextMesh Pro\Shaders\TMP_SDF-Mobile Overlay.shader" />
      <None Include="Assets\TextMesh Pro\Shaders\TMP_Bitmap.shader" />

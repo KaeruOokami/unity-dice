@@ -28,13 +28,22 @@ namespace DiceGame.Session
         public const byte FlowReturnToTitle = 4;
         public const float LobbyHeartbeatSeconds = 15f;
         /// <summary>
-        /// Host → client character poses after seed-based initial board.
+        /// Host → client character pose: check interval for sparse corrections (not continuous chase).
         /// </summary>
-        public const float SnapshotSendIntervalSeconds = 0.15f;
+        public const float CharacterCorrectCheckIntervalSeconds = 0.25f;
+        /// <summary>
+        /// Only send a character pose correction if any character moved at least this far
+        /// since the last correction send.
+        /// </summary>
+        public const float CharacterCorrectMinSendDistance = 0.35f;
         public const float AttackQueueResyncIntervalSeconds = 1f;
         public const float InputSendIntervalSeconds = 0.05f;
         /// <summary>
-        /// Host → clients: character pose corrections for rollback (not full board).
+        /// Legacy name kept for compatibility; prefer CharacterCorrectCheckIntervalSeconds.
+        /// </summary>
+        public const float SnapshotSendIntervalSeconds = CharacterCorrectCheckIntervalSeconds;
+        /// <summary>
+        /// Host → clients: unused as primary path in Phase C (input sync + sparse correct).
         /// </summary>
         public const float CharacterStateSendIntervalSeconds = 0.1f;
         /// <summary>

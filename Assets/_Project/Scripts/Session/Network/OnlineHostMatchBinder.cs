@@ -1,4 +1,3 @@
-using System;
 using System.Collections.Generic;
 using DiceGame.Config;
 using DiceGame.Core;
@@ -14,20 +13,25 @@ using GameCharacterController = DiceGame.Gameplay.CharacterController;
 namespace DiceGame.Session.Network
 {
     /// <summary>
-    /// Host authority after seed-based initial spawn: Reliable dice motion events,
-    /// attack queue sync, and character pose updates (no full-board snapshot).
+    /// Phase C host: dice motion events, attack queue, host→client input for P1,
+    /// and sparse character pose corrections (not continuous snapshots).
     /// </summary>
     public sealed class OnlineHostMatchBinder : MonoBehaviour
     {
         OnlineNetMessenger messenger;
         RemoteNetworkInputSource remoteInput;
+        CharacterInputReader localInputReader;
         DiceRegistry registry;
         DiceMatchOwnershipContext ownershipContext;
         VersusAttackController attackController;
         readonly List<GameCharacterController> characters = new();
         readonly OnlineEntityIdMap entityIds = new();
-        float characterSnapshotTimer;
+        readonly Dictionary<PlayerSlot, Vector3> lastSentCharacterPositions = new();
+        float characterCorrectTimer;
         float attackQueueResyncTimer;
+        float inputTimer;
+        Vector2 lastSentMove;
+        Direction? pendingDirection;
 
         public OnlineEntityIdMap EntityIds => entityIds;
 
@@ -65,9 +69,24 @@ namespace DiceGame.Session.Network
             }
 
             BindRemotePlayerInput();
+            BindLocalInputReader();
             entityIds.RebuildFromSeed(characters, registry, ownershipContext);
-            characterSnapshotTimer = 0f;
+            lastSentCharacterPositions.Clear();
+            characterCorrectTimer = 0f;
             attackQueueResyncTimer = 0f;
+            inputTimer = 0f;
+            lastSentMove = Vector2.zero;
+            pendingDirection = null;
+
+            // Seed the "last sent" poses so the first correction waits for real drift.
+            for (var i = 0; i < characters.Count; i++) {
+                var character = characters[i];
+                if (character == null) {
+                    continue;
+                }
+
+                lastSentCharacterPositions[character.PlayerSlot] = character.transform.position;
+            }
         }
 
         void OnDestroy() {
@@ -82,19 +101,12 @@ namespace DiceGame.Session.Network
         }
 
         void Update() {
-            if (!enabled) {
+            if (!enabled || messenger == null) {
                 return;
             }
 
-            if (messenger == null || registry == null) {
-                return;
-            }
-
-            characterSnapshotTimer += Time.unscaledDeltaTime;
-            if (characterSnapshotTimer >= OnlineSessionConstants.SnapshotSendIntervalSeconds) {
-                characterSnapshotTimer = 0f;
-                messenger.SendSnapshotToClients(BuildCharacterSnapshot());
-            }
+            TickHostInputSend();
+            TickSparseCharacterCorrection();
 
             if (attackController != null) {
                 attackQueueResyncTimer += Time.unscaledDeltaTime;
@@ -102,6 +114,22 @@ namespace DiceGame.Session.Network
                     attackQueueResyncTimer = 0f;
                     OnAttackQueueChanged();
                 }
+            }
+        }
+
+        void BindLocalInputReader() {
+            localInputReader = null;
+            foreach (var character in characters) {
+                if (character == null || character.PlayerSlot != PlayerSlot.Player1) {
+                    continue;
+                }
+
+                localInputReader = character.GetComponent<CharacterInputReader>();
+                break;
+            }
+
+            if (localInputReader == null) {
+                Debug.LogError("OnlineHostMatchBinder: Player1 CharacterInputReader not found.");
             }
         }
 
@@ -132,6 +160,84 @@ namespace DiceGame.Session.Network
             remoteCharacter.SetInputSource(remoteInput);
         }
 
+        void TickHostInputSend() {
+            if (localInputReader == null || !messenger.HasRemoteClients()) {
+                return;
+            }
+
+            inputTimer += Time.unscaledDeltaTime;
+            var move = localInputReader.ReadMove();
+            var lift = localInputReader.WasLiftPressedThisFrame();
+            var jump = localInputReader.WasJumpPressedThisFrame();
+            var hasDirection = localInputReader.TryGetDirectionPressedThisFrame(out var direction);
+            if (hasDirection) {
+                pendingDirection = direction;
+            }
+
+            if (inputTimer < OnlineSessionConstants.InputSendIntervalSeconds
+                && !lift
+                && !jump
+                && !hasDirection
+                && (move - lastSentMove).sqrMagnitude < 0.0001f) {
+                return;
+            }
+
+            inputTimer = 0f;
+            lastSentMove = move;
+            var payload = OnlineInputPayload.FromSource(
+                move,
+                lift,
+                jump,
+                pendingDirection.HasValue,
+                pendingDirection ?? Direction.North);
+            pendingDirection = null;
+            messenger.SendInputToClients(payload);
+        }
+
+        void TickSparseCharacterCorrection() {
+            if (registry == null || !messenger.HasRemoteClients()) {
+                return;
+            }
+
+            characterCorrectTimer += Time.unscaledDeltaTime;
+            if (characterCorrectTimer < OnlineSessionConstants.CharacterCorrectCheckIntervalSeconds) {
+                return;
+            }
+
+            characterCorrectTimer = 0f;
+
+            var minSend = OnlineSessionConstants.CharacterCorrectMinSendDistance;
+            var minSendSqr = minSend * minSend;
+            var needsSend = false;
+            for (var i = 0; i < characters.Count; i++) {
+                var character = characters[i];
+                if (character == null) {
+                    continue;
+                }
+
+                var position = character.transform.position;
+                if (!lastSentCharacterPositions.TryGetValue(character.PlayerSlot, out var last)
+                    || (position - last).sqrMagnitude >= minSendSqr) {
+                    needsSend = true;
+                    break;
+                }
+            }
+
+            if (!needsSend) {
+                return;
+            }
+
+            messenger.SendSnapshotToClients(BuildCharacterSnapshot());
+            for (var i = 0; i < characters.Count; i++) {
+                var character = characters[i];
+                if (character == null) {
+                    continue;
+                }
+
+                lastSentCharacterPositions[character.PlayerSlot] = character.transform.position;
+            }
+        }
+
         void OnInputReceived(ulong senderClientId, OnlineInputPayload payload) {
             remoteInput?.ApplyPayload(payload);
         }
@@ -153,7 +259,7 @@ namespace DiceGame.Session.Network
 
         static OnlineAttackVolleyPayload[] ToNetworkVolleys(IReadOnlyList<AttackVolley> volleys) {
             if (volleys == null || volleys.Count == 0) {
-                return Array.Empty<OnlineAttackVolleyPayload>();
+                return System.Array.Empty<OnlineAttackVolleyPayload>();
             }
 
             var result = new OnlineAttackVolleyPayload[volleys.Count];

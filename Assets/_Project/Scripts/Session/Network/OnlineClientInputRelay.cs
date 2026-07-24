@@ -9,8 +9,7 @@ using GameCharacterController = DiceGame.Gameplay.CharacterController;
 namespace DiceGame.Session.Network
 {
     /// <summary>
-    /// Online client: send local character input to the host after seed-based initial spawn.
-    /// Does not create presentation proxies.
+    /// Legacy: client→host input only. Prefer <see cref="OnlineClientCharacterBinder"/> (Phase C).
     /// </summary>
     public sealed class OnlineClientInputRelay : MonoBehaviour
     {
