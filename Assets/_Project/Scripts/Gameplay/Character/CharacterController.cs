@@ -127,8 +127,59 @@ namespace DiceGame.Gameplay
         public bool IsJumping => jumpPhase != JumpPhase.None;
         public bool IsLiftCarrying => liftPhase == LiftPhase.Carrying;
         public bool IsLiftBusy => liftPhase == LiftPhase.Lifting || liftPhase == LiftPhase.Placing;
+        public bool IsRollbackBusy => IsCarrying
+            || IsJumping
+            || isPushFollowing
+            || isFalling
+            || IsBusy;
 
         ICharacterInputSource ActiveInputSource => inputSource != null ? inputSource : inputReader;
+
+        public CharacterRollbackState CaptureRollbackState(uint sequence) {
+            var position = characterTransform != null ? characterTransform.position : transform.position;
+            var rotation = characterTransform != null ? characterTransform.rotation : transform.rotation;
+            return new CharacterRollbackState {
+                Sequence = sequence,
+                Position = position,
+                Rotation = rotation,
+                Speed = currentSpeed,
+                IsBusy = IsRollbackBusy
+            };
+        }
+
+        public void ApplyRollbackState(CharacterRollbackState state) {
+            if (!isInitialized || characterTransform == null || transformDriver == null) {
+                return;
+            }
+
+            // Character-only: restore pose/speed. Dice/placement interactions are not rolled back.
+            EndPushFollow();
+            ResetPushState();
+            currentSpeed = Mathf.Max(0f, state.Speed);
+            characterTransform.SetPositionAndRotation(state.Position, state.Rotation);
+            MoveToFloorAtCurrentWorldPosition();
+            transformDriver.SnapYToSurface();
+        }
+
+        /// <summary>
+        /// Re-run one surface-movement step with a historical input (character-only rollback resim).
+        /// Skips when the character is in a complex phase that cannot be safely resimulated.
+        /// </summary>
+        public void ResimulateSurfaceStep(Vector2 input, float deltaTime) {
+            if (!isInitialized || IsRollbackBusy || transformDriver == null || movementSettings == null) {
+                return;
+            }
+
+            if (deltaTime <= 0f) {
+                return;
+            }
+
+            UpdateLastFacing(input);
+            ResimulateSurfaceMovement(input, deltaTime);
+            if (!IsOnFloor || jumpPhase != JumpPhase.None) {
+                transformDriver.SnapYToSurface();
+            }
+        }
 
         public void SetInputSource(ICharacterInputSource source) {
             inputSource = source;
@@ -530,6 +581,10 @@ namespace DiceGame.Gameplay
         }
 
         void UpdateSurfaceMovement(Vector2 input) {
+            ResimulateSurfaceMovement(input, Time.deltaTime);
+        }
+
+        void ResimulateSurfaceMovement(Vector2 input, float deltaTime) {
             if (isFalling) {
                 currentSpeed = 0f;
                 return;
@@ -545,13 +600,13 @@ namespace DiceGame.Gameplay
             currentSpeed = Mathf.MoveTowards(
                 currentSpeed,
                 movementSettings.MaxMoveSpeed,
-                movementSettings.MoveAcceleration * Time.deltaTime);
+                movementSettings.MoveAcceleration * deltaTime);
 
             if (currentSpeed <= 0f) {
                 return;
             }
 
-            var move = input * (currentSpeed * Time.deltaTime);
+            var move = input * (currentSpeed * deltaTime);
             var currentXZ = transformDriver.GetWorldXZ();
             var standingCell = standingController.GridCell;
             var fromLevel = standingController.Level;

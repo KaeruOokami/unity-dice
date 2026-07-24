@@ -11,6 +11,7 @@ namespace DiceGame.Session
         public const string MessageDiceMotion = "DiceOnlineDiceMotion";
         public const string MessageAttackQueue = "DiceOnlineAttackQueue";
         public const string MessageDiceSpawn = "DiceOnlineDiceSpawn";
+        public const string MessageCharacterState = "DiceOnlineCharacterState";
         public const string MessageMatchStart = "DiceOnlineMatchStart";
         public const string MessageMatchSetupBroadcast = "DiceOnlineMatchSetupBroadcast";
         public const string MessageMatchSetupUpdate = "DiceOnlineMatchSetupUpdate";
@@ -31,6 +32,14 @@ namespace DiceGame.Session
         public const float SnapshotSendIntervalSeconds = 0.15f;
         public const float AttackQueueResyncIntervalSeconds = 1f;
         public const float InputSendIntervalSeconds = 0.05f;
+        /// <summary>
+        /// Host → clients: character pose corrections for rollback (not full board).
+        /// </summary>
+        public const float CharacterStateSendIntervalSeconds = 0.1f;
+        /// <summary>
+        /// Local input / pose history depth for character-only rollback resim.
+        /// </summary>
+        public const int CharacterRollbackHistorySize = 64;
         /// <summary>
         /// Soft warning threshold for one Reliable snapshot datagram (must remain a single packet).
         /// </summary>

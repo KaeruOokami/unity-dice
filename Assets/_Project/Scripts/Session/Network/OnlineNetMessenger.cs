@@ -23,6 +23,7 @@ namespace DiceGame.Session.Network
         public event Action<OnlineDiceMotionEvent> DiceMotionReceived;
         public event Action<OnlineAttackQueueSnapshot> AttackQueueReceived;
         public event Action<OnlineDiceSpawnCommand> DiceSpawnReceived;
+        public event Action<OnlineCharacterStateBatch> CharacterStateReceived;
         public event Action MatchStartReceived;
         public event Action<MatchSetupNetworkPayload> MatchSetupReceived;
         public event Action<MatchSetupNetworkPayload> MatchSetupBroadcastReceived;
@@ -56,6 +57,9 @@ namespace DiceGame.Session.Network
             networkManager.CustomMessagingManager.RegisterNamedMessageHandler(
                 OnlineSessionConstants.MessageDiceSpawn,
                 OnDiceSpawnMessage);
+            networkManager.CustomMessagingManager.RegisterNamedMessageHandler(
+                OnlineSessionConstants.MessageCharacterState,
+                OnCharacterStateMessage);
             networkManager.CustomMessagingManager.RegisterNamedMessageHandler(
                 OnlineSessionConstants.MessageMatchStart,
                 OnMatchStartMessage);
@@ -95,6 +99,8 @@ namespace DiceGame.Session.Network
                 OnlineSessionConstants.MessageAttackQueue);
             networkManager.CustomMessagingManager.UnregisterNamedMessageHandler(
                 OnlineSessionConstants.MessageDiceSpawn);
+            networkManager.CustomMessagingManager.UnregisterNamedMessageHandler(
+                OnlineSessionConstants.MessageCharacterState);
             networkManager.CustomMessagingManager.UnregisterNamedMessageHandler(
                 OnlineSessionConstants.MessageMatchStart);
             networkManager.CustomMessagingManager.UnregisterNamedMessageHandler(
@@ -175,6 +181,28 @@ namespace DiceGame.Session.Network
             Debug.Log(
                 $"OnlineNetMessenger.SendDiceSpawnToClients: reason={command.Reason} " +
                 $"kind={command.Kind} cell=({command.GridX},{command.GridY}) owner={command.OwnerSlot}");
+        }
+
+        public void SendCharacterStateToClients(OnlineCharacterStateBatch batch) {
+            if (networkManager == null || !networkManager.IsServer) {
+                return;
+            }
+
+            var customMessaging = networkManager.CustomMessagingManager;
+            if (customMessaging == null) {
+                return;
+            }
+
+            if (!networkManager.IsListening || networkManager.ConnectedClientsIds.Count <= 1) {
+                return;
+            }
+
+            using var writer = new FastBufferWriter(128, Allocator.Temp, 512);
+            writer.WriteNetworkSerializable(batch);
+            customMessaging.SendNamedMessageToAll(
+                OnlineSessionConstants.MessageCharacterState,
+                writer,
+                NetworkDelivery.UnreliableSequenced);
         }
 
         public void SendSnapshotToClients(OnlineMatchSnapshot snapshot) {
@@ -468,6 +496,15 @@ namespace DiceGame.Session.Network
                 $"OnlineNetMessenger.OnDiceSpawnMessage: reason={command.Reason} kind={command.Kind} " +
                 $"cell=({command.GridX},{command.GridY})");
             DiceSpawnReceived?.Invoke(command);
+        }
+
+        void OnCharacterStateMessage(ulong senderClientId, FastBufferReader reader) {
+            if (networkManager != null && networkManager.IsServer) {
+                return;
+            }
+
+            reader.ReadNetworkSerializable(out OnlineCharacterStateBatch batch);
+            CharacterStateReceived?.Invoke(batch);
         }
 
         void OnMatchStartMessage(ulong senderClientId, FastBufferReader reader) {
