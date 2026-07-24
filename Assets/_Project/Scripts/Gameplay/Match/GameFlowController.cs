@@ -298,10 +298,8 @@ namespace DiceGame.Gameplay
             ownsTimeScale = false;
             spawnSystem.SetGameplayEnabled(true);
             versusAttackController?.SetGameplayEnabled(true);
-            if (OnlineSessionState.Instance != null
-                && OnlineSessionState.Instance.PlayMode == OnlinePlayMode.OnlineClient) {
-                versusAttackController?.SetNetworkFollowerMode(true);
-            }
+            // Dual-sim: both peers run attack detection locally (no client follower mode).
+            versusAttackController?.SetNetworkFollowerMode(false);
             inputReader.SetGameplayInputEnabled(true);
             State = GameFlowState.Playing;
         }

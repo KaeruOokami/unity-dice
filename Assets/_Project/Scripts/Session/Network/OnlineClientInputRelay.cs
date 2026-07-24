@@ -9,7 +9,7 @@ using GameCharacterController = DiceGame.Gameplay.CharacterController;
 namespace DiceGame.Session.Network
 {
     /// <summary>
-    /// Legacy: client→host input only. Prefer <see cref="OnlineClientCharacterBinder"/> (Phase C).
+    /// Legacy: client→host input only. Prefer <see cref="OnlineDualSimInputBinder"/>.
     /// </summary>
     public sealed class OnlineClientInputRelay : MonoBehaviour
     {
