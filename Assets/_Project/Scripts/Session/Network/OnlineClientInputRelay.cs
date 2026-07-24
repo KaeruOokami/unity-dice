@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using DiceGame.Config;
 using DiceGame.Core;
 using DiceGame.Gameplay.Input;
 using Unity.Netcode;
