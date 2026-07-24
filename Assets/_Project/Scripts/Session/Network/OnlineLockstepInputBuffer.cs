@@ -41,6 +41,11 @@ namespace DiceGame.Session.Network
             DiscardBefore(player2, tick);
         }
 
+        public void Clear() {
+            player1.Clear();
+            player2.Clear();
+        }
+
         Dictionary<uint, OnlineInputPayload> MapFor(PlayerSlot slot) {
             return slot == PlayerSlot.Player1 ? player1 : player2;
         }

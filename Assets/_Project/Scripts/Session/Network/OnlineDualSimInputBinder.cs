@@ -1,20 +1,26 @@
 using System.Collections.Generic;
 using DiceGame.Config;
 using DiceGame.Core;
+using DiceGame.Gameplay;
 using DiceGame.Gameplay.Input;
+using DiceGame.Placement;
 using UnityEngine;
 using GameCharacterController = DiceGame.Gameplay.CharacterController;
 
 namespace DiceGame.Session.Network
 {
     /// <summary>
-    /// Phase B delayed lockstep: fixed-tick character simulation driven by per-tick inputs.
-    /// Waits for peer listening (LockstepReady), then prefills; resends the input window on stall.
+    /// Delayed lockstep dual-sim (Phase B) with Phase C hash check + host resync.
     /// </summary>
     [DefaultExecutionOrder(-100)]
     public sealed class OnlineDualSimInputBinder : MonoBehaviour
     {
         OnlineNetMessenger messenger;
+        DiceRegistry registry;
+        DiceMatchOwnershipContext ownershipContext;
+        DiceSpawnSystem spawnSystem;
+        OnlineEntityIdMap entityIds;
+        readonly List<GameCharacterController> characters = new();
         CharacterInputReader localHardwareInput;
         LockstepTickInputSource localTickInput;
         LockstepTickInputSource remoteTickInput;
@@ -24,6 +30,8 @@ namespace DiceGame.Session.Network
         GameCharacterController player2Character;
         readonly OnlineLockstepInputBuffer inputBuffer =
             new(OnlineSessionConstants.LockstepInputBufferTicks);
+        readonly Dictionary<uint, uint> localHashes = new();
+        readonly Dictionary<uint, uint> remoteHashes = new();
         PlayerSlot localSlot;
         PlayerSlot remoteSlot;
         bool isHost;
@@ -37,16 +45,24 @@ namespace DiceGame.Session.Network
         float nextStallLogTime;
         float nextReadySendTime;
         float nextResendTime;
+        float nextResyncAllowedTime;
         bool peerReady;
         bool repliedToPeerReady;
         bool prefillDone;
+        bool applyingResync;
 
         public void Configure(
             OnlineNetMessenger netMessenger,
             IReadOnlyList<GameCharacterController> spawnedCharacters,
             PlayerSlot localPlayerSlot,
-            bool host) {
+            bool host,
+            DiceRegistry diceRegistry,
+            DiceMatchOwnershipContext matchOwnership,
+            DiceSpawnSystem diceSpawnSystem) {
             messenger = netMessenger;
+            registry = diceRegistry;
+            ownershipContext = matchOwnership;
+            spawnSystem = diceSpawnSystem;
             localSlot = localPlayerSlot;
             remoteSlot = localPlayerSlot == PlayerSlot.Player1
                 ? PlayerSlot.Player2
@@ -62,12 +78,25 @@ namespace DiceGame.Session.Network
             nextStallLogTime = 0f;
             nextReadySendTime = 0f;
             nextResendTime = 0f;
+            nextResyncAllowedTime = 0f;
             peerReady = false;
             repliedToPeerReady = false;
             prefillDone = false;
+            applyingResync = false;
+            localHashes.Clear();
+            remoteHashes.Clear();
+            inputBuffer.Clear();
+
+            characters.Clear();
+            if (spawnedCharacters != null) {
+                characters.AddRange(spawnedCharacters);
+            }
+
+            entityIds = new OnlineEntityIdMap();
+            entityIds.RebuildFromSeed(characters, registry, ownershipContext);
 
             UnsubscribeMessenger();
-            BindCharacters(spawnedCharacters);
+            BindCharacters(characters);
 
             if (messenger == null) {
                 Debug.LogError("OnlineDualSimInputBinder.Configure: messenger is null.");
@@ -77,12 +106,13 @@ namespace DiceGame.Session.Network
             if (isHost) {
                 messenger.InputReceived += OnClientInputReceived;
                 messenger.LockstepReadyFromClient += OnLockstepReadyFromClient;
+                messenger.SimHashReceived += OnSimHashReceived;
             } else {
                 messenger.HostInputReceived += OnHostInputReceived;
                 messenger.LockstepReadyReceived += OnLockstepReadyFromHost;
+                messenger.SimResyncReceived += OnSimResyncReceived;
             }
 
-            // Subscribe first; Prefill only after peer signals it is listening.
             SendLockstepReady();
             nextReadySendTime = Time.realtimeSinceStartup
                 + OnlineSessionConstants.LockstepReadyRetryIntervalSeconds;
@@ -104,6 +134,8 @@ namespace DiceGame.Session.Network
             messenger.HostInputReceived -= OnHostInputReceived;
             messenger.LockstepReadyFromClient -= OnLockstepReadyFromClient;
             messenger.LockstepReadyReceived -= OnLockstepReadyFromHost;
+            messenger.SimHashReceived -= OnSimHashReceived;
+            messenger.SimResyncReceived -= OnSimResyncReceived;
         }
 
         void BindCharacters(IReadOnlyList<GameCharacterController> spawnedCharacters) {
@@ -179,8 +211,9 @@ namespace DiceGame.Session.Network
             }
         }
 
-        void PrefillLocalDelayWindow() {
-            for (uint tick = 0; tick < OnlineSessionConstants.InputDelayTicks; tick++) {
+        void PrefillLocalDelayWindowFrom(uint startTick) {
+            var end = startTick + (uint)OnlineSessionConstants.InputDelayTicks;
+            for (var tick = startTick; tick < end; tick++) {
                 CommitLocalInputForTick(tick);
             }
         }
@@ -188,13 +221,17 @@ namespace DiceGame.Session.Network
         void Update() {
             AccumulateHardwarePulses();
 
+            if (applyingResync) {
+                return;
+            }
+
             if (!peerReady) {
                 TickLockstepReadyHandshake();
                 return;
             }
 
             if (!prefillDone) {
-                PrefillLocalDelayWindow();
+                PrefillLocalDelayWindowFrom(0);
                 prefillDone = true;
                 nextResendTime = 0f;
                 Debug.Log("OnlineDualSimInputBinder: peer ready; Prefill sent, lockstep running.");
@@ -306,7 +343,6 @@ namespace DiceGame.Session.Network
                 }
 
                 if (!inputBuffer.HasBoth(currentTick)) {
-                    // Keep the delay window filled and force an immediate resend on stall.
                     nextResendTime = 0f;
                     LogStallThrottled();
                     break;
@@ -334,6 +370,123 @@ namespace DiceGame.Session.Network
             currentTick++;
             inputBuffer.DiscardBefore(
                 currentTick > 32 ? currentTick - 32 : 0u);
+
+            MaybeEmitSimHash();
+        }
+
+        void MaybeEmitSimHash() {
+            if (currentTick == 0
+                || currentTick % (uint)OnlineSessionConstants.LockstepHashIntervalTicks != 0) {
+                return;
+            }
+
+            var hash = OnlineSimStateHasher.Compute(
+                currentTick,
+                characters,
+                registry,
+                ownershipContext);
+            localHashes[currentTick] = hash;
+            TrimHashMap(localHashes);
+
+            if (!isHost) {
+                messenger.SendSimHashToServer(new OnlineSimHashPayload {
+                    Tick = currentTick,
+                    Hash = hash
+                });
+                return;
+            }
+
+            TryCompareHashes(currentTick);
+        }
+
+        void OnSimHashReceived(OnlineSimHashPayload payload) {
+            if (!isHost) {
+                return;
+            }
+
+            remoteHashes[payload.Tick] = payload.Hash;
+            TrimHashMap(remoteHashes);
+            TryCompareHashes(payload.Tick);
+        }
+
+        void TryCompareHashes(uint tick) {
+            if (!localHashes.TryGetValue(tick, out var local)
+                || !remoteHashes.TryGetValue(tick, out var remote)) {
+                return;
+            }
+
+            localHashes.Remove(tick);
+            remoteHashes.Remove(tick);
+            if (local == remote) {
+                return;
+            }
+
+            Debug.LogError(
+                $"OnlineDualSimInputBinder: DESYNC tick={tick} hostHash={local:X8} clientHash={remote:X8}");
+            SendHostResync();
+        }
+
+        void SendHostResync() {
+            if (!isHost || messenger == null) {
+                return;
+            }
+
+            var now = Time.realtimeSinceStartup;
+            if (now < nextResyncAllowedTime) {
+                return;
+            }
+
+            nextResyncAllowedTime = now + OnlineSessionConstants.LockstepResyncCooldownSeconds;
+            var payload = new OnlineSimResyncPayload {
+                Tick = currentTick,
+                Entities = OnlineSimBoardSnapshotBuilder.Build(
+                    characters,
+                    registry,
+                    ownershipContext,
+                    entityIds)
+            };
+            messenger.SendSimResyncToClients(payload);
+            nextResendTime = 0f;
+            Debug.Log(
+                $"OnlineDualSimInputBinder: sent resync tick={currentTick} " +
+                $"entities={payload.Entities?.Length ?? 0}");
+        }
+
+        void OnSimResyncReceived(OnlineSimResyncPayload payload) {
+            if (isHost) {
+                return;
+            }
+
+            applyingResync = true;
+            try {
+                OnlineSimResyncApplier.Apply(
+                    payload,
+                    characters,
+                    registry,
+                    ownershipContext,
+                    spawnSystem,
+                    entityIds);
+                AlignAfterResync(payload.Tick);
+                Debug.Log(
+                    $"OnlineDualSimInputBinder: applied resync tick={payload.Tick} " +
+                    $"entities={payload.Entities?.Length ?? 0}");
+            } finally {
+                applyingResync = false;
+            }
+        }
+
+        void AlignAfterResync(uint tick) {
+            currentTick = tick;
+            simulatorAccumulator = 0f;
+            inputBuffer.Clear();
+            localHashes.Clear();
+            remoteHashes.Clear();
+            pendingLift = false;
+            pendingJump = false;
+            pendingHasDirection = false;
+            PrefillLocalDelayWindowFrom(tick);
+            nextResendTime = 0f;
+            entityIds.RebuildFromSeed(characters, registry, ownershipContext);
         }
 
         void ApplyTickInput(PlayerSlot slot, OnlineInputPayload payload) {
@@ -395,6 +548,19 @@ namespace DiceGame.Session.Network
             }
 
             inputBuffer.Set(remoteSlot, payload.Tick, payload);
+        }
+
+        static void TrimHashMap(Dictionary<uint, uint> map) {
+            if (map.Count <= 8) {
+                return;
+            }
+
+            var keys = new List<uint>(map.Keys);
+            keys.Sort();
+            var removeCount = keys.Count - 8;
+            for (var i = 0; i < removeCount; i++) {
+                map.Remove(keys[i]);
+            }
         }
 
         void LogStallThrottled() {

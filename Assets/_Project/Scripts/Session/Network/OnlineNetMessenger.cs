@@ -35,6 +35,8 @@ namespace DiceGame.Session.Network
         public event Action<ulong, byte> FlowRequestReceived;
         public event Action LockstepReadyReceived;
         public event Action<ulong> LockstepReadyFromClient;
+        public event Action<OnlineSimHashPayload> SimHashReceived;
+        public event Action<OnlineSimResyncPayload> SimResyncReceived;
 
         public OnlineNetMessenger(NetworkManager manager) {
             networkManager = manager ?? throw new ArgumentNullException(nameof(manager));
@@ -90,6 +92,12 @@ namespace DiceGame.Session.Network
             networkManager.CustomMessagingManager.RegisterNamedMessageHandler(
                 OnlineSessionConstants.MessageLockstepReady,
                 OnLockstepReadyMessage);
+            networkManager.CustomMessagingManager.RegisterNamedMessageHandler(
+                OnlineSessionConstants.MessageSimHash,
+                OnSimHashMessage);
+            networkManager.CustomMessagingManager.RegisterNamedMessageHandler(
+                OnlineSessionConstants.MessageSimResync,
+                OnSimResyncMessage);
             registered = true;
         }
 
@@ -128,6 +136,10 @@ namespace DiceGame.Session.Network
                 OnlineSessionConstants.MessageFlowRequest);
             networkManager.CustomMessagingManager.UnregisterNamedMessageHandler(
                 OnlineSessionConstants.MessageLockstepReady);
+            networkManager.CustomMessagingManager.UnregisterNamedMessageHandler(
+                OnlineSessionConstants.MessageSimHash);
+            networkManager.CustomMessagingManager.UnregisterNamedMessageHandler(
+                OnlineSessionConstants.MessageSimResync);
             registered = false;
         }
 
@@ -493,6 +505,55 @@ namespace DiceGame.Session.Network
             }
         }
 
+        public void SendSimHashToServer(OnlineSimHashPayload payload) {
+            if (networkManager == null || !networkManager.IsClient || networkManager.IsServer) {
+                return;
+            }
+
+            var customMessaging = networkManager.CustomMessagingManager;
+            if (customMessaging == null) {
+                return;
+            }
+
+            using var writer = new FastBufferWriter(16, Allocator.Temp);
+            writer.WriteNetworkSerializable(payload);
+            customMessaging.SendNamedMessage(
+                OnlineSessionConstants.MessageSimHash,
+                NetworkManager.ServerClientId,
+                writer,
+                NetworkDelivery.ReliableSequenced);
+        }
+
+        public void SendSimResyncToClients(OnlineSimResyncPayload payload) {
+            if (networkManager == null || !networkManager.IsServer) {
+                return;
+            }
+
+            var customMessaging = networkManager.CustomMessagingManager;
+            if (customMessaging == null || !networkManager.IsListening) {
+                return;
+            }
+
+            var localId = networkManager.LocalClientId;
+            foreach (var clientId in networkManager.ConnectedClientsIds) {
+                if (clientId == localId) {
+                    continue;
+                }
+
+                using var writer = new FastBufferWriter(1024, Allocator.Temp, 8192);
+                writer.WriteNetworkSerializable(payload);
+                customMessaging.SendNamedMessage(
+                    OnlineSessionConstants.MessageSimResync,
+                    clientId,
+                    writer,
+                    NetworkDelivery.ReliableFragmentedSequenced);
+            }
+
+            Debug.Log(
+                $"OnlineNetMessenger.SendSimResyncToClients: tick={payload.Tick} " +
+                $"entities={payload.Entities?.Length ?? 0}");
+        }
+
         public void BroadcastMatchSetup(MatchSetupNetworkPayload setupPayload) {
             if (networkManager == null || !networkManager.IsServer) {
                 return;
@@ -709,6 +770,24 @@ namespace DiceGame.Session.Network
             }
 
             LockstepReadyReceived?.Invoke();
+        }
+
+        void OnSimHashMessage(ulong senderClientId, FastBufferReader reader) {
+            if (networkManager == null || !networkManager.IsServer) {
+                return;
+            }
+
+            reader.ReadNetworkSerializable(out OnlineSimHashPayload payload);
+            SimHashReceived?.Invoke(payload);
+        }
+
+        void OnSimResyncMessage(ulong senderClientId, FastBufferReader reader) {
+            if (networkManager == null || networkManager.IsServer) {
+                return;
+            }
+
+            reader.ReadNetworkSerializable(out OnlineSimResyncPayload payload);
+            SimResyncReceived?.Invoke(payload);
         }
 
         void OnMatchSetupBroadcastMessage(ulong senderClientId, FastBufferReader reader) {

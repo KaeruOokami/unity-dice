@@ -21,6 +21,8 @@ namespace DiceGame.Session
         public const string MessageFlowCommand = "DiceOnlineFlowCommand";
         public const string MessageFlowRequest = "DiceOnlineFlowRequest";
         public const string MessageLockstepReady = "DiceOnlineLockstepReady";
+        public const string MessageSimHash = "DiceOnlineSimHash";
+        public const string MessageSimResync = "DiceOnlineSimResync";
         public const string RelayConnectionType = "dtls";
 
         public const byte FlowPause = 1;
@@ -53,6 +55,14 @@ namespace DiceGame.Session
         /// Retry LockstepReady until the remote peer acknowledges it is listening.
         /// </summary>
         public const float LockstepReadyRetryIntervalSeconds = 0.25f;
+        /// <summary>
+        /// Phase C: compare sim hashes every N lockstep ticks.
+        /// </summary>
+        public const int LockstepHashIntervalTicks = 30;
+        /// <summary>
+        /// Minimum time between host resync dumps after a desync.
+        /// </summary>
+        public const float LockstepResyncCooldownSeconds = 2f;
         /// <summary>
         /// Host → client character pose: check interval for sparse corrections (not continuous chase).
         /// </summary>

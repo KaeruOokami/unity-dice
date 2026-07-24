@@ -271,7 +271,7 @@ namespace DiceGame.Gameplay
             if (session != null && session.IsOnline) {
                 Debug.Log(
                     $"GameBootstrap: online match seed={matchSeed} " +
-                    "(shared seed + Phase B delayed lockstep dual-sim)");
+                    "(shared seed + lockstep dual-sim + Phase C hash/resync)");
             }
 
             spawnSystem = GetComponent<DiceSpawnSystem>();
@@ -460,7 +460,14 @@ namespace DiceGame.Gameplay
             }
 
             dualSim.enabled = true;
-            dualSim.Configure(onlineController.Messenger, characters, localSlot, isHost);
+            dualSim.Configure(
+                onlineController.Messenger,
+                characters,
+                localSlot,
+                isHost,
+                registry,
+                ownershipContext,
+                spawnSystem);
         }
 
         void DestroyLegacyOnlineSyncComponents() {
