@@ -25,11 +25,11 @@ namespace DiceGame.Session.Network
         DiceMatchOwnershipContext ownershipContext;
         VersusAttackController attackController;
         readonly List<GameCharacterController> characters = new();
+        readonly OnlineEntityIdMap entityIds = new();
         float characterSnapshotTimer;
         float attackQueueResyncTimer;
-        uint nextEntityId = 1;
-        readonly Dictionary<int, uint> diceIds = new();
-        readonly Dictionary<PlayerSlot, uint> characterIds = new();
+
+        public OnlineEntityIdMap EntityIds => entityIds;
 
         public void Configure(
             OnlineNetMessenger netMessenger,
@@ -65,7 +65,7 @@ namespace DiceGame.Session.Network
             }
 
             BindRemotePlayerInput();
-            AssignIds();
+            entityIds.RebuildFromSeed(characters, registry, ownershipContext);
             characterSnapshotTimer = 0f;
             attackQueueResyncTimer = 0f;
         }
@@ -132,20 +132,6 @@ namespace DiceGame.Session.Network
             remoteCharacter.SetInputSource(remoteInput);
         }
 
-        void AssignIds() {
-            diceIds.Clear();
-            characterIds.Clear();
-            nextEntityId = 1;
-
-            foreach (var character in characters) {
-                if (character == null) {
-                    continue;
-                }
-
-                characterIds[character.PlayerSlot] = nextEntityId++;
-            }
-        }
-
         void OnInputReceived(ulong senderClientId, OnlineInputPayload payload) {
             remoteInput?.ApplyPayload(payload);
         }
@@ -188,7 +174,7 @@ namespace DiceGame.Session.Network
                 return;
             }
 
-            var entityId = EnsureDiceId(controller);
+            var entityId = entityIds.EnsureDice(controller);
             var catalogSide = ResolveCatalogSide(controller);
             messenger.SendDiceMotionToClients(
                 OnlineDiceMotionEvent.FromRequest(entityId, request, catalogSide));
@@ -211,16 +197,6 @@ namespace DiceGame.Session.Network
             return PlayerSlot.Player1;
         }
 
-        uint EnsureDiceId(DiceController dice) {
-            var key = dice.GetInstanceID();
-            if (!diceIds.TryGetValue(key, out var id)) {
-                id = nextEntityId++;
-                diceIds[key] = id;
-            }
-
-            return id;
-        }
-
         OnlineMatchSnapshot BuildCharacterSnapshot() {
             return new OnlineMatchSnapshot {
                 Entities = BuildCharacterEntities().ToArray()
@@ -234,9 +210,8 @@ namespace DiceGame.Session.Network
                     continue;
                 }
 
-                if (!characterIds.TryGetValue(character.PlayerSlot, out var id)) {
-                    id = nextEntityId++;
-                    characterIds[character.PlayerSlot] = id;
+                if (!entityIds.TryGetCharacterId(character.PlayerSlot, out var id)) {
+                    continue;
                 }
 
                 entities.Add(new OnlineTransformSnapshot {

@@ -274,6 +274,8 @@
      <Compile Include="Assets\_Project\Scripts\Placement\Rules\DiceEffectiveBehaviorFactory.cs" />
      <Compile Include="Assets\_Project\Scripts\Versus\Core\AttackKindBreakdown.cs" />
      <Compile Include="Assets\_Project\Scripts\Session\Network\OnlineClientInputRelay.cs" />
+     <Compile Include="Assets\_Project\Scripts\Session\Network\OnlineEntityIdMap.cs" />
+     <Compile Include="Assets\_Project\Scripts\Session\Network\OnlineClientEventBinder.cs" />
      <None Include="Assets\TextMesh Pro\Shaders\TMPro.cginc" />
      <None Include="Assets\TextMesh Pro\Shaders\TMP_SDF-Mobile Overlay.shader" />
      <None Include="Assets\TextMesh Pro\Shaders\TMP_Bitmap.shader" />

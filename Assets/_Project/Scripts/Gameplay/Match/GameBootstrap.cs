@@ -288,6 +288,7 @@ namespace DiceGame.Gameplay
             spawnSystem.ConfigureOwnership(ownershipContext);
             // Initial board is seed-built on both peers. Later board changes use host motion events.
             spawnSystem.EmitNetworkSpawns = false;
+            spawnSystem.AllowAutonomousSpawning = true;
 
             var playerCount = resolvedSetup.RequiredPlayerCount;
             var startDice = spawnSystem.SpawnInitialPlayerDice(playerCount);
@@ -446,9 +447,41 @@ namespace DiceGame.Gameplay
                 : PlayerSlot.Player2;
             inputRelay.Configure(onlineController.Messenger, characters, localSlot);
 
+            spawnSystem.AllowAutonomousSpawning = false;
+            spawnSystem.EmitNetworkSpawns = false;
+
             if (attackController != null) {
                 attackController.SetNetworkFollowerMode(true);
             }
+
+            // Host owns match detection; client only plays erasure/vanish from events.
+            var erasureSystem = GetComponent<DiceMatchErasureSystem>();
+            if (erasureSystem != null) {
+                erasureSystem.enabled = false;
+            }
+
+            var oneVanishSystem = GetComponent<DiceOneVanishSystem>();
+            if (oneVanishSystem != null) {
+                oneVanishSystem.enabled = false;
+            }
+
+            var entityIds = new OnlineEntityIdMap();
+            var eventBinder = GetComponent<OnlineClientEventBinder>();
+            if (eventBinder == null) {
+                eventBinder = gameObject.AddComponent<OnlineClientEventBinder>();
+            }
+
+            eventBinder.Configure(
+                onlineController.Messenger,
+                entityIds,
+                registry,
+                spawnSystem,
+                ownershipContext,
+                attackController,
+                board,
+                physicsSettings,
+                diceOneVanishSettings,
+                characters);
         }
 
         void DestroyOnlineClientMatchViewIfPresent() {

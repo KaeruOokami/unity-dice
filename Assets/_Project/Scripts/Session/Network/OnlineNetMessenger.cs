@@ -243,24 +243,37 @@ namespace DiceGame.Session.Network
                 Entities = entities
             };
 
-            // Single Reliable datagram only — never split (multi-chunk incompleteness froze clients).
-            using var writer = new FastBufferWriter(1024, Allocator.Temp, 8192);
-            writer.WriteNetworkSerializable(chunk);
-            if (writer.Length > OnlineSessionConstants.SnapshotReliableSoftBytes) {
-                Debug.LogWarning(
-                    $"OnlineNetMessenger.SendSnapshotToClients: snapshot is {writer.Length} bytes " +
-                    $"(soft limit {OnlineSessionConstants.SnapshotReliableSoftBytes}). Keep shrinking payload.");
+            // Phase A: full board may exceed non-fragmented Reliable MTU (~1264).
+            // Use fragmented reliable so rare dumps are not dropped.
+            var localId = networkManager.LocalClientId;
+            var sent = 0;
+            foreach (var clientId in networkManager.ConnectedClientsIds) {
+                if (clientId == localId) {
+                    continue;
+                }
+
+                using var writer = new FastBufferWriter(1024, Allocator.Temp, 8192);
+                writer.WriteNetworkSerializable(chunk);
+                if (writer.Length > OnlineSessionConstants.SnapshotReliableSoftBytes) {
+                    Debug.LogWarning(
+                        $"OnlineNetMessenger.SendSnapshotToClients: snapshot is {writer.Length} bytes " +
+                        $"(soft limit {OnlineSessionConstants.SnapshotReliableSoftBytes}). Keep shrinking payload.");
+                }
+
+                customMessaging.SendNamedMessage(
+                    OnlineSessionConstants.MessageSnapshot,
+                    clientId,
+                    writer,
+                    NetworkDelivery.ReliableFragmentedSequenced);
+                sent++;
             }
 
-            // Phase A: full board may exceed non-fragmented Reliable MTU (~1264).
-            // Use fragmented reliable so the initial board dump is not dropped.
-            customMessaging.SendNamedMessageToAll(
-                OnlineSessionConstants.MessageSnapshot,
-                writer,
-                NetworkDelivery.ReliableFragmentedSequenced);
+            if (sent == 0) {
+                return;
+            }
 
             LogSnapshotSendThrottled(
-                $"send ToAll entities={entities.Length} chunks=1 bytes={writer.Length} " +
+                $"send remotes={sent} entities={entities.Length} chunks=1 " +
                 $"seq={snapshotSequence} delivery=ReliableFragmentedSequenced " +
                 $"interval={OnlineSessionConstants.SnapshotSendIntervalSeconds:0.###}s");
         }
@@ -271,23 +284,34 @@ namespace DiceGame.Session.Network
             }
 
             var customMessaging = networkManager.CustomMessagingManager;
-            if (customMessaging == null) {
+            if (customMessaging == null || !networkManager.IsListening) {
                 return;
             }
 
-            if (!networkManager.IsListening || networkManager.ConnectedClientsIds.Count <= 1) {
+            var localId = networkManager.LocalClientId;
+            var sent = 0;
+            foreach (var clientId in networkManager.ConnectedClientsIds) {
+                if (clientId == localId) {
+                    continue;
+                }
+
+                using var writer = new FastBufferWriter(128, Allocator.Temp, 512);
+                writer.WriteNetworkSerializable(motionEvent);
+                customMessaging.SendNamedMessage(
+                    OnlineSessionConstants.MessageDiceMotion,
+                    clientId,
+                    writer,
+                    NetworkDelivery.Reliable);
+                sent++;
+            }
+
+            if (sent == 0) {
                 return;
             }
 
-            using var writer = new FastBufferWriter(128, Allocator.Temp, 512);
-            writer.WriteNetworkSerializable(motionEvent);
-            customMessaging.SendNamedMessageToAll(
-                OnlineSessionConstants.MessageDiceMotion,
-                writer,
-                NetworkDelivery.Reliable);
             Debug.Log(
                 $"OnlineNetMessenger.SendDiceMotionToClients: entity={motionEvent.EntityId} " +
-                $"kind={motionEvent.Kind} catalogSide={motionEvent.CatalogSide}");
+                $"kind={motionEvent.Kind} catalogSide={motionEvent.CatalogSide} remotes={sent}");
         }
 
         public void SendAttackQueueToClients(OnlineAttackQueueSnapshot queueSnapshot) {
@@ -296,27 +320,38 @@ namespace DiceGame.Session.Network
             }
 
             var customMessaging = networkManager.CustomMessagingManager;
-            if (customMessaging == null) {
+            if (customMessaging == null || !networkManager.IsListening) {
                 return;
             }
 
-            if (!networkManager.IsListening || networkManager.ConnectedClientsIds.Count <= 1) {
-                return;
+            var localId = networkManager.LocalClientId;
+            var sent = 0;
+            foreach (var clientId in networkManager.ConnectedClientsIds) {
+                if (clientId == localId) {
+                    continue;
+                }
+
+                using var writer = new FastBufferWriter(256, Allocator.Temp, 2048);
+                writer.WriteNetworkSerializable(queueSnapshot);
+                customMessaging.SendNamedMessage(
+                    OnlineSessionConstants.MessageAttackQueue,
+                    clientId,
+                    writer,
+                    NetworkDelivery.Reliable);
+                sent++;
             }
 
-            using var writer = new FastBufferWriter(256, Allocator.Temp, 2048);
-            writer.WriteNetworkSerializable(queueSnapshot);
-            customMessaging.SendNamedMessageToAll(
-                OnlineSessionConstants.MessageAttackQueue,
-                writer,
-                NetworkDelivery.Reliable);
+            if (sent == 0) {
+                return;
+            }
 
             var now = Time.realtimeSinceStartup;
             if (now >= nextAttackQueueSendLogTime) {
                 nextAttackQueueSendLogTime = now + 2f;
                 Debug.Log(
                     $"OnlineNetMessenger.SendAttackQueueToClients: " +
-                    $"p1={queueSnapshot.Player1Volleys?.Length ?? 0} p2={queueSnapshot.Player2Volleys?.Length ?? 0}");
+                    $"p1={queueSnapshot.Player1Volleys?.Length ?? 0} p2={queueSnapshot.Player2Volleys?.Length ?? 0} " +
+                    $"remotes={sent}");
             }
         }
 
