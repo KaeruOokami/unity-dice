@@ -33,6 +33,8 @@ namespace DiceGame.Session.Network
         public event Action PlayerIdentityRequestReceived;
         public event Action<byte> FlowCommandReceived;
         public event Action<ulong, byte> FlowRequestReceived;
+        public event Action LockstepReadyReceived;
+        public event Action<ulong> LockstepReadyFromClient;
 
         public OnlineNetMessenger(NetworkManager manager) {
             networkManager = manager ?? throw new ArgumentNullException(nameof(manager));
@@ -85,6 +87,9 @@ namespace DiceGame.Session.Network
             networkManager.CustomMessagingManager.RegisterNamedMessageHandler(
                 OnlineSessionConstants.MessageFlowRequest,
                 OnFlowRequestMessage);
+            networkManager.CustomMessagingManager.RegisterNamedMessageHandler(
+                OnlineSessionConstants.MessageLockstepReady,
+                OnLockstepReadyMessage);
             registered = true;
         }
 
@@ -121,6 +126,8 @@ namespace DiceGame.Session.Network
                 OnlineSessionConstants.MessageFlowCommand);
             networkManager.CustomMessagingManager.UnregisterNamedMessageHandler(
                 OnlineSessionConstants.MessageFlowRequest);
+            networkManager.CustomMessagingManager.UnregisterNamedMessageHandler(
+                OnlineSessionConstants.MessageLockstepReady);
             registered = false;
         }
 
@@ -441,6 +448,51 @@ namespace DiceGame.Session.Network
             Debug.Log("OnlineNetMessenger.SendMatchStartAckToServer: sent");
         }
 
+        public void SendLockstepReadyToServer() {
+            if (networkManager == null || !networkManager.IsClient || networkManager.IsServer) {
+                return;
+            }
+
+            var customMessaging = networkManager.CustomMessagingManager;
+            if (customMessaging == null) {
+                return;
+            }
+
+            using var writer = new FastBufferWriter(8, Allocator.Temp);
+            writer.WriteValueSafe((byte)1);
+            customMessaging.SendNamedMessage(
+                OnlineSessionConstants.MessageLockstepReady,
+                NetworkManager.ServerClientId,
+                writer,
+                NetworkDelivery.Reliable);
+        }
+
+        public void SendLockstepReadyToClients() {
+            if (networkManager == null || !networkManager.IsServer) {
+                return;
+            }
+
+            var customMessaging = networkManager.CustomMessagingManager;
+            if (customMessaging == null || !networkManager.IsListening) {
+                return;
+            }
+
+            var localId = networkManager.LocalClientId;
+            foreach (var clientId in networkManager.ConnectedClientsIds) {
+                if (clientId == localId) {
+                    continue;
+                }
+
+                using var writer = new FastBufferWriter(8, Allocator.Temp);
+                writer.WriteValueSafe((byte)1);
+                customMessaging.SendNamedMessage(
+                    OnlineSessionConstants.MessageLockstepReady,
+                    clientId,
+                    writer,
+                    NetworkDelivery.Reliable);
+            }
+        }
+
         public void BroadcastMatchSetup(MatchSetupNetworkPayload setupPayload) {
             if (networkManager == null || !networkManager.IsServer) {
                 return;
@@ -647,6 +699,16 @@ namespace DiceGame.Session.Network
             reader.ReadValueSafe(out byte _);
             Debug.Log($"OnlineNetMessenger.OnMatchStartAckMessage: from clientId={senderClientId}");
             MatchStartAckReceived?.Invoke(senderClientId);
+        }
+
+        void OnLockstepReadyMessage(ulong senderClientId, FastBufferReader reader) {
+            reader.ReadValueSafe(out byte _);
+            if (networkManager.IsServer) {
+                LockstepReadyFromClient?.Invoke(senderClientId);
+                return;
+            }
+
+            LockstepReadyReceived?.Invoke();
         }
 
         void OnMatchSetupBroadcastMessage(ulong senderClientId, FastBufferReader reader) {

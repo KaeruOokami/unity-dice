@@ -20,6 +20,7 @@ namespace DiceGame.Session
         public const string MessagePlayerIdentityRequest = "DiceOnlinePlayerIdentityRequest";
         public const string MessageFlowCommand = "DiceOnlineFlowCommand";
         public const string MessageFlowRequest = "DiceOnlineFlowRequest";
+        public const string MessageLockstepReady = "DiceOnlineLockstepReady";
         public const string RelayConnectionType = "dtls";
 
         public const byte FlowPause = 1;
@@ -44,6 +45,14 @@ namespace DiceGame.Session
         /// Cap render-time catch-up so a hitch does not spiral the sim.
         /// </summary>
         public const int LockstepMaxStepsPerFrame = 4;
+        /// <summary>
+        /// Resend local inputs in [currentTick, currentTick+delay] while peers may be catching up.
+        /// </summary>
+        public const float LockstepInputResendIntervalSeconds = 0.1f;
+        /// <summary>
+        /// Retry LockstepReady until the remote peer acknowledges it is listening.
+        /// </summary>
+        public const float LockstepReadyRetryIntervalSeconds = 0.25f;
         /// <summary>
         /// Host → client character pose: check interval for sparse corrections (not continuous chase).
         /// </summary>

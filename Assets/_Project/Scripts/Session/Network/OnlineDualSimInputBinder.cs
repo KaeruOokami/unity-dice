@@ -9,7 +9,7 @@ namespace DiceGame.Session.Network
 {
     /// <summary>
     /// Phase B delayed lockstep: fixed-tick character simulation driven by per-tick inputs.
-    /// Both peers simulate locally; network carries tick-tagged inputs only.
+    /// Waits for peer listening (LockstepReady), then prefills; resends the input window on stall.
     /// </summary>
     [DefaultExecutionOrder(-100)]
     public sealed class OnlineDualSimInputBinder : MonoBehaviour
@@ -35,6 +35,11 @@ namespace DiceGame.Session.Network
         bool pendingHasDirection;
         Direction pendingDirection;
         float nextStallLogTime;
+        float nextReadySendTime;
+        float nextResendTime;
+        bool peerReady;
+        bool repliedToPeerReady;
+        bool prefillDone;
 
         public void Configure(
             OnlineNetMessenger netMessenger,
@@ -55,6 +60,11 @@ namespace DiceGame.Session.Network
             pendingHasDirection = false;
             pendingDirection = Direction.North;
             nextStallLogTime = 0f;
+            nextReadySendTime = 0f;
+            nextResendTime = 0f;
+            peerReady = false;
+            repliedToPeerReady = false;
+            prefillDone = false;
 
             UnsubscribeMessenger();
             BindCharacters(spawnedCharacters);
@@ -66,11 +76,19 @@ namespace DiceGame.Session.Network
 
             if (isHost) {
                 messenger.InputReceived += OnClientInputReceived;
+                messenger.LockstepReadyFromClient += OnLockstepReadyFromClient;
             } else {
                 messenger.HostInputReceived += OnHostInputReceived;
+                messenger.LockstepReadyReceived += OnLockstepReadyFromHost;
             }
 
-            PrefillLocalDelayWindow();
+            // Subscribe first; Prefill only after peer signals it is listening.
+            SendLockstepReady();
+            nextReadySendTime = Time.realtimeSinceStartup
+                + OnlineSessionConstants.LockstepReadyRetryIntervalSeconds;
+            Debug.Log(
+                $"OnlineDualSimInputBinder: listening slot={localSlot} host={isHost}; " +
+                "waiting for LockstepReady before Prefill.");
         }
 
         void OnDestroy() {
@@ -84,6 +102,8 @@ namespace DiceGame.Session.Network
 
             messenger.InputReceived -= OnClientInputReceived;
             messenger.HostInputReceived -= OnHostInputReceived;
+            messenger.LockstepReadyFromClient -= OnLockstepReadyFromClient;
+            messenger.LockstepReadyReceived -= OnLockstepReadyFromHost;
         }
 
         void BindCharacters(IReadOnlyList<GameCharacterController> spawnedCharacters) {
@@ -119,7 +139,6 @@ namespace DiceGame.Session.Network
                     localCharacter = character;
                     localHardwareInput = character.GetComponent<CharacterInputReader>();
                     if (localHardwareInput != null) {
-                        // Keep enabled for sampling; gameplay reads LockstepTickInputSource.
                         localHardwareInput.enabled = true;
                     }
 
@@ -168,7 +187,65 @@ namespace DiceGame.Session.Network
 
         void Update() {
             AccumulateHardwarePulses();
+
+            if (!peerReady) {
+                TickLockstepReadyHandshake();
+                return;
+            }
+
+            if (!prefillDone) {
+                PrefillLocalDelayWindow();
+                prefillDone = true;
+                nextResendTime = 0f;
+                Debug.Log("OnlineDualSimInputBinder: peer ready; Prefill sent, lockstep running.");
+            }
+
+            ResendLocalInputWindowIfDue();
             TickLockstep();
+        }
+
+        void TickLockstepReadyHandshake() {
+            var now = Time.realtimeSinceStartup;
+            if (now < nextReadySendTime) {
+                return;
+            }
+
+            nextReadySendTime = now + OnlineSessionConstants.LockstepReadyRetryIntervalSeconds;
+            SendLockstepReady();
+        }
+
+        void MarkPeerReadyAndReply() {
+            var becameReady = !peerReady;
+            peerReady = true;
+            if (repliedToPeerReady) {
+                return;
+            }
+
+            repliedToPeerReady = true;
+            SendLockstepReady();
+            if (becameReady) {
+                Debug.Log($"OnlineDualSimInputBinder: LockstepReady from peer (slot={localSlot}).");
+            }
+        }
+
+        void OnLockstepReadyFromClient(ulong senderClientId) {
+            MarkPeerReadyAndReply();
+        }
+
+        void OnLockstepReadyFromHost() {
+            MarkPeerReadyAndReply();
+        }
+
+        void SendLockstepReady() {
+            if (messenger == null) {
+                return;
+            }
+
+            if (isHost) {
+                messenger.SendLockstepReadyToClients();
+            } else {
+                messenger.SendLockstepReadyToServer();
+            }
         }
 
         void AccumulateHardwarePulses() {
@@ -187,6 +264,24 @@ namespace DiceGame.Session.Network
             if (localHardwareInput.TryGetDirectionPressedThisFrame(out var direction)) {
                 pendingHasDirection = true;
                 pendingDirection = direction;
+            }
+        }
+
+        void ResendLocalInputWindowIfDue() {
+            var now = Time.realtimeSinceStartup;
+            if (now < nextResendTime) {
+                return;
+            }
+
+            nextResendTime = now + OnlineSessionConstants.LockstepInputResendIntervalSeconds;
+            var delay = (uint)OnlineSessionConstants.InputDelayTicks;
+            var endTick = currentTick + delay;
+            for (var tick = currentTick; tick <= endTick; tick++) {
+                if (!inputBuffer.TryGet(localSlot, tick, out var payload)) {
+                    continue;
+                }
+
+                SendLocalInput(payload);
             }
         }
 
@@ -211,6 +306,8 @@ namespace DiceGame.Session.Network
                 }
 
                 if (!inputBuffer.HasBoth(currentTick)) {
+                    // Keep the delay window filled and force an immediate resend on stall.
+                    nextResendTime = 0f;
                     LogStallThrottled();
                     break;
                 }
@@ -231,7 +328,6 @@ namespace DiceGame.Session.Network
             ApplyTickInput(PlayerSlot.Player1, p1);
             ApplyTickInput(PlayerSlot.Player2, p2);
 
-            // Deterministic order: Player1 then Player2.
             player1Character.SimulateLockstepFrame(simDt);
             player2Character.SimulateLockstepFrame(simDt);
 
