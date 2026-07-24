@@ -25,6 +25,7 @@ namespace DiceGame.Session.Network
         public event Action<OnlineDiceSpawnCommand> DiceSpawnReceived;
         public event Action<OnlineCharacterStateBatch> CharacterStateReceived;
         public event Action MatchStartReceived;
+        public event Action<ulong> MatchStartAckReceived;
         public event Action<MatchSetupNetworkPayload> MatchSetupReceived;
         public event Action<MatchSetupNetworkPayload> MatchSetupBroadcastReceived;
         public event Action<ulong, MatchSetupNetworkPayload> MatchSetupUpdateReceived;
@@ -63,6 +64,9 @@ namespace DiceGame.Session.Network
             networkManager.CustomMessagingManager.RegisterNamedMessageHandler(
                 OnlineSessionConstants.MessageMatchStart,
                 OnMatchStartMessage);
+            networkManager.CustomMessagingManager.RegisterNamedMessageHandler(
+                OnlineSessionConstants.MessageMatchStartAck,
+                OnMatchStartAckMessage);
             networkManager.CustomMessagingManager.RegisterNamedMessageHandler(
                 OnlineSessionConstants.MessageMatchSetupBroadcast,
                 OnMatchSetupBroadcastMessage);
@@ -103,6 +107,8 @@ namespace DiceGame.Session.Network
                 OnlineSessionConstants.MessageCharacterState);
             networkManager.CustomMessagingManager.UnregisterNamedMessageHandler(
                 OnlineSessionConstants.MessageMatchStart);
+            networkManager.CustomMessagingManager.UnregisterNamedMessageHandler(
+                OnlineSessionConstants.MessageMatchStartAck);
             networkManager.CustomMessagingManager.UnregisterNamedMessageHandler(
                 OnlineSessionConstants.MessageMatchSetupBroadcast);
             networkManager.CustomMessagingManager.UnregisterNamedMessageHandler(
@@ -326,20 +332,78 @@ namespace DiceGame.Session.Network
 
         public void SendMatchStartToClients(MatchSetupNetworkPayload setupPayload) {
             if (networkManager == null || !networkManager.IsServer) {
+                Debug.LogWarning(
+                    $"OnlineNetMessenger.SendMatchStartToClients: skipped " +
+                    $"(nmNull={networkManager == null} isServer={networkManager != null && networkManager.IsServer})");
+                return;
+            }
+
+            var customMessaging = networkManager.CustomMessagingManager;
+            if (customMessaging == null) {
+                Debug.LogError("OnlineNetMessenger.SendMatchStartToClients: CustomMessagingManager is null.");
+                return;
+            }
+
+            if (!networkManager.IsListening) {
+                Debug.LogError("OnlineNetMessenger.SendMatchStartToClients: NetworkManager is not listening.");
                 return;
             }
 
             var matchSeed = setupPayload.MatchSeed != 0
                 ? setupPayload.MatchSeed
                 : 1;
-            using var writer = new FastBufferWriter(MatchSetupWriterSize, Allocator.Temp);
-            writer.WriteNetworkSerializable(setupPayload);
-            // Trailing int: match RNG seed (previously a unused constant 1).
-            writer.WriteValueSafe(matchSeed);
-            networkManager.CustomMessagingManager.SendNamedMessageToAll(
-                OnlineSessionConstants.MessageMatchStart,
+            var localId = networkManager.LocalClientId;
+            var sent = 0;
+            foreach (var clientId in networkManager.ConnectedClientsIds) {
+                if (clientId == localId) {
+                    continue;
+                }
+
+                using var writer = new FastBufferWriter(MatchSetupWriterSize, Allocator.Temp, MatchSetupWriterSize);
+                writer.WriteNetworkSerializable(setupPayload);
+                // Trailing int: match RNG seed.
+                writer.WriteValueSafe(matchSeed);
+                try {
+                    customMessaging.SendNamedMessage(
+                        OnlineSessionConstants.MessageMatchStart,
+                        clientId,
+                        writer,
+                        NetworkDelivery.Reliable);
+                    sent++;
+                    Debug.Log(
+                        $"OnlineNetMessenger.SendMatchStartToClients: sent to clientId={clientId} " +
+                        $"bytes={writer.Length} seed={matchSeed} delivery=Reliable");
+                } catch (System.Exception ex) {
+                    Debug.LogError(
+                        $"OnlineNetMessenger.SendMatchStartToClients: send to {clientId} failed: {ex}");
+                }
+            }
+
+            if (sent == 0) {
+                Debug.LogWarning(
+                    "OnlineNetMessenger.SendMatchStartToClients: no remote clients to send to.");
+            }
+        }
+
+        public void SendMatchStartAckToServer() {
+            if (networkManager == null || !networkManager.IsClient || networkManager.IsServer) {
+                return;
+            }
+
+            var customMessaging = networkManager.CustomMessagingManager;
+            if (customMessaging == null) {
+                Debug.LogError("OnlineNetMessenger.SendMatchStartAckToServer: CustomMessagingManager is null.");
+                return;
+            }
+
+            using var writer = new FastBufferWriter(16, Allocator.Temp);
+            writer.WriteValueSafe((byte)1);
+            customMessaging.SendNamedMessage(
+                OnlineSessionConstants.MessageMatchStartAck,
+                NetworkManager.ServerClientId,
                 writer,
                 NetworkDelivery.Reliable);
+            Debug.Log("OnlineNetMessenger.SendMatchStartAckToServer: sent");
         }
 
         public void BroadcastMatchSetup(MatchSetupNetworkPayload setupPayload) {
@@ -516,14 +580,38 @@ namespace DiceGame.Session.Network
         }
 
         void OnMatchStartMessage(ulong senderClientId, FastBufferReader reader) {
-            reader.ReadNetworkSerializable(out MatchSetupNetworkPayload setupPayload);
-            reader.ReadValueSafe(out int matchSeed);
-            if (matchSeed != 0) {
-                setupPayload.MatchSeed = matchSeed;
+            // Listen-server must not treat its own MatchStart as a client presentation start.
+            if (networkManager != null && networkManager.IsServer) {
+                return;
             }
 
-            MatchSetupReceived?.Invoke(setupPayload);
-            MatchStartReceived?.Invoke();
+            Debug.Log(
+                $"OnlineNetMessenger.OnMatchStartMessage received: sender={senderClientId} " +
+                $"subscribers={MatchStartReceived?.GetInvocationList().Length ?? 0}");
+            try {
+                reader.ReadNetworkSerializable(out MatchSetupNetworkPayload setupPayload);
+                reader.ReadValueSafe(out int matchSeed);
+                if (matchSeed != 0) {
+                    setupPayload.MatchSeed = matchSeed;
+                }
+
+                Debug.Log(
+                    $"OnlineNetMessenger.OnMatchStartMessage: deserialized seed={setupPayload.MatchSeed}");
+                MatchSetupReceived?.Invoke(setupPayload);
+                MatchStartReceived?.Invoke();
+            } catch (System.Exception ex) {
+                Debug.LogError($"OnlineNetMessenger.OnMatchStartMessage: failed: {ex}");
+            }
+        }
+
+        void OnMatchStartAckMessage(ulong senderClientId, FastBufferReader reader) {
+            if (networkManager == null || !networkManager.IsServer) {
+                return;
+            }
+
+            reader.ReadValueSafe(out byte _);
+            Debug.Log($"OnlineNetMessenger.OnMatchStartAckMessage: from clientId={senderClientId}");
+            MatchStartAckReceived?.Invoke(senderClientId);
         }
 
         void OnMatchSetupBroadcastMessage(ulong senderClientId, FastBufferReader reader) {

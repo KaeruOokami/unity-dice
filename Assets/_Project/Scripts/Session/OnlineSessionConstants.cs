@@ -13,6 +13,7 @@ namespace DiceGame.Session
         public const string MessageDiceSpawn = "DiceOnlineDiceSpawn";
         public const string MessageCharacterState = "DiceOnlineCharacterState";
         public const string MessageMatchStart = "DiceOnlineMatchStart";
+        public const string MessageMatchStartAck = "DiceOnlineMatchStartAck";
         public const string MessageMatchSetupBroadcast = "DiceOnlineMatchSetupBroadcast";
         public const string MessageMatchSetupUpdate = "DiceOnlineMatchSetupUpdate";
         public const string MessagePlayerIdentity = "DiceOnlinePlayerIdentity";
@@ -64,6 +65,14 @@ namespace DiceGame.Session
         public const float LocalCharacterReconcileIdleSpeed = 0.2f;
         public const float OnlineSetupSyncIntervalSeconds = 0.35f;
         public const float OnlineIdentityRetryIntervalSeconds = 0.5f;
+        /// <summary>
+        /// Host resends MatchStart until the remote client acks presentation ready.
+        /// </summary>
+        public const float MatchStartAckRetryIntervalSeconds = 0.5f;
+        /// <summary>
+        /// Give up waiting for MatchStartAck and surface an error.
+        /// </summary>
+        public const float MatchStartAckTimeoutSeconds = 15f;
         public const string MatchSetupPersistDirectory = "MatchSetup";
         public const string MatchSetupOnlinePersistDirectory = "Online";
     }

@@ -24,6 +24,10 @@ namespace DiceGame.Session
         bool busy;
         bool onlineSharedSetupReady;
         float identityHandshakeTimer;
+        bool waitingForMatchStartAck;
+        MatchSetupNetworkPayload pendingMatchStartPayload;
+        float matchStartAckRetryTimer;
+        float matchStartAckWaitElapsed;
 
         public OnlineNetMessenger Messenger => messenger;
         public MatchSetupPresetRegistry MatchSetupPresetRegistry => matchSetupPresetRegistry;
@@ -69,6 +73,7 @@ namespace DiceGame.Session
 
             RefreshConnectedCount();
             TickIdentityHandshake();
+            TickMatchStartAckWait();
         }
 
         void OnDestroy() {
@@ -272,6 +277,12 @@ namespace DiceGame.Session
                 return;
             }
 
+            if (waitingForMatchStartAck) {
+                messenger?.SendMatchStartToClients(pendingMatchStartPayload);
+                OnlineSessionState.Instance.SetStatus("Waiting for opponent ready...");
+                return;
+            }
+
             if (!TryResolveOnlineMatchSetup(out var setup, out var setupError)) {
                 OnlineSessionState.Instance.SetStatus(setupError);
                 return;
@@ -281,12 +292,25 @@ namespace DiceGame.Session
             var payload = MatchSetupNetworkCodec.ToPayload(setup, matchSetupPresetRegistry);
             payload.MatchSeed = UnityEngine.Random.Range(1, int.MaxValue);
             OnlineSessionState.Instance.SetMatchSeed(payload.MatchSeed);
-            messenger?.SendMatchStartToClients(payload);
-            onlineSharedSetupReady = false;
-            OnlineSessionState.Instance.SetStatus("Match starting");
-            ShowGameplayWorld();
-            OnlineSessionState.Instance.RequestMatchStart();
-            lobbyUi?.Hide();
+
+            if (messenger == null) {
+                Debug.LogError(
+                    "OnlineSessionController.StartOnlineMatchAsHost: messenger is null; " +
+                    "MatchStart will not reach clients.");
+                OnlineSessionState.Instance.SetStatus("Online messenger missing.");
+                return;
+            }
+
+            pendingMatchStartPayload = payload;
+            waitingForMatchStartAck = true;
+            matchStartAckRetryTimer = OnlineSessionConstants.MatchStartAckRetryIntervalSeconds;
+            matchStartAckWaitElapsed = 0f;
+
+            Debug.Log(
+                $"OnlineSessionController.StartOnlineMatchAsHost: " +
+                $"clients={networkManager.ConnectedClientsList.Count} seed={payload.MatchSeed}");
+            messenger.SendMatchStartToClients(payload);
+            OnlineSessionState.Instance.SetStatus("Waiting for opponent ready...");
         }
 
         public async void LeaveSession() {
@@ -297,6 +321,7 @@ namespace DiceGame.Session
             busy = true;
             try {
                 await SafeLeaveAsync();
+                ClearMatchStartHandshake();
                 onlineSharedSetupReady = false;
                 OnlineSessionState.Instance.ResetMatchFlag();
                 OnlineSessionState.Instance.ClearCurrentSetup();
@@ -312,6 +337,7 @@ namespace DiceGame.Session
         }
 
         public void PrepareReturnToTitle() {
+            ClearMatchStartHandshake();
             onlineSharedSetupReady = false;
             OnlineSessionState.Instance?.ResetMatchFlag();
             OnlineSessionState.Instance?.ClearCurrentSetup();
@@ -353,6 +379,7 @@ namespace DiceGame.Session
         }
 
         void EnterTitlePresentation() {
+            ClearMatchStartHandshake();
             onlineSharedSetupReady = false;
             if (OnlineSessionState.Instance != null) {
                 OnlineSessionState.Instance.SetPlayMode(OnlinePlayMode.Unspecified);
@@ -392,11 +419,76 @@ namespace DiceGame.Session
                 return;
             }
 
+            // Host may retry MatchStart; if presentation is already up, only re-ack.
+            if (OnlineSessionState.Instance.IsMatchRunning
+                || (gameBootstrap != null && gameBootstrap.IsSessionActive)) {
+                messenger?.SendMatchStartAckToServer();
+                return;
+            }
+
+            onlineSharedSetupReady = false;
+            OnlineSessionState.Instance.SetStatus("Match starting");
+            lobbyUi?.Hide();
+            ShowGameplayWorld();
+            OnlineSessionState.Instance.RequestMatchStart();
+            messenger?.SendMatchStartAckToServer();
+            Debug.Log("OnlineSessionController.OnMatchStartFromHost: presentation started, ack sent");
+        }
+
+        void OnMatchStartAckFromClient(ulong senderClientId) {
+            if (!waitingForMatchStartAck) {
+                return;
+            }
+
+            if (OnlineSessionState.Instance == null || !OnlineSessionState.Instance.IsHost) {
+                return;
+            }
+
+            Debug.Log(
+                $"OnlineSessionController.OnMatchStartAckFromClient: clientId={senderClientId}");
+            ClearMatchStartHandshake();
             onlineSharedSetupReady = false;
             OnlineSessionState.Instance.SetStatus("Match starting");
             ShowGameplayWorld();
             OnlineSessionState.Instance.RequestMatchStart();
             lobbyUi?.Hide();
+        }
+
+        void TickMatchStartAckWait() {
+            if (!waitingForMatchStartAck) {
+                return;
+            }
+
+            if (OnlineSessionState.Instance == null || !OnlineSessionState.Instance.IsHost) {
+                ClearMatchStartHandshake();
+                return;
+            }
+
+            var dt = Time.unscaledDeltaTime;
+            matchStartAckWaitElapsed += dt;
+            if (matchStartAckWaitElapsed >= OnlineSessionConstants.MatchStartAckTimeoutSeconds) {
+                Debug.LogError(
+                    "OnlineSessionController: timed out waiting for MatchStartAck from client.");
+                ClearMatchStartHandshake();
+                OnlineSessionState.Instance.SetStatus("Opponent did not ready in time.");
+                return;
+            }
+
+            matchStartAckRetryTimer -= dt;
+            if (matchStartAckRetryTimer > 0f) {
+                return;
+            }
+
+            matchStartAckRetryTimer = OnlineSessionConstants.MatchStartAckRetryIntervalSeconds;
+            messenger?.SendMatchStartToClients(pendingMatchStartPayload);
+            OnlineSessionState.Instance.SetStatus("Waiting for opponent ready...");
+        }
+
+        void ClearMatchStartHandshake() {
+            waitingForMatchStartAck = false;
+            matchStartAckRetryTimer = 0f;
+            matchStartAckWaitElapsed = 0f;
+            pendingMatchStartPayload = default;
         }
 
         void OnMatchSetupFromHost(MatchSetupNetworkPayload payload) {
@@ -580,8 +672,10 @@ namespace DiceGame.Session
 
             messenger.MatchSetupUpdateReceived -= OnMatchSetupUpdateFromClient;
             messenger.PlayerIdentityReceived -= OnPlayerIdentity;
+            messenger.MatchStartAckReceived -= OnMatchStartAckFromClient;
             messenger.MatchSetupUpdateReceived += OnMatchSetupUpdateFromClient;
             messenger.PlayerIdentityReceived += OnPlayerIdentity;
+            messenger.MatchStartAckReceived += OnMatchStartAckFromClient;
         }
 
         void BindClientMessengerHandlers() {
@@ -610,6 +704,7 @@ namespace DiceGame.Session
             messenger.MatchSetupUpdateReceived -= OnMatchSetupUpdateFromClient;
             messenger.PlayerIdentityReceived -= OnPlayerIdentity;
             messenger.PlayerIdentityRequestReceived -= OnPlayerIdentityRequest;
+            messenger.MatchStartAckReceived -= OnMatchStartAckFromClient;
         }
 
         void BindNetworkCallbacks(NetworkManager networkManager) {
