@@ -28,6 +28,23 @@ namespace DiceGame.Session
         public const byte FlowReturnToTitle = 4;
         public const float LobbyHeartbeatSeconds = 15f;
         /// <summary>
+        /// Phase B lockstep: fixed simulation rate (both peers step with this dt).
+        /// </summary>
+        public const int SimTickHz = 60;
+        public const float SimTickSeconds = 1f / SimTickHz;
+        /// <summary>
+        /// Local input is scheduled this many ticks ahead (delayed lockstep).
+        /// </summary>
+        public const int InputDelayTicks = 3;
+        /// <summary>
+        /// How many tick inputs to retain in the lockstep buffer.
+        /// </summary>
+        public const int LockstepInputBufferTicks = 180;
+        /// <summary>
+        /// Cap render-time catch-up so a hitch does not spiral the sim.
+        /// </summary>
+        public const int LockstepMaxStepsPerFrame = 4;
+        /// <summary>
         /// Host → client character pose: check interval for sparse corrections (not continuous chase).
         /// </summary>
         public const float CharacterCorrectCheckIntervalSeconds = 0.25f;

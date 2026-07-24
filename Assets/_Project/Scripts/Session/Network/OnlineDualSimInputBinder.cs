@@ -8,21 +8,33 @@ using GameCharacterController = DiceGame.Gameplay.CharacterController;
 namespace DiceGame.Session.Network
 {
     /// <summary>
-    /// Step A dual-sim: both peers run the full local match simulation.
-    /// Network carries bidirectional character input only (no board events / pose chase).
+    /// Phase B delayed lockstep: fixed-tick character simulation driven by per-tick inputs.
+    /// Both peers simulate locally; network carries tick-tagged inputs only.
     /// </summary>
+    [DefaultExecutionOrder(-100)]
     public sealed class OnlineDualSimInputBinder : MonoBehaviour
     {
         OnlineNetMessenger messenger;
-        RemoteNetworkInputSource remoteInput;
-        CharacterInputReader localInputReader;
+        CharacterInputReader localHardwareInput;
+        LockstepTickInputSource localTickInput;
+        LockstepTickInputSource remoteTickInput;
+        GameCharacterController localCharacter;
+        GameCharacterController remoteCharacter;
+        GameCharacterController player1Character;
+        GameCharacterController player2Character;
+        readonly OnlineLockstepInputBuffer inputBuffer =
+            new(OnlineSessionConstants.LockstepInputBufferTicks);
         PlayerSlot localSlot;
+        PlayerSlot remoteSlot;
         bool isHost;
-        float inputTimer;
-        Vector2 lastMove;
-        Direction? pendingDirection;
+        uint currentTick;
         uint localInputSequence;
-        uint lastRemoteInputSequence;
+        float simulatorAccumulator;
+        bool pendingLift;
+        bool pendingJump;
+        bool pendingHasDirection;
+        Direction pendingDirection;
+        float nextStallLogTime;
 
         public void Configure(
             OnlineNetMessenger netMessenger,
@@ -31,14 +43,18 @@ namespace DiceGame.Session.Network
             bool host) {
             messenger = netMessenger;
             localSlot = localPlayerSlot;
+            remoteSlot = localPlayerSlot == PlayerSlot.Player1
+                ? PlayerSlot.Player2
+                : PlayerSlot.Player1;
             isHost = host;
-            localInputReader = null;
-            remoteInput = null;
-            inputTimer = 0f;
-            lastMove = Vector2.zero;
-            pendingDirection = null;
+            currentTick = 0;
             localInputSequence = 0;
-            lastRemoteInputSequence = 0;
+            simulatorAccumulator = 0f;
+            pendingLift = false;
+            pendingJump = false;
+            pendingHasDirection = false;
+            pendingDirection = Direction.North;
+            nextStallLogTime = 0f;
 
             UnsubscribeMessenger();
             BindCharacters(spawnedCharacters);
@@ -54,12 +70,7 @@ namespace DiceGame.Session.Network
                 messenger.HostInputReceived += OnHostInputReceived;
             }
 
-            // Dual-sim: characters must drive the board on both peers.
-            if (spawnedCharacters != null) {
-                for (var i = 0; i < spawnedCharacters.Count; i++) {
-                    spawnedCharacters[i]?.SetSuppressBoardMutation(false);
-                }
-            }
+            PrefillLocalDelayWindow();
         }
 
         void OnDestroy() {
@@ -76,93 +87,196 @@ namespace DiceGame.Session.Network
         }
 
         void BindCharacters(IReadOnlyList<GameCharacterController> spawnedCharacters) {
-            var remoteSlot = localSlot == PlayerSlot.Player1
-                ? PlayerSlot.Player2
-                : PlayerSlot.Player1;
+            localHardwareInput = null;
+            localTickInput = null;
+            remoteTickInput = null;
+            localCharacter = null;
+            remoteCharacter = null;
+            player1Character = null;
+            player2Character = null;
 
             if (spawnedCharacters == null) {
                 Debug.LogError("OnlineDualSimInputBinder: spawnedCharacters is null.");
                 return;
             }
 
-            GameCharacterController remoteCharacter = null;
             for (var i = 0; i < spawnedCharacters.Count; i++) {
                 var character = spawnedCharacters[i];
                 if (character == null) {
                     continue;
                 }
 
+                character.SetSuppressBoardMutation(false);
+                character.SetLockstepSimulation(true);
+
+                if (character.PlayerSlot == PlayerSlot.Player1) {
+                    player1Character = character;
+                } else if (character.PlayerSlot == PlayerSlot.Player2) {
+                    player2Character = character;
+                }
+
                 if (character.PlayerSlot == localSlot) {
-                    localInputReader = character.GetComponent<CharacterInputReader>();
-                    continue;
-                }
+                    localCharacter = character;
+                    localHardwareInput = character.GetComponent<CharacterInputReader>();
+                    if (localHardwareInput != null) {
+                        // Keep enabled for sampling; gameplay reads LockstepTickInputSource.
+                        localHardwareInput.enabled = true;
+                    }
 
-                if (character.PlayerSlot == remoteSlot) {
+                    localTickInput = character.GetComponent<LockstepTickInputSource>();
+                    if (localTickInput == null) {
+                        localTickInput = character.gameObject.AddComponent<LockstepTickInputSource>();
+                    }
+
+                    character.SetInputSource(localTickInput);
+                } else if (character.PlayerSlot == remoteSlot) {
                     remoteCharacter = character;
+                    var humanReader = character.GetComponent<CharacterInputReader>();
+                    if (humanReader != null) {
+                        humanReader.enabled = false;
+                    }
+
+                    remoteTickInput = character.GetComponent<LockstepTickInputSource>();
+                    if (remoteTickInput == null) {
+                        remoteTickInput = character.gameObject.AddComponent<LockstepTickInputSource>();
+                    }
+
+                    character.SetInputSource(remoteTickInput);
                 }
             }
 
-            if (localInputReader == null) {
+            if (localCharacter == null || localTickInput == null || localHardwareInput == null) {
                 Debug.LogError(
-                    $"OnlineDualSimInputBinder: local CharacterInputReader missing for slot={localSlot}.");
+                    $"OnlineDualSimInputBinder: local lockstep wiring failed for slot={localSlot}.");
             }
 
-            if (remoteCharacter == null) {
+            if (remoteCharacter == null || remoteTickInput == null) {
                 Debug.LogError(
-                    $"OnlineDualSimInputBinder: remote character missing for slot={remoteSlot}.");
-                return;
+                    $"OnlineDualSimInputBinder: remote lockstep wiring failed for slot={remoteSlot}.");
             }
 
-            var humanReader = remoteCharacter.GetComponent<CharacterInputReader>();
-            if (humanReader != null) {
-                humanReader.enabled = false;
+            if (player1Character == null || player2Character == null) {
+                Debug.LogError("OnlineDualSimInputBinder: need both Player1 and Player2 characters.");
             }
+        }
 
-            remoteInput = remoteCharacter.GetComponent<RemoteNetworkInputSource>();
-            if (remoteInput == null) {
-                remoteInput = remoteCharacter.gameObject.AddComponent<RemoteNetworkInputSource>();
+        void PrefillLocalDelayWindow() {
+            for (uint tick = 0; tick < OnlineSessionConstants.InputDelayTicks; tick++) {
+                CommitLocalInputForTick(tick);
             }
-
-            remoteCharacter.SetInputSource(remoteInput);
         }
 
         void Update() {
-            CaptureAndSendLocalInput();
+            AccumulateHardwarePulses();
+            TickLockstep();
         }
 
-        void CaptureAndSendLocalInput() {
-            if (messenger == null || localInputReader == null || !localInputReader.enabled) {
+        void AccumulateHardwarePulses() {
+            if (localHardwareInput == null) {
                 return;
             }
 
-            inputTimer += Time.unscaledDeltaTime;
-            var move = localInputReader.ReadMove();
-            var lift = localInputReader.WasLiftPressedThisFrame();
-            var jump = localInputReader.WasJumpPressedThisFrame();
-            var hasDirection = localInputReader.TryGetDirectionPressedThisFrame(out var direction);
-            if (hasDirection) {
+            if (localHardwareInput.WasLiftPressedThisFrame()) {
+                pendingLift = true;
+            }
+
+            if (localHardwareInput.WasJumpPressedThisFrame()) {
+                pendingJump = true;
+            }
+
+            if (localHardwareInput.TryGetDirectionPressedThisFrame(out var direction)) {
+                pendingHasDirection = true;
                 pendingDirection = direction;
             }
+        }
 
-            if (inputTimer < OnlineSessionConstants.InputSendIntervalSeconds
-                && !lift
-                && !jump
-                && !hasDirection
-                && (move - lastMove).sqrMagnitude < 0.0001f) {
+        void TickLockstep() {
+            if (messenger == null || localCharacter == null || remoteCharacter == null) {
                 return;
             }
 
-            inputTimer = 0f;
-            lastMove = move;
+            var simDt = OnlineSessionConstants.SimTickSeconds;
+            simulatorAccumulator += Time.deltaTime;
+            var maxCredit = simDt * OnlineSessionConstants.LockstepMaxStepsPerFrame;
+            if (simulatorAccumulator > maxCredit) {
+                simulatorAccumulator = maxCredit;
+            }
+
+            var steps = 0;
+            while (simulatorAccumulator >= simDt
+                && steps < OnlineSessionConstants.LockstepMaxStepsPerFrame) {
+                var scheduleTick = currentTick + (uint)OnlineSessionConstants.InputDelayTicks;
+                if (!inputBuffer.Has(localSlot, scheduleTick)) {
+                    CommitLocalInputForTick(scheduleTick);
+                }
+
+                if (!inputBuffer.HasBoth(currentTick)) {
+                    LogStallThrottled();
+                    break;
+                }
+
+                StepSimulationTick(simDt);
+                simulatorAccumulator -= simDt;
+                steps++;
+            }
+        }
+
+        void StepSimulationTick(float simDt) {
+            if (!inputBuffer.TryGet(PlayerSlot.Player1, currentTick, out var p1)
+                || !inputBuffer.TryGet(PlayerSlot.Player2, currentTick, out var p2)) {
+                Debug.LogError($"OnlineDualSimInputBinder: missing inputs for tick={currentTick}.");
+                return;
+            }
+
+            ApplyTickInput(PlayerSlot.Player1, p1);
+            ApplyTickInput(PlayerSlot.Player2, p2);
+
+            // Deterministic order: Player1 then Player2.
+            player1Character.SimulateLockstepFrame(simDt);
+            player2Character.SimulateLockstepFrame(simDt);
+
+            currentTick++;
+            inputBuffer.DiscardBefore(
+                currentTick > 32 ? currentTick - 32 : 0u);
+        }
+
+        void ApplyTickInput(PlayerSlot slot, OnlineInputPayload payload) {
+            if (slot == localSlot) {
+                localTickInput.SetTickInput(payload);
+            } else {
+                remoteTickInput.SetTickInput(payload);
+            }
+        }
+
+        void CommitLocalInputForTick(uint tick) {
+            if (inputBuffer.Has(localSlot, tick)) {
+                return;
+            }
+
+            var move = localHardwareInput != null
+                ? localHardwareInput.ReadMove()
+                : Vector2.zero;
             localInputSequence++;
             var payload = OnlineInputPayload.FromSource(
                 move,
-                lift,
-                jump,
-                pendingDirection.HasValue,
-                pendingDirection ?? Direction.North,
-                localInputSequence);
-            pendingDirection = null;
+                pendingLift,
+                pendingJump,
+                pendingHasDirection,
+                pendingHasDirection ? pendingDirection : Direction.North,
+                localInputSequence,
+                tick);
+            pendingLift = false;
+            pendingJump = false;
+            pendingHasDirection = false;
+
+            inputBuffer.Set(localSlot, tick, payload);
+            SendLocalInput(payload);
+        }
+
+        void SendLocalInput(OnlineInputPayload payload) {
+            if (messenger == null) {
+                return;
+            }
 
             if (isHost) {
                 messenger.SendInputToClients(payload);
@@ -172,22 +286,33 @@ namespace DiceGame.Session.Network
         }
 
         void OnClientInputReceived(ulong senderClientId, OnlineInputPayload payload) {
-            ApplyRemoteInput(payload);
+            StoreRemoteInput(payload);
         }
 
         void OnHostInputReceived(OnlineInputPayload payload) {
-            ApplyRemoteInput(payload);
+            StoreRemoteInput(payload);
         }
 
-        void ApplyRemoteInput(OnlineInputPayload payload) {
-            if (payload.Sequence != 0 && payload.Sequence <= lastRemoteInputSequence) {
+        void StoreRemoteInput(OnlineInputPayload payload) {
+            if (inputBuffer.Has(remoteSlot, payload.Tick)) {
                 return;
             }
 
-            lastRemoteInputSequence = payload.Sequence != 0
-                ? payload.Sequence
-                : lastRemoteInputSequence + 1;
-            remoteInput?.ApplyPayload(payload);
+            inputBuffer.Set(remoteSlot, payload.Tick, payload);
+        }
+
+        void LogStallThrottled() {
+            var now = Time.realtimeSinceStartup;
+            if (now < nextStallLogTime) {
+                return;
+            }
+
+            nextStallLogTime = now + 2f;
+            var hasLocal = inputBuffer.Has(localSlot, currentTick);
+            var hasRemote = inputBuffer.Has(remoteSlot, currentTick);
+            Debug.LogWarning(
+                $"OnlineDualSimInputBinder: lockstep stall tick={currentTick} " +
+                $"local={hasLocal} remote={hasRemote} delay={OnlineSessionConstants.InputDelayTicks}");
         }
     }
 }

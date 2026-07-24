@@ -271,7 +271,7 @@ namespace DiceGame.Gameplay
             if (session != null && session.IsOnline) {
                 Debug.Log(
                     $"GameBootstrap: online match seed={matchSeed} " +
-                    "(shared seed + dual-sim; both peers simulate the board)");
+                    "(shared seed + Phase B delayed lockstep dual-sim)");
             }
 
             spawnSystem = GetComponent<DiceSpawnSystem>();
@@ -433,7 +433,7 @@ namespace DiceGame.Gameplay
             var isHost = session != null && session.IsHost;
             var localSlot = session != null ? session.LocalPlayerSlot : PlayerSlot.Player1;
 
-            // Both peers simulate spawn / erasure / attack locally from shared seed + input.
+            // Phase B: both peers simulate locally; lockstep binder drives fixed-tick character frames.
             spawnSystem.AllowAutonomousSpawning = true;
             spawnSystem.EmitNetworkSpawns = false;
             if (attackController != null) {

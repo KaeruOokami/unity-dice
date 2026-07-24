@@ -14,6 +14,7 @@ namespace DiceGame.Session.Network
         public bool HasDirection;
         public byte DirectionValue;
         public uint Sequence;
+        public uint Tick;
 
         public Vector2 Move => new(MoveX, MoveY);
 
@@ -30,6 +31,7 @@ namespace DiceGame.Session.Network
             serializer.SerializeValue(ref HasDirection);
             serializer.SerializeValue(ref DirectionValue);
             serializer.SerializeValue(ref Sequence);
+            serializer.SerializeValue(ref Tick);
         }
 
         public static OnlineInputPayload FromSource(
@@ -38,7 +40,8 @@ namespace DiceGame.Session.Network
             bool jump,
             bool hasDirection,
             Direction direction,
-            uint sequence = 0) {
+            uint sequence = 0,
+            uint tick = 0) {
             return new OnlineInputPayload {
                 MoveX = move.x,
                 MoveY = move.y,
@@ -46,7 +49,8 @@ namespace DiceGame.Session.Network
                 JumpPressed = jump,
                 HasDirection = hasDirection,
                 DirectionValue = (byte)direction,
-                Sequence = sequence
+                Sequence = sequence,
+                Tick = tick
             };
         }
     }

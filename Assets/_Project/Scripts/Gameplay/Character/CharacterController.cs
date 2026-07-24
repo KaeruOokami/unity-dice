@@ -87,6 +87,11 @@ namespace DiceGame.Gameplay
         /// push / roll / lift dice (host events own the board).
         /// </summary>
         bool suppressBoardMutation;
+        /// <summary>
+        /// When true, gameplay advances only via <see cref="SimulateLockstepFrame"/> (Phase B).
+        /// </summary>
+        bool lockstepSimulation;
+        float simDeltaTime = 1f / 60f;
         readonly List<PushContactCandidate> pushCandidates = new();
         LiftPhase liftPhase;
         DiceController carriedDice;
@@ -204,6 +209,28 @@ namespace DiceGame.Gameplay
                     liftPhase = LiftPhase.None;
                 }
             }
+        }
+
+        public void SetLockstepSimulation(bool enabled) {
+            lockstepSimulation = enabled;
+        }
+
+        /// <summary>
+        /// Advance one fixed gameplay frame. Used by online delayed lockstep.
+        /// </summary>
+        public void SimulateLockstepFrame(float deltaTime) {
+            if (!lockstepSimulation) {
+                Debug.LogError("CharacterController.SimulateLockstepFrame: lockstep is not enabled.");
+                return;
+            }
+
+            if (deltaTime <= 0f) {
+                Debug.LogError("CharacterController.SimulateLockstepFrame: deltaTime must be > 0.");
+                return;
+            }
+
+            simDeltaTime = deltaTime;
+            RunGameplayFrame();
         }
 
         public void BindCrushOutcome(GameFlowController flow) {
@@ -401,6 +428,23 @@ namespace DiceGame.Gameplay
         }
 
         void Update() {
+            if (lockstepSimulation) {
+                return;
+            }
+
+            if (!isInitialized || standingController == null) {
+                return;
+            }
+
+            simDeltaTime = Time.deltaTime;
+            if (simDeltaTime <= 0f) {
+                return;
+            }
+
+            RunGameplayFrame();
+        }
+
+        void RunGameplayFrame() {
             if (!isInitialized || standingController == null) {
                 return;
             }
@@ -605,7 +649,7 @@ namespace DiceGame.Gameplay
         }
 
         void UpdateSurfaceMovement(Vector2 input) {
-            ResimulateSurfaceMovement(input, Time.deltaTime);
+            ResimulateSurfaceMovement(input, simDeltaTime);
         }
 
         void ResimulateSurfaceMovement(Vector2 input, float deltaTime) {
@@ -1312,7 +1356,7 @@ namespace DiceGame.Gameplay
                     $"alignment={best.InputAlignment:F2} faceDistance={best.FaceDistance:F3}");
             }
 
-            pushContactTime += Time.deltaTime;
+            pushContactTime += simDeltaTime;
             if (pushContactTime < movementSettings.PushHoldDuration) {
                 LogPushDebug(
                     "hold-wait",
@@ -1869,7 +1913,7 @@ namespace DiceGame.Gameplay
                 return;
             }
 
-            jumpMotion = GravityMotion.Step(jumpMotion, physicsSettings.Gravity, Time.deltaTime);
+            jumpMotion = GravityMotion.Step(jumpMotion, physicsSettings.Gravity, simDeltaTime);
             jumpYOffset = jumpMotion.Offset;
             LogJumpYOffsetState();
 
@@ -1892,7 +1936,7 @@ namespace DiceGame.Gameplay
                 return;
             }
 
-            fallMotion = GravityMotion.Step(fallMotion, physicsSettings.Gravity, Time.deltaTime);
+            fallMotion = GravityMotion.Step(fallMotion, physicsSettings.Gravity, simDeltaTime);
             if (fallMotion.IsGrounded) {
                 isFalling = false;
                 coupling?.EndRollTracking();
