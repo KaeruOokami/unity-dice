@@ -241,17 +241,6 @@ namespace DiceGame.Gameplay
                 cameraSetup.Apply(board);
             }
 
-            // Phase A: client is presentation-only (events + local character prediction).
-            if (session != null && session.IsOnline && !session.IsHost) {
-                if (!TryBeginOnlineClientPresentation()) {
-                    AbortPendingSessionStart();
-                    return;
-                }
-
-                sessionStarted = true;
-                return;
-            }
-
             registry = GetComponent<DiceRegistry>();
             if (registry == null) {
                 registry = gameObject.AddComponent<DiceRegistry>();
@@ -281,8 +270,8 @@ namespace DiceGame.Gameplay
             UnityEngine.Random.InitState(matchSeed);
             if (session != null && session.IsOnline) {
                 Debug.Log(
-                    $"GameBootstrap: online host match seed={matchSeed} " +
-                    "(Phase A: host-authoritative events; client presentation)");
+                    $"GameBootstrap: online match seed={matchSeed} " +
+                    "(initial board from shared seed; later changes via host events)");
             }
 
             spawnSystem = GetComponent<DiceSpawnSystem>();
@@ -297,13 +286,8 @@ namespace DiceGame.Gameplay
             }
 
             spawnSystem.ConfigureOwnership(ownershipContext);
-            // Board changes reach the client via Reliable motion events (not spawn-command full-sim).
+            // Initial board is seed-built on both peers. Later board changes use host motion events.
             spawnSystem.EmitNetworkSpawns = false;
-
-            OnlineHostMatchBinder hostMotionBinder = null;
-            if (session != null && session.IsOnline && session.IsHost) {
-                hostMotionBinder = BeginOnlineHostMotionRelay();
-            }
 
             var playerCount = resolvedSetup.RequiredPlayerCount;
             var startDice = spawnSystem.SpawnInitialPlayerDice(playerCount);
@@ -401,10 +385,17 @@ namespace DiceGame.Gameplay
             }
 
             if (session != null && session.IsOnline && session.IsHost) {
-                BindOnlineHostAuthority(hostMotionBinder);
+                // Subscribe motion relay only after seed spawn so initial emerge is not networked.
+                BindOnlineHostAuthority(null);
+            } else if (session != null && session.IsOnline && !session.IsHost) {
+                BindOnlineClientAfterSeedSpawn();
             }
 
-            spawnSystem.StartSpawning();
+            // Online client: do not run autonomous spawn; later dice come from host events.
+            if (session == null || !session.IsOnline || session.IsHost) {
+                spawnSystem.StartSpawning();
+            }
+
             sessionStarted = true;
         }
 
@@ -433,71 +424,41 @@ namespace DiceGame.Gameplay
             OnlineSessionState.Instance?.ResetMatchFlag();
         }
 
-        bool TryBeginOnlineClientPresentation() {
+        void BindOnlineClientAfterSeedSpawn() {
             var onlineController = FindObjectOfType<OnlineSessionController>();
             if (onlineController?.Messenger == null) {
-                Debug.LogError("GameBootstrap: Online client matched without messenger.");
-                return false;
+                Debug.LogError("GameBootstrap: Online client seed session requires messenger.");
+                return;
             }
 
-            GameWorldVisibility.SetBoardVisible(board, true);
+            DestroyOnlineSimSyncBinderIfPresent();
+            DestroyOnlineClientMatchViewIfPresent();
 
+            EnsureOnlineClientFlowAdapter();
+
+            var inputRelay = GetComponent<OnlineClientInputRelay>();
+            if (inputRelay == null) {
+                inputRelay = gameObject.AddComponent<OnlineClientInputRelay>();
+            }
+
+            var localSlot = OnlineSessionState.Instance != null
+                ? OnlineSessionState.Instance.LocalPlayerSlot
+                : PlayerSlot.Player2;
+            inputRelay.Configure(onlineController.Messenger, characters, localSlot);
+
+            if (attackController != null) {
+                attackController.SetNetworkFollowerMode(true);
+            }
+        }
+
+        void DestroyOnlineClientMatchViewIfPresent() {
             var clientView = GetComponent<OnlineClientMatchView>();
             if (clientView == null) {
-                clientView = gameObject.AddComponent<OnlineClientMatchView>();
+                return;
             }
 
-            clientView.Configure(
-                onlineController.Messenger,
-                diceEntityPrefab,
-                characterPrefab,
-                playerInputSettings,
-                physicsSettings,
-                diceAnimationSettings,
-                diceErasureSettings,
-                diceOneVanishSettings,
-                board,
-                ResolveClientPresentationCatalog(out var alternateCatalog),
-                alternateCatalog,
-                ResolveClientAttackQueueUiSettings(),
-                characterMovementSettings);
-
-            var flowAdapter = GetComponent<OnlineClientFlowAdapter>();
-            if (flowAdapter == null) {
-                flowAdapter = gameObject.AddComponent<OnlineClientFlowAdapter>();
-            }
-
-            flowAdapter.Configure(onlineController.Messenger, playerInputSettings);
-            return true;
-        }
-
-        DiceCatalog ResolveClientPresentationCatalog(out DiceCatalog alternateCatalog) {
-            alternateCatalog = null;
-            if (resolvedSetup == null) {
-                return diceCatalog;
-            }
-
-            if (resolvedSetup.GameMode == GameMode.Versus
-                && resolvedSetup.VersusBoardSettings != null) {
-                var versus = resolvedSetup.VersusBoardSettings;
-                alternateCatalog = versus.Player2.DiceCatalog;
-                return versus.Player1.DiceCatalog != null
-                    ? versus.Player1.DiceCatalog
-                    : diceCatalog;
-            }
-
-            return resolvedSetup.SharedDiceCatalog != null
-                ? resolvedSetup.SharedDiceCatalog
-                : diceCatalog;
-        }
-
-        AttackQueueUiSettings ResolveClientAttackQueueUiSettings() {
-            if (resolvedSetup?.GameMode == GameMode.Versus
-                && resolvedSetup.VersusBoardSettings != null) {
-                return resolvedSetup.VersusBoardSettings.AttackQueueUiSettings;
-            }
-
-            return null;
+            clientView.enabled = false;
+            Destroy(clientView);
         }
 
         void EnsureOnlineClientFlowAdapter() {
@@ -513,28 +474,6 @@ namespace DiceGame.Gameplay
             }
 
             flowAdapter.Configure(onlineController.Messenger, playerInputSettings);
-        }
-
-        OnlineHostMatchBinder BeginOnlineHostMotionRelay() {
-            var onlineController = FindObjectOfType<OnlineSessionController>();
-            if (onlineController?.Messenger == null) {
-                Debug.LogError("GameBootstrap: Online host motion relay requires messenger.");
-                return null;
-            }
-
-            DestroyOnlineSimSyncBinderIfPresent();
-
-            var hostBinder = GetComponent<OnlineHostMatchBinder>();
-            if (hostBinder == null) {
-                hostBinder = gameObject.AddComponent<OnlineHostMatchBinder>();
-            }
-
-            hostBinder.enabled = true;
-            hostBinder.BeginMotionRelay(
-                onlineController.Messenger,
-                registry,
-                ownershipContext);
-            return hostBinder;
         }
 
         void BindOnlineHostAuthority(OnlineHostMatchBinder hostBinder) {

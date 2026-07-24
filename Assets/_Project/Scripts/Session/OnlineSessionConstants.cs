@@ -28,7 +28,7 @@ namespace DiceGame.Session
         public const byte FlowReturnToTitle = 4;
         public const float LobbyHeartbeatSeconds = 15f;
         /// <summary>
-        /// Host → client character poses (Phase A). Full board is event-driven + one-shot initial dump.
+        /// Host → client character poses after seed-based initial board.
         /// </summary>
         public const float SnapshotSendIntervalSeconds = 0.15f;
         public const float AttackQueueResyncIntervalSeconds = 1f;
