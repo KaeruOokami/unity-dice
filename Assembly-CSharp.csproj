@@ -283,6 +283,7 @@
      <Compile Include="Assets\_Project\Scripts\Session\Network\OnlineSimStateHasher.cs" />
      <Compile Include="Assets\_Project\Scripts\Session\Network\OnlineSimHashPayload.cs" />
      <Compile Include="Assets\_Project\Scripts\Session\Network\OnlineSimResyncApplier.cs" />
+     <Compile Include="Assets\_Project\Scripts\Core\Motion\GameplaySimClock.cs" />
      <None Include="Assets\TextMesh Pro\Shaders\TMPro.cginc" />
      <None Include="Assets\TextMesh Pro\Shaders\TMP_SDF-Mobile Overlay.shader" />
      <None Include="Assets\TextMesh Pro\Shaders\TMP_Bitmap.shader" />

@@ -10,7 +10,8 @@ using GameCharacterController = DiceGame.Gameplay.CharacterController;
 namespace DiceGame.Session.Network
 {
     /// <summary>
-    /// Delayed lockstep dual-sim (Phase B) with Phase C hash check + host resync.
+    /// Delayed lockstep dual-sim: shared inputs + fixed-tick gameplay.
+    /// Hash compare detects DESYNC; auto board snap is off by default.
     /// </summary>
     [DefaultExecutionOrder(-100)]
     public sealed class OnlineDualSimInputBinder : MonoBehaviour
@@ -103,6 +104,8 @@ namespace DiceGame.Session.Network
                 return;
             }
 
+            GameplaySimClock.SetActive(true);
+
             if (isHost) {
                 messenger.InputReceived += OnClientInputReceived;
                 messenger.LockstepReadyFromClient += OnLockstepReadyFromClient;
@@ -121,7 +124,12 @@ namespace DiceGame.Session.Network
                 "waiting for LockstepReady before Prefill.");
         }
 
+        void OnDisable() {
+            GameplaySimClock.SetActive(false);
+        }
+
         void OnDestroy() {
+            GameplaySimClock.SetActive(false);
             UnsubscribeMessenger();
         }
 
@@ -237,6 +245,7 @@ namespace DiceGame.Session.Network
                 Debug.Log("OnlineDualSimInputBinder: peer ready; Prefill sent, lockstep running.");
             }
 
+            GameplaySimClock.BeginUnityFrame();
             ResendLocalInputWindowIfDue();
             TickLockstep();
         }
@@ -361,17 +370,22 @@ namespace DiceGame.Session.Network
                 return;
             }
 
-            ApplyTickInput(PlayerSlot.Player1, p1);
-            ApplyTickInput(PlayerSlot.Player2, p2);
+            GameplaySimClock.BeginStep(simDt);
+            try {
+                ApplyTickInput(PlayerSlot.Player1, p1);
+                ApplyTickInput(PlayerSlot.Player2, p2);
 
-            player1Character.SimulateLockstepFrame(simDt);
-            player2Character.SimulateLockstepFrame(simDt);
+                player1Character.SimulateLockstepFrame(simDt);
+                player2Character.SimulateLockstepFrame(simDt);
 
-            currentTick++;
-            inputBuffer.DiscardBefore(
-                currentTick > 32 ? currentTick - 32 : 0u);
+                currentTick++;
+                inputBuffer.DiscardBefore(
+                    currentTick > 32 ? currentTick - 32 : 0u);
 
-            MaybeEmitSimHash();
+                MaybeEmitSimHash();
+            } finally {
+                GameplaySimClock.EndStep();
+            }
         }
 
         void MaybeEmitSimHash() {
@@ -423,7 +437,9 @@ namespace DiceGame.Session.Network
 
             Debug.LogError(
                 $"OnlineDualSimInputBinder: DESYNC tick={tick} hostHash={local:X8} clientHash={remote:X8}");
-            SendHostResync();
+            if (OnlineSessionConstants.LockstepAutoResyncEnabled) {
+                SendHostResync();
+            }
         }
 
         void SendHostResync() {

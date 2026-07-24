@@ -56,11 +56,16 @@ namespace DiceGame.Session
         /// </summary>
         public const float LockstepReadyRetryIntervalSeconds = 0.25f;
         /// <summary>
-        /// Phase C: compare sim hashes every N lockstep ticks.
+        /// Phase C: compare sim hashes every N lockstep ticks (detection only).
         /// </summary>
         public const int LockstepHashIntervalTicks = 30;
         /// <summary>
-        /// Minimum time between host resync dumps after a desync.
+        /// When true, host pushes a full-board snapshot after DESYNC (recovery last resort).
+        /// Keep false for normal lockstep; input + deterministic sim is the main path.
+        /// </summary>
+        public const bool LockstepAutoResyncEnabled = false;
+        /// <summary>
+        /// Minimum time between host resync dumps when <see cref="LockstepAutoResyncEnabled"/> is true.
         /// </summary>
         public const float LockstepResyncCooldownSeconds = 2f;
         /// <summary>

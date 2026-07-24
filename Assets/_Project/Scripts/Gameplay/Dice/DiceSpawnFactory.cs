@@ -857,7 +857,7 @@ namespace DiceGame.Gameplay
                 var jitter = activeSpawnSettings.SpawnIntervalJitter;
                 var delay = activeSpawnSettings.SpawnInterval
                     + (float)((random.NextDouble() * 2.0 - 1.0) * jitter);
-                yield return new WaitForSeconds(Mathf.Max(0.01f, delay));
+                yield return GameplaySimClock.WaitForSeconds(Mathf.Max(0.01f, delay));
 
                 if (!DiceSpawnCellPicker.TryPickRandomSpawnSlot(
                         board,

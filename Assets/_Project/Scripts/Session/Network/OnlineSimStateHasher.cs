@@ -9,15 +9,13 @@ using GameCharacterController = DiceGame.Gameplay.CharacterController;
 namespace DiceGame.Session.Network
 {
     /// <summary>
-    /// Phase C: deterministic-ish fingerprint of logical board + quantized character poses.
+    /// Logical board fingerprint for lockstep desync detection.
+    /// Excludes visual/busy timing and fine world poses (those are not authoritative in lockstep).
     /// </summary>
     public static class OnlineSimStateHasher
     {
         const uint FnvOffset = 2166136261u;
         const uint FnvPrime = 16777619u;
-        const float PositionQuantum = 0.05f;
-        const float RotationQuantum = 1f;
-        const float SpeedQuantum = 0.05f;
 
         public static uint Compute(
             uint tick,
@@ -61,14 +59,13 @@ namespace DiceGame.Session.Network
                 return;
             }
 
-            var state = character.CaptureRollbackState(0);
+            var cell = character.StandingGridCell;
             hash = Mix(hash, (uint)character.PlayerSlot);
-            hash = Mix(hash, Quantize(state.Position.x, PositionQuantum));
-            hash = Mix(hash, Quantize(state.Position.y, PositionQuantum));
-            hash = Mix(hash, Quantize(state.Position.z, PositionQuantum));
-            hash = Mix(hash, Quantize(state.Rotation.eulerAngles.y, RotationQuantum));
-            hash = Mix(hash, Quantize(state.Speed, SpeedQuantum));
-            hash = Mix(hash, state.IsBusy ? 1u : 0u);
+            hash = Mix(hash, (uint)(ushort)cell.x);
+            hash = Mix(hash, (uint)(ushort)cell.y);
+            hash = Mix(hash, (uint)character.PlayerLevel);
+            hash = Mix(hash, character.IsCarrying ? 1u : 0u);
+            hash = Mix(hash, character.IsJumping ? 1u : 0u);
         }
 
         static void MixDice(
@@ -84,7 +81,9 @@ namespace DiceGame.Session.Network
             hash = Mix(hash, (byte)state.Orientation.North);
             hash = Mix(hash, (byte)state.Orientation.East);
             hash = Mix(hash, ResolveOwner(dice, ownershipContext));
-            hash = Mix(hash, dice.IsBusy ? 1u : 0u);
+            hash = Mix(hash, dice.IsCarried ? 1u : 0u);
+            hash = Mix(hash, dice.IsErasing ? 1u : 0u);
+            hash = Mix(hash, dice.IsVanishing ? 1u : 0u);
         }
 
         static GameCharacterController FindCharacter(
@@ -150,10 +149,6 @@ namespace DiceGame.Session.Network
             }
 
             return 0;
-        }
-
-        static uint Quantize(float value, float quantum) {
-            return (uint)Mathf.RoundToInt(value / quantum);
         }
 
         static uint Mix(uint hash, uint value) {

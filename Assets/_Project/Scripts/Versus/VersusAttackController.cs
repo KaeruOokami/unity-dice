@@ -2,6 +2,7 @@ using System;
 using System.Collections;
 using System.Collections.Generic;
 using DiceGame.Config;
+using DiceGame.Core;
 using DiceGame.Gameplay;
 using DiceGame.Grid;
 using DiceGame.View;
@@ -179,7 +180,7 @@ namespace DiceGame.Versus
                 var jitter = spawnSettings.SpawnIntervalJitter;
                 var delay = spawnSettings.SpawnInterval
                     + (float)((random.NextDouble() * 2.0 - 1.0) * jitter);
-                yield return new WaitForSeconds(Mathf.Max(0.01f, delay));
+                yield return GameplaySimClock.WaitForSeconds(Mathf.Max(0.01f, delay));
 
                 if (!NaturalSendVolleyBuilder.TryBuild(naturalSendSettings, random, out var volley)) {
                     continue;
@@ -224,7 +225,7 @@ namespace DiceGame.Versus
             }
 
             while (queue.Count > 0) {
-                if (!queue.IsHeadReady(Time.deltaTime)) {
+                if (!queue.IsHeadReady(GameplaySimClock.DeltaTime)) {
                     break;
                 }
 

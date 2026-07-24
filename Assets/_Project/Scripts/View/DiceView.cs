@@ -1370,7 +1370,7 @@ namespace DiceGame.View
             float duration) {
             var elapsed = 0f;
             while (elapsed < duration) {
-                elapsed += Time.deltaTime;
+                elapsed += GameplaySimClock.DeltaTime;
                 var t = Mathf.SmoothStep(0f, 1f, Mathf.Clamp01(elapsed / duration));
                 positionRoot.position = Vector3.Lerp(fromWorld, toWorld, t);
                 rotationRoot.rotation = Quaternion.Slerp(fromRotation, toRotation, t);
@@ -1553,7 +1553,7 @@ namespace DiceGame.View
             var elapsed = 0f;
             var rollDuration = animationSettings.RollAnimationDuration * GetRollDurationMultiplier();
             while (elapsed < rollDuration) {
-                elapsed += Time.deltaTime;
+                elapsed += GameplaySimClock.DeltaTime;
                 var linearT = Mathf.Clamp01(elapsed / rollDuration);
                 groundRollProgress = linearT;
                 var t = Mathf.SmoothStep(0f, 1f, linearT);
@@ -1745,7 +1745,7 @@ namespace DiceGame.View
             ApplyEmergenceVisual(board, progress);
 
             while (progress > 0f) {
-                progress = Mathf.Max(0f, progress - Time.deltaTime / duration);
+                progress = Mathf.Max(0f, progress - GameplaySimClock.DeltaTime / duration);
                 ApplyEmergenceVisual(board, progress);
                 yield return null;
             }
@@ -1765,7 +1765,7 @@ namespace DiceGame.View
 
             var elapsed = 0f;
             while (elapsed < duration) {
-                elapsed += Time.deltaTime;
+                elapsed += GameplaySimClock.DeltaTime;
                 var t = Mathf.SmoothStep(0f, 1f, elapsed / duration);
                 positionRoot.position = Vector3.Lerp(fromWorld, toWorld, t);
                 yield return null;
@@ -1782,7 +1782,7 @@ namespace DiceGame.View
             var vanishDuration = Mathf.Max(0.01f, settings.VanishDuration);
             oneVanishProgress = 0f;
             while (elapsed < vanishDuration) {
-                elapsed += Time.deltaTime;
+                elapsed += GameplaySimClock.DeltaTime;
                 oneVanishProgress = GetOneVanishEmissionFactor(elapsed, settings);
                 ApplyOneVanishEmission(settings, oneVanishProgress);
                 yield return null;
@@ -1871,7 +1871,7 @@ namespace DiceGame.View
             }
 
             while (erasureProgress < 1f) {
-                erasureProgress = Mathf.Min(1f, erasureProgress + Time.deltaTime / duration);
+                erasureProgress = Mathf.Min(1f, erasureProgress + GameplaySimClock.DeltaTime / duration);
                 ApplyErasureVisual(board, erasureProgress);
                 yield return null;
             }

@@ -267,7 +267,7 @@ namespace DiceGame.Gameplay.Character
                 holdTime = 0f;
             }
 
-            holdTime += Time.deltaTime;
+            holdTime += GameplaySimClock.DeltaTime;
             if (holdTime < movementSettings.DissolveDescentHoldDuration) {
                 return true;
             }

@@ -86,7 +86,7 @@ namespace DiceGame.Core
             Action<float, float, float> setWorldPosition,
             Action onGrounded = null) {
             while (!state.IsGrounded) {
-                state = Step(state, gravity, Time.deltaTime);
+                state = Step(state, gravity, GameplaySimClock.DeltaTime);
                 setWorldPosition(getHorizontalX(), groundWorldY + state.Offset, getHorizontalZ());
                 yield return null;
             }
@@ -160,7 +160,7 @@ namespace DiceGame.Core
                 session.Motion = StepSpawnBounce(
                     session.Motion,
                     gravity,
-                    Time.deltaTime,
+                    GameplaySimClock.DeltaTime,
                     restitution,
                     maxBounceCount,
                     minBounceVelocity,

@@ -433,7 +433,7 @@ namespace DiceGame.Gameplay
             var isHost = session != null && session.IsHost;
             var localSlot = session != null ? session.LocalPlayerSlot : PlayerSlot.Player1;
 
-            // Phase B: both peers simulate locally; lockstep binder drives fixed-tick character frames.
+            // Both peers simulate locally; lockstep binder drives fixed-tick character + sim clock.
             spawnSystem.AllowAutonomousSpawning = true;
             spawnSystem.EmitNetworkSpawns = false;
             if (attackController != null) {
