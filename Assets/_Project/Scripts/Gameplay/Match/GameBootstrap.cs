@@ -482,6 +482,13 @@ namespace DiceGame.Gameplay
                 physicsSettings,
                 diceOneVanishSettings,
                 characters);
+
+            // Presentation: characters may walk locally, but must not mutate the board.
+            for (var i = 0; i < characters.Count; i++) {
+                if (characters[i] != null) {
+                    characters[i].SetSuppressBoardMutation(true);
+                }
+            }
         }
 
         void DestroyOnlineClientMatchViewIfPresent() {

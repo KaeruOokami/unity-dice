@@ -82,6 +82,11 @@ namespace DiceGame.Gameplay
         bool pushFollowLimitOneCell;
         Vector3 pushFollowDiceStartWorld;
         bool isInitialized;
+        /// <summary>
+        /// Online client presentation: character may move visually, but must not
+        /// push / roll / lift dice (host events own the board).
+        /// </summary>
+        bool suppressBoardMutation;
         readonly List<PushContactCandidate> pushCandidates = new();
         LiftPhase liftPhase;
         DiceController carriedDice;
@@ -183,6 +188,22 @@ namespace DiceGame.Gameplay
 
         public void SetInputSource(ICharacterInputSource source) {
             inputSource = source;
+        }
+
+        /// <summary>
+        /// When true, this character will not mutate dice (push/roll/lift/coupled moves).
+        /// Used by online clients so only host events change the board.
+        /// </summary>
+        public void SetSuppressBoardMutation(bool suppress) {
+            suppressBoardMutation = suppress;
+            if (suppress) {
+                ResetPushState();
+                if (liftPhase != LiftPhase.None && carriedDice != null) {
+                    // Do not leave a locally carried die if presentation mode starts mid-carry.
+                    carriedDice = null;
+                    liftPhase = LiftPhase.None;
+                }
+            }
         }
 
         public void BindCrushOutcome(GameFlowController flow) {
@@ -427,10 +448,13 @@ namespace DiceGame.Gameplay
             TryMountOntoCoveringDiceIfNeeded();
 
             if (ActiveInputSource.WasLiftPressedThisFrame()) {
-                TryBeginLift();
+                if (!suppressBoardMutation) {
+                    TryBeginLift();
+                }
             }
 
             if (jumpPhase == JumpPhase.None && ActiveInputSource.WasJumpPressedThisFrame()) {
+                // Jump is allowed for local feel; dice-coupled jump rolls are blocked elsewhere.
                 TryBeginJump();
             }
 
@@ -663,6 +687,18 @@ namespace DiceGame.Gameplay
                 hasJumpCapability,
                 jumpCapability,
                 PlayerSlot);
+
+            // Online client: never start local dice rolls / ice slides / jump-grid dice moves.
+            if (suppressBoardMutation && plan.Kind == CharacterMoveKind.CoupledDiceMove) {
+                plan = new CharacterMovePlan {
+                    Kind = CharacterMoveKind.FaceSlide,
+                    FromCell = plan.FromCell,
+                    ToCell = plan.FromCell,
+                    Transition = MovementTransition.Blocked(),
+                    CoupledIntent = plan.CoupledIntent,
+                    BlockReason = "suppress-board-mutation"
+                };
+            }
 
             if (plan.Kind == CharacterMoveKind.Blocked) {
                 LogPositionMovementBlock(
@@ -1236,6 +1272,11 @@ namespace DiceGame.Gameplay
         }
 
         void UpdatePushContact(Vector2 input) {
+            if (suppressBoardMutation) {
+                ResetPushState();
+                return;
+            }
+
             if (liftPhase != LiftPhase.None || jumpPhase != JumpPhase.None) {
                 return;
             }
@@ -1673,6 +1714,10 @@ namespace DiceGame.Gameplay
         }
 
         bool TryBeginLift() {
+            if (suppressBoardMutation) {
+                return false;
+            }
+
             if (liftPhase != LiftPhase.None || isPushFollowing || jumpPhase != JumpPhase.None) {
                 return false;
             }
