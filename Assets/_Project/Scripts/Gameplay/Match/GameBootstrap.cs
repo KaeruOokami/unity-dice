@@ -107,7 +107,9 @@ namespace DiceGame.Gameplay
                 session.MatchStartRequested -= OnOnlineMatchStartRequested;
                 session.MatchStartRequested += OnOnlineMatchStartRequested;
 
-                if (session.PlayMode == OnlinePlayMode.Unspecified && !session.IsMatchRunning) {
+                // Online host/client and title lobby: wait for MatchStartRequested only.
+                // Beginning from Start() races MatchStart seed apply and can double-init.
+                if (session.IsOnline || session.PlayMode == OnlinePlayMode.Unspecified) {
                     return;
                 }
             }

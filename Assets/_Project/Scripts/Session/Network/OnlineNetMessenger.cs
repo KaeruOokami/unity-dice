@@ -162,7 +162,7 @@ namespace DiceGame.Session.Network
                 OnlineSessionConstants.MessageInput,
                 NetworkManager.ServerClientId,
                 writer,
-                NetworkDelivery.ReliableSequenced);
+                NetworkDelivery.UnreliableSequenced);
         }
 
         public void SendInputToClients(OnlineInputPayload payload) {
@@ -193,7 +193,7 @@ namespace DiceGame.Session.Network
                     OnlineSessionConstants.MessageInput,
                     clientId,
                     writer,
-                    NetworkDelivery.ReliableSequenced);
+                    NetworkDelivery.UnreliableSequenced);
             }
         }
 

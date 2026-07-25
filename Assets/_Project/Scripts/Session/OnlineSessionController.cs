@@ -310,7 +310,13 @@ namespace DiceGame.Session
                 $"OnlineSessionController.StartOnlineMatchAsHost: " +
                 $"clients={networkManager.ConnectedClientsList.Count} seed={payload.MatchSeed}");
             messenger.SendMatchStartToClients(payload);
+            // Start host sim immediately so DualSim can receive client Prefill/inputs
+            // while waiting for MatchStartAck (LockstepReady still gates Prefill exchange).
+            onlineSharedSetupReady = false;
             OnlineSessionState.Instance.SetStatus("Waiting for opponent ready...");
+            lobbyUi?.Hide();
+            ShowGameplayWorld();
+            OnlineSessionState.Instance.RequestMatchStart();
         }
 
         public async void LeaveSession() {
@@ -449,9 +455,19 @@ namespace DiceGame.Session
             ClearMatchStartHandshake();
             onlineSharedSetupReady = false;
             OnlineSessionState.Instance.SetStatus("Match starting");
+
+            // Host sim already started when MatchStart was sent; ACK only completes handshake.
+            if (gameBootstrap != null && gameBootstrap.IsSessionActive) {
+                return;
+            }
+
+            if (OnlineSessionState.Instance.IsMatchRunning) {
+                return;
+            }
+
+            lobbyUi?.Hide();
             ShowGameplayWorld();
             OnlineSessionState.Instance.RequestMatchStart();
-            lobbyUi?.Hide();
         }
 
         void TickMatchStartAckWait() {

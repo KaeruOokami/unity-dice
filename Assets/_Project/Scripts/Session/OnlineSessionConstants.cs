@@ -61,6 +61,7 @@ namespace DiceGame.Session
         public const int LockstepMaxStepsPerFrame = 4;
         /// <summary>
         /// Resend local inputs in [currentTick-redundancy, currentTick+delay] while peers may be catching up.
+        /// Inputs use UnreliableSequenced; redundancy recovers single-packet loss without HOL blocking.
         /// </summary>
         public const float LockstepInputResendIntervalSeconds = 0.1f;
         /// <summary>

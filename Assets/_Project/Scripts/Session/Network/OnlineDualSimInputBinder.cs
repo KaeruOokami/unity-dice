@@ -55,6 +55,7 @@ namespace DiceGame.Session.Network
         bool repliedToPeerReady;
         bool prefillDone;
         bool applyingResync;
+        bool stalledWaitingForRemote;
 
         public void Configure(
             OnlineNetMessenger netMessenger,
@@ -92,6 +93,7 @@ namespace DiceGame.Session.Network
             repliedToPeerReady = false;
             prefillDone = false;
             applyingResync = false;
+            stalledWaitingForRemote = false;
             localHashes.Clear();
             remoteHashes.Clear();
             inputBuffer.Clear();
@@ -330,14 +332,16 @@ namespace DiceGame.Session.Network
             }
 
             nextResendTime = now + OnlineSessionConstants.LockstepInputResendIntervalSeconds;
-            SendLocalInputWindow();
+            SendLocalInputWindow(expandLookback: stalledWaitingForRemote);
         }
 
-        void SendLocalInputWindow() {
+        void SendLocalInputWindow(bool expandLookback = false) {
             var delay = (uint)OnlineSessionConstants.InputDelayTicks;
-            var redundancy = (uint)OnlineSessionConstants.LockstepInputRedundancyTicks;
+            var lookback = expandLookback
+                ? (uint)OnlineSessionConstants.LockstepInputRetainTicks
+                : (uint)OnlineSessionConstants.LockstepInputRedundancyTicks;
             var endTick = currentTick + delay;
-            var startTick = currentTick > redundancy ? currentTick - redundancy : 0u;
+            var startTick = currentTick > lookback ? currentTick - lookback : 0u;
             SendLocalInputRange(startTick, endTick);
         }
 
@@ -382,10 +386,12 @@ namespace DiceGame.Session.Network
                 }
 
                 if (!inputBuffer.HasBoth(currentTick)) {
+                    stalledWaitingForRemote = true;
                     LogStallThrottled();
                     break;
                 }
 
+                stalledWaitingForRemote = false;
                 StepSimulationTick(simDt);
                 simulatorAccumulator -= simDt;
                 steps++;
