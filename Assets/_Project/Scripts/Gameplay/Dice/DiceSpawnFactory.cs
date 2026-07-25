@@ -1,5 +1,4 @@
 using System;
-using System.Collections;
 using System.Collections.Generic;
 using DiceGame.Config;
 using DiceGame.Core;
@@ -73,7 +72,7 @@ namespace DiceGame.Gameplay
             public PlayerSlot Slot;
             public DiceSpawnSettings Settings;
             public DiceCatalog Catalog;
-            public Coroutine SpawnCoroutine;
+            public float SpawnCooldown;
         }
 
         Board board;
@@ -93,7 +92,8 @@ namespace DiceGame.Gameplay
         VersusInitialDicePlacementMode versusInitialPlacementMode =
             VersusInitialDicePlacementMode.Mirrored;
 
-        Coroutine spawnCoroutine;
+        float soloSpawnCooldown;
+        bool soloSpawnActive;
         bool gameplayEnabled = true;
         bool emitNetworkSpawns;
         bool allowAutonomousSpawning = true;
@@ -188,10 +188,11 @@ namespace DiceGame.Gameplay
                 for (var i = 0; i < versusChannels.Count; i++) {
                     var channel = versusChannels[i];
                     if (channel.Settings == null || !channel.Settings.ContinuousSpawnEnabled) {
+                        channel.SpawnCooldown = -1f;
                         continue;
                     }
 
-                    channel.SpawnCoroutine = StartCoroutine(SpawnLoop(channel.Settings, channel.Slot));
+                    channel.SpawnCooldown = SampleSpawnDelay(channel.Settings);
                 }
 
                 return;
@@ -201,7 +202,8 @@ namespace DiceGame.Gameplay
                 return;
             }
 
-            spawnCoroutine = StartCoroutine(SpawnLoop(spawnSettings, null));
+            soloSpawnActive = true;
+            soloSpawnCooldown = SampleSpawnDelay(spawnSettings);
         }
 
         public void SetGameplayEnabled(bool enabled) {
@@ -218,17 +220,78 @@ namespace DiceGame.Gameplay
         }
 
         public void StopSpawning() {
-            if (spawnCoroutine != null) {
-                StopCoroutine(spawnCoroutine);
-                spawnCoroutine = null;
+            soloSpawnActive = false;
+            soloSpawnCooldown = -1f;
+            for (var i = 0; i < versusChannels.Count; i++) {
+                versusChannels[i].SpawnCooldown = -1f;
+            }
+        }
+
+        /// <summary>
+        /// Advance continuous spawn timers (lockstep tick or offline Update).
+        /// </summary>
+        public void SimulateLockstepTick(float deltaTime) {
+            if (!gameplayEnabled || !allowAutonomousSpawning || deltaTime <= 0f) {
+                return;
             }
 
-            for (var i = 0; i < versusChannels.Count; i++) {
-                var channel = versusChannels[i];
-                if (channel.SpawnCoroutine != null) {
-                    StopCoroutine(channel.SpawnCoroutine);
-                    channel.SpawnCoroutine = null;
+            if (versusChannels.Count > 0) {
+                for (var i = 0; i < versusChannels.Count; i++) {
+                    var channel = versusChannels[i];
+                    if (channel.Settings == null
+                        || !channel.Settings.ContinuousSpawnEnabled
+                        || channel.SpawnCooldown < 0f) {
+                        continue;
+                    }
+
+                    TickSpawnChannel(channel.Settings, channel.Slot, ref channel.SpawnCooldown, deltaTime);
                 }
+
+                return;
+            }
+
+            if (!soloSpawnActive || spawnSettings == null || soloSpawnCooldown < 0f) {
+                return;
+            }
+
+            TickSpawnChannel(spawnSettings, null, ref soloSpawnCooldown, deltaTime);
+        }
+
+        void Update() {
+            if (GameplaySimClock.IsActive) {
+                return;
+            }
+
+            SimulateLockstepTick(Time.deltaTime);
+        }
+
+        float SampleSpawnDelay(DiceSpawnSettings activeSpawnSettings) {
+            var jitter = activeSpawnSettings.SpawnIntervalJitter;
+            var delay = activeSpawnSettings.SpawnInterval
+                + (float)((random.NextDouble() * 2.0 - 1.0) * jitter);
+            return Mathf.Max(0.01f, delay);
+        }
+
+        void TickSpawnChannel(
+            DiceSpawnSettings activeSpawnSettings,
+            PlayerSlot? ownerSlot,
+            ref float cooldown,
+            float deltaTime) {
+            cooldown -= deltaTime;
+            while (cooldown <= 0f) {
+                if (!DiceSpawnCellPicker.TryPickRandomSpawnSlot(
+                        board,
+                        registry,
+                        ownerSlot,
+                        activeSpawnSettings.BottomSpawnWeight,
+                        random,
+                        out var slot)) {
+                    cooldown = -1f;
+                    return;
+                }
+
+                SpawnDiceWithAppear(slot, ownerSlot, activeSpawnSettings);
+                cooldown += SampleSpawnDelay(activeSpawnSettings);
             }
         }
 
@@ -850,27 +913,6 @@ namespace DiceGame.Gameplay
                 0.5f,
                 random,
                 out slot);
-        }
-
-        IEnumerator SpawnLoop(DiceSpawnSettings activeSpawnSettings, PlayerSlot? ownerSlot) {
-            while (enabled && gameplayEnabled) {
-                var jitter = activeSpawnSettings.SpawnIntervalJitter;
-                var delay = activeSpawnSettings.SpawnInterval
-                    + (float)((random.NextDouble() * 2.0 - 1.0) * jitter);
-                yield return GameplaySimClock.WaitForSeconds(Mathf.Max(0.01f, delay));
-
-                if (!DiceSpawnCellPicker.TryPickRandomSpawnSlot(
-                        board,
-                        registry,
-                        ownerSlot,
-                        activeSpawnSettings.BottomSpawnWeight,
-                        random,
-                        out var slot)) {
-                    yield break;
-                }
-
-                SpawnDiceWithAppear(slot, ownerSlot, activeSpawnSettings);
-            }
         }
 
         void OnDisable() {

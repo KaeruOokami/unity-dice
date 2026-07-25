@@ -30,6 +30,30 @@ namespace DiceGame.Placement
             board = targetBoard;
         }
 
+        /// <summary>
+        /// Advance logical motion timers on all dice (lockstep tick or offline Update).
+        /// </summary>
+        public void TickLogicalMotions(float deltaTime) {
+            if (deltaTime <= 0f) {
+                return;
+            }
+
+            for (var i = 0; i < allDice.Count; i++) {
+                var dice = allDice[i];
+                if (dice != null) {
+                    dice.TickLogicalMotion(deltaTime);
+                }
+            }
+        }
+
+        void Update() {
+            if (GameplaySimClock.IsActive) {
+                return;
+            }
+
+            TickLogicalMotions(Time.deltaTime);
+        }
+
         public bool CanPlaceBottomDiceAt(Vector2Int gridPos) {
             if (board == null || !board.IsInside(gridPos) || board.GetCell(gridPos) != CellType.Floor) {
                 return false;

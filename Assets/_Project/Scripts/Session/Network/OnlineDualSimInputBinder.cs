@@ -4,6 +4,7 @@ using DiceGame.Core;
 using DiceGame.Gameplay;
 using DiceGame.Gameplay.Input;
 using DiceGame.Placement;
+using DiceGame.Versus;
 using UnityEngine;
 using GameCharacterController = DiceGame.Gameplay.CharacterController;
 
@@ -20,6 +21,8 @@ namespace DiceGame.Session.Network
         DiceRegistry registry;
         DiceMatchOwnershipContext ownershipContext;
         DiceSpawnSystem spawnSystem;
+        VersusAttackController attackController;
+        DiceMatchErasureSystem erasureSystem;
         OnlineEntityIdMap entityIds;
         readonly List<GameCharacterController> characters = new();
         CharacterInputReader localHardwareInput;
@@ -59,11 +62,15 @@ namespace DiceGame.Session.Network
             bool host,
             DiceRegistry diceRegistry,
             DiceMatchOwnershipContext matchOwnership,
-            DiceSpawnSystem diceSpawnSystem) {
+            DiceSpawnSystem diceSpawnSystem,
+            VersusAttackController versusAttackController = null,
+            DiceMatchErasureSystem matchErasureSystem = null) {
             messenger = netMessenger;
             registry = diceRegistry;
             ownershipContext = matchOwnership;
             spawnSystem = diceSpawnSystem;
+            attackController = versusAttackController;
+            erasureSystem = matchErasureSystem;
             localSlot = localPlayerSlot;
             remoteSlot = localPlayerSlot == PlayerSlot.Player1
                 ? PlayerSlot.Player2
@@ -372,11 +379,17 @@ namespace DiceGame.Session.Network
 
             GameplaySimClock.BeginStep(simDt);
             try {
+                registry?.TickLogicalMotions(simDt);
+
                 ApplyTickInput(PlayerSlot.Player1, p1);
                 ApplyTickInput(PlayerSlot.Player2, p2);
 
                 player1Character.SimulateLockstepFrame(simDt);
                 player2Character.SimulateLockstepFrame(simDt);
+
+                spawnSystem?.SimulateLockstepTick(simDt);
+                attackController?.SimulateLockstepTick(simDt);
+                erasureSystem?.SimulateLockstepTick();
 
                 currentTick++;
                 inputBuffer.DiscardBefore(

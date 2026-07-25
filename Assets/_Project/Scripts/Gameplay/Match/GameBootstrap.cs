@@ -467,7 +467,9 @@ namespace DiceGame.Gameplay
                 isHost,
                 registry,
                 ownershipContext,
-                spawnSystem);
+                spawnSystem,
+                attackController,
+                erasureSystem);
         }
 
         void DestroyLegacyOnlineSyncComponents() {

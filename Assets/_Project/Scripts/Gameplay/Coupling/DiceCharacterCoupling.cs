@@ -102,12 +102,17 @@ namespace DiceGame.Gameplay.Coupling
         }
 
         public void SyncVisual() {
-            if (!session.IsTracking || standing.CurrentDice?.View.DiceTransform == null) {
+            if (!session.IsTracking || standing.CurrentDice == null || board == null) {
                 return;
             }
 
             var dice = standing.CurrentDice;
-            var diceCenter = dice.View.DiceTransform.position;
+            var toCenter = dice.GetLogicalCenterWorld();
+            var fromCenter = session.DiceCenterAnchor;
+            var progress = dice.IsMotionFollowActive ? dice.LogicalMotionProgress : 1f;
+            var diceCenter = Vector3.Lerp(fromCenter, toCenter, progress);
+            diceCenter.y = toCenter.y;
+
             if (session.HasPendingPartitionDismount
                 && HasPassedPartitionDismountBoundary(diceCenter)) {
                 CompletePartitionDismount(dice);
@@ -116,7 +121,7 @@ namespace DiceGame.Gameplay.Coupling
 
             var delta = diceCenter - session.DiceCenterAnchor;
             var worldPosition = session.CharacterAnchor + delta;
-            worldPosition.y = dice.GetTopSurfaceWorldY() + movementSettings.CharacterHeightOffset;
+            worldPosition.y = dice.GetLogicalTopSurfaceWorldY() + movementSettings.CharacterHeightOffset;
             transformDriver.ApplyWorldPosition(worldPosition);
         }
 
@@ -143,18 +148,18 @@ namespace DiceGame.Gameplay.Coupling
         /// Reuses the same anchor tracking as roll coupling.
         /// </summary>
         public void BeginMountFollow() {
-            if (standing.CurrentDice?.View.DiceTransform == null) {
-                Debug.LogError("DiceCharacterCoupling: BeginMountFollow requires a standing dice with a visual.");
+            if (standing.CurrentDice == null || board == null) {
+                Debug.LogError("DiceCharacterCoupling: BeginMountFollow requires a standing dice.");
                 return;
             }
 
             ClearRollCancelSession();
             session.JumpDiceGridMoved = false;
-            var diceCenter = standing.CurrentDice.View.DiceTransform.position;
+            var diceCenter = standing.CurrentDice.GetLogicalCenterWorld();
             var charPos = transformDriver.GetWorldXZ();
             BeginFollow(
                 new Vector3(charPos.x, 0f, charPos.y),
-                diceCenter,
+                new Vector3(diceCenter.x, 0f, diceCenter.z),
                 jumpArc: false,
                 JumpDiceMoveKind.None);
         }
@@ -378,9 +383,18 @@ namespace DiceGame.Gameplay.Coupling
             standing.SetOnDice(toState.GridPos, toState.Tier, dice);
 
             transformDriver.AlignToDiceFace(dice, nextXZ, halfExtent);
-            var diceCenter = dice.View.DiceTransform.position;
+            var diceCenter = dice.GetLogicalCenterWorld();
             var charPos = transformDriver.GetWorldXZ();
-            BeginFollow(new Vector3(charPos.x, 0f, charPos.y), diceCenter, jumpArc, session.JumpMoveKind);
+            BeginFollow(
+                new Vector3(charPos.x, 0f, charPos.y),
+                new Vector3(diceCenter.x, 0f, diceCenter.z),
+                jumpArc,
+                session.JumpMoveKind);
+            if (board != null && rollCancelSession.IsActive) {
+                var origin = board.GridToWorld(rollCancelSession.OriginalPlan.From.GridPos);
+                session.DiceCenterAnchor = new Vector3(origin.x, 0f, origin.z);
+            }
+
             session.IsActive = true;
         }
 
@@ -420,7 +434,7 @@ namespace DiceGame.Gameplay.Coupling
             Vector2 nextXZ,
             float halfExtent) {
             var dice = standing.CurrentDice;
-            if (dice?.View.DiceTransform == null || dice.IsBusy) {
+            if (dice == null || dice.IsBusy || board == null) {
                 return false;
             }
 
@@ -443,9 +457,13 @@ namespace DiceGame.Gameplay.Coupling
 
             standing.SetOnDice(plan.To.GridPos, plan.To.Tier, dice);
             transformDriver.AlignToDiceFace(dice, nextXZ, halfExtent);
-            var diceCenter = dice.View.DiceTransform.position;
+            var fromCenter = board.GridToWorld(plan.From.GridPos);
             var charPos = transformDriver.GetWorldXZ();
-            BeginFollow(new Vector3(charPos.x, 0f, charPos.y), diceCenter, jumpArc: false, JumpDiceMoveKind.None);
+            BeginFollow(
+                new Vector3(charPos.x, 0f, charPos.y),
+                new Vector3(fromCenter.x, 0f, fromCenter.z),
+                jumpArc: false,
+                JumpDiceMoveKind.None);
 
             var layout = board != null && board.IsVersusArena ? board.VersusLayout : null;
             if (IceSlidePassability.TryGetPartitionDismountCell(
@@ -509,7 +527,7 @@ namespace DiceGame.Gameplay.Coupling
             Vector2 nextXZ,
             float halfExtent) {
             var dice = standing.CurrentDice;
-            if (dice?.View.DiceTransform == null || dice.IsBusy) {
+            if (dice == null || dice.IsBusy || board == null) {
                 return false;
             }
 
@@ -543,9 +561,13 @@ namespace DiceGame.Gameplay.Coupling
             standing.SetOnDice(plan.To.GridPos, plan.To.Tier, dice);
 
             transformDriver.AlignToDiceFace(dice, nextXZ, halfExtent);
-            var diceCenter = dice.View.DiceTransform.position;
+            var fromCenter = board.GridToWorld(plan.From.GridPos);
             var charPos = transformDriver.GetWorldXZ();
-            BeginFollow(new Vector3(charPos.x, 0f, charPos.y), diceCenter, jumpArc, session.JumpMoveKind);
+            BeginFollow(
+                new Vector3(charPos.x, 0f, charPos.y),
+                new Vector3(fromCenter.x, 0f, fromCenter.z),
+                jumpArc,
+                session.JumpMoveKind);
             session.IsActive = true;
 
             if (!jumpArc && RollCancelPolicy.IsCancelEligiblePlan(plan)) {
@@ -582,13 +604,17 @@ namespace DiceGame.Gameplay.Coupling
         }
 
         public void EnsureTrackingFromCurrentPose() {
-            if (session.IsTracking || standing.CurrentDice?.View.DiceTransform == null) {
+            if (session.IsTracking || standing.CurrentDice == null) {
                 return;
             }
 
-            var diceCenter = standing.CurrentDice.View.DiceTransform.position;
+            var diceCenter = standing.CurrentDice.GetLogicalCenterWorld();
             var charPos = transformDriver.GetWorldXZ();
-            BeginFollow(new Vector3(charPos.x, 0f, charPos.y), diceCenter, session.IsJumpArc, session.JumpMoveKind);
+            BeginFollow(
+                new Vector3(charPos.x, 0f, charPos.y),
+                new Vector3(diceCenter.x, 0f, diceCenter.z),
+                session.IsJumpArc,
+                session.JumpMoveKind);
         }
     }
 }

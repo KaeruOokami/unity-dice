@@ -1019,6 +1019,32 @@ namespace DiceGame.View
                 : 0f;
         }
 
+        public float GetGroundParallelRollDuration(int distance) {
+            return animationSettings != null
+                ? animationSettings.GetGroundParallelRollDuration(distance) * GetRollDurationMultiplier()
+                : 0f;
+        }
+
+        public float GetSlideLogicalDuration(int cellDistance) {
+            return animationSettings != null
+                ? animationSettings.SlideDuration * Mathf.Max(1, cellDistance)
+                : 0f;
+        }
+
+        public float GetSpawnAppearLogicalDuration() {
+            return animationSettings != null
+                ? animationSettings.SpawnAppearLogicalDuration
+                : 0f;
+        }
+
+        public float GetCancelRollLogicalDuration(float cancelProgress) {
+            return animationSettings != null
+                ? Mathf.Clamp01(cancelProgress)
+                    * animationSettings.RollAnimationDuration
+                    * GetRollDurationMultiplier()
+                : 0f;
+        }
+
         public void PlayCancelGroundRollVisual(
             DiceRollVisualSnapshot snapshot,
             DiceState toState,

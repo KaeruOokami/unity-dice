@@ -366,8 +366,8 @@ namespace DiceGame.Gameplay
 
             if (!IsOnFloor
                 && standingController.TryGetStandingDice(out var startStanding)
-                && startStanding.View.DiceTransform != null) {
-                var center = startStanding.View.DiceTransform.position;
+                && startStanding != null) {
+                var center = startStanding.GetLogicalCenterWorld();
                 transformDriver.ApplyWorldPosition(new Vector3(center.x, 0f, center.z));
             } else {
                 transformDriver.SnapYToSurface();
@@ -1395,8 +1395,8 @@ namespace DiceGame.Gameplay
             pushFollowDirection = direction;
             isPushFollowing = true;
             pushFollowLimitOneCell = CharacterPushExecutor.LimitsPushFollowToOneCell(dice);
-            pushFollowDiceStartWorld = dice?.View?.DiceTransform != null
-                ? dice.View.DiceTransform.position
+            pushFollowDiceStartWorld = dice != null
+                ? dice.GetLogicalCenterWorld()
                 : Vector3.zero;
             currentSpeed = 0f;
             pushFollowDice.StateChanged += OnPushFollowDiceStateChanged;
@@ -1426,22 +1426,12 @@ namespace DiceGame.Gameplay
         }
 
         bool HasExceededPushFollowOneCellLimit() {
-            if (!pushFollowLimitOneCell
-                || pushFollowDice?.View?.DiceTransform == null
-                || board == null) {
+            if (!pushFollowLimitOneCell || pushFollowDice == null) {
                 return false;
             }
 
-            var delta = pushFollowDice.View.DiceTransform.position - pushFollowDiceStartWorld;
-            var displacement = pushFollowDirection switch {
-                Direction.East => delta.x,
-                Direction.West => -delta.x,
-                Direction.North => delta.z,
-                Direction.South => -delta.z,
-                _ => 0f
-            };
-
-            return displacement >= board.CellSize - EdgeEpsilon;
+            // Logical grid moves commit immediately; end one-cell follow when busy clears.
+            return !pushFollowDice.IsRolling;
         }
 
         void UpdatePushFollowPosition() {
@@ -1457,15 +1447,10 @@ namespace DiceGame.Gameplay
                 return;
             }
 
-            var diceTransform = pushFollowDice.View.DiceTransform;
-            if (diceTransform == null) {
-                return;
-            }
-
             coupling.EndRollTracking();
             SyncPushFollowStanding();
 
-            var diceCenter = diceTransform.position;
+            var diceCenter = pushFollowDice.GetLogicalCenterWorld();
             var half = board.CellSize * 0.5f;
             var contactOffset = half + GetPushHorizontalRadius();
             var beforePosition = characterTransform.position;
@@ -1485,9 +1470,7 @@ namespace DiceGame.Gameplay
                 return;
             }
 
-            var diceCell = pushFollowLimitOneCell && pushFollowDice.View?.DiceTransform != null
-                ? board.WorldToGrid(pushFollowDice.View.DiceTransform.position)
-                : pushFollowDice.CurrentState.GridPos;
+            var diceCell = pushFollowDice.CurrentState.GridPos;
             var contactCell = diceCell + pushFollowDirection.Opposite().ToGridDelta();
             if (!board.IsInside(contactCell)) {
                 return;
@@ -1544,84 +1527,74 @@ namespace DiceGame.Gameplay
         void CollectPushCandidates(Vector2 input, List<PushContactCandidate> candidates) {
             candidates.Clear();
 
-            if (characterPushCollider == null) {
-                LogPushDebugWhenInput(input, "no-collider", "stage=overlap characterPushCollider=null");
+            if (registry == null || board == null || standingController == null) {
                 return;
             }
 
-            var bounds = characterPushCollider.bounds;
-            var halfHeight = characterPushCollider.height * 0.5f - characterPushCollider.radius;
-            var bottom = bounds.center - Vector3.up * halfHeight;
-            var top = bounds.center + Vector3.up * halfHeight;
-            var hits = Physics.OverlapCapsule(
-                bottom,
-                top,
-                characterPushCollider.radius,
-                ~0,
-                QueryTriggerInteraction.Collide);
-
             var characterXZ = transformDriver.GetWorldXZ();
+            var standingCell = standingController.GridCell;
+            var minAlignment = movementSettings.PushInputAlignment;
             var overlapSummary = new System.Text.StringBuilder();
+            var considered = 0;
 
-            foreach (var hit in hits) {
-                if (hit == characterPushCollider) {
-                    continue;
+            void ConsiderDice(DiceController dice) {
+                if (dice == null) {
+                    return;
                 }
 
-                var pushBody = hit.GetComponent<DicePushBody>();
-                if (pushBody == null || pushBody.Dice == null || pushBody.Collider == null) {
-                    overlapSummary.Append($" [{hit.name}:noPushBody]");
-                    continue;
-                }
-
-                var diceLabel = FormatMovementDice(pushBody.Dice);
-                if (GhostPlacementRules.IsPlayerPassThrough(pushBody.Dice)) {
+                considered++;
+                var diceLabel = FormatMovementDice(dice);
+                if (GhostPlacementRules.IsPlayerPassThrough(dice)) {
                     overlapSummary.Append($" [{diceLabel}:ghost-pass-through]");
-                    continue;
+                    return;
                 }
 
-                if (pushBody.Dice.IsVanishing || pushBody.Dice.IsBusy) {
+                if (dice.IsVanishing || dice.IsBusy) {
                     overlapSummary.Append($" [{diceLabel}:busy]");
-                    continue;
+                    return;
                 }
 
-                if (pushBody.Dice.IsSinkErasing) {
+                if (dice.IsSinkErasing) {
                     overlapSummary.Append($" [{diceLabel}:sink-erasing]");
-                    continue;
+                    return;
                 }
 
-                if (!CanPushDice(pushBody.Dice, out var rejectReason)) {
+                if (!CanPushDice(dice, out var rejectReason)) {
                     overlapSummary.Append($" [{diceLabel}:canPush={rejectReason}]");
+                    return;
+                }
+
+                var pushBounds = dice.GetLogicalPushBounds();
+                overlapSummary.Append($" [{diceLabel}:canPush=ok]");
+                PushContactEvaluator.TryAdd(candidates, dice, pushBounds, input, characterXZ, Direction.East, minAlignment);
+                PushContactEvaluator.TryAdd(candidates, dice, pushBounds, input, characterXZ, Direction.West, minAlignment);
+                PushContactEvaluator.TryAdd(candidates, dice, pushBounds, input, characterXZ, Direction.North, minAlignment);
+                PushContactEvaluator.TryAdd(candidates, dice, pushBounds, input, characterXZ, Direction.South, minAlignment);
+            }
+
+            // Standing cell + four neighbors (deterministic registry lookup; no Physics).
+            if (registry.TryGetTopAt(standingCell, out var standingTop)) {
+                ConsiderDice(standingTop);
+            }
+
+            if (registry.TryGetBottomAt(standingCell, out var standingBottom)) {
+                ConsiderDice(standingBottom);
+            }
+
+            foreach (Direction direction in new[] {
+                Direction.East, Direction.West, Direction.North, Direction.South }) {
+                var neighbor = standingCell + direction.ToGridDelta();
+                if (!board.IsInside(neighbor)) {
                     continue;
                 }
 
-                overlapSummary.Append($" [{diceLabel}:canPush=ok");
-                foreach (Direction direction in new[] {
-                    Direction.East, Direction.West, Direction.North, Direction.South }) {
-                    if (PushContactEvaluator.TryEvaluate(
-                        pushBody.Collider.bounds,
-                        characterXZ,
-                        input,
-                        direction,
-                        movementSettings.PushInputAlignment,
-                        out _,
-                        out _,
-                        out var directionRejectReason)) {
-                        overlapSummary.Append($" {direction}=ok");
-                        continue;
-                    }
-
-                    overlapSummary.Append($" {direction}={directionRejectReason}");
+                if (registry.TryGetTopAt(neighbor, out var top)) {
+                    ConsiderDice(top);
                 }
 
-                overlapSummary.Append(']');
-
-                var pushBounds = pushBody.Collider.bounds;
-                var minAlignment = movementSettings.PushInputAlignment;
-                PushContactEvaluator.TryAdd(candidates, pushBody.Dice, pushBounds, input, characterXZ, Direction.East, minAlignment);
-                PushContactEvaluator.TryAdd(candidates, pushBody.Dice, pushBounds, input, characterXZ, Direction.West, minAlignment);
-                PushContactEvaluator.TryAdd(candidates, pushBody.Dice, pushBounds, input, characterXZ, Direction.North, minAlignment);
-                PushContactEvaluator.TryAdd(candidates, pushBody.Dice, pushBounds, input, characterXZ, Direction.South, minAlignment);
+                if (registry.TryGetBottomAt(neighbor, out var bottom)) {
+                    ConsiderDice(bottom);
+                }
             }
 
             candidates.Sort(PushContactEvaluator.Compare);
@@ -1629,9 +1602,9 @@ namespace DiceGame.Gameplay
             LogPushDebugWhenInput(
                 input,
                 "overlap-summary",
-                $"stage=overlap standing={FormatMovementGrid(standingController.GridCell)} layer={standingController.Level} " +
+                $"stage=overlap standing={FormatMovementGrid(standingCell)} layer={standingController.Level} " +
                 $"tier={standingController.Tier} charXZ=({characterXZ.x:F2},{characterXZ.y:F2}) input=({input.x:F2},{input.y:F2}) " +
-                $"hits={hits.Length} dice={overlapSummary} candidates={candidates.Count}");
+                $"considered={considered} dice={overlapSummary} candidates={candidates.Count}");
         }
 
         bool TryPushDice(PushContactCandidate candidate, out DiceController pushedDice, out Direction pushDir) {

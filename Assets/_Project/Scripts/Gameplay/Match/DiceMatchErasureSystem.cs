@@ -74,6 +74,17 @@ namespace DiceGame.Gameplay
         }
 
         void Update() {
+            if (GameplaySimClock.IsActive) {
+                return;
+            }
+
+            SimulateLockstepTick();
+        }
+
+        /// <summary>
+        /// Flush pending tier-fall match evaluation (lockstep or offline).
+        /// </summary>
+        public void SimulateLockstepTick() {
             TryFlushPendingTierFallMatches();
         }
 

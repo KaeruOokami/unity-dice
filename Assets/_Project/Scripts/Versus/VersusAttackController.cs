@@ -1,5 +1,4 @@
 using System;
-using System.Collections;
 using System.Collections.Generic;
 using DiceGame.Config;
 using DiceGame.Core;
@@ -20,10 +19,11 @@ namespace DiceGame.Versus
         System.Random random;
 
         readonly Dictionary<PlayerSlot, AttackQueue> incomingQueues = new();
-        readonly Dictionary<PlayerSlot, Coroutine> naturalSendCoroutines = new();
+        readonly Dictionary<PlayerSlot, float> naturalSendCooldowns = new();
         bool gameplayEnabled = true;
         bool generateAttacks = true;
         bool applyQueuedSpawns = true;
+        bool naturalSendActive;
 
         public void Configure(
             IVersusBoardSettings settings,
@@ -82,12 +82,32 @@ namespace DiceGame.Versus
         }
 
         void Update() {
-            if (!gameplayEnabled || !applyQueuedSpawns || versusSettings == null || spawnSystem == null) {
+            if (GameplaySimClock.IsActive) {
                 return;
             }
 
-            TickQueue(PlayerSlot.Player1);
-            TickQueue(PlayerSlot.Player2);
+            SimulateLockstepTick(Time.deltaTime);
+        }
+
+        /// <summary>
+        /// Advance natural-send timers and attack queues (lockstep or offline).
+        /// </summary>
+        public void SimulateLockstepTick(float deltaTime) {
+            if (!gameplayEnabled || versusSettings == null || spawnSystem == null || deltaTime <= 0f) {
+                return;
+            }
+
+            if (generateAttacks && naturalSendActive) {
+                TickNaturalSend(PlayerSlot.Player1, deltaTime);
+                TickNaturalSend(PlayerSlot.Player2, deltaTime);
+            }
+
+            if (!applyQueuedSpawns) {
+                return;
+            }
+
+            TickQueue(PlayerSlot.Player1, deltaTime);
+            TickQueue(PlayerSlot.Player2, deltaTime);
         }
 
         public void SetGameplayEnabled(bool enabled) {
@@ -141,21 +161,17 @@ namespace DiceGame.Versus
                 return;
             }
 
-            TryStartNaturalSendLoop(PlayerSlot.Player1);
-            TryStartNaturalSendLoop(PlayerSlot.Player2);
+            naturalSendActive = true;
+            TryArmNaturalSend(PlayerSlot.Player1);
+            TryArmNaturalSend(PlayerSlot.Player2);
         }
 
         void StopNaturalSendLoops() {
-            foreach (var pair in naturalSendCoroutines) {
-                if (pair.Value != null) {
-                    StopCoroutine(pair.Value);
-                }
-            }
-
-            naturalSendCoroutines.Clear();
+            naturalSendActive = false;
+            naturalSendCooldowns.Clear();
         }
 
-        void TryStartNaturalSendLoop(PlayerSlot sender) {
+        void TryArmNaturalSend(PlayerSlot sender) {
             if (versusSettings == null) {
                 return;
             }
@@ -168,31 +184,43 @@ namespace DiceGame.Versus
                 return;
             }
 
-            naturalSendCoroutines[sender] = StartCoroutine(
-                NaturalSendLoop(sender, spawnSettings, naturalSendSettings));
+            naturalSendCooldowns[sender] = SampleNaturalSendDelay(spawnSettings);
         }
 
-        IEnumerator NaturalSendLoop(
-            PlayerSlot sender,
-            DiceSpawnSettings spawnSettings,
-            PlayerNaturalSendSettings naturalSendSettings) {
-            while (enabled && gameplayEnabled && generateAttacks) {
-                var jitter = spawnSettings.SpawnIntervalJitter;
-                var delay = spawnSettings.SpawnInterval
-                    + (float)((random.NextDouble() * 2.0 - 1.0) * jitter);
-                yield return GameplaySimClock.WaitForSeconds(Mathf.Max(0.01f, delay));
+        float SampleNaturalSendDelay(DiceSpawnSettings spawnSettings) {
+            var jitter = spawnSettings.SpawnIntervalJitter;
+            var delay = spawnSettings.SpawnInterval
+                + (float)((random.NextDouble() * 2.0 - 1.0) * jitter);
+            return Mathf.Max(0.01f, delay);
+        }
 
-                if (!NaturalSendVolleyBuilder.TryBuild(naturalSendSettings, random, out var volley)) {
-                    continue;
+        void TickNaturalSend(PlayerSlot sender, float deltaTime) {
+            if (!naturalSendCooldowns.TryGetValue(sender, out var cooldown)) {
+                return;
+            }
+
+            var spawnSettings = versusSettings.GetSpawnSettings(sender);
+            var naturalSendSettings = versusSettings.GetNaturalSendSettings(sender);
+            if (spawnSettings == null || naturalSendSettings == null || !naturalSendSettings.Enabled) {
+                return;
+            }
+
+            cooldown -= deltaTime;
+            while (cooldown <= 0f) {
+                if (NaturalSendVolleyBuilder.TryBuild(naturalSendSettings, random, out var volley)) {
+                    var target = SinkingChainResolver.GetOpponent(sender);
+                    var attackSettings = versusSettings.GetAttackSettings(sender);
+                    var queueDelay = attackSettings != null
+                        ? attackSettings.QueueToBoardDelay
+                        : 0f;
+                    EnsureQueues();
+                    incomingQueues[target].Enqueue(volley, queueDelay);
                 }
 
-                var target = SinkingChainResolver.GetOpponent(sender);
-                var attackSettings = versusSettings.GetAttackSettings(sender);
-                var queueDelay = attackSettings != null
-                    ? attackSettings.QueueToBoardDelay
-                    : 0f;
-                incomingQueues[target].Enqueue(volley, queueDelay);
+                cooldown += SampleNaturalSendDelay(spawnSettings);
             }
+
+            naturalSendCooldowns[sender] = cooldown;
         }
 
         void OnErasureResolved(ErasureResolvedEvent e) {
@@ -216,16 +244,17 @@ namespace DiceGame.Versus
                 return;
             }
 
+            EnsureQueues();
             incomingQueues[e.Target].Enqueue(volley, attackSettings.QueueToBoardDelay);
         }
 
-        void TickQueue(PlayerSlot defenderSlot) {
+        void TickQueue(PlayerSlot defenderSlot, float deltaTime) {
             if (!incomingQueues.TryGetValue(defenderSlot, out var queue)) {
                 return;
             }
 
             while (queue.Count > 0) {
-                if (!queue.IsHeadReady(GameplaySimClock.DeltaTime)) {
+                if (!queue.IsHeadReady(deltaTime)) {
                     break;
                 }
 

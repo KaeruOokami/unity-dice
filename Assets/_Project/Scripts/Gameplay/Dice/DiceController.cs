@@ -34,16 +34,22 @@ namespace DiceGame.Gameplay
         PlayerSlot pendingElasticActionOwner;
         bool hasPendingElasticTransfer;
         Action pendingSlideComplete;
+        float logicalBusyRemaining;
+        float logicalBusyDuration;
+        Action pendingLogicalComplete;
+        float logicalSpawnRemaining;
+        Action pendingSpawnComplete;
 
         public bool IsSpawning => isSpawning;
         public DiceSpawnAppearMode SpawnAppearMode => spawnAppearMode;
         public bool AllowsUnconditionalMount =>
             spawnAppearMode == DiceSpawnAppearMode.BottomEmergence;
-        public bool IsRolling =>
-            !isSpawning
-            && (isRolling || (diceView != null && diceView.IsAnimating && !IsErasing && !isVanishing && !isCarried));
         /// <summary>
-        /// True while the dice visual is moving in a way the standing player should follow
+        /// Logical roll/slide busy only (not view animation). Advanced via <see cref="TickLogicalMotion"/>.
+        /// </summary>
+        public bool IsRolling => !isSpawning && isRolling;
+        /// <summary>
+        /// True while the dice is in a motion the standing player should follow
         /// (spawn appear / roll / slide), including spawn where <see cref="IsRolling"/> is false.
         /// </summary>
         public bool IsMotionFollowActive => IsSpawning || IsRolling;
@@ -67,7 +73,133 @@ namespace DiceGame.Gameplay
             registry != null && EffectiveBehavior.CanJumpCoupleWithPlayer;
         public bool CrushesPlayerOnCover => Capabilities.CrushesPlayerOnCover;
         public DiceView View => diceView;
-        public float GroundRollProgress => diceView != null ? diceView.GroundRollProgress : 0f;
+        public float GroundRollProgress {
+            get {
+                if (isRolling && logicalBusyDuration > 0f) {
+                    return 1f - Mathf.Clamp01(logicalBusyRemaining / logicalBusyDuration);
+                }
+
+                return diceView != null ? diceView.GroundRollProgress : 0f;
+            }
+        }
+
+        public float LogicalMotionProgress {
+            get {
+                if (logicalBusyDuration <= 0f) {
+                    return isRolling ? 0f : 1f;
+                }
+
+                return 1f - Mathf.Clamp01(logicalBusyRemaining / logicalBusyDuration);
+            }
+        }
+
+        public Vector3 GetLogicalCenterWorld() {
+            if (board == null) {
+                return transform.position;
+            }
+
+            var gridWorld = board.GridToWorld(currentState.GridPos);
+            return new Vector3(gridWorld.x, GetLogicalTopSurfaceWorldY(), gridWorld.z);
+        }
+
+        public Vector2 GetLogicalCenterXZ() {
+            var center = GetLogicalCenterWorld();
+            return new Vector2(center.x, center.z);
+        }
+
+        public Bounds GetLogicalPushBounds() {
+            if (board == null) {
+                return new Bounds(transform.position, Vector3.one);
+            }
+
+            var center = GetLogicalCenterWorld();
+            var size = board.CellSize;
+            var height = size;
+            return new Bounds(
+                new Vector3(center.x, center.y - height * 0.25f, center.z),
+                new Vector3(size, height, size));
+        }
+
+        /// <summary>
+        /// Advance logical roll/spawn timers. Called once per lockstep tick (or offline Update).
+        /// </summary>
+        public void TickLogicalMotion(float deltaTime) {
+            if (deltaTime <= 0f) {
+                return;
+            }
+
+            if (isSpawning && logicalSpawnRemaining > 0f) {
+                logicalSpawnRemaining -= deltaTime;
+                if (logicalSpawnRemaining <= 0f) {
+                    logicalSpawnRemaining = 0f;
+                    var spawnComplete = pendingSpawnComplete;
+                    pendingSpawnComplete = null;
+                    spawnComplete?.Invoke();
+                }
+            }
+
+            if (isRolling && logicalBusyRemaining > 0f) {
+                logicalBusyRemaining -= deltaTime;
+                if (logicalBusyRemaining <= 0f) {
+                    logicalBusyRemaining = 0f;
+                    var complete = pendingLogicalComplete;
+                    pendingLogicalComplete = null;
+                    complete?.Invoke();
+                }
+            }
+        }
+
+        void StartLogicalBusy(float duration, Action onComplete) {
+            isRolling = true;
+            logicalBusyDuration = Mathf.Max(0.0001f, duration);
+            logicalBusyRemaining = logicalBusyDuration;
+            pendingLogicalComplete = onComplete;
+        }
+
+        void ClearLogicalBusyWithoutComplete() {
+            isRolling = false;
+            logicalBusyRemaining = 0f;
+            logicalBusyDuration = 0f;
+            pendingLogicalComplete = null;
+        }
+
+        void FinishLogicalBusy() {
+            isRolling = false;
+            logicalBusyRemaining = 0f;
+            logicalBusyDuration = 0f;
+            pendingLogicalComplete = null;
+        }
+
+        const float LogicalMotionFallbackSeconds = 0.3f;
+
+        float ResolvePlanLogicalDuration(DiceGridMovePlan plan, DiceMoveVisualContext context) {
+            if (diceView == null) {
+                return LogicalMotionFallbackSeconds;
+            }
+
+            if (plan.Kind == DiceGridMoveKind.Demote
+                && DiceBehaviorResolver.GetBehavior(plan.From.Kind).Capabilities.UsesSlideVisualForDemote) {
+                var distance = MovementTransitionEvaluator.GetOrthogonalDistance(
+                    plan.From.GridPos,
+                    plan.To.GridPos);
+                return diceView.GetSlideLogicalDuration(distance);
+            }
+
+            return context.IsJump
+                ? diceView.GetJumpParallelRollDuration(plan.Distance)
+                : diceView.GetGroundParallelRollDuration(plan.Distance);
+        }
+
+        float ResolveSlideLogicalDuration(DiceState fromState, DiceState toState) {
+            if (diceView == null) {
+                return LogicalMotionFallbackSeconds;
+            }
+
+            var distance = MovementTransitionEvaluator.GetOrthogonalDistance(
+                fromState.GridPos,
+                toState.GridPos);
+            return diceView.GetSlideLogicalDuration(distance);
+        }
 
         public event Action<DiceState> StateChanged;
         public event Action<DiceController> Erased;
@@ -245,13 +377,24 @@ namespace DiceGame.Gameplay
             registry?.RegisterPendingSpawn(this, gridPos, tier);
 
             void OnSpawnComplete() {
+                if (!isSpawning) {
+                    return;
+                }
+
                 registry?.CommitPendingSpawn(this, currentState.GridPos, currentState.Tier);
                 isSpawning = false;
                 spawnAppearMode = DiceSpawnAppearMode.None;
+                logicalSpawnRemaining = 0f;
+                pendingSpawnComplete = null;
                 ConfigurePushBody();
                 StateChanged?.Invoke(currentState);
                 onComplete?.Invoke();
             }
+
+            pendingSpawnComplete = OnSpawnComplete;
+            logicalSpawnRemaining = diceView != null
+                ? Mathf.Max(LogicalMotionFallbackSeconds, diceView.GetSpawnAppearLogicalDuration())
+                : LogicalMotionFallbackSeconds;
 
             if (forceFallFromAbove || tier == DiceStackTier.Top) {
                 diceView.PlaySpawnAppear(
@@ -260,14 +403,14 @@ namespace DiceGame.Gameplay
                     registry,
                     Capabilities.HasSpawnBounce,
                     Capabilities.FallGravityScale,
-                    OnSpawnComplete);
+                    null);
             } else {
                 diceView.PlayBottomEmergenceAppear(
                     currentState,
                     board,
                     registry,
                     Capabilities.FallGravityScale,
-                    OnSpawnComplete);
+                    null);
             }
         }
 
@@ -457,7 +600,7 @@ namespace DiceGame.Gameplay
             }
 
             diceView?.TryInterruptRollAnimation(out snapshot);
-            isRolling = false;
+            ClearLogicalBusyWithoutComplete();
             ClearPendingElasticTransfer();
             pendingSlideComplete = null;
             return snapshot.IsValid;
@@ -521,18 +664,21 @@ namespace DiceGame.Gameplay
             }
 
             ApplyLogicalMove(plan.From, plan.To);
-            isRolling = true;
+            var duration = diceView != null
+                ? diceView.GetCancelRollLogicalDuration(cancelProgress)
+                : LogicalMotionFallbackSeconds;
+            StartLogicalBusy(duration, () => {
+                FinishLogicalBusy();
+                NotifyActionMoveCompleted();
+                StateChanged?.Invoke(currentState);
+            });
             diceView.PlayCancelGroundRollVisual(
                 snapshot,
                 plan.To,
                 cancelProgress,
                 board,
                 registry,
-                () => {
-                    isRolling = false;
-                    NotifyActionMoveCompleted();
-                    StateChanged?.Invoke(currentState);
-                });
+                null);
 
             return true;
         }
@@ -550,17 +696,20 @@ namespace DiceGame.Gameplay
             }
 
             ApplyLogicalMove(plan.From, plan.To);
-            isRolling = true;
+            var duration = diceView != null
+                ? diceView.GetJumpParallelRollDuration(plan.Distance)
+                : LogicalMotionFallbackSeconds;
+            StartLogicalBusy(duration, () => {
+                FinishLogicalBusy();
+                NotifyActionMoveCompleted(plan.From, plan.To);
+                StateChanged?.Invoke(currentState);
+            });
             diceView.PlayCancelJumpParallelRollVisual(
                 snapshot,
                 plan,
                 board,
                 registry,
-                () => {
-                    isRolling = false;
-                    NotifyActionMoveCompleted(plan.From, plan.To);
-                    StateChanged?.Invoke(currentState);
-                },
+                null,
                 jumpMotionProvider);
 
             return true;
@@ -696,22 +845,21 @@ namespace DiceGame.Gameplay
                 return false;
             }
 
-            isRolling = true;
-            PlayVisualForPlan(
-                plan,
-                context,
+            StartLogicalBusy(
+                ResolvePlanLogicalDuration(plan, context),
                 () => {
                     CompleteDeferredGhostLanding(
                         plan.GhostLanding,
                         plan.GhostFrom,
                         plan.GhostTo,
                         () => {
-                            isRolling = false;
+                            FinishLogicalBusy();
                             registry.ResolveUnsupportedTopAt(currentState.GridPos);
                             NotifyActionMoveCompleted(plan.From, plan.To);
                             StateChanged?.Invoke(currentState);
                         });
                 });
+            PlayVisualForPlan(plan, context, null);
 
             return true;
         }
@@ -848,23 +996,25 @@ namespace DiceGame.Gameplay
 
             pendingSlideComplete = onSlideComplete;
 
-            isRolling = true;
-            PlaySlideVisual(plan.From, plan.To, () => {
-                CompleteDeferredGhostLanding(
-                    plan.GhostLanding,
-                    plan.GhostFrom,
-                    plan.GhostTo,
-                    () => {
-                        isRolling = false;
-                        registry.ResolveUnsupportedTopAt(currentState.GridPos);
-                        NotifyActionMoveCompleted(plan.From, plan.To);
-                        StateChanged?.Invoke(currentState);
-                        var slideComplete = pendingSlideComplete;
-                        pendingSlideComplete = null;
-                        CompletePendingElasticTransfer();
-                        slideComplete?.Invoke();
-                    });
-            });
+            StartLogicalBusy(
+                ResolveSlideLogicalDuration(plan.From, plan.To),
+                () => {
+                    CompleteDeferredGhostLanding(
+                        plan.GhostLanding,
+                        plan.GhostFrom,
+                        plan.GhostTo,
+                        () => {
+                            FinishLogicalBusy();
+                            registry.ResolveUnsupportedTopAt(currentState.GridPos);
+                            NotifyActionMoveCompleted(plan.From, plan.To);
+                            StateChanged?.Invoke(currentState);
+                            var slideComplete = pendingSlideComplete;
+                            pendingSlideComplete = null;
+                            CompletePendingElasticTransfer();
+                            slideComplete?.Invoke();
+                        });
+                });
+            PlaySlideVisual(plan.From, plan.To, null);
 
             return true;
         }
@@ -1019,22 +1169,26 @@ namespace DiceGame.Gameplay
             }
 
             ApplyLogicalMove(fromState, toState);
-            isRolling = true;
+            var fallDistance = 1;
+            StartLogicalBusy(
+                diceView != null
+                    ? diceView.GetSlideLogicalDuration(fallDistance)
+                    : LogicalMotionFallbackSeconds,
+                () => {
+                    CompleteDeferredGhostLanding(
+                        deferredGhostLanding,
+                        deferredGhostFrom,
+                        deferredGhostTo,
+                        () => {
+                            FinishLogicalBusy();
+                            tierFallMatchNotifier?.NotifyTierFallCompleted(this);
+                            matchActionContext?.NotifyParticipantMoveCompleted(this);
+                            StateChanged?.Invoke(currentState);
+                        });
+                });
 
             var transition = DiceTransition.CrushDemote(fromState, toState, fromWorld);
-            diceView.PlayTransition(transition, board, registry, () => {
-                CompleteDeferredGhostLanding(
-                    deferredGhostLanding,
-                    deferredGhostFrom,
-                    deferredGhostTo,
-                    () => {
-                        isRolling = false;
-                        tierFallMatchNotifier?.NotifyTierFallCompleted(this);
-                        // Flush pending player action so displaced ghosts are match triggers too.
-                        matchActionContext?.NotifyParticipantMoveCompleted(this);
-                        StateChanged?.Invoke(currentState);
-                    });
-            });
+            diceView.PlayTransition(transition, board, registry, null);
         }
 
         public void NotifyStackedTopSync() {
@@ -1072,6 +1226,9 @@ namespace DiceGame.Gameplay
 
             isVanishing = false;
             isSpawning = false;
+            logicalSpawnRemaining = 0f;
+            pendingSpawnComplete = null;
+            ClearLogicalBusyWithoutComplete();
             diceView?.CancelErasure();
             registry?.Unregister(this);
             Erased?.Invoke(this);

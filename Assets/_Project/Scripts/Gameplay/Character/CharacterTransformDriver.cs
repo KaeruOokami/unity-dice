@@ -123,12 +123,12 @@ namespace DiceGame.Gameplay.Character
         }
 
         public static Vector2 GetOffsetFromDiceCenter(DiceController dice, Vector3 worldPos) {
-            if (dice?.View.DiceTransform == null) {
+            if (dice == null) {
                 return Vector2.zero;
             }
 
-            var center = dice.View.DiceTransform.position;
-            return new Vector2(worldPos.x - center.x, worldPos.z - center.z);
+            var center = dice.GetLogicalCenterXZ();
+            return new Vector2(worldPos.x - center.x, worldPos.z - center.y);
         }
 
         public static Vector2 WorldOffsetFromDiceCenter(Vector3 diceCenter, Vector2 worldXZ) {
@@ -136,11 +136,11 @@ namespace DiceGame.Gameplay.Character
         }
 
         public void AlignToDiceFace(DiceController dice, Vector2 nextXZ, float halfExtent) {
-            if (dice?.View.DiceTransform == null) {
+            if (dice == null) {
                 return;
             }
 
-            var diceCenter = dice.View.DiceTransform.position;
+            var diceCenter = dice.GetLogicalCenterWorld();
             var nextOffset = WorldOffsetFromDiceCenter(diceCenter, nextXZ);
             var clamped = ClampToFace(nextOffset, halfExtent);
             ApplyWorldPosition(new Vector3(diceCenter.x + clamped.x, 0f, diceCenter.z + clamped.y));
