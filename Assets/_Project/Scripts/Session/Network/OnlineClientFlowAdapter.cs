@@ -6,7 +6,7 @@ using UnityEngine;
 namespace DiceGame.Session.Network
 {
     /// <summary>
-    /// Client-side pause/reset UI and local freeze. Authority remains on host.
+    /// Legacy client-side pause/reset UI. Dual-sim uses <see cref="GameFlowController"/> instead.
     /// </summary>
     public sealed class OnlineClientFlowAdapter : MonoBehaviour
     {
@@ -36,9 +36,6 @@ namespace DiceGame.Session.Network
             pauseMenuUi.ResumeClicked += () => {
                 messenger?.SendFlowRequestToServer(OnlineSessionConstants.FlowResume);
             };
-            pauseMenuUi.ReturnToTitleClicked += () => {
-                messenger?.SendFlowRequestToServer(OnlineSessionConstants.FlowReturnToTitle);
-            };
 
             if (messenger != null) {
                 messenger.FlowCommandReceived += OnFlowCommandReceived;
@@ -56,8 +53,8 @@ namespace DiceGame.Session.Network
                 return;
             }
 
+            // Match reset is host-only.
             if (inputReader.WasResetPressedThisFrame()) {
-                messenger.SendFlowRequestToServer(OnlineSessionConstants.FlowResetMatch);
                 return;
             }
 
@@ -80,7 +77,8 @@ namespace DiceGame.Session.Network
                 case OnlineSessionConstants.FlowResetMatch:
                     MatchFlowFlags.ArmMatchRestart(
                         OnlinePlayMode.OnlineClient,
-                        OnlineSessionState.Instance?.CurrentSetup);
+                        OnlineSessionState.Instance?.CurrentSetup,
+                        OnlineSessionState.Instance?.MatchSeed ?? 0);
                     Time.timeScale = playingTimeScale;
                     UnityEngine.SceneManagement.SceneManager.LoadScene(
                         UnityEngine.SceneManagement.SceneManager.GetActiveScene().buildIndex);
@@ -99,7 +97,7 @@ namespace DiceGame.Session.Network
         void ApplyPaused() {
             paused = true;
             Time.timeScale = 0f;
-            pauseMenuUi?.Show(allowHostActions: false);
+            pauseMenuUi?.Show(PauseMenuRole.Client);
         }
 
         void ApplyResumed() {

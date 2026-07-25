@@ -37,10 +37,9 @@ namespace DiceGame.Session
         public const float SimTickSeconds = 1f / SimTickHz;
         /// <summary>
         /// Local input is scheduled this many ticks ahead (delayed lockstep).
-        /// Sized for Relay RTT + jitter (~167ms at <see cref="SimTickHz"/>) so peers
-        /// stall less often than the previous 3-tick (~50ms) window.
+        /// ~50ms at <see cref="SimTickHz"/>; Unreliable input + redundancy covers Relay jitter.
         /// </summary>
-        public const int InputDelayTicks = 10;
+        public const int InputDelayTicks = 3;
         /// <summary>
         /// How many tick inputs to retain in the lockstep buffer.
         /// </summary>

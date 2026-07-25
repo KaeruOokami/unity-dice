@@ -359,6 +359,12 @@ namespace DiceGame.Session
             if (pendingSetup != null) {
                 OnlineSessionState.Instance.SetCurrentSetup(pendingSetup);
             }
+
+            var pendingSeed = MatchFlowFlags.ConsumePendingMatchSeed();
+            if (pendingSeed != 0) {
+                OnlineSessionState.Instance.SetMatchSeed(pendingSeed);
+            }
+
             OnlineSessionState.Instance.SetStatus("Resuming match.");
             ShowGameplayWorld();
             lobbyUi?.Hide();

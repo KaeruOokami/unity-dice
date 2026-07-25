@@ -131,7 +131,12 @@ namespace DiceGame.Gameplay
 
             if (inputReader.WasResetPressedThisFrame())
             {
-                RequestOrApplyResetMatch();
+                // Online: match reset is host-only (Backspace ignored on client).
+                if (!IsOnlineClient())
+                {
+                    RequestOrApplyResetMatch();
+                }
+
                 return;
             }
 
@@ -246,7 +251,6 @@ namespace DiceGame.Gameplay
         {
             if (IsOnlineClient())
             {
-                sessionController.Messenger?.SendFlowRequestToServer(OnlineSessionConstants.FlowResetMatch);
                 return;
             }
 
@@ -278,7 +282,7 @@ namespace DiceGame.Gameplay
 
             State = GameFlowState.Paused;
             FreezeSimulation();
-            pauseMenuUi?.Show(IsLocalFlowAuthority());
+            pauseMenuUi?.Show(ResolvePauseMenuRole());
         }
 
         public void ApplyResume(bool broadcast)
@@ -315,7 +319,8 @@ namespace DiceGame.Gameplay
                 ? OnlineSessionState.Instance.PlayMode
                 : OnlinePlayMode.Local;
             var setup = OnlineSessionState.Instance?.CurrentSetup;
-            MatchFlowFlags.ArmMatchRestart(playMode, setup);
+            var matchSeed = OnlineSessionState.Instance?.MatchSeed ?? 0;
+            MatchFlowFlags.ArmMatchRestart(playMode, setup, matchSeed);
             ReloadActiveScene();
         }
 
@@ -400,7 +405,7 @@ namespace DiceGame.Gameplay
                     ApplyResume(broadcast: true);
                     break;
                 case OnlineSessionConstants.FlowResetMatch:
-                    ApplyResetMatch(broadcast: true);
+                    // Match reset is host-local only; ignore client requests.
                     break;
                 case OnlineSessionConstants.FlowReturnToTitle:
                     ApplyReturnToTitle(broadcast: true);
@@ -458,15 +463,9 @@ namespace DiceGame.Gameplay
                 && !NetworkManager.Singleton.IsServer;
         }
 
-        bool IsLocalFlowAuthority()
+        PauseMenuRole ResolvePauseMenuRole()
         {
-            var session = OnlineSessionState.Instance;
-            if (session == null || !session.IsOnline)
-            {
-                return true;
-            }
-
-            return session.IsHost;
+            return IsOnlineClient() ? PauseMenuRole.Client : PauseMenuRole.Host;
         }
     }
 }

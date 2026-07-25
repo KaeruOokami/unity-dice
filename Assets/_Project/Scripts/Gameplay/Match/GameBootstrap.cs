@@ -109,7 +109,12 @@ namespace DiceGame.Gameplay
 
                 // Online host/client and title lobby: wait for MatchStartRequested only.
                 // Beginning from Start() races MatchStart seed apply and can double-init.
+                // Exception: match restart reload already set IsMatchRunning before we subscribed.
                 if (session.IsOnline || session.PlayMode == OnlinePlayMode.Unspecified) {
+                    if (session.IsOnline && session.IsMatchRunning) {
+                        BeginSession();
+                    }
+
                     return;
                 }
             }
@@ -453,7 +458,8 @@ namespace DiceGame.Gameplay
             }
 
             if (!isHost) {
-                EnsureOnlineClientFlowAdapter();
+                // Dual-sim: GameFlowController owns pause/reset; legacy adapter would double-handle.
+                DestroyOnlineComponent<OnlineClientFlowAdapter>();
             }
 
             var dualSim = GetComponent<OnlineDualSimInputBinder>();
@@ -491,21 +497,6 @@ namespace DiceGame.Gameplay
 
             component.enabled = false;
             Destroy(component);
-        }
-
-        void EnsureOnlineClientFlowAdapter() {
-            var onlineController = FindObjectOfType<OnlineSessionController>();
-            if (onlineController?.Messenger == null) {
-                Debug.LogError("GameBootstrap: Online client matched without messenger.");
-                return;
-            }
-
-            var flowAdapter = GetComponent<OnlineClientFlowAdapter>();
-            if (flowAdapter == null) {
-                flowAdapter = gameObject.AddComponent<OnlineClientFlowAdapter>();
-            }
-
-            flowAdapter.Configure(onlineController.Messenger, playerInputSettings);
         }
 
         MatchSetupPresetRegistry FindPresetRegistry() {

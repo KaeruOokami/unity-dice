@@ -5,6 +5,14 @@ using UnityEngine.UI;
 
 namespace DiceGame.Gameplay
 {
+    public enum PauseMenuRole
+    {
+        /// <summary>Resume + return to title (host / local).</summary>
+        Host,
+        /// <summary>Resume only (online client).</summary>
+        Client
+    }
+
     public sealed class PauseMenuUi : MonoBehaviour
     {
         Canvas canvas;
@@ -12,7 +20,7 @@ namespace DiceGame.Gameplay
         Button resumeButton;
         Button titleButton;
         Text subtitleText;
-        bool hostControlsEnabled = true;
+        PauseMenuRole currentRole = PauseMenuRole.Host;
 
         public event Action ResumeClicked;
         public event Action ReturnToTitleClicked;
@@ -23,8 +31,8 @@ namespace DiceGame.Gameplay
             Hide();
         }
 
-        public void Show(bool allowHostActions) {
-            hostControlsEnabled = allowHostActions;
+        public void Show(PauseMenuRole role) {
+            currentRole = role;
             if (canvas != null) {
                 canvas.gameObject.SetActive(true);
             }
@@ -34,17 +42,18 @@ namespace DiceGame.Gameplay
             }
 
             if (resumeButton != null) {
-                resumeButton.interactable = allowHostActions;
+                resumeButton.interactable = true;
             }
 
             if (titleButton != null) {
-                titleButton.interactable = allowHostActions;
+                titleButton.gameObject.SetActive(role == PauseMenuRole.Host);
+                titleButton.interactable = role == PauseMenuRole.Host;
             }
 
             if (subtitleText != null) {
-                subtitleText.text = allowHostActions
-                    ? string.Empty
-                    : "Paused by host";
+                subtitleText.text = role == PauseMenuRole.Client
+                    ? "Paused"
+                    : string.Empty;
             }
         }
 
@@ -86,12 +95,10 @@ namespace DiceGame.Gameplay
             subtitleRect.offsetMax = Vector2.zero;
 
             resumeButton = CreateButton(panel.transform, "ResumeButton", "Resume", new Vector2(0f, 10f), () => {
-                if (hostControlsEnabled) {
-                    ResumeClicked?.Invoke();
-                }
+                ResumeClicked?.Invoke();
             });
             titleButton = CreateButton(panel.transform, "TitleButton", "Return to Title", new Vector2(0f, -80f), () => {
-                if (hostControlsEnabled) {
+                if (currentRole == PauseMenuRole.Host) {
                     ReturnToTitleClicked?.Invoke();
                 }
             });
@@ -112,7 +119,7 @@ namespace DiceGame.Gameplay
             panelObject.transform.SetParent(parent, false);
             var image = panelObject.AddComponent<Image>();
             image.color = color;
-            panelObject.AddComponent<RectTransform>();
+            // Image already adds RectTransform; do not AddComponent again.
             return panelObject;
         }
 
