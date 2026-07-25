@@ -66,7 +66,7 @@ namespace DiceGame.Session.Network
                 paused ? OnlineSessionConstants.FlowResume : OnlineSessionConstants.FlowPause);
         }
 
-        void OnFlowCommandReceived(byte command) {
+        void OnFlowCommandReceived(byte command, int data) {
             switch (command) {
                 case OnlineSessionConstants.FlowPause:
                     ApplyPaused();
@@ -75,10 +75,13 @@ namespace DiceGame.Session.Network
                     ApplyResumed();
                     break;
                 case OnlineSessionConstants.FlowResetMatch:
+                    if (data != 0) {
+                        OnlineSessionState.Instance?.SetMatchSeed(data);
+                    }
                     MatchFlowFlags.ArmMatchRestart(
                         OnlinePlayMode.OnlineClient,
                         OnlineSessionState.Instance?.CurrentSetup,
-                        OnlineSessionState.Instance?.MatchSeed ?? 0);
+                        data != 0 ? data : OnlineSessionState.Instance?.MatchSeed ?? 0);
                     Time.timeScale = playingTimeScale;
                     UnityEngine.SceneManagement.SceneManager.LoadScene(
                         UnityEngine.SceneManagement.SceneManager.GetActiveScene().buildIndex);
@@ -97,7 +100,7 @@ namespace DiceGame.Session.Network
         void ApplyPaused() {
             paused = true;
             Time.timeScale = 0f;
-            pauseMenuUi?.Show(PauseMenuRole.Client);
+            pauseMenuUi?.Show(PauseMenuRole.Client, canOperate: false);
         }
 
         void ApplyResumed() {

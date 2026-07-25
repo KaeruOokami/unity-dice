@@ -33,7 +33,7 @@ namespace DiceGame.Session.Network
         public event Action<ulong, MatchSetupNetworkPayload> MatchSetupUpdateReceived;
         public event Action<ulong, string> PlayerIdentityReceived;
         public event Action PlayerIdentityRequestReceived;
-        public event Action<byte> FlowCommandReceived;
+        public event Action<byte, int> FlowCommandReceived;
         public event Action<ulong, byte> FlowRequestReceived;
         public event Action LockstepReadyReceived;
         public event Action<ulong> LockstepReadyFromClient;
@@ -643,13 +643,14 @@ namespace DiceGame.Session.Network
                 NetworkDelivery.Reliable);
         }
 
-        public void BroadcastFlowCommand(byte command) {
+        public void BroadcastFlowCommand(byte command, int data = 0) {
             if (networkManager == null || !networkManager.IsServer) {
                 return;
             }
 
             using var writer = new FastBufferWriter(8, Allocator.Temp);
             writer.WriteValueSafe(command);
+            writer.WriteValueSafe(data);
             networkManager.CustomMessagingManager.SendNamedMessageToAll(
                 OnlineSessionConstants.MessageFlowCommand,
                 writer,
@@ -839,7 +840,8 @@ namespace DiceGame.Session.Network
 
         void OnFlowCommandMessage(ulong senderClientId, FastBufferReader reader) {
             reader.ReadValueSafe(out byte command);
-            FlowCommandReceived?.Invoke(command);
+            reader.ReadValueSafe(out int data);
+            FlowCommandReceived?.Invoke(command, data);
         }
 
         void OnFlowRequestMessage(ulong senderClientId, FastBufferReader reader) {

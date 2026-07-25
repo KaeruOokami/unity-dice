@@ -21,6 +21,7 @@ namespace DiceGame.Gameplay
         Button titleButton;
         Text subtitleText;
         PauseMenuRole currentRole = PauseMenuRole.Host;
+        bool canOperatePause = true;
 
         public event Action ResumeClicked;
         public event Action ReturnToTitleClicked;
@@ -31,8 +32,9 @@ namespace DiceGame.Gameplay
             Hide();
         }
 
-        public void Show(PauseMenuRole role) {
+        public void Show(PauseMenuRole role, bool canOperate) {
             currentRole = role;
+            canOperatePause = canOperate;
             if (canvas != null) {
                 canvas.gameObject.SetActive(true);
             }
@@ -42,18 +44,20 @@ namespace DiceGame.Gameplay
             }
 
             if (resumeButton != null) {
-                resumeButton.interactable = true;
+                resumeButton.interactable = canOperate;
             }
 
             if (titleButton != null) {
+                // Host/Client UI difference (Title only on Host) stays as-is;
+                // operability is gated by who initiated the pause.
                 titleButton.gameObject.SetActive(role == PauseMenuRole.Host);
-                titleButton.interactable = role == PauseMenuRole.Host;
+                titleButton.interactable = role == PauseMenuRole.Host && canOperate;
             }
 
             if (subtitleText != null) {
-                subtitleText.text = role == PauseMenuRole.Client
-                    ? "Paused"
-                    : string.Empty;
+                subtitleText.text = canOperate
+                    ? string.Empty
+                    : "相手がポーズ中です（操作できません）";
             }
         }
 
@@ -95,10 +99,12 @@ namespace DiceGame.Gameplay
             subtitleRect.offsetMax = Vector2.zero;
 
             resumeButton = CreateButton(panel.transform, "ResumeButton", "Resume", new Vector2(0f, 10f), () => {
-                ResumeClicked?.Invoke();
+                if (canOperatePause) {
+                    ResumeClicked?.Invoke();
+                }
             });
             titleButton = CreateButton(panel.transform, "TitleButton", "Return to Title", new Vector2(0f, -80f), () => {
-                if (currentRole == PauseMenuRole.Host) {
+                if (currentRole == PauseMenuRole.Host && canOperatePause) {
                     ReturnToTitleClicked?.Invoke();
                 }
             });
