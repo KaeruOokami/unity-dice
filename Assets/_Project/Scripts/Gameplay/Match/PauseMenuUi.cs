@@ -57,7 +57,7 @@ namespace DiceGame.Gameplay
             if (subtitleText != null) {
                 subtitleText.text = canOperate
                     ? string.Empty
-                    : "相手がポーズ中です（操作できません）";
+                    : "Paused by opponent (controls locked)";
             }
         }
 

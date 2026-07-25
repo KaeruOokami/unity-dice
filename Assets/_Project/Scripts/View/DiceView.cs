@@ -93,6 +93,9 @@ namespace DiceGame.View
         // Must match OnlineTransformSnapshot.VisualOneVanish.
         const byte NetworkVisualOneVanish = 3;
 
+        const float MinPhaseDuration = 0.01f;
+        const float MinFallGravityScale = 0.01f;
+
         float oneVanishProgress;
 
         public void Configure(
@@ -794,8 +797,9 @@ namespace DiceGame.View
 
         public void PlayErasure(
             ErasureKind kind,
+            DiceState state,
             Board board,
-            int topFace,
+            DiceRegistry registry,
             Color? emissionColorOverride,
             Action onComplete) {
             if (kind == ErasureKind.None) {
@@ -804,10 +808,9 @@ namespace DiceGame.View
                 return;
             }
 
-            if (rollCoroutine != null) {
-                StopCoroutine(rollCoroutine);
-                rollCoroutine = null;
-            }
+            // Logical placement is already at `state`; commit the view before erasure so a
+            // still-running move coroutine cannot leave dissolve anchored on the previous cell.
+            SnapTo(state, board, registry);
 
             if (erasureCoroutine != null) {
                 StopCoroutine(erasureCoroutine);
@@ -815,15 +818,17 @@ namespace DiceGame.View
 
             RaiseVisualMotion(new DiceVisualMotionRequest {
                 Kind = DiceVisualMotionKind.Erasure,
+                FromState = state,
+                ToState = state,
                 ErasureKind = kind,
-                TopFace = topFace,
+                TopFace = state.Orientation.Top,
                 HasEmissionOverride = emissionColorOverride.HasValue,
                 EmissionColor = emissionColorOverride ?? default
             });
 
             activeErasureKind = kind;
             erasureEmissionColorOverride = emissionColorOverride;
-            currentTopFace = topFace;
+            currentTopFace = state.Orientation.Top;
             erasureBoard = board;
             erasureCoroutine = StartCoroutine(ErasureCoroutine(board, kind, onComplete));
         }
@@ -937,11 +942,13 @@ namespace DiceGame.View
             erasureBoard = null;
         }
 
-        public void PlayOneVanish(DiceOneVanishSettings settings, Action onComplete) {
-            if (rollCoroutine != null) {
-                StopCoroutine(rollCoroutine);
-                rollCoroutine = null;
-            }
+        public void PlayOneVanish(
+            DiceOneVanishSettings settings,
+            DiceState state,
+            Board board,
+            DiceRegistry registry,
+            Action onComplete) {
+            SnapTo(state, board, registry);
 
             if (erasureCoroutine != null) {
                 StopCoroutine(erasureCoroutine);
@@ -953,7 +960,9 @@ namespace DiceGame.View
             }
 
             RaiseVisualMotion(new DiceVisualMotionRequest {
-                Kind = DiceVisualMotionKind.OneVanish
+                Kind = DiceVisualMotionKind.OneVanish,
+                FromState = state,
+                ToState = state
             });
 
             EnsureMesh();
@@ -1019,22 +1028,150 @@ namespace DiceGame.View
                 : 0f;
         }
 
-        public float GetGroundParallelRollDuration(int distance) {
-            return animationSettings != null
-                ? animationSettings.GetGroundParallelRollDuration(distance) * GetRollDurationMultiplier()
+        public float GetBottomEmergenceLogicalDuration() {
+            return physicsSettings != null
+                ? Mathf.Max(MinPhaseDuration, physicsSettings.BottomEmergenceDuration)
                 : 0f;
         }
 
-        public float GetSlideLogicalDuration(int cellDistance) {
-            return animationSettings != null
-                ? animationSettings.SlideDuration * Mathf.Max(1, cellDistance)
-                : 0f;
+        public float GetSpawnFallLogicalDuration(bool enableSpawnBounce, float fallGravityScale) {
+            if (physicsSettings == null) {
+                return 0f;
+            }
+
+            return GravityMotion.ComputeSpawnBounceDropDuration(
+                physicsSettings.SpawnHeight,
+                ResolveFallGravity(fallGravityScale),
+                enableSpawnBounce ? physicsSettings.BounceRestitution : 0f,
+                enableSpawnBounce ? physicsSettings.MaxBounceCount : 0,
+                physicsSettings.MinBounceVelocity);
         }
 
-        public float GetSpawnAppearLogicalDuration() {
-            return animationSettings != null
-                ? animationSettings.SpawnAppearLogicalDuration
-                : 0f;
+        /// <summary>
+        /// Remaining logical time of the fall left by <see cref="RetargetActiveSpawnLanding"/>.
+        /// Valid only while the session still has its starting velocity (a retarget from
+        /// emergence); a mid-fall retarget keeps its original, longer timeline.
+        /// </summary>
+        public float GetActiveSpawnFallRemainingLogicalDuration() {
+            if (activeSpawnFallSession == null || physicsSettings == null) {
+                return 0f;
+            }
+
+            return GravityMotion.ComputeSpawnBounceDropDuration(
+                activeSpawnFallSession.Motion.Offset,
+                ResolveFallGravity(activeSpawnFallGravityScale),
+                activeSpawnBounceRestitution,
+                activeSpawnMaxBounceCount,
+                activeSpawnMinBounceVelocity);
+        }
+
+        /// <summary>
+        /// Logical duration of <see cref="PlayJumpRoll"/>. Mirrors the phases of
+        /// <see cref="JumpRollCoroutine"/>; keep both in sync.
+        /// </summary>
+        public float GetJumpRollLogicalDuration(
+            DiceState fromState,
+            DiceState toState,
+            int rollDistance,
+            bool fallBeforeSnap,
+            bool useArcRoll,
+            Board board,
+            DiceRegistry registry,
+            Func<VerticalMotionState> jumpMotionProvider = null) {
+            if (animationSettings == null || physicsSettings == null) {
+                return 0f;
+            }
+
+            // Arc rolls end when the rider's jump lands — same clock as JumpArcRollCoroutine.
+            if (useArcRoll) {
+                if (jumpMotionProvider == null) {
+                    return GetJumpParallelRollDuration(rollDistance);
+                }
+
+                return GravityMotion.ComputeRemainingAirtime(
+                    jumpMotionProvider(),
+                    physicsSettings.Gravity);
+            }
+
+            var rolls = Mathf.Clamp(rollDistance, 1, DiceGridRollLimits.MaxParallelRollDistance);
+            var duration = animationSettings.GetGroundParallelRollDuration(rolls)
+                * GetRollDurationMultiplier();
+            if (fallBeforeSnap) {
+                duration += GetTierDropDuration(fromState, toState, board, registry);
+            }
+
+            return duration;
+        }
+
+        /// <summary>
+        /// Logical duration of <see cref="PlayTransition"/>. Mirrors the phases of
+        /// <see cref="TransitionCoroutine"/>; keep both in sync.
+        /// </summary>
+        public float GetTransitionLogicalDuration(
+            DiceTransition transition,
+            Board board,
+            DiceRegistry registry,
+            int slideCellDistance = 1) {
+            if (animationSettings == null || physicsSettings == null) {
+                return 0f;
+            }
+
+            var cells = Mathf.Max(1, slideCellDistance);
+            var rollDuration = animationSettings.RollAnimationDuration * GetRollDurationMultiplier();
+            switch (transition.Path) {
+                case DiceTransitionPath.FreeMove:
+                    return transition.SnapToGridOnComplete
+                        ? animationSettings.PlaceDuration
+                        : animationSettings.LiftDuration;
+                case DiceTransitionPath.RollThenDrop:
+                    return rollDuration
+                        + GetTierDropDuration(transition.From, transition.To, board, registry);
+                case DiceTransitionPath.RollThenRise:
+                    return rollDuration + animationSettings.LiftDuration;
+                case DiceTransitionPath.HorizontalThenDrop:
+                    return animationSettings.FallHorizontalDuration * cells
+                        + GetWorldDropDuration(transition, board, registry);
+                default:
+                    return animationSettings.SlideDuration * cells;
+            }
+        }
+
+        /// <summary>
+        /// Tier-to-tier fall height: the die's own extent cancels out because the orientation
+        /// is unchanged for the whole drop, leaving the surface delta.
+        /// </summary>
+        float GetTierDropDuration(
+            DiceState fromState,
+            DiceState toState,
+            Board board,
+            DiceRegistry registry) {
+            if (board == null) {
+                return 0f;
+            }
+
+            var height = ResolveSurfaceBaseWorldY(fromState, board, registry)
+                - ResolveSurfaceBaseWorldY(toState, board, registry);
+            return GravityMotion.ComputeDropDuration(
+                height,
+                ResolveFallGravity(ResolveVisualCapabilities().FallGravityScale));
+        }
+
+        float GetWorldDropDuration(DiceTransition transition, Board board, DiceRegistry registry) {
+            if (board == null) {
+                return 0f;
+            }
+
+            var fromY = transition.FromWorldOverride?.y
+                ?? GetAnchoredWorldPosition(transition.From, board, registry).y;
+            var toY = transition.ToWorldOverride?.y
+                ?? GetAnchoredWorldPosition(transition.To, board, registry).y;
+            return GravityMotion.ComputeDropDuration(
+                fromY - toY,
+                ResolveFallGravity(ResolveVisualCapabilities().FallGravityScale));
+        }
+
+        float ResolveFallGravity(float fallGravityScale) {
+            return physicsSettings.Gravity * Mathf.Max(MinFallGravityScale, fallGravityScale);
         }
 
         public float GetCancelRollLogicalDuration(float cancelProgress) {
@@ -1423,15 +1560,13 @@ namespace DiceGame.View
                 positionRoot.position = new Vector3(targetWorld.x, positionRoot.position.y, targetWorld.z);
                 yield return AnimateGravityFall(targetWorld);
             } else if (!skipHorizontalAlign) {
+                // A roll already ends on the target cell, so align instantly rather than with a
+                // conditional timed phase the logical duration cannot predict.
                 var targetWorld = ComputeAnchoredWorldPosition(toState, board, registry, visualYOffset);
-                var rolled = new Vector3(targetWorld.x, positionRoot.position.y, targetWorld.z);
-                if (Vector3.SqrMagnitude(rolled - positionRoot.position) > 0.0001f) {
-                    yield return AnimatePositionLerp(
-                        positionRoot.position,
-                        rolled,
-                        animationSettings.FallHorizontalDuration);
-                    positionRoot.position = rolled;
-                }
+                positionRoot.position = new Vector3(
+                    targetWorld.x,
+                    positionRoot.position.y,
+                    targetWorld.z);
             }
 
             // SnapTo stops rollCoroutine; detach first so the caller can finish and invoke onComplete.
@@ -1515,12 +1650,7 @@ namespace DiceGame.View
                 rotationRoot.rotation = DiceOrientationMapper.ToRotation(transition.To.Orientation);
 
                 var stackWorld = GetAnchoredWorldPosition(transition.To, board, registry);
-                var rolled = new Vector3(stackWorld.x, positionRoot.position.y, stackWorld.z);
-                if (Vector3.SqrMagnitude(rolled - positionRoot.position) > 0.0001f) {
-                    yield return AnimatePositionLerp(positionRoot.position, rolled, animationSettings.FallHorizontalDuration);
-                    positionRoot.position = rolled;
-                }
-
+                positionRoot.position = new Vector3(stackWorld.x, positionRoot.position.y, stackWorld.z);
                 yield return AnimatePositionLerp(positionRoot.position, stackWorld, animationSettings.LiftDuration);
                 positionRoot.position = stackWorld;
             } else {
@@ -1633,12 +1763,11 @@ namespace DiceGame.View
                 yield break;
             }
 
-            var gravityScale = Mathf.Max(0.01f, ResolveVisualCapabilities().FallGravityScale);
             var startOffset = positionRoot.position.y - targetWorld.y;
             var state = GravityMotion.CreateDrop(startOffset);
             yield return GravityMotion.AnimateVerticalDropCoroutine(
                 state,
-                physicsSettings.Gravity * gravityScale,
+                ResolveFallGravity(ResolveVisualCapabilities().FallGravityScale),
                 targetWorld.y,
                 () => positionRoot.position.x,
                 () => positionRoot.position.z,
@@ -1686,11 +1815,9 @@ namespace DiceGame.View
                 GroundWorldY = landedWorld.y
             };
 
-            var gravity = physicsSettings.Gravity
-                * Mathf.Max(0.01f, fallGravityScale);
             yield return GravityMotion.AnimateSpawnBounceDropCoroutine(
                 activeSpawnFallSession,
-                gravity,
+                ResolveFallGravity(fallGravityScale),
                 bounceRestitution,
                 maxBounceCount,
                 minBounceVelocity,
@@ -1715,11 +1842,9 @@ namespace DiceGame.View
                 yield break;
             }
 
-            var gravity = physicsSettings.Gravity
-                * Mathf.Max(0.01f, activeSpawnFallGravityScale);
             yield return GravityMotion.AnimateSpawnBounceDropCoroutine(
                 activeSpawnFallSession,
-                gravity,
+                ResolveFallGravity(activeSpawnFallGravityScale),
                 activeSpawnBounceRestitution,
                 activeSpawnMaxBounceCount,
                 activeSpawnMinBounceVelocity,
@@ -1766,7 +1891,7 @@ namespace DiceGame.View
             rotationRoot.rotation = DiceOrientationMapper.ToRotation(state.Orientation);
             CommitGridPlacement(state, board, registry);
 
-            var duration = Mathf.Max(0.01f, emergenceDuration);
+            var duration = Mathf.Max(MinPhaseDuration, emergenceDuration);
             var progress = 1f;
             ApplyEmergenceVisual(board, progress);
 

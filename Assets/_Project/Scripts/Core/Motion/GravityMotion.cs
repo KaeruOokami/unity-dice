@@ -77,6 +77,39 @@ namespace DiceGame.Core
             return Mathf.Clamp01((jumpTimeline - jumpTimelineAtRollStart) / remaining);
         }
 
+        /// <summary>
+        /// Analytic free-fall time for <see cref="AnimateVerticalDropCoroutine"/>.
+        /// The stepped integration always reaches the ground at or slightly before this,
+        /// so a logical timer built on it never completes ahead of the visual.
+        /// </summary>
+        public static float ComputeDropDuration(float height, float gravity) {
+            if (height <= 0f || gravity <= 0f) {
+                return 0f;
+            }
+
+            return Mathf.Sqrt(2f * height / gravity);
+        }
+
+        /// <summary>
+        /// Remaining airtime until <see cref="VerticalMotionState.Offset"/> reaches 0 under constant gravity.
+        /// Solves ½gt² − vt − h = 0 for the positive root. Matches jump / fall visuals driven by
+        /// <see cref="Step"/> (which may land one step earlier).
+        /// </summary>
+        public static float ComputeRemainingAirtime(VerticalMotionState motion, float gravity) {
+            if (motion.IsGrounded || gravity <= 0f) {
+                return 0f;
+            }
+
+            var height = Mathf.Max(0f, motion.Offset);
+            var velocityY = motion.VelocityY;
+            var discriminant = velocityY * velocityY + 2f * gravity * height;
+            if (discriminant <= 0f) {
+                return 0f;
+            }
+
+            return (velocityY + Mathf.Sqrt(discriminant)) / gravity;
+        }
+
         public static IEnumerator AnimateVerticalDropCoroutine(
             VerticalMotionState state,
             float gravity,
@@ -126,6 +159,34 @@ namespace DiceGame.Core
             }
 
             return state;
+        }
+
+        /// <summary>
+        /// Analytic duration of <see cref="AnimateSpawnBounceDropCoroutine"/>: the initial drop
+        /// plus every bounce arc the stepped integration will take.
+        /// </summary>
+        public static float ComputeSpawnBounceDropDuration(
+            float height,
+            float gravity,
+            float restitution,
+            int maxBounceCount,
+            float minBounceVelocity) {
+            var total = ComputeDropDuration(height, gravity);
+            if (total <= 0f) {
+                return 0f;
+            }
+
+            var impactVelocity = gravity * total;
+            for (var bounce = 0; bounce < maxBounceCount; bounce++) {
+                if (impactVelocity <= minBounceVelocity) {
+                    break;
+                }
+
+                impactVelocity *= restitution;
+                total += 2f * impactVelocity / gravity;
+            }
+
+            return total;
         }
 
         /// <summary>

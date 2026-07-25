@@ -322,8 +322,9 @@ namespace DiceGame.Session.Network
                 : null;
             diceView.PlayErasure(
                 (ErasureKind)motionEvent.ErasureKind,
+                motionEvent.ToState,
                 board,
-                motionEvent.TopFace,
+                registry,
                 emission,
                 () => {
                     clearOverride();
@@ -343,7 +344,7 @@ namespace DiceGame.Session.Network
                 return;
             }
 
-            diceView.PlayOneVanish(oneVanishSettings, () => {
+            diceView.PlayOneVanish(oneVanishSettings, motionEvent.ToState, board, registry, () => {
                 clearOverride();
                 FinishRemovedDice(controller);
             });

@@ -128,7 +128,7 @@ namespace DiceGame.Gameplay
                 return;
             }
 
-            if (isSpawning && logicalSpawnRemaining > 0f) {
+            if (isSpawning && pendingSpawnComplete != null) {
                 logicalSpawnRemaining -= deltaTime;
                 if (logicalSpawnRemaining <= 0f) {
                     logicalSpawnRemaining = 0f;
@@ -168,26 +168,67 @@ namespace DiceGame.Gameplay
             logicalBusyRemaining = 0f;
             logicalBusyDuration = 0f;
             pendingLogicalComplete = null;
+            CommitVisualToCurrentLogicalState();
+        }
+
+        /// <summary>
+        /// Logical busy ends in Update before move coroutines resume; snap so match/erasure
+        /// never dissolve against a mid-move transform.
+        /// </summary>
+        void CommitVisualToCurrentLogicalState() {
+            if (diceView == null || board == null) {
+                return;
+            }
+
+            diceView.SnapTo(currentState, board, registry);
         }
 
         const float LogicalMotionFallbackSeconds = 0.3f;
 
+        /// <summary>
+        /// Must resolve the same visual <see cref="PlayVisualForPlan"/> plays, so the logical
+        /// state advances exactly when the motion ends.
+        /// </summary>
         float ResolvePlanLogicalDuration(DiceGridMovePlan plan, DiceMoveVisualContext context) {
             if (diceView == null) {
                 return LogicalMotionFallbackSeconds;
             }
 
-            if (plan.Kind == DiceGridMoveKind.Demote
-                && DiceBehaviorResolver.GetBehavior(plan.From.Kind).Capabilities.UsesSlideVisualForDemote) {
-                var distance = MovementTransitionEvaluator.GetOrthogonalDistance(
-                    plan.From.GridPos,
-                    plan.To.GridPos);
-                return diceView.GetSlideLogicalDuration(distance);
+            switch (plan.Kind) {
+                case DiceGridMoveKind.Parallel:
+                    return diceView.GetJumpRollLogicalDuration(
+                        plan.From,
+                        plan.To,
+                        plan.Distance,
+                        fallBeforeSnap: false,
+                        useArcRoll: context.IsJump && context.JumpMotionProvider != null,
+                        board,
+                        registry,
+                        context.JumpMotionProvider);
+                case DiceGridMoveKind.Demote:
+                    if (UsesSlideVisualForDemote(plan)) {
+                        return ResolveSlideLogicalDuration(plan.From, plan.To);
+                    }
+
+                    goto case DiceGridMoveKind.Stack;
+                case DiceGridMoveKind.Stack:
+                    return context.IsJump
+                        ? diceView.GetJumpRollLogicalDuration(
+                            plan.From,
+                            plan.To,
+                            plan.Distance,
+                            fallBeforeSnap: context.JumpMotionProvider == null,
+                            useArcRoll: context.JumpMotionProvider != null,
+                            board,
+                            registry,
+                            context.JumpMotionProvider)
+                        : diceView.GetTransitionLogicalDuration(
+                            BuildTierChangeTransition(plan),
+                            board,
+                            registry);
             }
 
-            return context.IsJump
-                ? diceView.GetJumpParallelRollDuration(plan.Distance)
-                : diceView.GetGroundParallelRollDuration(plan.Distance);
+            return LogicalMotionFallbackSeconds;
         }
 
         float ResolveSlideLogicalDuration(DiceState fromState, DiceState toState) {
@@ -195,10 +236,30 @@ namespace DiceGame.Gameplay
                 return LogicalMotionFallbackSeconds;
             }
 
-            var distance = MovementTransitionEvaluator.GetOrthogonalDistance(
-                fromState.GridPos,
-                toState.GridPos);
-            return diceView.GetSlideLogicalDuration(distance);
+            return diceView.GetTransitionLogicalDuration(
+                DiceTransition.GridMove(fromState, toState),
+                board,
+                registry,
+                ResolveSlideCellDistance(fromState, toState));
+        }
+
+        static int ResolveSlideCellDistance(DiceState fromState, DiceState toState) {
+            return Mathf.Max(
+                1,
+                MovementTransitionEvaluator.GetOrthogonalDistance(fromState.GridPos, toState.GridPos));
+        }
+
+        static bool UsesSlideVisualForDemote(DiceGridMovePlan plan) {
+            return DiceBehaviorResolver
+                .GetBehavior(plan.From.Kind)
+                .Capabilities
+                .UsesSlideVisualForDemote;
+        }
+
+        static DiceTransition BuildTierChangeTransition(DiceGridMovePlan plan) {
+            return plan.Kind == DiceGridMoveKind.Stack
+                ? DiceTransition.RollThenRise(plan.From, plan.To, plan.Direction)
+                : DiceTransition.RollThenDemote(plan.From, plan.To, plan.Direction);
         }
 
         public event Action<DiceState> StateChanged;
@@ -392,11 +453,16 @@ namespace DiceGame.Gameplay
             }
 
             pendingSpawnComplete = OnSpawnComplete;
-            logicalSpawnRemaining = diceView != null
-                ? Mathf.Max(LogicalMotionFallbackSeconds, diceView.GetSpawnAppearLogicalDuration())
-                : LogicalMotionFallbackSeconds;
+            logicalSpawnRemaining = ResolveSpawnAppearLogicalDuration();
 
-            if (forceFallFromAbove || tier == DiceStackTier.Top) {
+            if (spawnAppearMode == DiceSpawnAppearMode.BottomEmergence) {
+                diceView.PlayBottomEmergenceAppear(
+                    currentState,
+                    board,
+                    registry,
+                    Capabilities.FallGravityScale,
+                    null);
+            } else {
                 diceView.PlaySpawnAppear(
                     currentState,
                     board,
@@ -404,14 +470,19 @@ namespace DiceGame.Gameplay
                     Capabilities.HasSpawnBounce,
                     Capabilities.FallGravityScale,
                     null);
-            } else {
-                diceView.PlayBottomEmergenceAppear(
-                    currentState,
-                    board,
-                    registry,
-                    Capabilities.FallGravityScale,
-                    null);
             }
+        }
+
+        float ResolveSpawnAppearLogicalDuration() {
+            if (diceView == null) {
+                return LogicalMotionFallbackSeconds;
+            }
+
+            return spawnAppearMode == DiceSpawnAppearMode.BottomEmergence
+                ? diceView.GetBottomEmergenceLogicalDuration()
+                : diceView.GetSpawnFallLogicalDuration(
+                    Capabilities.HasSpawnBounce,
+                    Capabilities.FallGravityScale);
         }
 
         /// <summary>
@@ -423,6 +494,7 @@ namespace DiceGame.Gameplay
                 return;
             }
 
+            var wasEmerging = spawnAppearMode == DiceSpawnAppearMode.BottomEmergence;
             currentState = new DiceState(
                 currentState.GridPos,
                 currentState.Orientation,
@@ -430,6 +502,12 @@ namespace DiceGame.Gameplay
                 currentState.Kind);
             spawnAppearMode = DiceSpawnAppearMode.FallFromAbove;
             diceView?.RetargetActiveSpawnLanding(currentState);
+
+            // Emergence is abandoned for a fall, so its timeline no longer describes the motion.
+            if (wasEmerging && diceView != null) {
+                logicalSpawnRemaining = diceView.GetActiveSpawnFallRemainingLogicalDuration();
+            }
+
             StateChanged?.Invoke(currentState);
         }
 
@@ -697,7 +775,15 @@ namespace DiceGame.Gameplay
 
             ApplyLogicalMove(plan.From, plan.To);
             var duration = diceView != null
-                ? diceView.GetJumpParallelRollDuration(plan.Distance)
+                ? diceView.GetJumpRollLogicalDuration(
+                    plan.From,
+                    plan.To,
+                    plan.Distance,
+                    fallBeforeSnap: false,
+                    useArcRoll: true,
+                    board,
+                    registry,
+                    jumpMotionProvider)
                 : LogicalMotionFallbackSeconds;
             StartLogicalBusy(duration, () => {
                 FinishLogicalBusy();
@@ -875,7 +961,7 @@ namespace DiceGame.Gameplay
 
                     return;
                 case DiceGridMoveKind.Demote:
-                    if (DiceBehaviorResolver.GetBehavior(plan.From.Kind).Capabilities.UsesSlideVisualForDemote) {
+                    if (UsesSlideVisualForDemote(plan)) {
                         PlaySlideVisual(plan.From, plan.To, onComplete);
                         return;
                     }
@@ -931,10 +1017,7 @@ namespace DiceGame.Gameplay
         }
 
         void PlayGroundTierChangeRollVisual(DiceGridMovePlan plan, Action onComplete) {
-            var transition = plan.Kind == DiceGridMoveKind.Stack
-                ? DiceTransition.RollThenRise(plan.From, plan.To, plan.Direction)
-                : DiceTransition.RollThenDemote(plan.From, plan.To, plan.Direction);
-            diceView.PlayTransition(transition, board, registry, onComplete);
+            diceView.PlayTransition(BuildTierChangeTransition(plan), board, registry, onComplete);
         }
 
         void PlayJumpTierChangeRollVisual(
@@ -955,9 +1038,12 @@ namespace DiceGame.Gameplay
         }
 
         void PlaySlideVisual(DiceState fromState, DiceState toState, Action onComplete) {
-            var transition = DiceTransition.GridMove(fromState, toState);
-            var distance = MovementTransitionEvaluator.GetOrthogonalDistance(fromState.GridPos, toState.GridPos);
-            diceView.PlayTransition(transition, board, registry, onComplete, Mathf.Max(1, distance));
+            diceView.PlayTransition(
+                DiceTransition.GridMove(fromState, toState),
+                board,
+                registry,
+                onComplete,
+                ResolveSlideCellDistance(fromState, toState));
         }
 
         bool BeginSlide(
@@ -1052,7 +1138,7 @@ namespace DiceGame.Gameplay
                 ConfigurePushBody();
             }
 
-            diceView.PlayErasure(kind, board, currentState.Orientation.Top, emissionColor, () => {
+            diceView.PlayErasure(kind, currentState, board, registry, emissionColor, () => {
                 registry?.Unregister(this);
                 erasureKind = ErasureKind.None;
                 Erased?.Invoke(this);
@@ -1099,7 +1185,7 @@ namespace DiceGame.Gameplay
 
             isVanishing = true;
             diceView.SetErasureEmissionColor(emissionColor);
-            diceView.PlayOneVanish(settings, () => {
+            diceView.PlayOneVanish(settings, currentState, board, registry, () => {
                 registry?.Unregister(this);
                 Erased?.Invoke(this);
                 onComplete?.Invoke();
@@ -1168,12 +1254,11 @@ namespace DiceGame.Gameplay
                 deferredGhostLanding = GhostLandingMode.InCellPromoteGhost;
             }
 
+            var transition = DiceTransition.CrushDemote(fromState, toState, fromWorld);
+
             ApplyLogicalMove(fromState, toState);
-            var fallDistance = 1;
             StartLogicalBusy(
-                diceView != null
-                    ? diceView.GetSlideLogicalDuration(fallDistance)
-                    : LogicalMotionFallbackSeconds,
+                diceView.GetTransitionLogicalDuration(transition, board, registry),
                 () => {
                     CompleteDeferredGhostLanding(
                         deferredGhostLanding,
@@ -1187,7 +1272,6 @@ namespace DiceGame.Gameplay
                         });
                 });
 
-            var transition = DiceTransition.CrushDemote(fromState, toState, fromWorld);
             diceView.PlayTransition(transition, board, registry, null);
         }
 
