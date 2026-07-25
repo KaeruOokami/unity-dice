@@ -54,4 +54,30 @@ namespace DiceGame.Session.Network
             };
         }
     }
+
+    /// <summary>
+    /// A window of per-tick inputs sent together for redundancy: a single lost
+    /// packet is recovered by the next batch instead of waiting for an explicit
+    /// resend, without changing the reliable-sequenced transport.
+    /// </summary>
+    public struct OnlineInputBatchPayload : INetworkSerializable
+    {
+        public OnlineInputPayload[] Inputs;
+
+        public void NetworkSerialize<T>(BufferSerializer<T> serializer) where T : IReaderWriter {
+            var count = Inputs?.Length ?? 0;
+            serializer.SerializeValue(ref count);
+            if (serializer.IsReader) {
+                Inputs = count > 0
+                    ? new OnlineInputPayload[count]
+                    : Array.Empty<OnlineInputPayload>();
+            }
+
+            for (var i = 0; i < count; i++) {
+                var input = Inputs[i];
+                input.NetworkSerialize(serializer);
+                Inputs[i] = input;
+            }
+        }
+    }
 }

@@ -46,11 +46,21 @@ namespace DiceGame.Session
         /// </summary>
         public const int LockstepInputBufferTicks = 180;
         /// <summary>
+        /// Each outgoing input packet also carries this many prior ticks so a single
+        /// lost packet is recovered by the following batch (redundancy window).
+        /// </summary>
+        public const int LockstepInputRedundancyTicks = 16;
+        /// <summary>
+        /// Keep already-consumed inputs this many ticks behind the current tick so a
+        /// lagging peer's redundant retransmissions can still be stored and matched.
+        /// </summary>
+        public const int LockstepInputRetainTicks = 64;
+        /// <summary>
         /// Cap render-time catch-up so a hitch does not spiral the sim.
         /// </summary>
         public const int LockstepMaxStepsPerFrame = 4;
         /// <summary>
-        /// Resend local inputs in [currentTick, currentTick+delay] while peers may be catching up.
+        /// Resend local inputs in [currentTick-redundancy, currentTick+delay] while peers may be catching up.
         /// </summary>
         public const float LockstepInputResendIntervalSeconds = 0.1f;
         /// <summary>

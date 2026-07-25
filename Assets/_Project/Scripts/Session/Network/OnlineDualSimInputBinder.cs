@@ -34,6 +34,7 @@ namespace DiceGame.Session.Network
         GameCharacterController player2Character;
         readonly OnlineLockstepInputBuffer inputBuffer =
             new(OnlineSessionConstants.LockstepInputBufferTicks);
+        readonly List<OnlineInputPayload> inputBatchScratch = new();
         readonly Dictionary<uint, uint> localHashes = new();
         readonly Dictionary<uint, uint> remoteHashes = new();
         PlayerSlot localSlot;
@@ -231,6 +232,8 @@ namespace DiceGame.Session.Network
             for (var tick = startTick; tick < end; tick++) {
                 CommitLocalInputForTick(tick);
             }
+
+            SendLocalInputWindow();
         }
 
         void Update() {
@@ -327,15 +330,34 @@ namespace DiceGame.Session.Network
             }
 
             nextResendTime = now + OnlineSessionConstants.LockstepInputResendIntervalSeconds;
+            SendLocalInputWindow();
+        }
+
+        void SendLocalInputWindow() {
             var delay = (uint)OnlineSessionConstants.InputDelayTicks;
+            var redundancy = (uint)OnlineSessionConstants.LockstepInputRedundancyTicks;
             var endTick = currentTick + delay;
-            for (var tick = currentTick; tick <= endTick; tick++) {
+            var startTick = currentTick > redundancy ? currentTick - redundancy : 0u;
+            SendLocalInputRange(startTick, endTick);
+        }
+
+        void SendLocalInputRange(uint startTickInclusive, uint endTickInclusive) {
+            inputBatchScratch.Clear();
+            for (var tick = startTickInclusive; tick <= endTickInclusive; tick++) {
                 if (!inputBuffer.TryGet(localSlot, tick, out var payload)) {
                     continue;
                 }
 
-                SendLocalInput(payload);
+                inputBatchScratch.Add(payload);
             }
+
+            if (inputBatchScratch.Count == 0) {
+                return;
+            }
+
+            SendLocalInputBatch(new OnlineInputBatchPayload {
+                Inputs = inputBatchScratch.ToArray()
+            });
         }
 
         void TickLockstep() {
@@ -356,10 +378,10 @@ namespace DiceGame.Session.Network
                 var scheduleTick = currentTick + (uint)OnlineSessionConstants.InputDelayTicks;
                 if (!inputBuffer.Has(localSlot, scheduleTick)) {
                     CommitLocalInputForTick(scheduleTick);
+                    SendLocalInputWindow();
                 }
 
                 if (!inputBuffer.HasBoth(currentTick)) {
-                    nextResendTime = 0f;
                     LogStallThrottled();
                     break;
                 }
@@ -393,7 +415,9 @@ namespace DiceGame.Session.Network
 
                 currentTick++;
                 inputBuffer.DiscardBefore(
-                    currentTick > 32 ? currentTick - 32 : 0u);
+                    currentTick > (uint)OnlineSessionConstants.LockstepInputRetainTicks
+                        ? currentTick - (uint)OnlineSessionConstants.LockstepInputRetainTicks
+                        : 0u);
 
                 MaybeEmitSimHash();
             } finally {
@@ -548,11 +572,14 @@ namespace DiceGame.Session.Network
             pendingHasDirection = false;
 
             inputBuffer.Set(localSlot, tick, payload);
-            SendLocalInput(payload);
         }
 
-        void SendLocalInput(OnlineInputPayload payload) {
+        void SendLocalInputBatch(OnlineInputBatchPayload payload) {
             if (messenger == null) {
+                return;
+            }
+
+            if (payload.Inputs == null || payload.Inputs.Length == 0) {
                 return;
             }
 
@@ -563,12 +590,22 @@ namespace DiceGame.Session.Network
             }
         }
 
-        void OnClientInputReceived(ulong senderClientId, OnlineInputPayload payload) {
-            StoreRemoteInput(payload);
+        void OnClientInputReceived(ulong senderClientId, OnlineInputBatchPayload payload) {
+            StoreRemoteInputBatch(payload);
         }
 
-        void OnHostInputReceived(OnlineInputPayload payload) {
-            StoreRemoteInput(payload);
+        void OnHostInputReceived(OnlineInputBatchPayload payload) {
+            StoreRemoteInputBatch(payload);
+        }
+
+        void StoreRemoteInputBatch(OnlineInputBatchPayload payload) {
+            if (payload.Inputs == null || payload.Inputs.Length == 0) {
+                return;
+            }
+
+            for (var i = 0; i < payload.Inputs.Length; i++) {
+                StoreRemoteInput(payload.Inputs[i]);
+            }
         }
 
         void StoreRemoteInput(OnlineInputPayload payload) {

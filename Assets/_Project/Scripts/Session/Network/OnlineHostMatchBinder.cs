@@ -238,8 +238,14 @@ namespace DiceGame.Session.Network
             }
         }
 
-        void OnInputReceived(ulong senderClientId, OnlineInputPayload payload) {
-            remoteInput?.ApplyPayload(payload);
+        void OnInputReceived(ulong senderClientId, OnlineInputBatchPayload batch) {
+            if (batch.Inputs == null || batch.Inputs.Length == 0 || remoteInput == null) {
+                return;
+            }
+
+            for (var i = 0; i < batch.Inputs.Length; i++) {
+                remoteInput.ApplyPayload(batch.Inputs[i]);
+            }
         }
 
         void OnAttackQueueChanged() {

@@ -9,6 +9,8 @@ namespace DiceGame.Session.Network
     {
         const int MatchSetupWriterSize = 8192;
         const int IdentityWriterSize = 256;
+        const int InputBatchHeaderBytes = 8;
+        const int InputPayloadMaxBytes = 32;
 
         readonly NetworkManager networkManager;
         bool registered;
@@ -17,8 +19,8 @@ namespace DiceGame.Session.Network
         float nextSnapshotReceiveLogTime;
         float nextAttackQueueSendLogTime;
 
-        public event Action<ulong, OnlineInputPayload> InputReceived;
-        public event Action<OnlineInputPayload> HostInputReceived;
+        public event Action<ulong, OnlineInputBatchPayload> InputReceived;
+        public event Action<OnlineInputBatchPayload> HostInputReceived;
         public event Action<OnlineMatchSnapshotChunk> SnapshotChunkReceived;
         public event Action<OnlineDiceMotionEvent> DiceMotionReceived;
         public event Action<OnlineAttackQueueSnapshot> AttackQueueReceived;
@@ -144,11 +146,17 @@ namespace DiceGame.Session.Network
         }
 
         public void SendInputToServer(OnlineInputPayload payload) {
+            SendInputToServer(new OnlineInputBatchPayload {
+                Inputs = new[] { payload }
+            });
+        }
+
+        public void SendInputToServer(OnlineInputBatchPayload payload) {
             if (networkManager == null || !networkManager.IsClient) {
                 return;
             }
 
-            using var writer = new FastBufferWriter(64, Allocator.Temp);
+            using var writer = new FastBufferWriter(InputBatchWriterSize(payload), Allocator.Temp);
             writer.WriteNetworkSerializable(payload);
             networkManager.CustomMessagingManager.SendNamedMessage(
                 OnlineSessionConstants.MessageInput,
@@ -158,6 +166,12 @@ namespace DiceGame.Session.Network
         }
 
         public void SendInputToClients(OnlineInputPayload payload) {
+            SendInputToClients(new OnlineInputBatchPayload {
+                Inputs = new[] { payload }
+            });
+        }
+
+        public void SendInputToClients(OnlineInputBatchPayload payload) {
             if (networkManager == null || !networkManager.IsServer) {
                 return;
             }
@@ -173,7 +187,7 @@ namespace DiceGame.Session.Network
                     continue;
                 }
 
-                using var writer = new FastBufferWriter(64, Allocator.Temp);
+                using var writer = new FastBufferWriter(InputBatchWriterSize(payload), Allocator.Temp);
                 writer.WriteNetworkSerializable(payload);
                 customMessaging.SendNamedMessage(
                     OnlineSessionConstants.MessageInput,
@@ -181,6 +195,11 @@ namespace DiceGame.Session.Network
                     writer,
                     NetworkDelivery.ReliableSequenced);
             }
+        }
+
+        static int InputBatchWriterSize(OnlineInputBatchPayload payload) {
+            var count = payload.Inputs?.Length ?? 0;
+            return InputBatchHeaderBytes + count * InputPayloadMaxBytes;
         }
 
         public void SendDiceSpawnToClients(OnlineDiceSpawnCommand command) {
@@ -652,7 +671,7 @@ namespace DiceGame.Session.Network
         }
 
         void OnInputMessage(ulong senderClientId, FastBufferReader reader) {
-            reader.ReadNetworkSerializable(out OnlineInputPayload payload);
+            reader.ReadNetworkSerializable(out OnlineInputBatchPayload payload);
             if (networkManager.IsServer) {
                 InputReceived?.Invoke(senderClientId, payload);
                 return;

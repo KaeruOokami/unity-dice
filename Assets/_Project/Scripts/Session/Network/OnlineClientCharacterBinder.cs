@@ -144,8 +144,14 @@ namespace DiceGame.Session.Network
             messenger.SendInputToServer(payload);
         }
 
-        void OnHostInputReceived(OnlineInputPayload payload) {
-            remoteInput?.ApplyPayload(payload);
+        void OnHostInputReceived(OnlineInputBatchPayload batch) {
+            if (batch.Inputs == null || batch.Inputs.Length == 0 || remoteInput == null) {
+                return;
+            }
+
+            for (var i = 0; i < batch.Inputs.Length; i++) {
+                remoteInput.ApplyPayload(batch.Inputs[i]);
+            }
         }
 
         void OnSnapshotChunkReceived(OnlineMatchSnapshotChunk chunk) {

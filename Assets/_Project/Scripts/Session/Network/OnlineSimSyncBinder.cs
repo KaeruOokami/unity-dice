@@ -263,16 +263,27 @@ namespace DiceGame.Session.Network
             });
         }
 
-        void OnClientInputReceived(ulong senderClientId, OnlineInputPayload payload) {
-            if (payload.Sequence != 0 && payload.Sequence <= lastRemoteInputSequence) {
+        void OnClientInputReceived(ulong senderClientId, OnlineInputBatchPayload batch) {
+            if (batch.Inputs == null || batch.Inputs.Length == 0) {
                 return;
             }
 
-            lastRemoteInputSequence = payload.Sequence != 0 ? payload.Sequence : lastRemoteInputSequence + 1;
-            remoteInput?.ApplyPayload(payload);
+            for (var i = 0; i < batch.Inputs.Length; i++) {
+                ApplyRemoteInputPayload(batch.Inputs[i]);
+            }
         }
 
-        void OnHostInputReceived(OnlineInputPayload payload) {
+        void OnHostInputReceived(OnlineInputBatchPayload batch) {
+            if (batch.Inputs == null || batch.Inputs.Length == 0) {
+                return;
+            }
+
+            for (var i = 0; i < batch.Inputs.Length; i++) {
+                ApplyRemoteInputPayload(batch.Inputs[i]);
+            }
+        }
+
+        void ApplyRemoteInputPayload(OnlineInputPayload payload) {
             if (payload.Sequence != 0 && payload.Sequence <= lastRemoteInputSequence) {
                 return;
             }
