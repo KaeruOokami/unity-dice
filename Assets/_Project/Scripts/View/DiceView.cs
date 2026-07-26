@@ -1257,8 +1257,10 @@ namespace DiceGame.View
                 && registry != null
                 && registry.TryGetBottomAt(state.GridPos, out var bottom)
                 && bottom != null) {
-                // Cell/tier logical height — not the bottom die's current animated world Y.
-                baseY = bottom.GetLogicalTopSurfaceWorldY();
+                // Follow support standing height (jumbo sink stage included).
+                baseY = bottom.Capabilities.HasExpandedFootprint
+                    ? bottom.GetLogicalStandingSurfaceWorldY(SurfaceHeightLevel.Bottom)
+                    : bottom.GetLogicalTopSurfaceWorldY();
             }
 
             return baseY;
@@ -2053,6 +2055,8 @@ namespace DiceGame.View
             ApplySurfaceLayout(board, progress);
             ApplySinkGhostVisual(progress);
             SyncStackedTopDuringErasure();
+            EnsureDiceController();
+            diceController?.NotifyErasureProgressChanged();
         }
 
         /// <summary>

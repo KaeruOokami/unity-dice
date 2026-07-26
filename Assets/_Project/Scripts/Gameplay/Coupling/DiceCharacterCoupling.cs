@@ -121,7 +121,8 @@ namespace DiceGame.Gameplay.Coupling
 
             var delta = diceCenter - session.DiceCenterAnchor;
             var worldPosition = session.CharacterAnchor + delta;
-            worldPosition.y = dice.GetLogicalTopSurfaceWorldY() + movementSettings.CharacterHeightOffset;
+            worldPosition.y = dice.GetLogicalStandingSurfaceWorldY(standing.Level)
+                + movementSettings.CharacterHeightOffset;
             transformDriver.ApplyWorldPosition(worldPosition);
         }
 

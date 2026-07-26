@@ -47,7 +47,7 @@ namespace DiceGame.Placement
                 ? SurfaceState.Erasing
                 : SurfaceState.Normal;
             var surfaceY = dice != null
-                ? dice.GetLogicalTopSurfaceWorldY()
+                ? dice.GetLogicalStandingSurfaceWorldY(level)
                 : 0f;
             return new BoardSurface(gridCell, level, state, dice, surfaceY);
         }

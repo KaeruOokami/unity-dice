@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using System.Text;
 using DiceGame.Core;
 using UnityEngine;
 
@@ -19,6 +20,8 @@ namespace DiceGame.Gameplay
 
     public static class DiceMatchFinder
     {
+        const string LogPrefix = "[JumboMatch]";
+
         static readonly Direction[] Directions = {
             Direction.East, Direction.West, Direction.North, Direction.South
         };
@@ -37,13 +40,22 @@ namespace DiceGame.Gameplay
             // Pre-sink jumbo is consumed as a whole dice; sinking matches are per (dice, tier).
             var consumedDice = new HashSet<DiceController>();
             var consumedSlots = new HashSet<(DiceController, DiceStackTier)>();
+            var diagnose = HasAnyExpandedFootprint(allDice);
+            if (diagnose) {
+                LogMatchBegin(allDice, actionDice);
+            }
 
             for (var face = 2; face <= 6; face++) {
-                FindPreSinkBridgedClusters(allDice, actionDice, face, consumedDice, consumedSlots, results);
+                FindPreSinkBridgedClusters(
+                    allDice, actionDice, face, consumedDice, consumedSlots, results, diagnose);
                 FindSinkingTierClusters(
                     allDice, actionDice, face, DiceStackTier.Bottom, consumedDice, consumedSlots, results);
                 FindSinkingTierClusters(
                     allDice, actionDice, face, DiceStackTier.Top, consumedDice, consumedSlots, results);
+            }
+
+            if (diagnose) {
+                LogMatchEnd(allDice, actionDice, results);
             }
 
             return results;
@@ -59,8 +71,15 @@ namespace DiceGame.Gameplay
             int face,
             HashSet<DiceController> consumedDice,
             HashSet<(DiceController, DiceStackTier)> consumedSlots,
-            List<DiceMatchCluster> results) {
-            var lookup = BuildPreSinkBridgedLookup(allDice, face, consumedDice, consumedSlots);
+            List<DiceMatchCluster> results,
+            bool diagnose) {
+            var lookup = BuildPreSinkBridgedLookup(
+                allDice, face, consumedDice, consumedSlots, diagnose);
+            // Bridged pass only matters when a pre-sink jumbo is in the lookup for this face.
+            if (!LookupContainsExpandedFootprint(lookup)) {
+                return;
+            }
+
             var visited = new HashSet<(Vector2Int, DiceStackTier)>();
 
             foreach (var pair in lookup) {
@@ -69,13 +88,44 @@ namespace DiceGame.Gameplay
                 }
 
                 var cluster = FloodFillBridged(lookup, pair.Key, visited);
-                if (cluster.Weight < face || !HasActionParticipant(cluster.Members, actionDice)) {
+                var hasJumbo = ContainsPreSinkJumbo(cluster.Members);
+
+                if (cluster.Weight < face) {
+                    if (diagnose && hasJumbo) {
+                        Debug.Log(
+                            $"{LogPrefix} bridged discard face={face}: weight {cluster.Weight} < {face} " +
+                            $"members={FormatMembers(cluster.Members)}");
+                    }
+
+                    continue;
+                }
+
+                if (!HasActionParticipant(cluster.Members, actionDice)) {
+                    if (diagnose && hasJumbo) {
+                        Debug.Log(
+                            $"{LogPrefix} bridged discard face={face}: no action participant " +
+                            $"members={FormatMembers(cluster.Members)} " +
+                            $"action={FormatActionDice(actionDice)}");
+                    }
+
                     continue;
                 }
 
                 // Bridged pass is only meaningful when a pre-sink jumbo is involved.
-                if (!ContainsPreSinkJumbo(cluster.Members)) {
+                if (!hasJumbo) {
+                    if (diagnose) {
+                        Debug.Log(
+                            $"{LogPrefix} bridged discard face={face}: no pre-sink jumbo in cluster " +
+                            $"members={FormatMembers(cluster.Members)}");
+                    }
+
                     continue;
+                }
+
+                if (diagnose) {
+                    Debug.Log(
+                        $"{LogPrefix} bridged ACCEPT face={face} weight={cluster.Weight} " +
+                        $"members={FormatMembers(cluster.Members)}");
                 }
 
                 results.Add(cluster);
@@ -162,29 +212,64 @@ namespace DiceGame.Gameplay
             IReadOnlyList<DiceController> allDice,
             int face,
             HashSet<DiceController> consumedDice,
-            HashSet<(DiceController, DiceStackTier)> consumedSlots) {
+            HashSet<(DiceController, DiceStackTier)> consumedSlots,
+            bool diagnose) {
             var lookup = new Dictionary<(Vector2Int, DiceStackTier), DiceController>();
 
             foreach (var dice in allDice) {
-                if (dice == null
-                    || consumedDice.Contains(dice)
-                    || !IsMatchEligible(dice)
-                    || dice.CurrentState.Orientation.Top != face) {
+                if (dice == null) {
+                    continue;
+                }
+
+                var isJumbo = dice.Capabilities.HasExpandedFootprint;
+                if (consumedDice.Contains(dice)) {
+                    if (diagnose && isJumbo && dice.CurrentState.Orientation.Top == face) {
+                        Debug.Log(
+                            $"{LogPrefix} bridged skip {FormatDice(dice)} face={face}: already consumed");
+                    }
+
+                    continue;
+                }
+
+                if (!IsMatchEligible(dice)) {
+                    if (diagnose && isJumbo && dice.CurrentState.Orientation.Top == face) {
+                        Debug.Log(
+                            $"{LogPrefix} bridged skip {FormatDice(dice)} face={face}: " +
+                            $"ineligible IsSpawning={dice.IsSpawning} IsRolling={dice.IsRolling}");
+                    }
+
+                    continue;
+                }
+
+                if (dice.CurrentState.Orientation.Top != face) {
                     continue;
                 }
 
                 // Sinking jumbos use the per-tier pass.
-                if (dice.Capabilities.HasExpandedFootprint && dice.IsSinkErasing) {
+                if (isJumbo && dice.IsSinkErasing) {
+                    if (diagnose) {
+                        Debug.Log(
+                            $"{LogPrefix} bridged skip {FormatDice(dice)} face={face}: " +
+                            "IsSinkErasing (uses same-tier pass)");
+                    }
+
                     continue;
                 }
 
-                if (dice.Capabilities.HasExpandedFootprint) {
+                if (isJumbo) {
                     FootprintBuffer.Clear();
                     JumboFootprint.AppendCells(dice.CurrentState.GridPos, FootprintBuffer);
                     for (var i = 0; i < FootprintBuffer.Count; i++) {
                         var cell = FootprintBuffer[i];
                         lookup[(cell, DiceStackTier.Bottom)] = dice;
                         lookup[(cell, DiceStackTier.Top)] = dice;
+                    }
+
+                    if (diagnose) {
+                        Debug.Log(
+                            $"{LogPrefix} bridged include {FormatDice(dice)} face={face} " +
+                            $"footprint={FormatFootprint(dice.CurrentState.GridPos)} " +
+                            $"weight={DiceMatchWeight.GetPreSinkBridgedWeight(dice)}");
                     }
 
                     continue;
@@ -347,6 +432,221 @@ namespace DiceGame.Gameplay
             }
 
             return new DiceMatchCluster(members, weight, matchTier);
+        }
+
+        static bool HasAnyExpandedFootprint(IReadOnlyList<DiceController> allDice) {
+            if (allDice == null) {
+                return false;
+            }
+
+            for (var i = 0; i < allDice.Count; i++) {
+                var dice = allDice[i];
+                if (dice != null && dice.Capabilities.HasExpandedFootprint) {
+                    return true;
+                }
+            }
+
+            return false;
+        }
+
+        static bool LookupContainsExpandedFootprint(
+            Dictionary<(Vector2Int, DiceStackTier), DiceController> lookup) {
+            foreach (var pair in lookup) {
+                if (pair.Value != null && pair.Value.Capabilities.HasExpandedFootprint) {
+                    return true;
+                }
+            }
+
+            return false;
+        }
+
+        static void LogMatchBegin(
+            IReadOnlyList<DiceController> allDice,
+            IReadOnlyCollection<DiceController> actionDice) {
+            var sb = new StringBuilder();
+            sb.Append(LogPrefix).Append(" BEGIN action=").Append(FormatActionDice(actionDice));
+            for (var i = 0; i < allDice.Count; i++) {
+                var dice = allDice[i];
+                if (dice == null || !dice.Capabilities.HasExpandedFootprint) {
+                    continue;
+                }
+
+                sb.Append(" | jumbo=").Append(FormatDice(dice));
+                sb.Append(" spawn=").Append(dice.IsSpawning);
+                sb.Append(" rolling=").Append(dice.IsRolling);
+                sb.Append(" sink=").Append(dice.IsSinkErasing);
+                sb.Append(" face=").Append(dice.CurrentState.Orientation.Top);
+                sb.Append(" tier=").Append(dice.CurrentState.Tier);
+                sb.Append(" anchor=").Append(FormatCell(dice.CurrentState.GridPos));
+                sb.Append(" fp=").Append(FormatFootprint(dice.CurrentState.GridPos));
+                sb.Append(" keepTop=").Append(dice.KeepsJumboTopOccupancy);
+                sb.Append(" eligible=").Append(IsMatchEligible(dice));
+                LogActionAdjacency(sb, dice, actionDice);
+            }
+
+            Debug.Log(sb.ToString());
+        }
+
+        static void LogMatchEnd(
+            IReadOnlyList<DiceController> allDice,
+            IReadOnlyCollection<DiceController> actionDice,
+            List<DiceMatchCluster> results) {
+            var jumboInResults = false;
+            for (var i = 0; i < results.Count; i++) {
+                if (ContainsAnyExpandedFootprint(results[i].Members)) {
+                    jumboInResults = true;
+                    Debug.Log(
+                        $"{LogPrefix} RESULT[{i}] tier={results[i].MatchTier} " +
+                        $"weight={results[i].Weight} members={FormatMembers(results[i].Members)}");
+                }
+            }
+
+            if (jumboInResults) {
+                return;
+            }
+
+            for (var i = 0; i < allDice.Count; i++) {
+                var jumbo = allDice[i];
+                if (jumbo == null || !jumbo.Capabilities.HasExpandedFootprint) {
+                    continue;
+                }
+
+                Debug.LogWarning(
+                    $"{LogPrefix} END no cluster included jumbo {FormatDice(jumbo)} " +
+                    $"(face={jumbo.CurrentState.Orientation.Top} eligible={IsMatchEligible(jumbo)} " +
+                    $"sink={jumbo.IsSinkErasing}). action={FormatActionDice(actionDice)}");
+            }
+        }
+
+        static void LogActionAdjacency(
+            StringBuilder sb,
+            DiceController jumbo,
+            IReadOnlyCollection<DiceController> actionDice) {
+            if (actionDice == null) {
+                sb.Append(" adjAction=none");
+                return;
+            }
+
+            sb.Append(" adjAction=");
+            var any = false;
+            foreach (var action in actionDice) {
+                if (action == null) {
+                    continue;
+                }
+
+                any = true;
+                var sameFace = action.CurrentState.Orientation.Top
+                    == jumbo.CurrentState.Orientation.Top;
+                var ortho = IsOrthogonallyAdjacentToFootprint(
+                    jumbo.CurrentState.GridPos,
+                    action.CurrentState.GridPos);
+                sb.Append('[')
+                    .Append(FormatDice(action))
+                    .Append(" sameFace=").Append(sameFace)
+                    .Append(" orthoFp=").Append(ortho)
+                    .Append(" cell=").Append(FormatCell(action.CurrentState.GridPos))
+                    .Append(" tier=").Append(action.CurrentState.Tier)
+                    .Append(']');
+            }
+
+            if (!any) {
+                sb.Append("none");
+            }
+        }
+
+        static bool IsOrthogonallyAdjacentToFootprint(Vector2Int anchor, Vector2Int cell) {
+            FootprintBuffer.Clear();
+            JumboFootprint.AppendCells(anchor, FootprintBuffer);
+            for (var i = 0; i < FootprintBuffer.Count; i++) {
+                var fp = FootprintBuffer[i];
+                var dx = Mathf.Abs(fp.x - cell.x);
+                var dy = Mathf.Abs(fp.y - cell.y);
+                if (dx + dy == 1) {
+                    return true;
+                }
+            }
+
+            return false;
+        }
+
+        static bool ContainsAnyExpandedFootprint(IReadOnlyList<DiceController> members) {
+            for (var i = 0; i < members.Count; i++) {
+                if (members[i] != null && members[i].Capabilities.HasExpandedFootprint) {
+                    return true;
+                }
+            }
+
+            return false;
+        }
+
+        static string FormatDice(DiceController dice) {
+            if (dice == null) {
+                return "(null)";
+            }
+
+            return $"{dice.name}({dice.Kind}@{FormatCell(dice.CurrentState.GridPos)}/" +
+                   $"{dice.CurrentState.Tier}/f{dice.CurrentState.Orientation.Top})";
+        }
+
+        static string FormatMembers(IReadOnlyList<DiceController> members) {
+            if (members == null || members.Count == 0) {
+                return "[]";
+            }
+
+            var sb = new StringBuilder();
+            sb.Append('[');
+            for (var i = 0; i < members.Count; i++) {
+                if (i > 0) {
+                    sb.Append(", ");
+                }
+
+                sb.Append(FormatDice(members[i]));
+            }
+
+            sb.Append(']');
+            return sb.ToString();
+        }
+
+        static string FormatActionDice(IReadOnlyCollection<DiceController> actionDice) {
+            if (actionDice == null) {
+                return "[]";
+            }
+
+            var sb = new StringBuilder();
+            sb.Append('[');
+            var first = true;
+            foreach (var dice in actionDice) {
+                if (!first) {
+                    sb.Append(", ");
+                }
+
+                first = false;
+                sb.Append(FormatDice(dice));
+            }
+
+            sb.Append(']');
+            return sb.ToString();
+        }
+
+        static string FormatCell(Vector2Int cell) {
+            return $"({cell.x},{cell.y})";
+        }
+
+        static string FormatFootprint(Vector2Int anchor) {
+            FootprintBuffer.Clear();
+            JumboFootprint.AppendCells(anchor, FootprintBuffer);
+            var sb = new StringBuilder();
+            sb.Append('[');
+            for (var i = 0; i < FootprintBuffer.Count; i++) {
+                if (i > 0) {
+                    sb.Append(' ');
+                }
+
+                sb.Append(FormatCell(FootprintBuffer[i]));
+            }
+
+            sb.Append(']');
+            return sb.ToString();
         }
     }
 }

@@ -63,12 +63,24 @@ namespace DiceGame.Placement
         /// <summary>
         /// Top slot is free for solid dice landing: solid Bottom present, no solid Top,
         /// and no pending Top spawn (falling spawn reserves the slot for dice moves).
+        /// Jumbo only accepts Top dice in Bottom-only sink stage (≤ half height).
         /// </summary>
         public static bool CanPlaceSolidTopAt(DiceRegistry registry, Vector2Int cell) {
-            return HasSolidBottomAt(registry, cell)
-                && !HasSolidTopAt(registry, cell)
-                && registry != null
-                && !registry.HasPendingTopAt(cell);
+            if (registry == null
+                || !HasSolidBottomAt(registry, cell)
+                || HasSolidTopAt(registry, cell)
+                || registry.HasPendingTopAt(cell)) {
+                return false;
+            }
+
+            if (registry.TryGetBottomAt(cell, out var bottom)
+                && bottom != null
+                && bottom.Capabilities.HasExpandedFootprint
+                && bottom.WantsJumboTopOccupancy) {
+                return false;
+            }
+
+            return true;
         }
 
         /// <summary>

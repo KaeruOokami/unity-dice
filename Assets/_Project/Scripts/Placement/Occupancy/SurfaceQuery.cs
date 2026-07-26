@@ -52,6 +52,17 @@ namespace DiceGame.Placement
                 if (registry.TryGetBottomAt(gridCell, out var bottomForTop)
                     && bottomForTop != null
                     && !GhostPlacementRules.IsPlayerPassThrough(bottomForTop)) {
+                    // Jumbo mid-sink (Bottom-only stage): no virtual Top — stand on Bottom height.
+                    if (bottomForTop.Capabilities.HasExpandedFootprint
+                        && bottomForTop.IsSinkErasing
+                        && !bottomForTop.KeepsJumboTopOccupancy) {
+                        surface = BoardSurface.FromDice(
+                            gridCell,
+                            SurfaceHeightLevel.Bottom,
+                            bottomForTop);
+                        return true;
+                    }
+
                     // Ghost-only top: stand on the solid bottom, not at ghost elevation.
                     if (registry.TryGetTopAt(gridCell, out var topOccupant)
                         && GhostPlacementRules.IsPlayerPassThrough(topOccupant)) {

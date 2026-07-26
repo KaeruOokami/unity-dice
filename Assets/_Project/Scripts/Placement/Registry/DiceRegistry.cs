@@ -67,7 +67,19 @@ namespace DiceGame.Placement
                 return false;
             }
 
-            return HasBottomAt(gridPos) && !HasTopAt(gridPos) && !HasPendingTopAt(gridPos);
+            if (!HasBottomAt(gridPos) || HasTopAt(gridPos) || HasPendingTopAt(gridPos)) {
+                return false;
+            }
+
+            // Jumbo accepts stacked dice only in Bottom-only sink stage (≤ half height).
+            if (TryGetBottomAt(gridPos, out var bottom)
+                && bottom != null
+                && bottom.Capabilities.HasExpandedFootprint
+                && bottom.WantsJumboTopOccupancy) {
+                return false;
+            }
+
+            return true;
         }
 
         public bool CanAcceptTopDiceAt(Vector2Int gridPos) {
@@ -307,6 +319,74 @@ namespace DiceGame.Placement
             }
         }
 
+        /// <summary>
+        /// Jumbo sink: progress &lt; threshold keeps Top+Bottom footprint; at/above threshold
+        /// releases Top so only Bottom remains (rollback restores Top when no stacked die blocks it).
+        /// </summary>
+        /// <returns>True when Top occupancy changed.</returns>
+        public bool SyncJumboSinkOccupancy(DiceController dice) {
+            if (dice == null || !dice.Capabilities.HasExpandedFootprint) {
+                return false;
+            }
+
+            var wantTop = dice.WantsJumboTopOccupancy;
+            var anchor = dice.CurrentState.GridPos;
+            footprintCells.Clear();
+            JumboFootprint.AppendCells(anchor, footprintCells);
+
+            // Stacked Top dice block reclaim — jumbo stays Bottom-only until they leave.
+            if (wantTop) {
+                for (var i = 0; i < footprintCells.Count; i++) {
+                    if (TryGetTopAt(footprintCells[i], out var top)
+                        && top != null
+                        && top != dice) {
+                        wantTop = false;
+                        break;
+                    }
+                }
+            }
+
+            var topChanged = false;
+            for (var i = 0; i < footprintCells.Count; i++) {
+                var cell = footprintCells[i];
+                if (wantTop) {
+                    if (!TryGetTopAt(cell, out var top) || top != dice) {
+                        SetDiceAt(cell, dice, DiceStackTier.Top);
+                        topChanged = true;
+                    }
+                } else if (TryGetTopAt(cell, out var top) && top == dice) {
+                    ClearDiceAt(cell, dice, DiceStackTier.Top, notifySupportLoss: false);
+                    topChanged = true;
+                }
+
+                if (!TryGetBottomAt(cell, out var bottom) || bottom != dice) {
+                    SetDiceAt(cell, dice, DiceStackTier.Bottom);
+                }
+            }
+
+            return topChanged;
+        }
+
+        /// <summary>
+        /// Sync visual height of any Top dice stacked on a jumbo footprint (or single cell).
+        /// </summary>
+        public void SyncStackedTopsForDice(DiceController support, Board targetBoard) {
+            if (support == null || targetBoard == null) {
+                return;
+            }
+
+            if (!support.Capabilities.HasExpandedFootprint) {
+                SyncStackedTopAt(support.CurrentState.GridPos, targetBoard, support);
+                return;
+            }
+
+            footprintCells.Clear();
+            JumboFootprint.AppendCells(support.CurrentState.GridPos, footprintCells);
+            for (var i = 0; i < footprintCells.Count; i++) {
+                SyncStackedTopAt(footprintCells[i], targetBoard, support);
+            }
+        }
+
         void ClearOccupantsForJumboLanding(Vector2Int anchor, DiceController excluding) {
             footprintClearBuffer.Clear();
             footprintCells.Clear();
@@ -539,8 +619,16 @@ namespace DiceGame.Placement
             return TryGetPendingBottomAt(gridPos, out dice);
         }
 
-        public void SyncStackedTopAt(Vector2Int gridPos, Board board) {
+        public void SyncStackedTopAt(Vector2Int gridPos, Board board, DiceController exclude = null) {
             if (board == null || !TryGetTopAt(gridPos, out var top) || top == null) {
+                return;
+            }
+
+            // A jumbo occupies its own Top tier across its footprint. When syncing
+            // stacked dice for that jumbo it must not sync itself, or the visual
+            // update path recurses (SyncStackedSurface -> ApplyErasureVisual ->
+            // NotifyErasureProgressChanged -> SyncStackedTopsForDice) indefinitely.
+            if (top == exclude) {
                 return;
             }
 

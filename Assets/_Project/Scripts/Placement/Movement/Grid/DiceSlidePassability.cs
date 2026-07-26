@@ -217,13 +217,9 @@ namespace DiceGame.Placement
             landingTier = default;
 
             if (fromTier == DiceStackTier.Bottom) {
+                // Floor / Bottom slides stay on Bottom. Stacking onto another Bottom is roll/jump only.
                 if (GhostPlacementRules.CanPlaceSolidBottomAt(registry, cell)) {
                     landingTier = DiceStackTier.Bottom;
-                    return true;
-                }
-
-                if (GhostPlacementRules.CanPlaceSolidTopAt(registry, cell)) {
-                    landingTier = DiceStackTier.Top;
                     return true;
                 }
 

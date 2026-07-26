@@ -59,9 +59,13 @@ namespace DiceGame.Placement
                 return false;
             }
 
+            var landingLevel = bottomDice.Capabilities.HasExpandedFootprint
+                && bottomDice.KeepsJumboTopOccupancy
+                ? SurfaceHeightLevel.Top
+                : SurfaceHeightLevel.Bottom;
             if (!HeightReachPolicy.CanTransfer(
                 fromSurface,
-                bottomDice.GetLogicalTopSurfaceWorldY(),
+                bottomDice.GetLogicalStandingSurfaceWorldY(landingLevel),
                 null,
                 registry,
                 reach,
@@ -72,7 +76,7 @@ namespace DiceGame.Placement
 
             transition = MovementTransition.Walkable(
                 bottomDice,
-                SurfaceHeightLevel.Bottom,
+                landingLevel,
                 MovementTransitionRoute.HeightTransfer);
             return true;
         }
@@ -112,7 +116,7 @@ namespace DiceGame.Placement
                 reach,
                 allowDescentOnly,
                 target)) {
-                transition = CreateWalkableTransfer(target);
+                transition = CreateWalkableTransfer(targetSurface);
                 return true;
             }
 
@@ -214,15 +218,16 @@ namespace DiceGame.Placement
             }
 
             if (standingTier == DiceStackTier.Bottom
-                && target.CurrentState.Tier == DiceStackTier.Bottom
-                && GhostPlacementRules.HasSolidTopAt(registry, target.CurrentState.GridPos)) {
+                && SurfaceHeightLevel.ToDiceStackTier(targetSurface.Level) == DiceStackTier.Bottom
+                && GhostPlacementRules.HasSolidTopAt(registry, targetSurface.GridCell)) {
                 rejectReason = "neighbor-bottom-occluded-by-top";
                 return false;
             }
 
-            if (!IsLandingTierAtOrBelowStandingTier(standingTier, target.CurrentState.Tier)) {
+            var landingTier = SurfaceHeightLevel.ToDiceStackTier(targetSurface.Level);
+            if (!IsLandingTierAtOrBelowStandingTier(standingTier, landingTier)) {
                 rejectReason =
-                    $"landing-tier-above-standing standingTier={standingTier} landingTier={target.CurrentState.Tier}";
+                    $"landing-tier-above-standing standingTier={standingTier} landingTier={landingTier}";
                 return false;
             }
 
@@ -247,7 +252,8 @@ namespace DiceGame.Placement
                 return false;
             }
 
-            if (!IsLandingTierAtOrBelowStandingTier(standingTier, target.CurrentState.Tier)) {
+            var landingTier = SurfaceHeightLevel.ToDiceStackTier(targetSurface.Level);
+            if (!IsLandingTierAtOrBelowStandingTier(standingTier, landingTier)) {
                 return false;
             }
 
@@ -261,16 +267,14 @@ namespace DiceGame.Placement
                 return false;
             }
 
-            var targetLevel = SurfaceHeightLevel.FromDiceStackTier(target.CurrentState.Tier);
-            transition = MovementTransition.BlockedStepOnly(target, targetLevel);
+            transition = MovementTransition.BlockedStepOnly(target, targetSurface.Level);
             return true;
         }
 
-        static MovementTransition CreateWalkableTransfer(DiceController target) {
-            var targetLevel = SurfaceHeightLevel.FromDiceStackTier(target.CurrentState.Tier);
+        static MovementTransition CreateWalkableTransfer(BoardSurface targetSurface) {
             return MovementTransition.Walkable(
-                target,
-                targetLevel,
+                targetSurface.Dice,
+                targetSurface.Level,
                 MovementTransitionRoute.HeightTransfer);
         }
     }

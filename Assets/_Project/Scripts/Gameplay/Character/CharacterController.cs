@@ -380,10 +380,25 @@ namespace DiceGame.Gameplay
                 return;
             }
 
-            if (standingController.TryGetStandingDice(out var standingDice)
-                && standingDice == standingController.CurrentDice
-                && state.GridPos == standingController.GridCell
-                && state.Tier != standingController.Tier) {
+            if (!standingController.TryGetStandingDice(out var standingDice)
+                || standingDice != standingController.CurrentDice) {
+                return;
+            }
+
+            var onFootprint = standingDice.Capabilities.HasExpandedFootprint
+                ? JumboFootprint.Contains(state.GridPos, standingController.GridCell)
+                : state.GridPos == standingController.GridCell;
+            if (!onFootprint) {
+                return;
+            }
+
+            // Jumbo sink stage changes height without changing CurrentState.Tier.
+            if (standingDice.Capabilities.HasExpandedFootprint && standingDice.IsSinkErasing) {
+                transformDriver.SnapYToSurface();
+                return;
+            }
+
+            if (state.Tier != standingController.Tier) {
                 transformDriver.SnapYToSurface();
             }
         }
@@ -467,13 +482,23 @@ namespace DiceGame.Gameplay
             }
 
             // If the player state indicates Top-support, but the top dice doesn't exist anymore,
-            // fall under gravity instead of using any virtual-top height fallback.
+            // demote onto the same-cell Bottom when present (e.g. Jumbo mid-sink); otherwise fall.
             if (!isFalling
                 && jumpPhase == JumpPhase.None
                 && liftPhase == LiftPhase.None
                 && standingController.Support.Kind == SupportKind.Dice
                 && standingController.Support.DiceSurfaceLevel == DiceSurfaceLevel.Top
                 && !registry.HasTopAt(standingController.GridCell)) {
+                var grid = standingController.GridCell;
+                if (registry.TryGetBottomAt(grid, out var bottom)
+                    && bottom != null
+                    && !GhostPlacementRules.IsPlayerPassThrough(bottom)) {
+                    standingController.SetOnDice(grid, DiceStackTier.Bottom, bottom);
+                    transformDriver.SnapYToSurface();
+                    currentSpeed = 0f;
+                    return;
+                }
+
                 MoveToFloorAtCurrentWorldPosition();
                 return;
             }
@@ -1161,8 +1186,15 @@ namespace DiceGame.Gameplay
                 return;
             }
 
-            var state = coveringDice.CurrentState;
-            standingController.SetOnDice(state.GridPos, state.Tier, coveringDice);
+            var cell = standingController.GridCell;
+            var mountTier = coveringDice.CurrentState.Tier;
+            if (registry.TryGetTopAt(cell, out var top) && top == coveringDice) {
+                mountTier = DiceStackTier.Top;
+            } else if (registry.TryGetBottomAt(cell, out var bottom) && bottom == coveringDice) {
+                mountTier = DiceStackTier.Bottom;
+            }
+
+            standingController.SetOnDice(cell, mountTier, coveringDice);
             currentSpeed = 0f;
 
             if (coveringDice.IsMotionFollowActive) {
@@ -1256,7 +1288,7 @@ namespace DiceGame.Gameplay
             }
 
             if (standingController != null && standingController.TryGetStandingDice(out var standingDice)) {
-                return standingDice.GetLogicalTopSurfaceWorldY();
+                return standingDice.GetLogicalStandingSurfaceWorldY(standingController.Level);
             }
 
             if (isFalling) {

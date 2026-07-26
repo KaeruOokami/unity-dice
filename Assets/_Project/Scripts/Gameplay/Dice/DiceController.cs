@@ -60,6 +60,24 @@ namespace DiceGame.Gameplay
         public bool IsVanishing => isVanishing;
         public bool IsErasureGhost =>
             IsSinkErasing && diceView != null && diceView.IsErasureGhost;
+        /// <summary>
+        /// True while this jumbo currently occupies Top footprint slots.
+        /// Driven by <see cref="DiceRegistry.SyncJumboSinkOccupancy"/> (progress threshold + stack gate).
+        /// </summary>
+        public bool KeepsJumboTopOccupancy =>
+            !Capabilities.HasExpandedFootprint
+            || (registry != null
+                && registry.TryGetTopAt(currentState.GridPos, out var top)
+                && top == this);
+
+        /// <summary>
+        /// Sink stage still tall enough for Top connection (progress below threshold, or not sinking).
+        /// </summary>
+        public bool WantsJumboTopOccupancy =>
+            !Capabilities.HasExpandedFootprint
+            || !IsSinkErasing
+            || (diceView != null
+                && diceView.ErasureProgress < JumboFootprint.SinkTopOccupancyThreshold);
         public bool IsCarried => isCarried;
         public bool IsBusy => IsRolling || isSpawning || IsErasing || isVanishing || isCarried;
         public DiceState CurrentState => currentState;
@@ -545,13 +563,13 @@ namespace DiceGame.Gameplay
         }
 
         public float GetLogicalTopSurfaceWorldY() {
-            if (diceView == null || board == null) {
-                return board != null ? board.FloorSurfaceWorldY : 0f;
+            if (Capabilities.HasExpandedFootprint) {
+                return GetLogicalStandingSurfaceWorldY(
+                    KeepsJumboTopOccupancy ? SurfaceHeightLevel.Top : SurfaceHeightLevel.Bottom);
             }
 
-            if (Capabilities.HasExpandedFootprint) {
-                return board.FloorSurfaceWorldY
-                    + JumboFootprint.GetTopSurfaceHeightAboveFloor(board.CellSize);
+            if (diceView == null || board == null) {
+                return board != null ? board.FloorSurfaceWorldY : 0f;
             }
 
             // Bottom tier is always floor-anchored so stacked ghosts/tops never read animated fall Y.
@@ -560,6 +578,24 @@ namespace DiceGame.Gameplay
             }
 
             return diceView.GetLogicalTopSurfaceWorldY(board);
+        }
+
+        /// <summary>
+        /// Standing / stack surface Y for a height level. Jumbo is 2× tall: Top = 2 cells, Bottom = 1.
+        /// </summary>
+        public float GetLogicalStandingSurfaceWorldY(int surfaceLevel) {
+            if (board == null) {
+                return 0f;
+            }
+
+            if (Capabilities.HasExpandedFootprint) {
+                var tiers = surfaceLevel == SurfaceHeightLevel.Top && KeepsJumboTopOccupancy
+                    ? JumboFootprint.Size
+                    : 1;
+                return board.FloorSurfaceWorldY + board.CellSize * tiers;
+            }
+
+            return GetLogicalTopSurfaceWorldY();
         }
 
         public bool TryExecuteSlidePlan(DiceSlidePlan plan, PlayerSlot actionOwner) {
@@ -1163,7 +1199,10 @@ namespace DiceGame.Gameplay
                 return;
             }
 
-            diceView.RetreatErasure(amount);
+            // Match sink progress rate: Jumbo (duration ×2) retreats half as far in progress space.
+            var sinkMultiplier = Capabilities.SinkDurationMultiplier;
+            var scaledAmount = sinkMultiplier > 0f ? amount / sinkMultiplier : amount;
+            diceView.RetreatErasure(scaledAmount);
         }
 
         public void AdvanceErasure(float amount) {
@@ -1276,7 +1315,22 @@ namespace DiceGame.Gameplay
         }
 
         public void NotifyStackedTopSync() {
-            registry?.SyncStackedTopAt(currentState.GridPos, board);
+            registry?.SyncStackedTopsForDice(this, board);
+        }
+
+        /// <summary>
+        /// Called whenever sink erasure progress changes so Jumbo Top/Bottom occupancy stays in sync.
+        /// </summary>
+        public void NotifyErasureProgressChanged() {
+            if (!Capabilities.HasExpandedFootprint || !IsSinkErasing || registry == null) {
+                return;
+            }
+
+            var topChanged = registry.SyncJumboSinkOccupancy(this);
+            registry.SyncStackedTopsForDice(this, board);
+            if (topChanged) {
+                StateChanged?.Invoke(currentState);
+            }
         }
 
         public void OnCeasedErasureGhost() {

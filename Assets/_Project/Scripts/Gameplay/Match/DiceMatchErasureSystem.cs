@@ -285,11 +285,31 @@ namespace DiceGame.Gameplay
                     board,
                     triggerDice,
                     out var attacker)) {
+                    if (ClusterHasExpandedFootprint(cluster.Members)) {
+                        Debug.LogWarning(
+                            $"[JumboMatch] attacker unresolved for jumbo cluster weight={cluster.Weight} " +
+                            $"tier={cluster.MatchTier} trigger={triggerDice.name}");
+                    }
+
                     continue;
                 }
 
                 ProcessCluster(cluster, attacker);
             }
+        }
+
+        static bool ClusterHasExpandedFootprint(IReadOnlyList<DiceController> members) {
+            if (members == null) {
+                return false;
+            }
+
+            for (var i = 0; i < members.Count; i++) {
+                if (members[i] != null && members[i].Capabilities.HasExpandedFootprint) {
+                    return true;
+                }
+            }
+
+            return false;
         }
 
         void ProcessCluster(DiceMatchCluster cluster, PlayerSlot attacker) {

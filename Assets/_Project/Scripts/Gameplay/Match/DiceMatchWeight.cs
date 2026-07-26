@@ -21,6 +21,11 @@ namespace DiceGame.Gameplay
                     return 0;
                 }
 
+                // Top occupancy released: jumbo is Bottom-only — do not match Top dice stacked on it.
+                if (matchTier == DiceStackTier.Top && !dice.KeepsJumboTopOccupancy) {
+                    return 0;
+                }
+
                 var sinkingWeight = capabilities.SinkingMatchWeightPerTier;
                 return sinkingWeight > 0
                     ? sinkingWeight

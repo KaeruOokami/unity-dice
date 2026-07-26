@@ -11,6 +11,10 @@ namespace DiceGame.Core
         public const int MatchWeightBeforeErasure = 1;
         /// <summary>Match weight per tier while sink-erasing (Bottom 4 / Top 4).</summary>
         public const int MatchWeightPerTierWhileErasing = 4;
+        /// <summary>
+        /// Sink progress at which Top footprint occupancy is released (Bottom-only stage).
+        /// </summary>
+        public const float SinkTopOccupancyThreshold = 0.5f;
 
         public static void AppendCells(Vector2Int anchor, List<Vector2Int> results) {
             if (results == null) {
