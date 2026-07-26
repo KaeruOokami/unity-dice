@@ -589,10 +589,29 @@ namespace DiceGame.Session.Network
                 return;
             }
 
-            if (isHost) {
-                messenger.SendInputToClients(payload);
-            } else {
-                messenger.SendInputToServer(payload);
+            var maxPerBatch = OnlineSessionConstants.LockstepInputMaxPayloadsPerBatch;
+            if (maxPerBatch <= 0) {
+                Debug.LogError("OnlineDualSimInputBinder: LockstepInputMaxPayloadsPerBatch must be > 0.");
+                return;
+            }
+
+            var inputs = payload.Inputs;
+            for (var offset = 0; offset < inputs.Length; offset += maxPerBatch) {
+                var count = Mathf.Min(maxPerBatch, inputs.Length - offset);
+                OnlineInputBatchPayload chunk;
+                if (offset == 0 && count == inputs.Length) {
+                    chunk = payload;
+                } else {
+                    var slice = new OnlineInputPayload[count];
+                    System.Array.Copy(inputs, offset, slice, 0, count);
+                    chunk = new OnlineInputBatchPayload { Inputs = slice };
+                }
+
+                if (isHost) {
+                    messenger.SendInputToClients(chunk);
+                } else {
+                    messenger.SendInputToServer(chunk);
+                }
             }
         }
 

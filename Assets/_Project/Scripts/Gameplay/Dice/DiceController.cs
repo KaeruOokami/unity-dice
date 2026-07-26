@@ -1379,37 +1379,47 @@ namespace DiceGame.Gameplay
             }
 
             isCarried = true;
-            registry?.Unregister(this);
+            // Vacate occupancy only — stay in allDice so TickLogicalMotions advances lift/place busy.
+            registry?.RemoveFromGrid(this);
 
-            var fromWorld = diceView.DiceTransform.position;
+            // Logical from-position (not mid-lerp view transform) so both lockstep peers match.
+            var fromWorld = diceView.GetAnchoredWorldPosition(currentState, board, registry);
             var transition = DiceTransition.FreeMove(fromWorld, carryWorldTarget, snapToGridOnComplete: false);
-            diceView.PlayTransition(transition, board, registry, () => {
-                onComplete?.Invoke();
-            });
+            StartLogicalBusy(
+                diceView.GetTransitionLogicalDuration(transition, board, registry),
+                () => {
+                    // Still carried: do not snap back onto the vacated cell.
+                    ClearLogicalBusyWithoutComplete();
+                    onComplete?.Invoke();
+                });
+            diceView.PlayTransition(transition, board, registry, null);
 
             return true;
         }
 
         public bool TryPlaceAt(Vector2Int targetGrid, DiceStackTier targetTier, Vector3 fromWorld, Action onComplete) {
-            if (!isCarried || board == null || diceView == null || registry == null) {
+            if (!isCarried || isRolling || board == null || diceView == null || registry == null) {
                 return false;
             }
 
-            var fromState = currentState;
             var toState = new DiceState(targetGrid, currentState.Orientation, targetTier, currentState.Kind);
             var toWorld = diceView.GetAnchoredWorldPosition(toState, board, registry);
             var transition = DiceTransition.FreeMove(fromWorld, toWorld, snapToGridOnComplete: true, toState);
 
-            diceView.PlayTransition(transition, board, registry, () => {
-                currentState = toState;
-                isCarried = false;
-                registry.Place(this, targetGrid, targetTier);
-                ConfigurePushBody();
-                // Carry placement always completes the player action, including same-cell drops.
-                NotifyActionMoveCompleted();
-                StateChanged?.Invoke(currentState);
-                onComplete?.Invoke();
-            });
+            StartLogicalBusy(
+                diceView.GetTransitionLogicalDuration(transition, board, registry),
+                () => {
+                    currentState = toState;
+                    isCarried = false;
+                    registry.Place(this, targetGrid, targetTier);
+                    ConfigurePushBody();
+                    FinishLogicalBusy();
+                    // Carry placement always completes the player action, including same-cell drops.
+                    NotifyActionMoveCompleted();
+                    StateChanged?.Invoke(currentState);
+                    onComplete?.Invoke();
+                });
+            diceView.PlayTransition(transition, board, registry, null);
 
             return true;
         }

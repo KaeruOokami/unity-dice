@@ -156,6 +156,10 @@ namespace DiceGame.Session.Network
                 return;
             }
 
+            if (!TryValidateInputBatchSize(payload, nameof(SendInputToServer))) {
+                return;
+            }
+
             using var writer = new FastBufferWriter(InputBatchWriterSize(payload), Allocator.Temp);
             writer.WriteNetworkSerializable(payload);
             networkManager.CustomMessagingManager.SendNamedMessage(
@@ -181,6 +185,10 @@ namespace DiceGame.Session.Network
                 return;
             }
 
+            if (!TryValidateInputBatchSize(payload, nameof(SendInputToClients))) {
+                return;
+            }
+
             var localId = networkManager.LocalClientId;
             foreach (var clientId in networkManager.ConnectedClientsIds) {
                 if (clientId == localId) {
@@ -195,6 +203,19 @@ namespace DiceGame.Session.Network
                     writer,
                     NetworkDelivery.UnreliableSequenced);
             }
+        }
+
+        static bool TryValidateInputBatchSize(OnlineInputBatchPayload payload, string caller) {
+            var count = payload.Inputs?.Length ?? 0;
+            var max = OnlineSessionConstants.LockstepInputMaxPayloadsPerBatch;
+            if (count <= max) {
+                return true;
+            }
+
+            Debug.LogError(
+                $"OnlineNetMessenger.{caller}: input batch count={count} exceeds " +
+                $"LockstepInputMaxPayloadsPerBatch={max}. Split before send.");
+            return false;
         }
 
         static int InputBatchWriterSize(OnlineInputBatchPayload payload) {

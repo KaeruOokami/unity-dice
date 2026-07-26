@@ -563,7 +563,7 @@ namespace DiceGame.Placement
             ClearDiceAt(gridPos, dice, tier);
         }
 
-            public void Unregister(DiceController dice) {
+        public void Unregister(DiceController dice) {
             if (dice == null) {
                 return;
             }

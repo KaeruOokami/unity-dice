@@ -64,6 +64,12 @@ namespace DiceGame.Session
         /// </summary>
         public const float LockstepInputResendIntervalSeconds = 0.1f;
         /// <summary>
+        /// Max payloads per UnreliableSequenced input batch.
+        /// Retain-window resends can exceed NGO non-fragmented MTU (~1300B) if sent as one packet;
+        /// chunking keeps each batch under that limit (~32B/payload + header).
+        /// </summary>
+        public const int LockstepInputMaxPayloadsPerBatch = 24;
+        /// <summary>
         /// Retry LockstepReady until the remote peer acknowledges it is listening.
         /// </summary>
         public const float LockstepReadyRetryIntervalSeconds = 0.25f;

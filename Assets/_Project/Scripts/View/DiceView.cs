@@ -769,7 +769,7 @@ namespace DiceGame.View
         }
 
         public void SetCarryWorldPosition(Vector3 worldPosition) {
-            if (positionRoot == null) {
+            if (positionRoot == null || isAnimating) {
                 return;
             }
 
