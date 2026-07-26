@@ -1048,24 +1048,6 @@ namespace DiceGame.View
         }
 
         /// <summary>
-        /// Remaining logical time of the fall left by <see cref="RetargetActiveSpawnLanding"/>.
-        /// Valid only while the session still has its starting velocity (a retarget from
-        /// emergence); a mid-fall retarget keeps its original, longer timeline.
-        /// </summary>
-        public float GetActiveSpawnFallRemainingLogicalDuration() {
-            if (activeSpawnFallSession == null || physicsSettings == null) {
-                return 0f;
-            }
-
-            return GravityMotion.ComputeSpawnBounceDropDuration(
-                activeSpawnFallSession.Motion.Offset,
-                ResolveFallGravity(activeSpawnFallGravityScale),
-                activeSpawnBounceRestitution,
-                activeSpawnMaxBounceCount,
-                activeSpawnMinBounceVelocity);
-        }
-
-        /// <summary>
         /// Logical duration of <see cref="PlayJumpRoll"/>. Mirrors the phases of
         /// <see cref="JumpRollCoroutine"/>; keep both in sync.
         /// </summary>

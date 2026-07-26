@@ -521,9 +521,11 @@ namespace DiceGame.Gameplay
             spawnAppearMode = DiceSpawnAppearMode.FallFromAbove;
             diceView?.RetargetActiveSpawnLanding(currentState);
 
-            // Emergence is abandoned for a fall, so its timeline no longer describes the motion.
-            if (wasEmerging && diceView != null) {
-                logicalSpawnRemaining = diceView.GetActiveSpawnFallRemainingLogicalDuration();
+            // Emergence → Top: settled Bottom rest is below Top rest, so drop height is 0 and
+            // logical spawn completes on the next tick. Never sample View motion Offset — that
+            // follows stall/frame presentation and is not lockstep-deterministic.
+            if (wasEmerging) {
+                logicalSpawnRemaining = 0f;
             }
 
             StateChanged?.Invoke(currentState);
