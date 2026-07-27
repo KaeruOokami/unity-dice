@@ -152,6 +152,16 @@ namespace DiceGame.Session
             RefreshStatus();
         }
 
+        public void ShowClientWaitingForHostMode(string lobbyCode) {
+            onlineSharedSetupActive = false;
+            SetPanel(main: false, localMode: false, onlineMode: false, setup: false, host: false, client: true);
+            if (clientStatusText != null) {
+                clientStatusText.text = $"Joined: {lobbyCode}\nWaiting for host to select mode...";
+            }
+
+            RefreshStatus();
+        }
+
         public void Hide() {
             onlineSharedSetupActive = false;
             if (canvas != null) {
@@ -304,7 +314,20 @@ namespace DiceGame.Session
         }
 
         void OnOnlineModeSelected(GameMode mode) {
-            controller?.CreateHostLobby(mode);
+            controller?.ConfirmHostGameMode(mode);
+        }
+
+        void OnCreateHostClicked() {
+            controller?.CreateHostLobby();
+        }
+
+        void OnOnlineModeBackClicked() {
+            if (OnlineSessionState.Instance != null && OnlineSessionState.Instance.IsHost) {
+                controller?.LeaveSession();
+                return;
+            }
+
+            ShowMainPanel();
         }
 
         void OnMatchSetupPrimaryClicked() {
@@ -497,9 +520,10 @@ namespace DiceGame.Session
             LobbyUiFactory.CenterPanel(mainPanel.GetComponent<RectTransform>(), new Vector2(520f, 420f));
             LobbyUiFactory.CreateText(mainPanel.transform, "Title", "Dice Game", 40, TextAnchor.UpperCenter);
             LobbyUiFactory.CreateButton(mainPanel.transform, "LocalButton", "Local Play", new Vector2(0f, 80f), OnLocalPlayClicked);
-            LobbyUiFactory.CreateButton(mainPanel.transform, "HostButton", "Create Room (Host)", new Vector2(0f, 0f), ShowOnlineModePanel);
+            LobbyUiFactory.CreateButton(mainPanel.transform, "HostButton", "Create Room (Host)", new Vector2(0f, 0f), OnCreateHostClicked);
 
             joinCodeInput = LobbyUiFactory.CreateInputField(mainPanel.transform, "JoinCodeInput", "Join code", new Vector2(0f, -90f));
+            BindJoinCodeUppercase(joinCodeInput);
             LobbyUiFactory.CreateButton(mainPanel.transform, "JoinButton", "Join by Code", new Vector2(0f, -170f), () => {
                 controller?.JoinLobbyByCode(joinCodeInput != null ? joinCodeInput.text : string.Empty);
             });
@@ -531,7 +555,7 @@ namespace DiceGame.Session
             LobbyUiFactory.CreateButton(onlineModePanel.transform, "OnlineVersusButton", "Versus", new Vector2(0f, -40f), () => {
                 OnOnlineModeSelected(GameMode.Versus);
             });
-            LobbyUiFactory.CreateButton(onlineModePanel.transform, "OnlineModeBackButton", "Back", new Vector2(0f, -140f), ShowMainPanel);
+            LobbyUiFactory.CreateButton(onlineModePanel.transform, "OnlineModeBackButton", "Leave", new Vector2(0f, -140f), OnOnlineModeBackClicked);
         }
 
         void BuildMatchSetupPanel(Transform root) {
@@ -598,6 +622,27 @@ namespace DiceGame.Session
             clientStatusText = LobbyUiFactory.CreateText(clientPanel.transform, "ClientStatus", "Connecting...", 32, TextAnchor.MiddleCenter);
             LobbyUiFactory.CreateButton(clientPanel.transform, "ClientLeaveButton", "Cancel", new Vector2(0f, -100f), () => {
                 controller?.LeaveSession();
+            });
+        }
+
+        static void BindJoinCodeUppercase(TMP_InputField input) {
+            if (input == null) {
+                return;
+            }
+
+            input.onValueChanged.AddListener(value => {
+                if (string.IsNullOrEmpty(value)) {
+                    return;
+                }
+
+                var upper = value.ToUpperInvariant();
+                if (upper == value) {
+                    return;
+                }
+
+                var caret = input.stringPosition;
+                input.SetTextWithoutNotify(upper);
+                input.stringPosition = Mathf.Clamp(caret, 0, upper.Length);
             });
         }
 

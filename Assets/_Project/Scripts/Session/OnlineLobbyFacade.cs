@@ -18,7 +18,7 @@ namespace DiceGame.Session
         public string LobbyCode => ActiveLobby?.LobbyCode ?? string.Empty;
         public bool IsHost => hostLobby != null;
 
-        public async Task<Lobby> CreateLobbyAsync(string relayJoinCode, string relayRegion, GameMode gameMode) {
+        public async Task<Lobby> CreateLobbyAsync(string relayJoinCode, string relayRegion) {
             await UnityGamingServicesAuth.EnsureSignedInAsync();
 
             var options = new CreateLobbyOptions {
@@ -31,10 +31,6 @@ namespace DiceGame.Session
                     {
                         OnlineSessionConstants.LobbyDataRelayRegion,
                         new DataObject(DataObject.VisibilityOptions.Member, relayRegion ?? string.Empty)
-                    },
-                    {
-                        OnlineSessionConstants.LobbyDataGameMode,
-                        new DataObject(DataObject.VisibilityOptions.Member, gameMode.ToString())
                     }
                 }
             };
@@ -46,6 +42,27 @@ namespace DiceGame.Session
             joinedLobby = null;
             heartbeatTimer = 0f;
             return hostLobby;
+        }
+
+        public async Task UpdateLobbyGameModeAsync(GameMode gameMode) {
+            if (hostLobby == null) {
+                throw new InvalidOperationException("No host lobby to update.");
+            }
+
+            if (gameMode != GameMode.Coop && gameMode != GameMode.Versus) {
+                throw new InvalidOperationException("Online lobby game mode must be Co-op or Versus.");
+            }
+
+            hostLobby = await LobbyService.Instance.UpdateLobbyAsync(
+                hostLobby.Id,
+                new UpdateLobbyOptions {
+                    Data = new Dictionary<string, DataObject> {
+                        {
+                            OnlineSessionConstants.LobbyDataGameMode,
+                            new DataObject(DataObject.VisibilityOptions.Member, gameMode.ToString())
+                        }
+                    }
+                });
         }
 
         public bool TryGetGameMode(out GameMode gameMode) {

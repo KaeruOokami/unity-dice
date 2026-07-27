@@ -23,6 +23,7 @@ namespace DiceGame.Session
         OnlineLobbyUi lobbyUi;
         bool busy;
         bool onlineSharedSetupReady;
+        bool onlineGameModeConfirmed;
         float identityHandshakeTimer;
         bool waitingForMatchStartAck;
         MatchSetupNetworkPayload pendingMatchStartPayload;
@@ -121,21 +122,16 @@ namespace DiceGame.Session
             OnlineSessionState.Instance.SetStatus("Failed to start the game. Check the Console.");
         }
 
-        public async void CreateHostLobby(GameMode mode) {
+        public async void CreateHostLobby() {
             if (busy) {
-                return;
-            }
-
-            if (mode != GameMode.Coop && mode != GameMode.Versus) {
-                OnlineSessionState.Instance.SetStatus("Online mode must be Co-op or Versus.");
                 return;
             }
 
             busy = true;
             onlineSharedSetupReady = false;
+            onlineGameModeConfirmed = false;
             try {
                 OnlineSessionState.Instance.SetPlayMode(OnlinePlayMode.OnlineHost);
-                OnlineSessionState.Instance.SetOnlineGameMode(mode);
                 OnlineSessionState.Instance.ClearRemotePeerPlayerId();
                 OnlineSessionState.Instance.SetStatus("Authenticating...");
                 await UnityGamingServicesAuth.EnsureSignedInAsync();
@@ -145,7 +141,7 @@ namespace DiceGame.Session
                     OnlineSessionConstants.MaxPlayers - 1);
 
                 OnlineSessionState.Instance.SetStatus("Creating lobby...");
-                var lobby = await lobbyFacade.CreateLobbyAsync(relayJoinCode, allocation.Region, mode);
+                var lobby = await lobbyFacade.CreateLobbyAsync(relayJoinCode, allocation.Region);
                 OnlineSessionState.Instance.SetLobbyCode(lobby.LobbyCode);
 
                 var networkManager = OnlineNetworkHost.EnsureNetworkManager();
@@ -160,14 +156,63 @@ namespace DiceGame.Session
                 EnsureMessenger(networkManager);
                 BindHostMessengerHandlers();
                 identityHandshakeTimer = OnlineSessionConstants.OnlineIdentityRetryIntervalSeconds;
-                OnlineSessionState.Instance.SetStatus(
-                    $"Host ready ({GameModeDisplayNames.GetDisplayName(mode)}). Join code: {lobby.LobbyCode}");
+                OnlineSessionState.Instance.SetStatus($"Host ready. Join code: {lobby.LobbyCode}");
                 lobbyUi?.ShowHostPanel(lobby.LobbyCode);
             } catch (Exception ex) {
                 Debug.LogError($"OnlineSessionController: Host failed: {ex}");
                 OnlineSessionState.Instance.SetStatus($"Host failed: {ex.Message}");
                 OnlineSessionState.Instance.SetPlayMode(OnlinePlayMode.Unspecified);
                 await SafeLeaveAsync();
+            } finally {
+                busy = false;
+            }
+        }
+
+        public async void ConfirmHostGameMode(GameMode mode) {
+            if (busy) {
+                return;
+            }
+
+            if (!OnlineSessionState.Instance.IsHost) {
+                OnlineSessionState.Instance.SetStatus("Only the host can select the mode.");
+                return;
+            }
+
+            if (mode != GameMode.Coop && mode != GameMode.Versus) {
+                OnlineSessionState.Instance.SetStatus("Online mode must be Co-op or Versus.");
+                return;
+            }
+
+            var networkManager = NetworkManager.Singleton;
+            if (networkManager == null
+                || !networkManager.IsServer
+                || networkManager.ConnectedClientsList.Count < OnlineSessionConstants.MaxPlayers) {
+                OnlineSessionState.Instance.SetStatus("Waiting for a player to connect first.");
+                lobbyUi?.ShowHostPanel(OnlineSessionState.Instance.LobbyCode);
+                return;
+            }
+
+            busy = true;
+            try {
+                OnlineSessionState.Instance.SetStatus("Updating lobby mode...");
+                await lobbyFacade.UpdateLobbyGameModeAsync(mode);
+                OnlineSessionState.Instance.SetOnlineGameMode(mode);
+                onlineGameModeConfirmed = true;
+                OnlineSessionState.Instance.SetStatus(
+                    $"Mode set to {GameModeDisplayNames.GetDisplayName(mode)}. Preparing shared settings...");
+
+                if (!string.IsNullOrEmpty(OnlineSessionState.Instance.RemotePeerPlayerId)) {
+                    TryBeginSharedSetupFromIdentity(OnlineSessionState.Instance.RemotePeerPlayerId);
+                } else {
+                    RequestIdentityFromRemoteClients(networkManager);
+                    identityHandshakeTimer = OnlineSessionConstants.OnlineIdentityRetryIntervalSeconds;
+                    OnlineSessionState.Instance.SetStatus("Waiting for opponent identity...");
+                }
+            } catch (Exception ex) {
+                Debug.LogError($"OnlineSessionController: ConfirmHostGameMode failed: {ex}");
+                OnlineSessionState.Instance.SetStatus($"Failed to set mode: {ex.Message}");
+                onlineGameModeConfirmed = false;
+                lobbyUi?.ShowOnlineModePanel();
             } finally {
                 busy = false;
             }
@@ -180,6 +225,7 @@ namespace DiceGame.Session
 
             busy = true;
             onlineSharedSetupReady = false;
+            onlineGameModeConfirmed = false;
             try {
                 OnlineSessionState.Instance.SetPlayMode(OnlinePlayMode.OnlineClient);
                 OnlineSessionState.Instance.ClearRemotePeerPlayerId();
@@ -192,8 +238,7 @@ namespace DiceGame.Session
 
                 if (lobbyFacade.TryGetGameMode(out var mode)) {
                     OnlineSessionState.Instance.SetOnlineGameMode(mode);
-                } else {
-                    OnlineSessionState.Instance.SetOnlineGameMode(GameMode.Versus);
+                    onlineGameModeConfirmed = true;
                 }
 
                 if (!lobbyFacade.TryGetRelayJoinCode(out var relayJoinCode)) {
@@ -216,8 +261,8 @@ namespace DiceGame.Session
                 BindClientMessengerHandlers();
                 identityHandshakeTimer = 0f;
                 TrySendLocalPlayerIdentity();
-                OnlineSessionState.Instance.SetStatus("Waiting for host...");
-                lobbyUi?.ShowClientWaitingPanel(lobby.LobbyCode);
+                OnlineSessionState.Instance.SetStatus("Waiting for host to select mode...");
+                lobbyUi?.ShowClientWaitingForHostMode(lobby.LobbyCode);
             } catch (Exception ex) {
                 Debug.LogError($"OnlineSessionController: Join failed: {ex}");
                 OnlineSessionState.Instance.SetStatus($"Join failed: {ex.Message}");
@@ -320,6 +365,21 @@ namespace DiceGame.Session
         }
 
         public async void LeaveSession() {
+            await EndSessionAndReturnToTitle("Session ended.");
+        }
+
+        public void PrepareReturnToTitle() {
+            ClearMatchStartHandshake();
+            onlineSharedSetupReady = false;
+            onlineGameModeConfirmed = false;
+            OnlineSessionState.Instance?.ResetMatchFlag();
+            OnlineSessionState.Instance?.ClearCurrentSetup();
+            OnlineSessionState.Instance?.ClearRemotePeerPlayerId();
+            OnlineSessionState.Instance?.SetPlayMode(OnlinePlayMode.Unspecified);
+            OnlineSessionState.Instance?.SetLobbyCode(string.Empty);
+        }
+
+        async Task EndSessionAndReturnToTitle(string statusMessage) {
             if (busy) {
                 return;
             }
@@ -329,27 +389,18 @@ namespace DiceGame.Session
                 await SafeLeaveAsync();
                 ClearMatchStartHandshake();
                 onlineSharedSetupReady = false;
+                onlineGameModeConfirmed = false;
                 OnlineSessionState.Instance.ResetMatchFlag();
                 OnlineSessionState.Instance.ClearCurrentSetup();
                 OnlineSessionState.Instance.ClearRemotePeerPlayerId();
                 OnlineSessionState.Instance.SetPlayMode(OnlinePlayMode.Unspecified);
                 OnlineSessionState.Instance.SetLobbyCode(string.Empty);
-                OnlineSessionState.Instance.SetStatus("Session ended.");
                 EnterTitlePresentation();
+                OnlineSessionState.Instance.SetStatus(statusMessage);
                 lobbyUi?.ShowMainPanel();
             } finally {
                 busy = false;
             }
-        }
-
-        public void PrepareReturnToTitle() {
-            ClearMatchStartHandshake();
-            onlineSharedSetupReady = false;
-            OnlineSessionState.Instance?.ResetMatchFlag();
-            OnlineSessionState.Instance?.ClearCurrentSetup();
-            OnlineSessionState.Instance?.ClearRemotePeerPlayerId();
-            OnlineSessionState.Instance?.SetPlayMode(OnlinePlayMode.Unspecified);
-            OnlineSessionState.Instance?.SetLobbyCode(string.Empty);
         }
 
         void ResumeMatchAfterReload(OnlinePlayMode resumePlayMode) {
@@ -393,6 +444,7 @@ namespace DiceGame.Session
         void EnterTitlePresentation() {
             ClearMatchStartHandshake();
             onlineSharedSetupReady = false;
+            onlineGameModeConfirmed = false;
             if (OnlineSessionState.Instance != null) {
                 OnlineSessionState.Instance.SetPlayMode(OnlinePlayMode.Unspecified);
                 OnlineSessionState.Instance.ResetMatchFlag();
@@ -587,6 +639,22 @@ namespace DiceGame.Session
             Debug.Log(
                 $"OnlineSessionController: Received player identity from client {senderClientId}: {playerId}");
 
+            OnlineSessionState.Instance.SetRemotePeerPlayerId(playerId);
+
+            if (!onlineGameModeConfirmed) {
+                OnlineSessionState.Instance.SetStatus("Player connected. Select Co-op or Versus.");
+                lobbyUi?.ShowOnlineModePanel();
+                return;
+            }
+
+            TryBeginSharedSetupFromIdentity(playerId);
+        }
+
+        void TryBeginSharedSetupFromIdentity(string playerId) {
+            if (!onlineGameModeConfirmed || string.IsNullOrWhiteSpace(playerId)) {
+                return;
+            }
+
             var alreadyReady =
                 onlineSharedSetupReady
                 && string.Equals(
@@ -747,10 +815,16 @@ namespace DiceGame.Session
                 OnlineSessionState.Instance.SetStatus(
                     $"Connected {networkManager.ConnectedClientsList.Count}/{OnlineSessionConstants.MaxPlayers}");
                 if (clientId != networkManager.LocalClientId
-                    && !onlineSharedSetupReady
                     && !OnlineSessionState.Instance.IsMatchRunning) {
-                    messenger?.RequestPlayerIdentityFromClient(clientId);
-                    identityHandshakeTimer = OnlineSessionConstants.OnlineIdentityRetryIntervalSeconds;
+                    if (!onlineGameModeConfirmed && !onlineSharedSetupReady) {
+                        OnlineSessionState.Instance.SetStatus("Player connected. Select Co-op or Versus.");
+                        lobbyUi?.ShowOnlineModePanel();
+                    }
+
+                    if (!onlineSharedSetupReady) {
+                        messenger?.RequestPlayerIdentityFromClient(clientId);
+                        identityHandshakeTimer = OnlineSessionConstants.OnlineIdentityRetryIntervalSeconds;
+                    }
                 }
 
                 return;
@@ -830,9 +904,44 @@ namespace DiceGame.Session
 
         void OnClientDisconnected(ulong clientId) {
             RefreshConnectedCount();
-            if (OnlineSessionState.Instance != null && OnlineSessionState.Instance.IsMatchRunning) {
-                OnlineSessionState.Instance.SetStatus("Opponent disconnected.");
+            if (OnlineSessionState.Instance == null) {
+                return;
             }
+
+            // Host closed the room (or connection dropped): client returns to title.
+            if (OnlineSessionState.Instance.PlayMode == OnlinePlayMode.OnlineClient) {
+                if (busy) {
+                    return;
+                }
+
+                _ = EndSessionAndReturnToTitle("Host closed the room.");
+                return;
+            }
+
+            if (OnlineSessionState.Instance.IsMatchRunning) {
+                OnlineSessionState.Instance.SetStatus("Opponent disconnected.");
+                return;
+            }
+
+            if (!OnlineSessionState.Instance.IsHost) {
+                return;
+            }
+
+            var networkManager = NetworkManager.Singleton;
+            if (networkManager == null || !networkManager.IsServer) {
+                return;
+            }
+
+            if (networkManager.ConnectedClientsList.Count >= OnlineSessionConstants.MaxPlayers) {
+                return;
+            }
+
+            onlineSharedSetupReady = false;
+            onlineGameModeConfirmed = false;
+            OnlineSessionState.Instance.ClearRemotePeerPlayerId();
+            OnlineSessionState.Instance.ClearCurrentSetup();
+            OnlineSessionState.Instance.SetStatus("Player disconnected. Waiting for a new player...");
+            lobbyUi?.ShowHostPanel(OnlineSessionState.Instance.LobbyCode);
         }
 
         void RefreshConnectedCount() {
@@ -855,6 +964,7 @@ namespace DiceGame.Session
 
         async Task SafeLeaveAsync() {
             onlineSharedSetupReady = false;
+            onlineGameModeConfirmed = false;
             UnbindMessengerHandlers();
             if (messenger != null) {
                 messenger.Dispose();
