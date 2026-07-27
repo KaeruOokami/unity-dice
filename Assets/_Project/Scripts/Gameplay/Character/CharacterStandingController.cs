@@ -106,7 +106,8 @@ namespace DiceGame.Gameplay.Character
             }
 
             var state = dice.CurrentState;
-            SetOnDice(state.GridPos, state.Tier, dice);
+            var tier = ExpandedFootprintWalkPolicy.ResolveStandingTier(dice);
+            SetOnDice(state.GridPos, tier, dice);
         }
 
         public bool TryGetStandingDice(out DiceController dice) {

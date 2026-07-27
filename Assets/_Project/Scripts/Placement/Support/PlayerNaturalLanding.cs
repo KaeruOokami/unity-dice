@@ -31,10 +31,16 @@ namespace DiceGame.Placement
                 && bottom != null
                 && bottom != excludeDice
                 && !GhostPlacementRules.IsPlayerPassThrough(bottom)) {
+                var level = ExpandedFootprintWalkPolicy.ResolveStandingLevel(
+                    bottom,
+                    SurfaceHeightLevel.Bottom);
+                var surfaceLevel = level >= SurfaceHeightLevel.Top
+                    ? DiceSurfaceLevel.Top
+                    : DiceSurfaceLevel.Bottom;
                 return CharacterSupportState.OnDice(
                     cell,
-                    SurfaceHeightLevel.Bottom,
-                    SupportRef.DiceSupport(bottom, DiceSurfaceLevel.Bottom));
+                    level,
+                    SupportRef.DiceSupport(bottom, surfaceLevel));
             }
 
             return CharacterSupportState.OnFloor(cell);

@@ -111,6 +111,13 @@ namespace DiceGame.Gameplay.Character
 
             var center = GetCellCenterXZ(supportState.Cell);
             var limit = GetWalkHalfExtent();
+            if (supportState.Support.Kind == SupportKind.Dice
+                && supportState.Support.Dice != null
+                && supportState.Support.Dice.Capabilities.HasExpandedFootprint) {
+                center = ExpandedFootprintWalkPolicy.GetFootprintCenterXZ(supportState.Support.Dice);
+                limit = ExpandedFootprintWalkPolicy.GetFootprintWalkHalfExtent(board.CellSize);
+            }
+
             worldPos.x = Mathf.Clamp(worldPos.x, center.x - limit, center.x + limit);
             worldPos.z = Mathf.Clamp(worldPos.z, center.y - limit, center.y + limit);
             return worldPos;
@@ -140,7 +147,15 @@ namespace DiceGame.Gameplay.Character
                 return;
             }
 
-            var diceCenter = dice.GetLogicalCenterWorld();
+            AlignToDiceFaceAtCenter(dice.GetLogicalCenterWorld(), nextXZ, halfExtent);
+        }
+
+        /// <summary>
+        /// Clamp the character onto a dice face using an explicit world center.
+        /// Use the move's <c>From</c> cell when logical state has already committed to <c>To</c>
+        /// (lockstep), so follow anchors stay on the visual start pose.
+        /// </summary>
+        public void AlignToDiceFaceAtCenter(Vector3 diceCenter, Vector2 nextXZ, float halfExtent) {
             var nextOffset = WorldOffsetFromDiceCenter(diceCenter, nextXZ);
             var clamped = ClampToFace(nextOffset, halfExtent);
             ApplyWorldPosition(new Vector3(diceCenter.x + clamped.x, 0f, diceCenter.z + clamped.y));

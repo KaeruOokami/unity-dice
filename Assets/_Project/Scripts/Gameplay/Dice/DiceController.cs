@@ -584,6 +584,8 @@ namespace DiceGame.Gameplay
 
         /// <summary>
         /// Standing / stack surface Y for a height level. Jumbo is 2× tall: Top = 2 cells, Bottom = 1.
+        /// While sink-erasing, height follows visual squash (same as normal dice) so floor mounts
+        /// become reachable once the step limit is met.
         /// </summary>
         public float GetLogicalStandingSurfaceWorldY(int surfaceLevel) {
             if (board == null) {
@@ -591,6 +593,10 @@ namespace DiceGame.Gameplay
             }
 
             if (Capabilities.HasExpandedFootprint) {
+                if (IsSinkErasing && diceView != null) {
+                    return diceView.GetLogicalBottomTierTopSurfaceWorldY(board);
+                }
+
                 var tiers = surfaceLevel == SurfaceHeightLevel.Top && KeepsJumboTopOccupancy
                     ? JumboFootprint.Size
                     : 1;

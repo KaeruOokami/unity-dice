@@ -751,13 +751,25 @@ namespace DiceGame.Placement
 
         public DiceController GetTransferTargetAt(
             DiceController fromDice,
+            Vector2Int fromCell,
             Direction direction,
             int fromLevel) {
             if (fromDice == null) {
                 return null;
             }
 
-            var neighborPos = fromDice.CurrentState.GridPos + direction.ToGridDelta();
+            var anchor = fromDice.CurrentState.GridPos;
+            var useFootprintOrigin = fromDice.Capabilities.HasExpandedFootprint
+                && JumboFootprint.Contains(anchor, fromCell);
+            var neighborPos = useFootprintOrigin
+                ? fromCell + direction.ToGridDelta()
+                : anchor + direction.ToGridDelta();
+
+            if (useFootprintOrigin
+                && JumboFootprint.Contains(anchor, neighborPos)) {
+                return fromDice;
+            }
+
             if (SurfaceHeightLevel.IsAtOrAboveTop(fromLevel)) {
                 if (TryGetTopAt(neighborPos, out var top)
                     && top != null

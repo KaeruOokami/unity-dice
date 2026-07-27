@@ -272,9 +272,10 @@ namespace DiceGame.Gameplay
             coupling = new DiceCharacterCoupling();
             standingController.Configure(placement, () => coupling.EndRollTracking());
             if (startDice != null) {
+                var startTier = ExpandedFootprintWalkPolicy.ResolveStandingTier(startDice);
                 standingController.SetInitialStanding(CharacterPlacement.OnDice(
                     startDice.CurrentState.GridPos,
-                    startDice.CurrentState.Tier,
+                    startTier,
                     startDice));
             } else {
                 standingController.SetInitialStanding(CharacterPlacement.OnFloor(startGridCellFromTransform()));

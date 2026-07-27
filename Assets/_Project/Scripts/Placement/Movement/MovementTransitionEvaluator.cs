@@ -366,6 +366,18 @@ namespace DiceGame.Placement
                 isJumping,
                 standingDice);
 
+            if (fromLevel != SurfaceHeightLevel.Floor
+                && standingDice != null
+                && ExpandedFootprintWalkPolicy.TryEvaluateParallelWalk(
+                    fromCell,
+                    toCell,
+                    fromLevel,
+                    standingDice,
+                    registry,
+                    out var footprintTransition)) {
+                return footprintTransition;
+            }
+
             // L1 player-only transfer (Iron / Stone / iron-adjacent Magnet / sink-erasing dice / immovable on ground):
             // Resolve target surface at toCell first (top -> bottom -> floor).
             if (playerOnlyMovement
@@ -520,6 +532,7 @@ namespace DiceGame.Placement
             }
 
             if (TryEvaluateHeightTransfer(
+                fromCell,
                 toCell,
                 fromLevel,
                 fromSurface,
@@ -629,6 +642,7 @@ namespace DiceGame.Placement
         }
 
         bool TryEvaluateHeightTransfer(
+            Vector2Int fromCell,
             Vector2Int toCell,
             int fromLevel,
             BoardSurface fromSurface,
@@ -646,8 +660,7 @@ namespace DiceGame.Placement
                 return false;
             }
 
-            var fromCell = standingDice.CurrentState.GridPos;
-            var sameTierTarget = registry.GetTransferTargetAt(standingDice, direction, fromLevel);
+            var sameTierTarget = registry.GetTransferTargetAt(standingDice, fromCell, direction, fromLevel);
 
             // During coupled jump, prefer per-dice grid roll over same-tier height transfer.
             // Player-only dice skip this path because AllowJumpGridMove is false.
@@ -764,7 +777,7 @@ namespace DiceGame.Placement
                 return false;
             }
 
-            if (target.CurrentState.GridPos != toCell) {
+            if (!ExpandedFootprintWalkPolicy.OccupiesCell(target, toCell)) {
                 rejectReason =
                     $"target-cell-mismatch target={FormatDice(target)} targetCell={FormatGrid(target.CurrentState.GridPos)}";
                 return false;
@@ -775,10 +788,12 @@ namespace DiceGame.Placement
                 return false;
             }
 
-            var targetSurface = BoardSurface.FromDice(
-                toCell,
-                target.CurrentState.Tier == DiceStackTier.Top ? SurfaceHeightLevel.Top : SurfaceHeightLevel.Bottom,
-                target);
+            var targetLevel = target.Capabilities.HasExpandedFootprint
+                ? ExpandedFootprintWalkPolicy.ResolveStandingLevel(target, fromLevel)
+                : target.CurrentState.Tier == DiceStackTier.Top
+                    ? SurfaceHeightLevel.Top
+                    : SurfaceHeightLevel.Bottom;
+            var targetSurface = BoardSurface.FromDice(toCell, targetLevel, target);
 
             var allowDescentOnly = isJumping
                 && targetSurface.SurfaceWorldY < fromSurface.SurfaceWorldY - 0.001f;

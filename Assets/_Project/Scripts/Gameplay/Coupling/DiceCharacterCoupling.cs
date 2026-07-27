@@ -457,12 +457,10 @@ namespace DiceGame.Gameplay.Coupling
             }
 
             standing.SetOnDice(plan.To.GridPos, plan.To.Tier, dice);
-            transformDriver.AlignToDiceFace(dice, nextXZ, halfExtent);
-            var fromCenter = board.GridToWorld(plan.From.GridPos);
-            var charPos = transformDriver.GetWorldXZ();
-            BeginFollow(
-                new Vector3(charPos.x, 0f, charPos.y),
-                new Vector3(fromCenter.x, 0f, fromCenter.z),
+            BeginFollowFromGridCell(
+                plan.From.GridPos,
+                nextXZ,
+                halfExtent,
                 jumpArc: false,
                 JumpDiceMoveKind.None);
 
@@ -560,13 +558,10 @@ namespace DiceGame.Gameplay.Coupling
                 _ => JumpDiceMoveKind.None
             };
             standing.SetOnDice(plan.To.GridPos, plan.To.Tier, dice);
-
-            transformDriver.AlignToDiceFace(dice, nextXZ, halfExtent);
-            var fromCenter = board.GridToWorld(plan.From.GridPos);
-            var charPos = transformDriver.GetWorldXZ();
-            BeginFollow(
-                new Vector3(charPos.x, 0f, charPos.y),
-                new Vector3(fromCenter.x, 0f, fromCenter.z),
+            BeginFollowFromGridCell(
+                plan.From.GridPos,
+                nextXZ,
+                halfExtent,
                 jumpArc,
                 session.JumpMoveKind);
             session.IsActive = true;
@@ -576,6 +571,26 @@ namespace DiceGame.Gameplay.Coupling
             }
 
             return true;
+        }
+
+        /// <summary>
+        /// Start follow anchored on the move's start cell. Logical dice state may already be at
+        /// <c>To</c>; using <paramref name="fromGrid"/> keeps character and visual dice aligned.
+        /// </summary>
+        void BeginFollowFromGridCell(
+            Vector2Int fromGrid,
+            Vector2 nextXZ,
+            float halfExtent,
+            bool jumpArc,
+            JumpDiceMoveKind moveKind) {
+            var fromCenter = board.GridToWorld(fromGrid);
+            transformDriver.AlignToDiceFaceAtCenter(fromCenter, nextXZ, halfExtent);
+            var charPos = transformDriver.GetWorldXZ();
+            BeginFollow(
+                new Vector3(charPos.x, 0f, charPos.y),
+                new Vector3(fromCenter.x, 0f, fromCenter.z),
+                jumpArc,
+                moveKind);
         }
 
         void BeginRollCancelSession(DiceGridMovePlan plan, bool wasGroundRoll) {
