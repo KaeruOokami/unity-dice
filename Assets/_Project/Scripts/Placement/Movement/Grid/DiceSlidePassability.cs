@@ -63,12 +63,7 @@ namespace DiceGame.Placement
                 return false;
             }
 
-            if (TryBuildLandingPlan(
-                fromState,
-                targetPos,
-                DiceStackTier.Bottom,
-                registry,
-                out plan)) {
+            if (TryBuildLandingPlan(fromState, targetPos, registry, out plan)) {
                 return true;
             }
 
@@ -91,12 +86,7 @@ namespace DiceGame.Placement
                 return false;
             }
 
-            if (TryBuildLandingPlan(
-                fromState,
-                targetPos,
-                DiceStackTier.Top,
-                registry,
-                out plan)) {
+            if (TryBuildLandingPlan(fromState, targetPos, registry, out plan)) {
                 return true;
             }
 
@@ -104,139 +94,30 @@ namespace DiceGame.Placement
             return false;
         }
 
-        /// <summary>
-        /// Same rules as grid landing: ghosts invisible for solid place; same-slot ghost → swap.
-        /// </summary>
         static bool TryBuildLandingPlan(
             DiceState fromState,
             Vector2Int targetPos,
-            DiceStackTier fromTier,
             DiceRegistry registry,
             out DiceSlidePlan plan) {
             plan = default;
-
-            if (GhostPlacementRules.IsPassThroughKind(fromState.Kind)) {
-                return false;
-            }
-
-            if (registry.TryGetDiceAt(targetPos, fromTier, out var sameTierGhost)
-                && GhostPlacementRules.TryResolveCellSwap(
-                    fromState,
-                    sameTierGhost,
-                    out var sameTierMoverTo,
-                    out var sameTierGhostFrom,
-                    out var sameTierGhostTo)) {
-                plan = new DiceSlidePlan(
-                    fromState,
-                    sameTierMoverTo,
-                    GhostLandingMode.CellSwap,
-                    sameTierGhostFrom,
-                    sameTierGhostTo);
-                return true;
-            }
-
-            if (!TryResolveSolidLandingTier(fromTier, targetPos, registry, out var landingTier)) {
-                return false;
-            }
-
-            var moverTo = new DiceState(
+            if (!GhostLandingResolver.TryResolve(
+                fromState,
                 targetPos,
-                fromState.Orientation,
-                landingTier,
-                fromState.Kind);
-
-            if (!registry.TryGetDiceAt(targetPos, landingTier, out var landingGhost) || landingGhost == null) {
-                plan = new DiceSlidePlan(fromState, moverTo);
-                return true;
-            }
-
-            // Vertical demote onto ghost Bottom → in-cell promote.
-            if (fromTier == DiceStackTier.Top
-                && landingTier == DiceStackTier.Bottom
-                && GhostPlacementRules.TryResolveInCellPromote(
-                    fromState,
-                    landingGhost,
-                    out var promoteMoverTo,
-                    out var promoteGhostFrom,
-                    out var promoteGhostTo)) {
-                plan = new DiceSlidePlan(
-                    fromState,
-                    promoteMoverTo,
-                    GhostLandingMode.InCellPromoteGhost,
-                    promoteGhostFrom,
-                    promoteGhostTo);
-                return true;
-            }
-
-            // Ascent Bottom → Top ghost: diagonal swap (ghost to previous Bottom).
-            if (fromTier == DiceStackTier.Bottom
-                && landingTier == DiceStackTier.Top
-                && GhostPlacementRules.TryResolveAscentGhostSwap(
-                    fromState,
-                    landingGhost,
-                    out var ascentMoverTo,
-                    out var ascentGhostFrom,
-                    out var ascentGhostTo)) {
-                plan = new DiceSlidePlan(
-                    fromState,
-                    ascentMoverTo,
-                    GhostLandingMode.CellSwap,
-                    ascentGhostFrom,
-                    ascentGhostTo);
-                return true;
-            }
-
-            var landingProbe = new DiceState(
-                fromState.GridPos,
-                fromState.Orientation,
-                landingTier,
-                fromState.Kind);
-            if (GhostPlacementRules.TryResolveCellSwap(
-                landingProbe,
-                landingGhost,
-                out moverTo,
-                out var landingGhostFrom,
-                out var landingGhostTo)) {
-                plan = new DiceSlidePlan(
-                    fromState,
-                    moverTo,
-                    GhostLandingMode.CellSwap,
-                    landingGhostFrom,
-                    landingGhostTo);
-                return true;
-            }
-
-            return false;
-        }
-
-        static bool TryResolveSolidLandingTier(
-            DiceStackTier fromTier,
-            Vector2Int cell,
-            DiceRegistry registry,
-            out DiceStackTier landingTier) {
-            landingTier = default;
-
-            if (fromTier == DiceStackTier.Bottom) {
-                // Floor / Bottom slides stay on Bottom. Stacking onto another Bottom is roll/jump only.
-                if (GhostPlacementRules.CanPlaceSolidBottomAt(registry, cell)) {
-                    landingTier = DiceStackTier.Bottom;
-                    return true;
-                }
-
+                registry,
+                SolidLandingStackPolicy.Slide,
+                canOverwriteTopAt: null,
+                out _,
+                out var ghostLanding,
+                out var moverTo,
+                out var ghostFrom,
+                out var ghostTo)) {
                 return false;
             }
 
-            if (GhostPlacementRules.CanPlaceSolidBottomAt(registry, cell)) {
-                landingTier = DiceStackTier.Bottom;
-                return true;
-            }
-
-            if (GhostPlacementRules.CanPlaceSolidTopAt(registry, cell)) {
-                landingTier = DiceStackTier.Top;
-                return true;
-            }
-
-            return false;
+            plan = ghostLanding == GhostLandingMode.None
+                ? new DiceSlidePlan(fromState, moverTo)
+                : new DiceSlidePlan(fromState, moverTo, ghostLanding, ghostFrom, ghostTo);
+            return true;
         }
 
         static bool BlocksSlideTraversal(
@@ -250,7 +131,7 @@ namespace DiceGame.Placement
             return registry.BlocksTraversalBetween(fromState.GridPos, targetPos);
         }
 
-        static string FormatGrid(UnityEngine.Vector2Int grid) {
+        static string FormatGrid(Vector2Int grid) {
             return $"({grid.x},{grid.y})";
         }
     }

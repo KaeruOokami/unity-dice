@@ -6,14 +6,28 @@ alwaysApply: false
 
 # Movement Policy Hierarchy
 
-`MovementTransitionEvaluator` はディスパッチャ。L2 本体は `DiceCoupledMoveEngine`、グリッド経路は `DiceGridPassability`。
+`MovementTransitionEvaluator` は **Fact → Select → Build** の入口。
+L2 の計画構築は `DiceCoupledMoveEngine`、グリッド経路は `DiceGridPassability`。
+
+## 決定表パイプライン
+
+1. **Fact** — `MoveFactResolver` / `HeightTransferFactResolver` が一度だけ入力を正規化する。
+2. **Select** — `MoveActionSelector` / `HeightTransferActionSelector` が Action を一意に選ぶ。
+3. **Build** — `MoveTransitionBuilder` / `HeightTransferBuilder` が選ばれた Action のみ具体化する。
+
+- 支持面は `PlayerSupportQuery`（`HighestSolid` / `ElevatedSolid` / `BottomOrFloor`）に集約。
+- Character 押し追従は `ResolveMountableAt` で motion-block フィルタを適用。
+- HeightTransfer は `MoveAction.HeightTransfer` 選択後にサブパイプラインへ委譲。
+- 着地 tier は `SolidLandingTierResolver`（`Slide` / `GridRoll`）に集約。Ghost swap/promote は `GhostLandingResolver`。
+- covering mount は `PlayerSupportQuery.TryGetCoveringDice`（Floor→Bottom / Bottom→Top）。
+- L3 の coupled 失敗フォールバックは Plan 時に `HasCoupledFailFloorWalkFallback` として明示化する（実行時の暗黙正規化禁止）。
 
 ## 配置パス（階層）
 
 - Behavior: `Core/Behavior/`
 - 配置台帳: `Placement/Registry/`
 - 占有・表面: `Placement/Occupancy/`
-- 移動本流: `Placement/Movement/`（`Walk/` `Jump/` `Grid/`）
+- 移動本流: `Placement/Movement/`（`Walk/` `Jump/` `Grid/` + `MoveFacts` / `MoveActionSelector`）
 - 押し・リフト: `Placement/Interaction/`
 - Ghost/Iron/Effective: `Placement/Rules/`
 - Magnet: `Placement/Magnet/`
@@ -32,16 +46,16 @@ alwaysApply: false
 - API: `ResolveStandingMoveMode == PlayerOnly`
   - ジャンプ: `!CanJumpCoupleWithPlayer`（鉄・石・鉄隣接 Magnet 等）
   - 地上: `!IsPlayerMovable`（鉄・動かせない Magnet 等）
-- L1 に該当したら **L2（dice-coupled）Policy は一切評価しない**。
+- L1 に該当したら **L2（dice-coupled）Policy は一切評価しない**（`MoveActionSelector.SelectPlayerOnly`）。
 - プレイヤー単独の `WalkTransferPolicy` / `HeightReachPolicy` のみ。
 
 ## L2: Dice-coupled（ダイス連携）
 
-- 入口: `MovementTransitionEvaluator` → `DiceCoupledMoveEngine`
+- 入口: `MoveActionSelector.SelectCoupled` → `MoveTransitionBuilder`
 - mode: `ResolveStandingMoveMode` が `Slide` または `Roll`
 - **mode で分岐**（順序付き capability プローブはしない）:
-  - `Slide` → 地上 `IceSlide` / ジャンプ `JumpGridRoll`（+ occupied なら `TierLanding`）
-  - `Roll` → `JumpGridRoll` / empty は `TopFall` / occupied は `TierLanding` / `GridRoll`
+  - `Slide` → 地上 `IceSlide`（変位あり）/ ジャンプ `CoupledJumpGrid`（+ occupied なら `TierLanding`）/ 変位なしは Landing（`HeightTransfer`）
+  - `Roll` → `CoupledJumpGrid` / empty は `TopFall` / occupied は `TierLanding` / `GridRoll`
 - グリッド経路・着地: `GridMovePlanBuilder` → `DiceGridPassability` → `GridTraversability`
 - `GroundGridPassability` / `JumpGridPassability` は互換ラッパー（新規コードは `DiceGridPassability` を使う）
 
@@ -50,6 +64,7 @@ alwaysApply: false
 - L2 Policy（特に `TopFallPolicy`）内で `CanGridRoll` / `IsPlayerMovable` を個別に書かない。入口で mode 済みにする。
 - `Slide` と `Roll` を同じ if チェーンで順序依存させない（`ResolveStandingMoveMode` 側で排他）。
 - `AllowsRoll`（盤面状態）と `IsPlayerMovable`（ダイス capability）を混同しない。
+- ビルダ失敗を理由に別 Action へフォールバックしない（「Ice を失敗させて HeightTransfer に渡す」等）。
 
 ## L3: 実行・ビジュアル / Character 入口
 
@@ -68,6 +83,6 @@ alwaysApply: false
 
 1. 新種類は `IDiceBehavior` 実装を追加し `DiceBehaviorResolver.GetBehavior` に登録する。
 2. L1 / L2 / L3 のどこに属するか決める。
-3. L2 なら `DiceCoupledMoveEngine` の `Slide` / `Roll` 分岐内に追加する。
+3. L2 なら `MoveFacts` のプローブと `MoveActionSelector` の行、必要なら `MoveAction` を追加する。
 4. 一時状態の例外は Behavior 本体ではなく Modifier（`DiceBehaviorRuntimeState`）で表現する。
 5. 新規ファイルは上記フォルダ階層の適切な葉に置く（同列でない責務を同じディレクトリに置かない）。

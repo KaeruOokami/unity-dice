@@ -81,7 +81,7 @@ namespace DiceGame.Session
         /// When true, host pushes a full-board snapshot after DESYNC (recovery last resort).
         /// Keep false for normal lockstep; input + deterministic sim is the main path.
         /// </summary>
-        public const bool LockstepAutoResyncEnabled = false;
+        public static bool LockstepAutoResyncEnabled => false;
         /// <summary>
         /// Minimum time between host resync dumps when <see cref="LockstepAutoResyncEnabled"/> is true.
         /// </summary>

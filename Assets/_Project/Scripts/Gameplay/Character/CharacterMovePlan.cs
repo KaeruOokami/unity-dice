@@ -35,6 +35,8 @@ namespace DiceGame.Gameplay.Character
         public DiceGridMovePlan DiceGridMovePlan;
         public bool HasDiceSlidePlan;
         public DiceSlidePlan DiceSlidePlan;
+        public bool HasCoupledFailFloorWalkFallback;
+        public MovementTransition CoupledFailFloorWalkFallback;
         public bool BlockFailedJumpGridFallback;
         public bool BlockJumpStackTransfer;
         public string BlockReason;

@@ -1124,7 +1124,7 @@ namespace DiceGame.Gameplay
                 return;
             }
 
-            if (!TryGetCoveringDice(out var coveringDice)) {
+            if (!TryGetCoveringDice(out var coveringDice, out var coveringLevel)) {
                 return;
             }
 
@@ -1148,39 +1148,17 @@ namespace DiceGame.Gameplay
                 return;
             }
 
-            MountOntoCoveringDice(coveringDice);
+            MountOntoCoveringDice(coveringDice, coveringLevel);
         }
 
-        bool TryGetCoveringDice(out DiceController coveringDice) {
-            coveringDice = null;
-            var cell = standingController.GridCell;
-            var level = standingController.Level;
-
-            if (SurfaceHeightLevel.IsFloor(level)) {
-                if (!registry.TryGetBottomIncludingPending(cell, out var bottom)
-                    || bottom == null
-                    || bottom == standingController.CurrentDice
-                    || GhostPlacementRules.IsPlayerPassThrough(bottom)) {
-                    return false;
-                }
-
-                coveringDice = bottom;
-                return true;
-            }
-
-            if (level == SurfaceHeightLevel.Bottom) {
-                if (!registry.TryGetTopAt(cell, out var top)
-                    || top == null
-                    || top == standingController.CurrentDice
-                    || GhostPlacementRules.IsPlayerPassThrough(top)) {
-                    return false;
-                }
-
-                coveringDice = top;
-                return true;
-            }
-
-            return false;
+        bool TryGetCoveringDice(out DiceController coveringDice, out int coveringLevel) {
+            return PlayerSupportQuery.TryGetCoveringDice(
+                standingController.GridCell,
+                standingController.Level,
+                registry,
+                out coveringDice,
+                out coveringLevel,
+                standingController.CurrentDice);
         }
 
         /// <summary>
@@ -1193,7 +1171,7 @@ namespace DiceGame.Gameplay
                 && !dice.AllowsUnconditionalMount;
         }
 
-        void MountOntoCoveringDice(DiceController coveringDice) {
+        void MountOntoCoveringDice(DiceController coveringDice, int coveringLevel) {
             if (coveringDice == null) {
                 Debug.LogError("CharacterController: MountOntoCoveringDice received null dice.");
                 return;
@@ -1203,15 +1181,10 @@ namespace DiceGame.Gameplay
                 return;
             }
 
-            var cell = standingController.GridCell;
-            var mountTier = coveringDice.CurrentState.Tier;
-            if (registry.TryGetTopAt(cell, out var top) && top == coveringDice) {
-                mountTier = DiceStackTier.Top;
-            } else if (registry.TryGetBottomAt(cell, out var bottom) && bottom == coveringDice) {
-                mountTier = DiceStackTier.Bottom;
-            }
-
-            standingController.SetOnDice(cell, mountTier, coveringDice);
+            standingController.SetOnDice(
+                standingController.GridCell,
+                SurfaceHeightLevel.ToDiceStackTier(coveringLevel),
+                coveringDice);
             currentSpeed = 0f;
 
             if (coveringDice.IsMotionFollowActive) {
@@ -1612,25 +1585,18 @@ namespace DiceGame.Gameplay
                 return;
             }
 
-            if (registry.CanPlaceBottomDiceAt(gridCell)) {
-                ApplyFloorStanding(gridCell);
-                return;
-            }
-
-            if (registry.TryGetBottomAt(gridCell, out var bottom)
-                && bottom != null
-                && bottom != excludeDice) {
-                if (GhostPlacementRules.IsPlayerPassThrough(bottom)
-                    || BlocksCoveringMountUntilSettled(bottom)) {
-                    ApplyFloorStanding(gridCell);
-                    return;
-                }
-
-                ApplyDiceStanding(gridCell, DiceStackTier.Bottom, bottom);
-                return;
-            }
-
-            ApplyFloorStanding(gridCell);
+            PlayerSupportQuery.ResolveMountableAt(
+                gridCell,
+                registry,
+                board.FloorSurfaceWorldY,
+                PlayerSupportResolutionKind.BottomOrFloor,
+                BlocksCoveringMountUntilSettled,
+                out var dice,
+                out var level,
+                out _,
+                includePendingBottom: false,
+                excludeDice);
+            ApplyResolvedSupport(gridCell, dice, level);
         }
 
         void ResolveStandingAtGridCellForElevatedPush(Vector2Int gridCell, DiceController excludeDice) {
@@ -1638,25 +1604,26 @@ namespace DiceGame.Gameplay
                 return;
             }
 
-            if (registry.TryGetTopAt(gridCell, out var top)
-                && top != null
-                && top != excludeDice
-                && !GhostPlacementRules.IsPlayerPassThrough(top)
-                && !BlocksCoveringMountUntilSettled(top)) {
-                ApplyDiceStanding(gridCell, DiceStackTier.Top, top);
+            PlayerSupportQuery.ResolveMountableAt(
+                gridCell,
+                registry,
+                board.FloorSurfaceWorldY,
+                PlayerSupportResolutionKind.ElevatedSolid,
+                BlocksCoveringMountUntilSettled,
+                out var dice,
+                out var level,
+                out _,
+                excludeDice: excludeDice);
+            ApplyResolvedSupport(gridCell, dice, level);
+        }
+
+        void ApplyResolvedSupport(Vector2Int gridCell, DiceController dice, int level) {
+            if (dice == null || level == SurfaceHeightLevel.Floor) {
+                ApplyFloorStanding(gridCell);
                 return;
             }
 
-            if (registry.TryGetBottomAt(gridCell, out var bottom)
-                && bottom != null
-                && bottom != excludeDice
-                && !GhostPlacementRules.IsPlayerPassThrough(bottom)
-                && !BlocksCoveringMountUntilSettled(bottom)) {
-                ApplyDiceStanding(gridCell, DiceStackTier.Bottom, bottom);
-                return;
-            }
-
-            ApplyFloorStanding(gridCell);
+            ApplyDiceStanding(gridCell, SurfaceHeightLevel.ToDiceStackTier(level), dice);
         }
 
         void ApplyFloorStanding(Vector2Int gridCell) {

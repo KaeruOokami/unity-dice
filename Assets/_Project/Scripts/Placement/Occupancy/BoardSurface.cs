@@ -29,10 +29,6 @@ namespace DiceGame.Placement
 
         public bool AllowsRoll => Dice != null && State == SurfaceState.Normal;
 
-        public bool AllowsWalkFrom(BoardSurface fromSurface, bool isJumping) {
-            return true;
-        }
-
         public static BoardSurface Floor(Vector2Int gridCell, float floorSurfaceWorldY) {
             return new BoardSurface(
                 gridCell,

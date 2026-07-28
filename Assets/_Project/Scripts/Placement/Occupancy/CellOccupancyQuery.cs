@@ -89,109 +89,27 @@ namespace DiceGame.Placement
             }
 
             if (registry == null || GhostPlacementRules.IsPassThroughKind(moverKind)) {
-                return TryResolveSolidLandingOnly(fromTier, cell, out landingTier);
+                return SolidLandingTierResolver.TryResolve(
+                    registry,
+                    fromTier,
+                    cell,
+                    SolidLandingStackPolicy.GridRoll,
+                    CanOverwriteTopAt,
+                    out landingTier);
             }
 
-            // Horizontal: same-tier ghost overlap → CellSwap to previous cell.
-            var sameTierProbe = new DiceState(fromCell, DiceOrientation.Default, fromTier, moverKind);
-            if (registry.TryGetDiceAt(cell, fromTier, out var sameTierGhost)
-                && GhostPlacementRules.TryResolveCellSwap(
-                    sameTierProbe,
-                    sameTierGhost,
-                    out _,
-                    out ghostFrom,
-                    out ghostTo)) {
-                landingTier = fromTier;
-                ghostLanding = GhostLandingMode.CellSwap;
-                return true;
-            }
-
-            // Ghosts are invisible for solid occupancy.
-            if (!TryResolveSolidLandingOnly(fromTier, cell, out landingTier)) {
-                return false;
-            }
-
-            if (!registry.TryGetDiceAt(cell, landingTier, out var landingGhost) || landingGhost == null) {
-                return true;
-            }
-
-            // Vertical: Top demoting onto ghost Bottom → same-cell promote (not previous-cell swap).
-            if (fromTier == DiceStackTier.Top
-                && landingTier == DiceStackTier.Bottom
-                && GhostPlacementRules.TryResolveInCellPromote(
-                    sameTierProbe,
-                    landingGhost,
-                    out _,
-                    out ghostFrom,
-                    out ghostTo)) {
-                ghostLanding = GhostLandingMode.InCellPromoteGhost;
-                return true;
-            }
-
-            // Ascent Bottom → Top ghost: diagonal swap (ghost to previous Bottom, no Top intermediate).
-            if (fromTier == DiceStackTier.Bottom
-                && landingTier == DiceStackTier.Top
-                && GhostPlacementRules.TryResolveAscentGhostSwap(
-                    sameTierProbe,
-                    landingGhost,
-                    out _,
-                    out ghostFrom,
-                    out ghostTo)) {
-                ghostLanding = GhostLandingMode.CellSwap;
-                return true;
-            }
-
-            // Horizontal same-tier overlap → CellSwap.
-            var landingProbe = new DiceState(fromCell, DiceOrientation.Default, landingTier, moverKind);
-            if (GhostPlacementRules.TryResolveCellSwap(
-                landingProbe,
-                landingGhost,
+            var moverFrom = new DiceState(fromCell, DiceOrientation.Default, fromTier, moverKind);
+            return GhostLandingResolver.TryResolve(
+                moverFrom,
+                cell,
+                registry,
+                SolidLandingStackPolicy.GridRoll,
+                CanOverwriteTopAt,
+                out landingTier,
+                out ghostLanding,
                 out _,
                 out ghostFrom,
-                out ghostTo)) {
-                ghostLanding = GhostLandingMode.CellSwap;
-                return true;
-            }
-
-            if (landingTier == DiceStackTier.Top && CanOverwriteTopAt(cell)) {
-                return true;
-            }
-
-            landingTier = default;
-            return false;
-        }
-
-        bool TryResolveSolidLandingOnly(
-            DiceStackTier fromTier,
-            Vector2Int cell,
-            out DiceStackTier landingTier) {
-            landingTier = default;
-
-            if (fromTier == DiceStackTier.Bottom) {
-                if (GhostPlacementRules.CanPlaceSolidBottomAt(registry, cell)) {
-                    landingTier = DiceStackTier.Bottom;
-                    return true;
-                }
-
-                if (GhostPlacementRules.CanPlaceSolidTopAt(registry, cell) || CanOverwriteTopAt(cell)) {
-                    landingTier = DiceStackTier.Top;
-                    return true;
-                }
-
-                return false;
-            }
-
-            if (GhostPlacementRules.CanPlaceSolidBottomAt(registry, cell)) {
-                landingTier = DiceStackTier.Bottom;
-                return true;
-            }
-
-            if (GhostPlacementRules.CanPlaceSolidTopAt(registry, cell) || CanOverwriteTopAt(cell)) {
-                landingTier = DiceStackTier.Top;
-                return true;
-            }
-
-            return false;
+                out ghostTo);
         }
     }
 }

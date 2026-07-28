@@ -104,14 +104,8 @@ namespace DiceGame.Gameplay.Character
                         return false;
                     }
 
-                    if (plan.CoupledIntent == CoupledMoveIntent.GroundParallelRoll
-                        && NormalizedHeight.ToNormalized(
-                            fromSurfaceY,
-                            board.FloorSurfaceWorldY,
-                            board.CellSize) <= movementSettings.MaxWalkStep) {
-                        standing.ApplyFromTransition(
-                            MovementTransition.Walkable(null, SurfaceHeightLevel.Floor),
-                            plan.ToCell);
+                    if (plan.HasCoupledFailFloorWalkFallback) {
+                        standing.ApplyFromTransition(plan.CoupledFailFloorWalkFallback, plan.ToCell);
                         return false;
                     }
 

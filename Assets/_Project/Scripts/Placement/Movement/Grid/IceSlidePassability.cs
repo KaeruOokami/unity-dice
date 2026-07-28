@@ -95,9 +95,9 @@ namespace DiceGame.Placement
 
             if (steps == 0) {
                 // Immediate adjacent block (no slide step).
-                // Standing / coupled evaluation uses allowElasticOnImmediateBlock=false so this
-                // fails and HeightTransfer / push keep ownership of tier rules
-                // (e.g. Bottom must not mount Top).
+                // Standing / coupled evaluation uses allowElasticOnImmediateBlock=false so
+                // HasSlideDisplacement is false and MoveActionSelector routes to HeightTransfer
+                // (same-tier ride / Bottom→Top prohibition).
                 // Push / elastic execution uses allowElasticOnImmediateBlock=true so a
                 // same-tier ice neighbor can receive momentum without mover displacement.
                 if (allowElasticOnImmediateBlock

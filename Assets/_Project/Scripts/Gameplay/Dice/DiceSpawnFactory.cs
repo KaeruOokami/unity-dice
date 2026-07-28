@@ -324,7 +324,6 @@ namespace DiceGame.Gameplay
                 return results;
             }
 
-            DiceController standingDice = null;
             for (var i = 0; i < slots.Count; i++) {
                 var slot = slots[i];
                 var diceController = SpawnDiceAt(

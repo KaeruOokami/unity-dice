@@ -5,8 +5,8 @@ using UnityEngine;
 namespace DiceGame.Placement
 {
     /// <summary>
-    /// L2 dice-coupled movement engine. Switch on
-    /// <see cref="DiceStandingMoveMode"/> then run slide/roll sub-engines.
+    /// L2 dice-coupled probes and grid-roll helpers.
+    /// Action selection lives in <see cref="MoveActionSelector"/>; this type only builds plans.
     /// </summary>
     public sealed class DiceCoupledMoveEngine
     {
@@ -18,49 +18,54 @@ namespace DiceGame.Placement
             this.gridPlanBuilder = gridPlanBuilder;
         }
 
-        public bool TryEvaluateOnEmptyCell(
-            Vector2Int fromCell,
-            Vector2Int toCell,
-            int fromLevel,
-            BoardSurface fromSurface,
-            DiceController standingDice,
-            Direction direction,
-            PassabilityContext context,
-            out MovementTransition transition) {
-            return TryEvaluate(
-                fromCell,
-                toCell,
-                fromLevel,
-                fromSurface,
-                standingDice,
-                direction,
-                context,
-                allowTierLanding: false,
-                reach: default,
-                out transition);
-        }
+        public GridMovePlanBuilder PlanBuilder => gridPlanBuilder;
 
-        public bool TryEvaluateOnOccupiedCell(
-            Vector2Int fromCell,
-            Vector2Int toCell,
-            int fromLevel,
-            BoardSurface fromSurface,
+        /// <summary>
+        /// Standing-move ice probe: displacement required.
+        /// Immediate block is not a slide success (HeightTransfer owns same-tier ride).
+        /// Push/elastic uses <see cref="IceSlidePassability"/> with allowElasticOnImmediateBlock separately.
+        /// </summary>
+        public bool TryProbeIceSlide(
             DiceController standingDice,
+            int fromLevel,
             Direction direction,
-            PassabilityContext context,
-            HeightReachEvaluation reach,
-            out MovementTransition transition) {
-            return TryEvaluate(
-                fromCell,
-                toCell,
-                fromLevel,
-                fromSurface,
-                standingDice,
+            out DiceSlidePlan plan,
+            out DiceController elasticTransferTarget) {
+            plan = default;
+            elasticTransferTarget = null;
+
+            if (standingDice == null) {
+                return false;
+            }
+
+            if (!standingDice.Capabilities.SlideUntilBlocked) {
+                return false;
+            }
+
+            if (SurfaceHeightLevel.ToDiceStackTier(fromLevel) != standingDice.CurrentState.Tier) {
+                return false;
+            }
+
+            if (!standingDice.IsPlayerMovable) {
+                return false;
+            }
+
+            if (!IceSlidePassability.TryBuildUntilBlocked(
+                standingDice.CurrentState,
                 direction,
-                context,
-                allowTierLanding: true,
-                reach,
-                out transition);
+                registry,
+                out plan,
+                out elasticTransferTarget,
+                allowElasticOnImmediateBlock: false,
+                out _)) {
+                return false;
+            }
+
+            if (!standingDice.Capabilities.TransfersSlideOnCollision) {
+                elasticTransferTarget = null;
+            }
+
+            return IceSlidePassability.HasSlideDisplacement(plan);
         }
 
         public bool TryEvaluateGridRoll(
@@ -123,250 +128,6 @@ namespace DiceGame.Placement
                 context,
                 out plan,
                 out rejectReason);
-        }
-
-        bool TryEvaluate(
-            Vector2Int fromCell,
-            Vector2Int toCell,
-            int fromLevel,
-            BoardSurface fromSurface,
-            DiceController standingDice,
-            Direction direction,
-            PassabilityContext context,
-            bool allowTierLanding,
-            HeightReachEvaluation reach,
-            out MovementTransition transition) {
-            transition = default;
-            var isJumping = context.IsJumping;
-            var mode = JumpPlayerTransferPolicy.ResolveStandingMoveMode(isJumping, standingDice);
-
-            switch (mode) {
-                case DiceStandingMoveMode.Slide:
-                    return TryEvaluateSlide(
-                        fromCell,
-                        toCell,
-                        fromLevel,
-                        fromSurface,
-                        standingDice,
-                        direction,
-                        context,
-                        allowTierLanding,
-                        reach,
-                        out transition);
-
-                case DiceStandingMoveMode.Roll:
-                    return TryEvaluateRoll(
-                        fromCell,
-                        toCell,
-                        fromLevel,
-                        fromSurface,
-                        standingDice,
-                        direction,
-                        context,
-                        allowTierLanding,
-                        reach,
-                        out transition);
-
-                default:
-                    return false;
-            }
-        }
-
-        bool TryEvaluateSlide(
-            Vector2Int fromCell,
-            Vector2Int toCell,
-            int fromLevel,
-            BoardSurface fromSurface,
-            DiceController standingDice,
-            Direction direction,
-            PassabilityContext context,
-            bool allowTierLanding,
-            HeightReachEvaluation reach,
-            out MovementTransition transition) {
-            transition = default;
-            var isJumping = context.IsJumping;
-
-            // Ice extends shared slide: require at least one legal slide step.
-            // Immediate block returns false so EvaluateToCell continues to HeightTransfer
-            // (same-tier ride / Bottom→Top prohibition) and push can run.
-            if (!isJumping
-                && TryBuildIceSlide(
-                    standingDice,
-                    fromLevel,
-                    direction,
-                    out var iceSlidePlan,
-                    out var elasticTransferTarget)
-                && IceSlidePassability.HasSlideDisplacement(iceSlidePlan)) {
-                transition = MovementTransition.IceSlide(iceSlidePlan, elasticTransferTarget);
-                return true;
-            }
-
-            if (isJumping
-                && JumpGridRollPolicy.TryCreateCoupledTransition(
-                    fromCell,
-                    toCell,
-                    fromSurface,
-                    standingDice,
-                    direction,
-                    context,
-                    gridPlanBuilder,
-                    out transition)) {
-                return true;
-            }
-
-            if (allowTierLanding
-                && TierLandingPolicy.TryEvaluate(
-                    fromCell,
-                    toCell,
-                    fromLevel,
-                    fromSurface,
-                    standingDice,
-                    context,
-                    registry,
-                    reach,
-                    out transition)) {
-                return true;
-            }
-
-            return false;
-        }
-
-        bool TryEvaluateRoll(
-            Vector2Int fromCell,
-            Vector2Int toCell,
-            int fromLevel,
-            BoardSurface fromSurface,
-            DiceController standingDice,
-            Direction direction,
-            PassabilityContext context,
-            bool allowTierLanding,
-            HeightReachEvaluation reach,
-            out MovementTransition transition) {
-            transition = default;
-            var isJumping = context.IsJumping;
-
-            if (isJumping
-                && JumpGridRollPolicy.TryCreateCoupledTransition(
-                    fromCell,
-                    toCell,
-                    fromSurface,
-                    standingDice,
-                    direction,
-                    context,
-                    gridPlanBuilder,
-                    out transition)) {
-                return true;
-            }
-
-            if (!allowTierLanding
-                && TopFallPolicy.TryEvaluate(
-                    fromLevel,
-                    fromSurface,
-                    standingDice,
-                    direction,
-                    context,
-                    gridPlanBuilder,
-                    out transition)) {
-                return true;
-            }
-
-            if (allowTierLanding
-                && TierLandingPolicy.TryEvaluate(
-                    fromCell,
-                    toCell,
-                    fromLevel,
-                    fromSurface,
-                    standingDice,
-                    context,
-                    registry,
-                    reach,
-                    out transition)) {
-                return true;
-            }
-
-            if (!TryEvaluateGridRoll(
-                fromCell,
-                toCell,
-                fromSurface,
-                standingDice,
-                direction,
-                MovementTransitionEvaluator.GetOrthogonalDistance(fromCell, toCell),
-                allowMultiCell: false,
-                context,
-                out var gridPlan,
-                out _)) {
-                return false;
-            }
-
-            if (isJumping) {
-                if (!context.AllowJumpGridMove) {
-                    transition = MovementTransition.Blocked();
-                    return true;
-                }
-
-                transition = CreateCoupledGridMoveTransition(standingDice, gridPlan);
-                return true;
-            }
-
-            transition = MovementTransition.GridRoll(gridPlan);
-            return true;
-        }
-
-        bool TryBuildIceSlide(
-            DiceController standingDice,
-            int fromLevel,
-            Direction direction,
-            out DiceSlidePlan plan,
-            out DiceController elasticTransferTarget) {
-            plan = default;
-            elasticTransferTarget = null;
-
-            if (standingDice == null) {
-                return false;
-            }
-
-            if (!standingDice.Capabilities.SlideUntilBlocked) {
-                return false;
-            }
-
-            if (SurfaceHeightLevel.ToDiceStackTier(fromLevel) != standingDice.CurrentState.Tier) {
-                return false;
-            }
-
-            if (!standingDice.IsPlayerMovable) {
-                return false;
-            }
-
-            if (!IceSlidePassability.TryBuildUntilBlocked(
-                standingDice.CurrentState,
-                direction,
-                registry,
-                out plan,
-                out elasticTransferTarget,
-                // Standing path: do not treat immediate ice-ice contact as IceSlide success.
-                // HeightTransfer owns same-tier ride; Bottom→Top stays forbidden there.
-                allowElasticOnImmediateBlock: false,
-                out _)) {
-                return false;
-            }
-
-            if (!standingDice.Capabilities.TransfersSlideOnCollision) {
-                elasticTransferTarget = null;
-            }
-
-            // Ice is slide-until-blocked only when the mover actually travels.
-            return IceSlidePassability.HasSlideDisplacement(plan);
-        }
-
-        static MovementTransition CreateCoupledGridMoveTransition(
-            DiceController standingDice,
-            DiceGridMovePlan plan) {
-            var targetLevel = SurfaceHeightLevel.FromDiceStackTier(plan.To.Tier);
-            return MovementTransition.WalkableWithGridPlan(
-                standingDice,
-                targetLevel,
-                MovementTransitionRoute.CoupledGridMove,
-                plan);
         }
     }
 }

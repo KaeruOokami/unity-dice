@@ -206,11 +206,6 @@ namespace DiceGame.Placement
                 return false;
             }
 
-            if (!targetSurface.AllowsWalkFrom(fromSurface, isJumping)) {
-                rejectReason = "allows-walk-from-false";
-                return false;
-            }
-
             if (target.IsRadianceErasing
                 && (standingDice == null || !standingDice.IsRadianceErasing)) {
                 rejectReason = "radiance-top-transfer-blocked";

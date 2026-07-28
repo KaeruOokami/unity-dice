@@ -166,7 +166,10 @@ namespace DiceGame.Gameplay.Character
                             nextCell,
                             direction,
                             transition,
-                            CoupledMoveIntent.GroundParallelRoll);
+                            CoupledMoveIntent.GroundParallelRoll,
+                            standingDice,
+                            fromLevel,
+                            footingWorldY);
                     }
 
                     return CharacterMovePlan.FaceSlide(standingCell);
@@ -205,14 +208,17 @@ namespace DiceGame.Gameplay.Character
             }
         }
 
-        static CharacterMovePlan BuildCoupledDiceMovePlan(
+        CharacterMovePlan BuildCoupledDiceMovePlan(
             Vector2Int fromCell,
             Vector2Int toCell,
             Direction direction,
             MovementTransition transition,
             CoupledMoveIntent intent,
+            DiceController standingDice = null,
+            int fromLevel = SurfaceHeightLevel.Floor,
+            float footingWorldY = 0f,
             bool blockFailedJumpGridFallback = false) {
-            return new CharacterMovePlan {
+            var plan = new CharacterMovePlan {
                 Kind = CharacterMoveKind.CoupledDiceMove,
                 FromCell = fromCell,
                 ToCell = toCell,
@@ -223,6 +229,23 @@ namespace DiceGame.Gameplay.Character
                 DiceGridMovePlan = transition.DiceGridMovePlan,
                 BlockFailedJumpGridFallback = blockFailedJumpGridFallback
             };
+
+            if (intent == CoupledMoveIntent.GroundParallelRoll
+                && standingDice != null
+                && movementTransition.TryEvaluateBetween(
+                    fromCell,
+                    toCell,
+                    fromLevel,
+                    footingWorldY,
+                    standingDice,
+                    out var floorWalkFallback)
+                && floorWalkFallback.Kind == MovementTransitionKind.Walkable
+                && floorWalkFallback.TargetLevel == SurfaceHeightLevel.Floor) {
+                plan.HasCoupledFailFloorWalkFallback = true;
+                plan.CoupledFailFloorWalkFallback = floorWalkFallback;
+            }
+
+            return plan;
         }
 
         public int GetMaxMovementCellDistance(

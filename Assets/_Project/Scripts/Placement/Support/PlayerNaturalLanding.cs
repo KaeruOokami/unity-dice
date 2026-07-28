@@ -15,35 +15,37 @@ namespace DiceGame.Placement
             Vector2Int cell,
             DiceRegistry registry,
             DiceController excludeDice = null) {
-            if (registry != null
-                && registry.TryGetTopAt(cell, out var top)
-                && top != null
-                && top != excludeDice
-                && !GhostPlacementRules.IsPlayerPassThrough(top)) {
+            PlayerSupportQuery.ResolveAt(
+                cell,
+                registry,
+                floorSurfaceWorldY: 0f,
+                out var targetDice,
+                out var targetLevel,
+                out _,
+                includePendingBottom: false,
+                excludeDice);
+
+            if (targetDice == null || targetLevel == SurfaceHeightLevel.Floor) {
+                return CharacterSupportState.OnFloor(cell);
+            }
+
+            if (targetLevel >= SurfaceHeightLevel.Top) {
                 return CharacterSupportState.OnDice(
                     cell,
                     SurfaceHeightLevel.Top,
-                    SupportRef.DiceSupport(top, DiceSurfaceLevel.Top));
+                    SupportRef.DiceSupport(targetDice, DiceSurfaceLevel.Top));
             }
 
-            if (registry != null
-                && registry.TryGetBottomAt(cell, out var bottom)
-                && bottom != null
-                && bottom != excludeDice
-                && !GhostPlacementRules.IsPlayerPassThrough(bottom)) {
-                var level = ExpandedFootprintWalkPolicy.ResolveStandingLevel(
-                    bottom,
-                    SurfaceHeightLevel.Bottom);
-                var surfaceLevel = level >= SurfaceHeightLevel.Top
-                    ? DiceSurfaceLevel.Top
-                    : DiceSurfaceLevel.Bottom;
-                return CharacterSupportState.OnDice(
-                    cell,
-                    level,
-                    SupportRef.DiceSupport(bottom, surfaceLevel));
-            }
-
-            return CharacterSupportState.OnFloor(cell);
+            var level = ExpandedFootprintWalkPolicy.ResolveStandingLevel(
+                targetDice,
+                SurfaceHeightLevel.Bottom);
+            var surfaceLevel = level >= SurfaceHeightLevel.Top
+                ? DiceSurfaceLevel.Top
+                : DiceSurfaceLevel.Bottom;
+            return CharacterSupportState.OnDice(
+                cell,
+                level,
+                SupportRef.DiceSupport(targetDice, surfaceLevel));
         }
 
         public static float ResolveSurfaceWorldY(
@@ -51,23 +53,17 @@ namespace DiceGame.Placement
             DiceRegistry registry,
             Board board,
             DiceController excludeDice = null) {
-            if (registry != null
-                && registry.TryGetTopAt(cell, out var top)
-                && top != null
-                && top != excludeDice
-                && !GhostPlacementRules.IsPlayerPassThrough(top)) {
-                return top.GetLogicalTopSurfaceWorldY();
-            }
-
-            if (registry != null
-                && registry.TryGetBottomAt(cell, out var bottom)
-                && bottom != null
-                && bottom != excludeDice
-                && !GhostPlacementRules.IsPlayerPassThrough(bottom)) {
-                return bottom.GetLogicalTopSurfaceWorldY();
-            }
-
-            return board != null ? board.FloorSurfaceWorldY : 0f;
+            var floorY = board != null ? board.FloorSurfaceWorldY : 0f;
+            PlayerSupportQuery.ResolveAt(
+                cell,
+                registry,
+                floorY,
+                out _,
+                out _,
+                out var surfaceY,
+                includePendingBottom: false,
+                excludeDice);
+            return surfaceY;
         }
     }
 }
