@@ -186,13 +186,17 @@ namespace DiceGame.Placement
             transition = default;
             var isJumping = context.IsJumping;
 
+            // Ice extends shared slide: require at least one legal slide step.
+            // Immediate block returns false so EvaluateToCell continues to HeightTransfer
+            // (same-tier ride / Bottom→Top prohibition) and push can run.
             if (!isJumping
                 && TryBuildIceSlide(
                     standingDice,
                     fromLevel,
                     direction,
                     out var iceSlidePlan,
-                    out var elasticTransferTarget)) {
+                    out var elasticTransferTarget)
+                && IceSlidePassability.HasSlideDisplacement(iceSlidePlan)) {
                 transition = MovementTransition.IceSlide(iceSlidePlan, elasticTransferTarget);
                 return true;
             }
@@ -339,6 +343,9 @@ namespace DiceGame.Placement
                 registry,
                 out plan,
                 out elasticTransferTarget,
+                // Standing path: do not treat immediate ice-ice contact as IceSlide success.
+                // HeightTransfer owns same-tier ride; Bottom→Top stays forbidden there.
+                allowElasticOnImmediateBlock: false,
                 out _)) {
                 return false;
             }
@@ -347,7 +354,8 @@ namespace DiceGame.Placement
                 elasticTransferTarget = null;
             }
 
-            return true;
+            // Ice is slide-until-blocked only when the mover actually travels.
+            return IceSlidePassability.HasSlideDisplacement(plan);
         }
 
         static MovementTransition CreateCoupledGridMoveTransition(

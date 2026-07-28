@@ -76,10 +76,13 @@ namespace DiceGame.Gameplay
         DiceController pushTargetDice;
         Direction pushDirection;
         bool hasPushDirection;
+        Direction elasticInputLockDirection;
+        bool hasElasticInputLock;
         DiceController pushFollowDice;
         Direction pushFollowDirection;
         bool isPushFollowing;
         bool pushFollowLimitOneCell;
+        bool pushFollowStartedOnFloor;
         Vector3 pushFollowDiceStartWorld;
         bool isInitialized;
         /// <summary>
@@ -683,6 +686,8 @@ namespace DiceGame.Gameplay
                 currentSpeed = 0f;
                 return;
             }
+
+            UpdateElasticInputLock(input);
             if (input.sqrMagnitude <= 0f) {
                 currentSpeed = 0f;
                 ResetPushState();
@@ -691,6 +696,13 @@ namespace DiceGame.Gameplay
             }
 
             input.Normalize();
+            if (IsElasticInputLocked(input)) {
+                currentSpeed = 0f;
+                ResetPushState();
+                dissolveHoldState.Reset();
+                return;
+            }
+
             currentSpeed = Mathf.MoveTowards(
                 currentSpeed,
                 movementSettings.MaxMoveSpeed,
@@ -802,6 +814,10 @@ namespace DiceGame.Gameplay
                 dissolveHoldState,
                 pendingJumpLandingState,
                 out var consumedMovement)) {
+                if (consumedMovement && ShouldLockElasticRetrigger(plan)) {
+                    SetElasticInputLock(plan.Direction);
+                }
+
                 if (consumedMovement) {
                     UpdatePushContact(Vector2.zero);
                 }
@@ -1405,7 +1421,6 @@ namespace DiceGame.Gameplay
                     LogPushDebug(
                         "push-ok",
                         $"stage=push dice={FormatMovementDice(pushedDice)} dir={pushDir}");
-                    BeginPushFollow(pushedDice, pushDir);
                     pushed = true;
                     break;
                 }
@@ -1422,15 +1437,18 @@ namespace DiceGame.Gameplay
             ResetPushState();
         }
 
-        void BeginPushFollow(DiceController dice, Direction direction) {
+        void BeginPushFollow(
+            DiceController dice,
+            Direction direction,
+            Vector3 startWorld,
+            bool startedOnFloor) {
             EndPushFollow();
             pushFollowDice = dice;
             pushFollowDirection = direction;
             isPushFollowing = true;
             pushFollowLimitOneCell = CharacterPushExecutor.LimitsPushFollowToOneCell(dice);
-            pushFollowDiceStartWorld = dice != null
-                ? dice.GetLogicalCenterWorld()
-                : Vector3.zero;
+            pushFollowStartedOnFloor = startedOnFloor;
+            pushFollowDiceStartWorld = startWorld;
             currentSpeed = 0f;
             pushFollowDice.StateChanged += OnPushFollowDiceStateChanged;
             UpdatePushFollowPosition();
@@ -1447,6 +1465,7 @@ namespace DiceGame.Gameplay
 
             isPushFollowing = false;
             pushFollowLimitOneCell = false;
+            pushFollowStartedOnFloor = false;
             pushFollowDice = null;
         }
 
@@ -1459,12 +1478,31 @@ namespace DiceGame.Gameplay
         }
 
         bool HasExceededPushFollowOneCellLimit() {
-            if (!pushFollowLimitOneCell || pushFollowDice == null) {
+            if (!pushFollowLimitOneCell || pushFollowDice == null || board == null) {
                 return false;
             }
 
-            // Logical grid moves commit immediately; end one-cell follow when busy clears.
+            // Ice (and other slide-until-blocked) commits logical To immediately, so follow
+            // ends by visual travel of one cell — not when the whole slide finishes.
+            if (GetPushFollowTravelDistance() >= board.CellSize - EdgeEpsilon) {
+                return true;
+            }
+
             return !pushFollowDice.IsRolling;
+        }
+
+        float GetPushFollowTravelDistance() {
+            var current = GetPushFollowDiceMotionCenterWorld();
+            var delta = pushFollowDirection.ToGridDelta();
+            if (delta.x != 0) {
+                return Mathf.Abs(current.x - pushFollowDiceStartWorld.x);
+            }
+
+            if (delta.y != 0) {
+                return Mathf.Abs(current.z - pushFollowDiceStartWorld.z);
+            }
+
+            return 0f;
         }
 
         void UpdatePushFollowPosition() {
@@ -1483,7 +1521,7 @@ namespace DiceGame.Gameplay
             coupling.EndRollTracking();
             SyncPushFollowStanding();
 
-            var diceCenter = pushFollowDice.GetLogicalCenterWorld();
+            var diceCenter = GetPushFollowDiceCenterWorld();
             var half = board.CellSize * 0.5f;
             var contactOffset = half + GetPushHorizontalRadius();
             var beforePosition = characterTransform.position;
@@ -1498,21 +1536,78 @@ namespace DiceGame.Gameplay
             transformDriver.ApplyWorldPosition(position);
         }
 
+        /// <summary>
+        /// Follow target center. During motion prefer the visual root so continuous ice slides
+        /// stay smooth; one-cell-limited follows are clamped to the first cell from start.
+        /// </summary>
+        Vector3 GetPushFollowDiceCenterWorld() {
+            var center = GetPushFollowDiceMotionCenterWorld();
+            if (!pushFollowLimitOneCell || board == null) {
+                return center;
+            }
+
+            return ClampPushFollowCenterToOneCell(center);
+        }
+
+        Vector3 GetPushFollowDiceMotionCenterWorld() {
+            if (pushFollowDice == null) {
+                return pushFollowDiceStartWorld;
+            }
+
+            var visual = pushFollowDice.View != null ? pushFollowDice.View.DiceTransform : null;
+            if (visual != null && pushFollowDice.IsRolling) {
+                var p = visual.position;
+                return new Vector3(p.x, pushFollowDiceStartWorld.y, p.z);
+            }
+
+            return pushFollowDice.GetLogicalCenterWorld();
+        }
+
+        Vector3 ClampPushFollowCenterToOneCell(Vector3 center) {
+            var delta = pushFollowDirection.ToGridDelta();
+            var cell = board.CellSize;
+            if (delta.x != 0) {
+                var limitX = pushFollowDiceStartWorld.x + delta.x * cell;
+                center.x = delta.x > 0
+                    ? Mathf.Min(center.x, limitX)
+                    : Mathf.Max(center.x, limitX);
+            }
+
+            if (delta.y != 0) {
+                var limitZ = pushFollowDiceStartWorld.z + delta.y * cell;
+                center.z = delta.y > 0
+                    ? Mathf.Min(center.z, limitZ)
+                    : Mathf.Max(center.z, limitZ);
+            }
+
+            return center;
+        }
+
         void SyncPushFollowStanding() {
             if (pushFollowDice == null || board == null) {
                 return;
             }
 
-            var diceCell = pushFollowDice.CurrentState.GridPos;
-            var contactCell = diceCell + pushFollowDirection.Opposite().ToGridDelta();
+            var center = GetPushFollowDiceCenterWorld();
+            var followCell = board.WorldToGrid(center);
+            var contactCell = followCell + pushFollowDirection.Opposite().ToGridDelta();
             if (!board.IsInside(contactCell)) {
                 return;
             }
 
-            ResolveStandingAtGridCell(contactCell);
+            if (pushFollowStartedOnFloor) {
+                ResolveStandingAtGridCell(contactCell, pushFollowDice);
+                return;
+            }
+
+            ResolveStandingAtGridCellForElevatedPush(contactCell, pushFollowDice);
         }
 
         void ResolveStandingAtGridCell(Vector2Int gridCell) {
+            ResolveStandingAtGridCell(gridCell, excludeDice: null);
+        }
+
+        void ResolveStandingAtGridCell(Vector2Int gridCell, DiceController excludeDice) {
             if (registry == null || board == null || !board.IsInside(gridCell)) {
                 return;
             }
@@ -1522,13 +1617,41 @@ namespace DiceGame.Gameplay
                 return;
             }
 
-            if (registry.TryGetBottomAt(gridCell, out var bottom)) {
+            if (registry.TryGetBottomAt(gridCell, out var bottom)
+                && bottom != null
+                && bottom != excludeDice) {
                 if (GhostPlacementRules.IsPlayerPassThrough(bottom)
                     || BlocksCoveringMountUntilSettled(bottom)) {
                     ApplyFloorStanding(gridCell);
                     return;
                 }
 
+                ApplyDiceStanding(gridCell, DiceStackTier.Bottom, bottom);
+                return;
+            }
+
+            ApplyFloorStanding(gridCell);
+        }
+
+        void ResolveStandingAtGridCellForElevatedPush(Vector2Int gridCell, DiceController excludeDice) {
+            if (registry == null || board == null || !board.IsInside(gridCell)) {
+                return;
+            }
+
+            if (registry.TryGetTopAt(gridCell, out var top)
+                && top != null
+                && top != excludeDice
+                && !GhostPlacementRules.IsPlayerPassThrough(top)
+                && !BlocksCoveringMountUntilSettled(top)) {
+                ApplyDiceStanding(gridCell, DiceStackTier.Top, top);
+                return;
+            }
+
+            if (registry.TryGetBottomAt(gridCell, out var bottom)
+                && bottom != null
+                && bottom != excludeDice
+                && !GhostPlacementRules.IsPlayerPassThrough(bottom)
+                && !BlocksCoveringMountUntilSettled(bottom)) {
                 ApplyDiceStanding(gridCell, DiceStackTier.Bottom, bottom);
                 return;
             }
@@ -1547,7 +1670,8 @@ namespace DiceGame.Gameplay
         }
 
         void ApplyDiceStanding(Vector2Int gridCell, DiceStackTier tier, DiceController dice) {
-            var level = SurfaceHeightLevel.FromDiceStackTier(tier); if (standingController.Level == level
+            var level = SurfaceHeightLevel.FromDiceStackTier(tier);
+            if (standingController.Level == level
                 && standingController.GridCell == gridCell
                 && standingController.Tier == tier
                 && standingController.CurrentDice == dice) {
@@ -1643,17 +1767,32 @@ namespace DiceGame.Gameplay
         bool TryPushDice(PushContactCandidate candidate, out DiceController pushedDice, out Direction pushDir) {
             pushedDice = null;
             pushDir = candidate.Direction;
+            var dice = candidate.Dice;
+            if (dice == null) {
+                return false;
+            }
+
+            // Capture before execute: ice/normal both commit logical To immediately.
+            var startWorld = dice.GetLogicalCenterWorld();
+            var startedOnFloor = IsOnFloor;
+
             if (!CharacterPushExecutor.TryExecute(
-                candidate.Dice,
+                dice,
                 candidate.Direction,
                 registry,
                 movementTransition,
                 GetFootingWorldY(),
-                PlayerSlot)) {
+                PlayerSlot,
+                out var consumesInputUntilRelease)) {
                 return false;
             }
 
-            pushedDice = candidate.Dice;
+            if (consumesInputUntilRelease) {
+                SetElasticInputLock(candidate.Direction);
+            }
+
+            BeginPushFollow(dice, candidate.Direction, startWorld, startedOnFloor);
+            pushedDice = dice;
             return true;
         }
 
@@ -1743,6 +1882,34 @@ namespace DiceGame.Gameplay
             }
 
             return true;
+        }
+
+        void UpdateElasticInputLock(Vector2 input) {
+            if (!hasElasticInputLock) {
+                return;
+            }
+
+            if (!TryInputToDirection(input, out var direction) || direction != elasticInputLockDirection) {
+                hasElasticInputLock = false;
+            }
+        }
+
+        bool IsElasticInputLocked(Vector2 input) {
+            return hasElasticInputLock
+                && TryInputToDirection(input, out var direction)
+                && direction == elasticInputLockDirection;
+        }
+
+        void SetElasticInputLock(Direction direction) {
+            elasticInputLockDirection = direction;
+            hasElasticInputLock = true;
+        }
+
+        static bool ShouldLockElasticRetrigger(CharacterMovePlan plan) {
+            return plan.Kind == CharacterMoveKind.CoupledDiceMove
+                && plan.CoupledIntent == CoupledMoveIntent.GroundIceSlide
+                && plan.Transition.Kind == MovementTransitionKind.IceSlide
+                && plan.Transition.TargetDice != null;
         }
 
         void SnapToStandingCellCenter() {

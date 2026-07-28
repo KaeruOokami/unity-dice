@@ -16,6 +16,25 @@ namespace DiceGame.Placement
             MovementTransitionEvaluator movementTransition,
             float footingWorldY,
             PlayerSlot playerSlot) {
+            return TryExecute(
+                dice,
+                direction,
+                registry,
+                movementTransition,
+                footingWorldY,
+                playerSlot,
+                out _);
+        }
+
+        public static bool TryExecute(
+            DiceController dice,
+            Direction direction,
+            DiceRegistry registry,
+            MovementTransitionEvaluator movementTransition,
+            float footingWorldY,
+            PlayerSlot playerSlot,
+            out bool consumesInputUntilRelease) {
+            consumesInputUntilRelease = false;
             if (dice == null || registry == null || movementTransition == null) {
                 return false;
             }
@@ -38,7 +57,8 @@ namespace DiceGame.Placement
                         dice,
                         direction,
                         registry,
-                        playerSlot);
+                        playerSlot,
+                        out consumesInputUntilRelease);
 
                 default:
                     return DiceSlidePassability.TryEvaluate(

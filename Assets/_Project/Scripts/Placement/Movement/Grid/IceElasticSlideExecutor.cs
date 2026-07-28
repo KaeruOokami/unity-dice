@@ -15,6 +15,16 @@ namespace DiceGame.Placement
             Direction direction,
             DiceRegistry registry,
             PlayerSlot actionOwner) {
+            return TryExecute(mover, direction, registry, actionOwner, out _);
+        }
+
+        public static bool TryExecute(
+            DiceController mover,
+            Direction direction,
+            DiceRegistry registry,
+            PlayerSlot actionOwner,
+            out bool consumesInputUntilRelease) {
+            consumesInputUntilRelease = false;
             if (mover == null
                 || registry == null
                 || !mover.Capabilities.SlideUntilBlocked
@@ -36,6 +46,7 @@ namespace DiceGame.Placement
                 transferTarget = null;
             }
 
+            consumesInputUntilRelease = transferTarget != null;
             if (IceSlidePassability.HasSlideDisplacement(plan)) {
                 return mover.TryExecuteSlidePlan(plan, actionOwner, direction, transferTarget);
             }

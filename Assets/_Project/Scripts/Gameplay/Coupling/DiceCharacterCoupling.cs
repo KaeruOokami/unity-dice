@@ -442,6 +442,8 @@ namespace DiceGame.Gameplay.Coupling
             RegisterStandingDiceForAction();
 
             if (!IceSlidePassability.HasSlideDisplacement(plan)) {
+                // No mover travel: only elastic momentum transfer (push / mid-slide collision).
+                // Same-tier standing ride is HeightTransfer's job, not IceSlide.
                 return IceElasticSlideExecutor.TryBeginTransfer(
                     elasticTransferTarget,
                     direction,

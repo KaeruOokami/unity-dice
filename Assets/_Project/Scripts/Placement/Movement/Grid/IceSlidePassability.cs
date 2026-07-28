@@ -19,6 +19,7 @@ namespace DiceGame.Placement
                 placement,
                 out plan,
                 out _,
+                allowElasticOnImmediateBlock: true,
                 out rejectReason);
         }
 
@@ -28,6 +29,24 @@ namespace DiceGame.Placement
             IDicePlacement placement,
             out DiceSlidePlan plan,
             out DiceController elasticTransferTarget,
+            out string rejectReason) {
+            return TryBuildUntilBlocked(
+                fromState,
+                direction,
+                placement,
+                out plan,
+                out elasticTransferTarget,
+                allowElasticOnImmediateBlock: true,
+                out rejectReason);
+        }
+
+        public static bool TryBuildUntilBlocked(
+            DiceState fromState,
+            Direction direction,
+            IDicePlacement placement,
+            out DiceSlidePlan plan,
+            out DiceController elasticTransferTarget,
+            bool allowElasticOnImmediateBlock,
             out string rejectReason) {
             plan = default;
             elasticTransferTarget = null;
@@ -74,22 +93,34 @@ namespace DiceGame.Placement
                 current = stepPlan.To;
             }
 
+            if (steps == 0) {
+                // Immediate adjacent block (no slide step).
+                // Standing / coupled evaluation uses allowElasticOnImmediateBlock=false so this
+                // fails and HeightTransfer / push keep ownership of tier rules
+                // (e.g. Bottom must not mount Top).
+                // Push / elastic execution uses allowElasticOnImmediateBlock=true so a
+                // same-tier ice neighbor can receive momentum without mover displacement.
+                if (allowElasticOnImmediateBlock
+                    && TryResolveElasticTransferTarget(
+                        fromState,
+                        direction,
+                        registry,
+                        out var candidate)) {
+                    plan = new DiceSlidePlan(fromState, fromState);
+                    elasticTransferTarget = candidate;
+                    return true;
+                }
+
+                rejectReason = stepRejectReason ?? "no-slide-step";
+                return false;
+            }
+
             if (exitByBlockedStep) {
                 TryResolveElasticTransferTarget(
                     current,
                     direction,
                     registry,
                     out elasticTransferTarget);
-            }
-
-            if (steps == 0) {
-                if (elasticTransferTarget != null) {
-                    plan = new DiceSlidePlan(fromState, fromState);
-                    return true;
-                }
-
-                rejectReason = stepRejectReason ?? "no-slide-step";
-                return false;
             }
 
             plan = lastStep.HasGhostSwap
