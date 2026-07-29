@@ -13,6 +13,26 @@ namespace DiceGame.Versus.Core
             bool isSnatch,
             System.Random random,
             out AttackVolley volley) {
+            return TryBuild(
+                settings,
+                face,
+                chainCount,
+                clusterSize,
+                isSnatch,
+                random,
+                int.MaxValue,
+                out volley);
+        }
+
+        public static bool TryBuild(
+            PlayerAttackSettings settings,
+            int face,
+            int chainCount,
+            int clusterSize,
+            bool isSnatch,
+            System.Random random,
+            int jumboSendableRemaining,
+            out AttackVolley volley) {
             volley = null;
             if (settings == null || random == null) {
                 return false;
@@ -28,7 +48,13 @@ namespace DiceGame.Versus.Core
                 return false;
             }
 
-            if (!AttackKindBreakdown.TryBuild(sendableKinds, diceCount, power, random, out var breakdown)) {
+            if (!AttackKindBreakdown.TryBuild(
+                    sendableKinds,
+                    diceCount,
+                    power,
+                    random,
+                    jumboSendableRemaining,
+                    out var breakdown)) {
                 return false;
             }
 

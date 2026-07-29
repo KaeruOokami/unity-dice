@@ -12,6 +12,7 @@ namespace DiceGame.Session
 
         DiceSpawnSettingsPanelUi.Bindings sharedSpawnUi;
         DiceCatalogPanelUi.Bindings sharedCatalogUi;
+        JumboDiceSettingsPanelUi.Bindings jumboUi;
         TMP_InputField versusSharedInitialDiceCount;
         PlayerSlotUi player1Ui;
         PlayerSlotUi player2Ui;
@@ -50,6 +51,7 @@ namespace DiceGame.Session
                 versusSharedInitialDiceCount = LobbyUiFactory.CreateLabeledIntInput(
                     contentRoot,
                     "Initial Dice Count (1P/2P Shared)");
+                jumboUi = JumboDiceSettingsPanelUi.Build(contentRoot, "Jumbo Dice Settings");
                 CreatePlayerSlotSwitcher();
                 player1Ui = CreatePlayerSection("1P", true, defaults.Player1);
                 player2Ui = CreatePlayerSection("2P", true, defaults.Player2);
@@ -154,6 +156,8 @@ namespace DiceGame.Session
                     versusSharedInitialDiceCount.SetTextWithoutNotify(
                         snapshot.GetVersusSharedInitialDiceCount().ToString());
                 }
+
+                JumboDiceSettingsPanelUi.Apply(jumboUi, snapshot.Jumbo);
             } else {
                 DiceSpawnSettingsPanelUi.Apply(sharedSpawnUi, snapshot.SharedSpawn);
                 DiceCatalogPanelUi.Apply(sharedCatalogUi, snapshot.SharedCatalog);
@@ -197,6 +201,11 @@ namespace DiceGame.Session
                     return false;
                 }
 
+                if (!JumboDiceSettingsPanelUi.TryRead(jumboUi, out var jumbo, out errorMessage)) {
+                    snapshot = null;
+                    return false;
+                }
+
                 if (!TryBuildPlayerSetup(
                         player1Ui,
                         true,
@@ -217,6 +226,7 @@ namespace DiceGame.Session
                     return false;
                 }
 
+                snapshot.Jumbo = jumbo;
                 snapshot.Player1 = player1;
                 snapshot.Player2 = player2;
                 snapshot.NormalizeVersusSharedInitialDiceCount();

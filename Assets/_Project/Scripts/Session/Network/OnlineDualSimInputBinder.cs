@@ -22,6 +22,7 @@ namespace DiceGame.Session.Network
         DiceMatchOwnershipContext ownershipContext;
         DiceSpawnSystem spawnSystem;
         VersusAttackController attackController;
+        JumboDiceSequenceController jumboSequenceController;
         DiceMatchErasureSystem erasureSystem;
         OnlineEntityIdMap entityIds;
         readonly List<GameCharacterController> characters = new();
@@ -66,13 +67,15 @@ namespace DiceGame.Session.Network
             DiceMatchOwnershipContext matchOwnership,
             DiceSpawnSystem diceSpawnSystem,
             VersusAttackController versusAttackController = null,
-            DiceMatchErasureSystem matchErasureSystem = null) {
+            DiceMatchErasureSystem matchErasureSystem = null,
+            JumboDiceSequenceController jumboSequence = null) {
             messenger = netMessenger;
             registry = diceRegistry;
             ownershipContext = matchOwnership;
             spawnSystem = diceSpawnSystem;
             attackController = versusAttackController;
             erasureSystem = matchErasureSystem;
+            jumboSequenceController = jumboSequence;
             localSlot = localPlayerSlot;
             remoteSlot = localPlayerSlot == PlayerSlot.Player1
                 ? PlayerSlot.Player2
@@ -417,6 +420,7 @@ namespace DiceGame.Session.Network
 
                 spawnSystem?.SimulateLockstepTick(simDt);
                 attackController?.SimulateLockstepTick(simDt);
+                jumboSequenceController?.SimulateLockstepTick();
                 erasureSystem?.SimulateLockstepTick();
 
                 currentTick++;

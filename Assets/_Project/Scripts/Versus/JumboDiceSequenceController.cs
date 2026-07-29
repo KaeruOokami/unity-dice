@@ -12,6 +12,7 @@ namespace DiceGame.Versus
     /// <summary>
     /// Versus-only jumbo sequence: face-1 vanish starts Jumbo2 on the opponent,
     /// then each fully erased jumbo advances 3..6 toward the opponent of the last owner.
+    /// When a 2x2 spawn is unavailable, the sequence waits and retries until space opens.
     /// </summary>
     public sealed class JumboDiceSequenceController : MonoBehaviour
     {
@@ -28,6 +29,8 @@ namespace DiceGame.Versus
         int nextFace = 2;
         DiceController activeJumbo;
         PlayerSlot lastJumboOwner;
+        bool hasPendingSpawn;
+        PlayerSlot pendingSpawnTarget;
 
         public void Configure(
             IVersusBoardSettings settings,
@@ -50,11 +53,20 @@ namespace DiceGame.Versus
             sequenceActive = false;
             nextFace = jumboSettings != null ? jumboSettings.SequenceStartFace : 2;
             activeJumbo = null;
+            ClearPendingSpawn();
 
             if (oneVanishSystem != null) {
                 oneVanishSystem.FaceOneVanished -= OnFaceOneVanished;
                 oneVanishSystem.FaceOneVanished += OnFaceOneVanished;
             }
+        }
+
+        void Update() {
+            if (GameplaySimClock.IsActive) {
+                return;
+            }
+
+            TickPendingSpawn();
         }
 
         void LateUpdate() {
@@ -68,6 +80,13 @@ namespace DiceGame.Versus
             }
         }
 
+        /// <summary>
+        /// Retry a pending jumbo spawn during lockstep (offline uses <see cref="Update"/>).
+        /// </summary>
+        public void SimulateLockstepTick() {
+            TickPendingSpawn();
+        }
+
         void OnDisable() {
             if (oneVanishSystem != null) {
                 oneVanishSystem.FaceOneVanished -= OnFaceOneVanished;
@@ -77,7 +96,7 @@ namespace DiceGame.Versus
         }
 
         void OnFaceOneVanished(PlayerSlot initiator) {
-            if (!IsJumboEnabled() || sequenceActive || activeJumbo != null) {
+            if (!IsJumboEnabled() || sequenceActive || activeJumbo != null || hasPendingSpawn) {
                 return;
             }
 
@@ -102,8 +121,7 @@ namespace DiceGame.Versus
 
             var endFace = jumboSettings != null ? jumboSettings.SequenceEndFace : 6;
             if (nextFace >= endFace) {
-                sequenceActive = false;
-                nextFace = jumboSettings != null ? jumboSettings.SequenceStartFace : 2;
+                EndSequence();
                 return;
             }
 
@@ -112,8 +130,17 @@ namespace DiceGame.Versus
             TrySpawnJumbo(target, nextFace);
         }
 
+        void TickPendingSpawn() {
+            if (!hasPendingSpawn || activeJumbo != null || !sequenceActive || !IsJumboEnabled()) {
+                return;
+            }
+
+            TrySpawnJumbo(pendingSpawnTarget, nextFace);
+        }
+
         void TrySpawnJumbo(PlayerSlot target, int face) {
             if (spawnSystem == null || versusSettings == null) {
+                BeginPendingSpawn(target);
                 return;
             }
 
@@ -121,15 +148,30 @@ namespace DiceGame.Versus
             CollectBlockedCells(target);
             var jumbo = spawnSystem.SpawnJumboDice(target, face, spawnSettings, blockedCellsBuffer);
             if (jumbo == null) {
-                Debug.LogError($"JumboDiceSequenceController: Failed to spawn jumbo face={face} on {target}.");
-                sequenceActive = false;
+                BeginPendingSpawn(target);
                 return;
             }
 
+            ClearPendingSpawn();
             activeJumbo = jumbo;
             lastJumboOwner = target;
             jumbo.Erased += OnJumboErased;
             jumbo.ErasureStarted += OnJumboErasureStarted;
+        }
+
+        void BeginPendingSpawn(PlayerSlot target) {
+            hasPendingSpawn = true;
+            pendingSpawnTarget = target;
+        }
+
+        void ClearPendingSpawn() {
+            hasPendingSpawn = false;
+        }
+
+        void EndSequence() {
+            sequenceActive = false;
+            ClearPendingSpawn();
+            nextFace = jumboSettings != null ? jumboSettings.SequenceStartFace : 2;
         }
 
         void OnJumboErasureStarted(DiceController dice) {

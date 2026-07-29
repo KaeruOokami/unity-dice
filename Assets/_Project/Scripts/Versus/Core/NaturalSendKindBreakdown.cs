@@ -1,6 +1,7 @@
 using System.Collections.Generic;
 using DiceGame.Config;
 using DiceGame.Core;
+using UnityEngine;
 
 namespace DiceGame.Versus.Core
 {
@@ -17,6 +18,15 @@ namespace DiceGame.Versus.Core
             PlayerNaturalSendSettings settings,
             int totalCount,
             System.Random random,
+            out List<(DiceKind kind, int count)> breakdown) {
+            return TryBuild(settings, totalCount, random, int.MaxValue, out breakdown);
+        }
+
+        public static bool TryBuild(
+            PlayerNaturalSendSettings settings,
+            int totalCount,
+            System.Random random,
+            int jumboSendableRemaining,
             out List<(DiceKind kind, int count)> breakdown) {
             breakdown = new List<(DiceKind, int)>();
             if (settings == null || !settings.Enabled || totalCount <= 0 || random == null) {
@@ -36,12 +46,20 @@ namespace DiceGame.Versus.Core
                     continue;
                 }
 
+                var remaining = JumboSendCap.CapKindRemaining(
+                    limit.Kind,
+                    limit.MaxCountPerVolley,
+                    jumboSendableRemaining);
+                if (remaining <= 0) {
+                    continue;
+                }
+
                 slots.Add(new KindSlot {
                     Kind = limit.Kind,
-                    Remaining = limit.MaxCountPerVolley,
+                    Remaining = remaining,
                     Weight = limit.SelectionWeight
                 });
-                capacity += limit.MaxCountPerVolley;
+                capacity += remaining;
             }
 
             if (slots.Count == 0) {
@@ -49,7 +67,7 @@ namespace DiceGame.Versus.Core
             }
 
             if (capacity < totalCount) {
-                UnityEngine.Debug.LogError(
+                Debug.LogError(
                     $"NaturalSendKindBreakdown: sendable capacity ({capacity}) is less than requested count ({totalCount}).");
                 totalCount = capacity;
             }

@@ -5,6 +5,7 @@ namespace DiceGame.Config
         public GameMode GameMode { get; set; }
         public DiceSpawnSettingsData SharedSpawn { get; set; }
         public DiceCatalogData SharedCatalog { get; set; }
+        public JumboDiceSettingsData Jumbo { get; set; }
         public PlayerSlotSetup Player1 { get; set; }
         public PlayerSlotSetup Player2 { get; set; }
 
@@ -43,6 +44,10 @@ namespace DiceGame.Config
 
         bool TryValidateVersus(out string errorMessage) {
             NormalizeVersusSharedInitialDiceCount();
+
+            if (!Jumbo.TryValidate(out errorMessage)) {
+                return false;
+            }
 
             if (!TryValidatePlayerSlot(PlayerSlot.Player1, requireVersusAssets: true, out errorMessage)) {
                 return false;
@@ -126,6 +131,7 @@ namespace DiceGame.Config
                 GameMode = GameMode,
                 SharedSpawn = SharedSpawn,
                 SharedCatalog = SharedCatalog,
+                Jumbo = Jumbo,
                 Player1 = Player1,
                 Player2 = Player2
             };

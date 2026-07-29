@@ -8,11 +8,13 @@ namespace DiceGame.Config
         readonly VersusBoardSettings template;
         readonly PlayerBoardDefinition player1;
         readonly PlayerBoardDefinition player2;
+        readonly JumboDiceSettings jumboDiceSettings;
 
         public RuntimeVersusBoardSettings(
             VersusBoardSettings template,
             PlayerSlotSetup player1Setup,
-            PlayerSlotSetup player2Setup) {
+            PlayerSlotSetup player2Setup,
+            JumboDiceSettingsData jumboSetup) {
             this.template = template;
             var sharedInitialDiceCount = Mathf.Max(1, player1Setup.Spawn.InitialDiceCount);
             var player1Spawn = player1Setup.Spawn.WithInitialDiceCount(sharedInitialDiceCount);
@@ -31,6 +33,7 @@ namespace DiceGame.Config
                 player2Setup.Catalog.ToRuntimeAsset(),
                 player2Setup.Attack.ToRuntimeAsset(),
                 player2Setup.NaturalSend.ToRuntimeAsset());
+            jumboDiceSettings = jumboSetup.ToRuntimeAsset();
         }
 
         public PlayerBoardDefinition Player1 => player1;
@@ -38,7 +41,7 @@ namespace DiceGame.Config
         public VersusInitialDicePlacementMode InitialDicePlacementMode =>
             template.InitialDicePlacementMode;
         public AttackQueueUiSettings AttackQueueUiSettings => template.AttackQueueUiSettings;
-        public JumboDiceSettings JumboDiceSettings => template.JumboDiceSettings;
+        public JumboDiceSettings JumboDiceSettings => jumboDiceSettings;
 
         public VersusArenaLayout CreateLayout() {
             return template.CreateLayout();
@@ -105,6 +108,10 @@ namespace DiceGame.Config
 
             if (player2.NaturalSendSettings != null
                 && !player2.NaturalSendSettings.TryValidate(out errorMessage)) {
+                return false;
+            }
+
+            if (jumboDiceSettings != null && !jumboDiceSettings.TryValidate(out errorMessage)) {
                 return false;
             }
 

@@ -9,6 +9,9 @@ namespace DiceGame.View
 {
     sealed class DiceIconGenerator : IDisposable
     {
+        public const int MinPip = 1;
+        public const int MaxPip = 6;
+
         readonly struct CacheKey : IEquatable<CacheKey>
         {
             public readonly int MeshPrefabId;
@@ -89,23 +92,39 @@ namespace DiceGame.View
             previewCamera.targetTexture = renderTexture;
         }
 
-        public bool TryGetSprite(GameObject meshPrefab, int pip, out Sprite sprite) {
+        /// <summary>
+        /// Match-time lookup: returns only sprites that were warmed beforehand.
+        /// </summary>
+        public bool TryGetCachedSprite(GameObject meshPrefab, int pip, out Sprite sprite) {
             sprite = null;
-            if (disposed || meshPrefab == null || pip is < 1 or > 6) {
+            if (disposed || meshPrefab == null || pip is < MinPip or > MaxPip) {
                 return false;
             }
 
             var key = new CacheKey(meshPrefab.GetInstanceID(), pip);
-            if (cache.TryGetValue(key, out sprite)) {
-                return sprite != null;
+            return cache.TryGetValue(key, out sprite) && sprite != null;
+        }
+
+        /// <summary>
+        /// Generates and caches a sprite if missing. Intended for match-start warmup only.
+        /// </summary>
+        public bool WarmSprite(GameObject meshPrefab, int pip) {
+            if (disposed || meshPrefab == null || pip is < MinPip or > MaxPip) {
+                return false;
             }
 
-            sprite = RenderSprite(meshPrefab, pip);
-            if (sprite != null) {
-                cache[key] = sprite;
+            var key = new CacheKey(meshPrefab.GetInstanceID(), pip);
+            if (cache.TryGetValue(key, out var existing) && existing != null) {
+                return true;
             }
 
-            return sprite != null;
+            var sprite = RenderSprite(meshPrefab, pip);
+            if (sprite == null) {
+                return false;
+            }
+
+            cache[key] = sprite;
+            return true;
         }
 
         Sprite RenderSprite(GameObject meshPrefab, int pip) {
@@ -129,6 +148,8 @@ namespace DiceGame.View
             previewCamera.transform.rotation = Quaternion.LookRotation(Vector3.down, Vector3.forward);
 
             previewCamera.Render();
+            // Ensure GPU work for this camera is submitted before CPU readback.
+            GL.Flush();
 
             var resolution = settings.IconResolution;
             var texture = new Texture2D(resolution, resolution, TextureFormat.RGBA32, false);

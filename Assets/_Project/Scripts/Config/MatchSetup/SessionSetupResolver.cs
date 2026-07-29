@@ -49,7 +49,8 @@ namespace DiceGame.Config
                 versusSettings = new RuntimeVersusBoardSettings(
                     gameSessionSettings.VersusBoardSettings,
                     snapshot.Player1,
-                    snapshot.Player2);
+                    snapshot.Player2,
+                    snapshot.Jumbo);
             }
 
             return new ResolvedSessionSetup {

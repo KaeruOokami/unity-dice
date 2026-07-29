@@ -19,6 +19,7 @@ MonoBehaviour:
   rowSpacing: 4
   boundsPadding: 1
   previewLightIntensity: 1.2
+  iconPrewarmPerFrame: 2
   previewLayerName: DiceIconPreview
   player1PanelLayout:
     anchorMin: {x: 0.02, y: 0.02}

@@ -1,9 +1,11 @@
 using System;
+using System.Collections;
 using System.Collections.Generic;
 using DiceGame.Config;
 using DiceGame.Core;
 using DiceGame.Gameplay;
 using DiceGame.Grid;
+using DiceGame.Placement;
 using DiceGame.View;
 using DiceGame.Versus.Core;
 using UnityEngine;
@@ -13,10 +15,13 @@ namespace DiceGame.Versus
     public sealed class VersusAttackController : MonoBehaviour
     {
         IVersusBoardSettings versusSettings;
+        Board board;
+        DiceRegistry registry;
         DiceSpawnSystem spawnSystem;
         DiceMatchErasureSystem erasureSystem;
         AttackQueueView queueView;
         System.Random random;
+        Coroutine iconWarmupRoutine;
 
         readonly Dictionary<PlayerSlot, AttackQueue> incomingQueues = new();
         readonly Dictionary<PlayerSlot, float> naturalSendCooldowns = new();
@@ -25,14 +30,19 @@ namespace DiceGame.Versus
         bool applyQueuedSpawns = true;
         bool naturalSendActive;
 
+        public bool AreIconsReady => queueView == null || queueView.AreIconsReady;
+
         public void Configure(
             IVersusBoardSettings settings,
-            Board board,
+            Board targetBoard,
+            DiceRegistry targetRegistry,
             DiceSpawnSystem targetSpawnSystem,
             DiceMatchErasureSystem targetErasureSystem,
             System.Random attackRandom,
             Transform viewParent) {
             versusSettings = settings;
+            board = targetBoard;
+            registry = targetRegistry;
             spawnSystem = targetSpawnSystem;
             erasureSystem = targetErasureSystem;
             random = attackRandom ?? new System.Random();
@@ -47,7 +57,11 @@ namespace DiceGame.Versus
 
             EnsureQueues();
             EnsureQueueView(viewParent);
-            StartNaturalSendLoops();
+            if (iconWarmupRoutine != null) {
+                StopCoroutine(iconWarmupRoutine);
+            }
+
+            iconWarmupRoutine = StartCoroutine(EnableGameplayAfterIconWarmup());
         }
 
         /// <summary>
@@ -59,7 +73,7 @@ namespace DiceGame.Versus
             applyQueuedSpawns = !follower;
             if (follower) {
                 StopNaturalSendLoops();
-            } else if (gameplayEnabled) {
+            } else if (gameplayEnabled && AreIconsReady) {
                 StartNaturalSendLoops();
             }
         }
@@ -74,6 +88,11 @@ namespace DiceGame.Versus
         }
 
         void OnDisable() {
+            if (iconWarmupRoutine != null) {
+                StopCoroutine(iconWarmupRoutine);
+                iconWarmupRoutine = null;
+            }
+
             StopNaturalSendLoops();
 
             if (erasureSystem != null) {
@@ -97,6 +116,10 @@ namespace DiceGame.Versus
                 return;
             }
 
+            if (!AreIconsReady) {
+                return;
+            }
+
             if (generateAttacks && naturalSendActive) {
                 TickNaturalSend(PlayerSlot.Player1, deltaTime);
                 TickNaturalSend(PlayerSlot.Player2, deltaTime);
@@ -117,10 +140,25 @@ namespace DiceGame.Versus
 
             gameplayEnabled = enabled;
             if (gameplayEnabled) {
-                StartNaturalSendLoops();
+                if (AreIconsReady) {
+                    StartNaturalSendLoops();
+                }
             } else {
                 StopNaturalSendLoops();
             }
+        }
+
+        IEnumerator EnableGameplayAfterIconWarmup() {
+            while (queueView != null && !queueView.AreIconsReady) {
+                yield return null;
+            }
+
+            iconWarmupRoutine = null;
+            if (gameplayEnabled && generateAttacks) {
+                StartNaturalSendLoops();
+            }
+
+            RefreshQueueView();
         }
 
         void EnsureQueues() {
@@ -157,7 +195,7 @@ namespace DiceGame.Versus
 
         void StartNaturalSendLoops() {
             StopNaturalSendLoops();
-            if (!gameplayEnabled || !generateAttacks) {
+            if (!gameplayEnabled || !generateAttacks || !AreIconsReady) {
                 return;
             }
 
@@ -207,8 +245,13 @@ namespace DiceGame.Versus
 
             cooldown -= deltaTime;
             while (cooldown <= 0f) {
-                if (NaturalSendVolleyBuilder.TryBuild(naturalSendSettings, random, out var volley)) {
-                    var target = SinkingChainResolver.GetOpponent(sender);
+                var target = SinkingChainResolver.GetOpponent(sender);
+                var jumboRemaining = ResolveJumboSendableRemaining(target);
+                if (NaturalSendVolleyBuilder.TryBuild(
+                        naturalSendSettings,
+                        random,
+                        jumboRemaining,
+                        out var volley)) {
                     var attackSettings = versusSettings.GetAttackSettings(sender);
                     var queueDelay = attackSettings != null
                         ? attackSettings.QueueToBoardDelay
@@ -224,7 +267,7 @@ namespace DiceGame.Versus
         }
 
         void OnErasureResolved(ErasureResolvedEvent e) {
-            if (!gameplayEnabled || !generateAttacks || versusSettings == null) {
+            if (!gameplayEnabled || !generateAttacks || versusSettings == null || !AreIconsReady) {
                 return;
             }
 
@@ -233,6 +276,7 @@ namespace DiceGame.Versus
                 return;
             }
 
+            var jumboRemaining = ResolveJumboSendableRemaining(e.Target);
             if (!AttackVolleyBuilder.TryBuild(
                     attackSettings,
                     e.Face,
@@ -240,12 +284,31 @@ namespace DiceGame.Versus
                     e.ClusterSize,
                     e.IsSnatch,
                     random,
+                    jumboRemaining,
                     out var volley)) {
                 return;
             }
 
             EnsureQueues();
             incomingQueues[e.Target].Enqueue(volley, attackSettings.QueueToBoardDelay);
+        }
+
+        int ResolveJumboSendableRemaining(PlayerSlot targetBoard) {
+            var jumboSettings = versusSettings != null ? versusSettings.JumboDiceSettings : null;
+            if (jumboSettings == null || !jumboSettings.Enabled) {
+                return 0;
+            }
+
+            EnsureQueues();
+            var pending = incomingQueues.TryGetValue(targetBoard, out var queue)
+                ? queue.GetPendingVolleys()
+                : Array.Empty<AttackVolley>();
+            var occupied = JumboBoardOccupancy.CountOccupied(
+                registry != null ? registry.AllDice : Array.Empty<DiceController>(),
+                board != null ? board.VersusLayout : null,
+                targetBoard,
+                pending);
+            return jumboSettings.GetRemainingSendableSlots(occupied);
         }
 
         void TickQueue(PlayerSlot defenderSlot, float deltaTime) {
@@ -279,7 +342,8 @@ namespace DiceGame.Versus
             var remaining = new List<AttackDieSpec>();
             for (var i = 0; i < volley.Count; i++) {
                 var spec = volley.Dice[i];
-                if (spawnSystem.SpawnAttackDice(defenderSlot, spec.Kind, spec.Pip, spawnSettings) == null) {
+                var spawned = spawnSystem.SpawnAttackDice(defenderSlot, spec.Kind, spec.Pip, spawnSettings);
+                if (spawned == null) {
                     remaining.Add(spec);
                 }
             }

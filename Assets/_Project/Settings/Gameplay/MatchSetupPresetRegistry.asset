@@ -37,3 +37,4 @@ MonoBehaviour:
   defaultPlayer2Catalog: {fileID: 11400000, guid: b8c9d0e1f2a34990aabbccddeeff4402, type: 2}
   defaultPlayer2Attack: {fileID: 11400000, guid: d4e5f6a7b8c94990aabbccddeeff3202, type: 2}
   defaultPlayer2NaturalSend: {fileID: 11400000, guid: a7b8c9d0e1f24990aabbccddeeff4503, type: 2}
+  defaultJumboDiceSettings: {fileID: 11400000, guid: a9c1e2f3b4d5467788aabbccddeeff01, type: 2}

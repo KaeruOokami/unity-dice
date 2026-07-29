@@ -38,6 +38,8 @@ namespace DiceGame.Config
         [SerializeField] float boundsPadding = 1.15f;
         [Min(0f)]
         [SerializeField] float previewLightIntensity = 1.2f;
+        [Min(1)]
+        [SerializeField] int iconPrewarmPerFrame = 2;
         [SerializeField] string previewLayerName = "DiceIconPreview";
         [SerializeField] AttackQueuePanelLayout player1PanelLayout = new(
             new Vector2(0.02f, 0.98f),
@@ -55,6 +57,7 @@ namespace DiceGame.Config
         public float RowSpacing => rowSpacing;
         public float BoundsPadding => boundsPadding;
         public float PreviewLightIntensity => previewLightIntensity;
+        public int IconPrewarmPerFrame => Mathf.Max(1, iconPrewarmPerFrame);
         public string PreviewLayerName => previewLayerName;
         public AttackQueuePanelLayout Player1PanelLayout => player1PanelLayout;
         public AttackQueuePanelLayout Player2PanelLayout => player2PanelLayout;

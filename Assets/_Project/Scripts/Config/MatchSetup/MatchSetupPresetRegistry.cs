@@ -23,6 +23,7 @@ namespace DiceGame.Config
         [SerializeField] DiceCatalog defaultPlayer2Catalog;
         [SerializeField] PlayerAttackSettings defaultPlayer2Attack;
         [SerializeField] PlayerNaturalSendSettings defaultPlayer2NaturalSend;
+        [SerializeField] JumboDiceSettings defaultJumboDiceSettings;
 
         public DiceSpawnSettings[] SpawnPresets => spawnPresets;
         public DiceCatalog[] CatalogPresets => catalogPresets;
@@ -39,6 +40,7 @@ namespace DiceGame.Config
                 GameMode = mode,
                 SharedSpawn = DiceSpawnSettingsData.FromTemplate(defaultSharedSpawn),
                 SharedCatalog = DiceCatalogData.FromTemplate(defaultSharedCatalog),
+                Jumbo = JumboDiceSettingsData.FromTemplate(defaultJumboDiceSettings),
                 Player1 = CreateDefaultPlayerSetup(
                     GetControlDefaults(PlayerSlot.Player1),
                     defaultPlayer1Spawn,

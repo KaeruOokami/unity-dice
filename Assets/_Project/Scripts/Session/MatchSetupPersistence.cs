@@ -8,7 +8,7 @@ namespace DiceGame.Session
 {
     public static class MatchSetupPersistence
     {
-        public const int CurrentVersion = 1;
+        public const int CurrentVersion = 2;
 
         public static MatchSetupSnapshot LoadOrCreate(GameMode mode, MatchSetupPresetRegistry registry) {
             if (registry == null) {
@@ -181,9 +181,21 @@ namespace DiceGame.Session
                     return false;
                 }
 
+                // Backward compatibility:
+                // Version 1 did not have JumboDiceSettings persisted.
+                // For v1 files, we migrate by filling missing Jumbo with defaults.
                 if (file.Version != CurrentVersion) {
-                    errorMessage = $"Unsupported persist version {file.Version}.";
-                    return false;
+                    if (file.Version == 1) {
+                        // Ensure the new field exists (JsonUtility may leave it null when missing).
+                        if (file.Jumbo == null) {
+                            file.Jumbo = new JumboDiceSettingsPersistDto();
+                        }
+
+                        file.Version = CurrentVersion;
+                    } else {
+                        errorMessage = $"Unsupported persist version {file.Version}.";
+                        return false;
+                    }
                 }
 
                 var payload = MatchSetupPersistMapper.ToNetworkPayload(file);

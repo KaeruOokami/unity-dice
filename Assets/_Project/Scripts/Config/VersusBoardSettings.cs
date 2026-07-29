@@ -179,6 +179,11 @@ namespace DiceGame.Config
                 return false;
             }
 
+            if (jumboDiceSettings != null && !jumboDiceSettings.TryValidate(out errorMessage))
+            {
+                return false;
+            }
+
             errorMessage = null;
             return true;
         }

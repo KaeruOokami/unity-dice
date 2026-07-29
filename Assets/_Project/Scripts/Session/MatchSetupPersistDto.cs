@@ -1,4 +1,5 @@
 using System;
+using DiceGame.Config;
 using DiceGame.Session.Network;
 
 namespace DiceGame.Session
@@ -6,10 +7,11 @@ namespace DiceGame.Session
     [Serializable]
     public sealed class MatchSetupPersistFile
     {
-        public int Version = 1;
+        public int Version = 2;
         public byte GameMode;
         public DiceSpawnSettingsPersistDto SharedSpawn = new();
         public DiceCatalogPersistDto SharedCatalog = new();
+        public JumboDiceSettingsPersistDto Jumbo = new();
         public PlayerSlotPersistDto Player1 = new();
         public PlayerSlotPersistDto Player2 = new();
     }
@@ -99,6 +101,15 @@ namespace DiceGame.Session
         public NaturalSendKindLimitPersistDto[] SendableKinds = Array.Empty<NaturalSendKindLimitPersistDto>();
     }
 
+    [Serializable]
+    public sealed class JumboDiceSettingsPersistDto
+    {
+        public bool Enabled;
+        public int SequenceStartFace;
+        public int SequenceEndFace;
+        public int MaxPerBoard;
+    }
+
     public static class MatchSetupPersistMapper
     {
         public static MatchSetupPersistFile FromNetworkPayload(MatchSetupNetworkPayload payload) {
@@ -107,6 +118,7 @@ namespace DiceGame.Session
                 GameMode = payload.GameMode,
                 SharedSpawn = FromSpawn(payload.SharedSpawn),
                 SharedCatalog = FromCatalog(payload.SharedCatalog),
+                Jumbo = FromJumbo(payload.Jumbo),
                 Player1 = FromPlayer(
                     payload.Player1IsAi,
                     payload.Player1DeviceKind,
@@ -133,6 +145,7 @@ namespace DiceGame.Session
                 GameMode = file.GameMode,
                 SharedSpawn = ToSpawn(file.SharedSpawn),
                 SharedCatalog = ToCatalog(file.SharedCatalog),
+                Jumbo = ToJumbo(file.Jumbo),
                 Player1IsAi = player1.IsAi ? (byte)1 : (byte)0,
                 Player1DeviceKind = player1.DeviceKind,
                 Player1GamepadIndex = (byte)player1.GamepadIndex,
@@ -333,6 +346,35 @@ namespace DiceGame.Session
                 Enabled = dto.Enabled,
                 DiceCountPerVolley = dto.DiceCountPerVolley,
                 SendableKinds = kinds
+            };
+        }
+
+        static JumboDiceSettingsPersistDto FromJumbo(JumboDiceSettingsNetworkPayload payload) {
+            return new JumboDiceSettingsPersistDto {
+                Enabled = payload.Enabled,
+                SequenceStartFace = payload.SequenceStartFace,
+                SequenceEndFace = payload.SequenceEndFace,
+                MaxPerBoard = payload.MaxPerBoard
+            };
+        }
+
+        static JumboDiceSettingsNetworkPayload ToJumbo(JumboDiceSettingsPersistDto dto) {
+            dto ??= new JumboDiceSettingsPersistDto();
+            var defaults = JumboDiceSettingsData.Default();
+            if (dto.MaxPerBoard <= 0) {
+                return new JumboDiceSettingsNetworkPayload {
+                    Enabled = defaults.Enabled,
+                    SequenceStartFace = defaults.SequenceStartFace,
+                    SequenceEndFace = defaults.SequenceEndFace,
+                    MaxPerBoard = defaults.MaxPerBoard
+                };
+            }
+
+            return new JumboDiceSettingsNetworkPayload {
+                Enabled = dto.Enabled,
+                SequenceStartFace = dto.SequenceStartFace,
+                SequenceEndFace = dto.SequenceEndFace,
+                MaxPerBoard = dto.MaxPerBoard
             };
         }
     }

@@ -1,3 +1,4 @@
+using System.Collections;
 using System.Collections.Generic;
 using DiceGame.Config;
 using DiceGame.Versus.Core;
@@ -14,6 +15,10 @@ namespace DiceGame.View
         DiceIconGenerator iconGenerator;
         RectTransform player1Panel;
         RectTransform player2Panel;
+        Coroutine prewarmRoutine;
+        int prewarmGeneration;
+
+        public bool AreIconsReady { get; private set; }
 
         public void Configure(
             DiceCatalog targetPlayer1Catalog,
@@ -28,12 +33,19 @@ namespace DiceGame.View
             EnsureUi();
             iconGenerator?.Dispose();
             iconGenerator = new DiceIconGenerator(transform, uiSettings);
+            AreIconsReady = false;
+            prewarmGeneration++;
+            if (prewarmRoutine != null) {
+                StopCoroutine(prewarmRoutine);
+            }
+
+            prewarmRoutine = StartCoroutine(PrewarmIconsRoutine(prewarmGeneration));
         }
 
         public void RenderAll(
             IReadOnlyList<AttackVolley> player1Volleys,
             IReadOnlyList<AttackVolley> player2Volleys) {
-            if (iconGenerator == null) {
+            if (iconGenerator == null || !AreIconsReady) {
                 return;
             }
 
@@ -42,8 +54,79 @@ namespace DiceGame.View
         }
 
         void OnDestroy() {
+            if (prewarmRoutine != null) {
+                StopCoroutine(prewarmRoutine);
+                prewarmRoutine = null;
+            }
+
             iconGenerator?.Dispose();
             iconGenerator = null;
+        }
+
+        IEnumerator PrewarmIconsRoutine(int generation) {
+            var meshes = CollectUniqueMeshPrefabs(player1Catalog, player2Catalog);
+            var perFrame = uiSettings.IconPrewarmPerFrame;
+            var warmedThisFrame = 0;
+
+            for (var meshIndex = 0; meshIndex < meshes.Count; meshIndex++) {
+                var meshPrefab = meshes[meshIndex];
+                for (var pip = DiceIconGenerator.MinPip; pip <= DiceIconGenerator.MaxPip; pip++) {
+                    if (generation != prewarmGeneration || iconGenerator == null) {
+                        yield break;
+                    }
+
+                    if (!iconGenerator.WarmSprite(meshPrefab, pip)) {
+                        Debug.LogError(
+                            $"AttackQueueView: Failed to warm icon mesh='{meshPrefab.name}' pip={pip}.");
+                    }
+
+                    warmedThisFrame++;
+                    if (warmedThisFrame < perFrame) {
+                        continue;
+                    }
+
+                    warmedThisFrame = 0;
+                    yield return null;
+                }
+            }
+
+            if (generation != prewarmGeneration) {
+                yield break;
+            }
+
+            AreIconsReady = true;
+            prewarmRoutine = null;
+        }
+
+        static List<GameObject> CollectUniqueMeshPrefabs(DiceCatalog catalogA, DiceCatalog catalogB) {
+            var meshes = new List<GameObject>();
+            var seenIds = new HashSet<int>();
+            AppendCatalogMeshes(catalogA, meshes, seenIds);
+            AppendCatalogMeshes(catalogB, meshes, seenIds);
+            return meshes;
+        }
+
+        static void AppendCatalogMeshes(
+            DiceCatalog catalog,
+            List<GameObject> meshes,
+            HashSet<int> seenIds) {
+            if (catalog?.Entries == null) {
+                return;
+            }
+
+            for (var i = 0; i < catalog.Entries.Length; i++) {
+                var meshPrefab = catalog.Entries[i].MeshPrefab;
+                if (meshPrefab == null) {
+                    continue;
+                }
+
+                var id = meshPrefab.GetInstanceID();
+                if (!seenIds.Add(id)) {
+                    continue;
+                }
+
+                meshes.Add(meshPrefab);
+            }
         }
 
         void EnsureUi() {
@@ -94,10 +177,17 @@ namespace DiceGame.View
                 for (var row = 0; row < volley.Count; row++) {
                     var spec = volley.Dice[row];
                     if (!catalog.TryGetMeshPrefab(spec.Kind, out var meshPrefab) || meshPrefab == null) {
+                        Debug.LogWarning(
+                            $"[QueueView] defender={defenderSlot} volley={volleyIndex} row={row} " +
+                            $"meshMissing kind={spec.Kind}");
                         continue;
                     }
 
-                    if (!iconGenerator.TryGetSprite(meshPrefab, spec.Pip, out var sprite) || sprite == null) {
+                    if (!iconGenerator.TryGetCachedSprite(meshPrefab, spec.Pip, out var sprite)
+                        || sprite == null) {
+                        Debug.LogError(
+                            $"[QueueView] defender={defenderSlot} volley={volleyIndex} row={row} " +
+                            $"cacheMiss kind={spec.Kind} pip={spec.Pip} mesh='{meshPrefab.name}'.");
                         continue;
                     }
 

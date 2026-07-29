@@ -174,6 +174,21 @@ namespace DiceGame.Session.Network
         }
     }
 
+    public struct JumboDiceSettingsNetworkPayload : INetworkSerializable
+    {
+        public bool Enabled;
+        public int SequenceStartFace;
+        public int SequenceEndFace;
+        public int MaxPerBoard;
+
+        public void NetworkSerialize<T>(BufferSerializer<T> serializer) where T : IReaderWriter {
+            serializer.SerializeValue(ref Enabled);
+            serializer.SerializeValue(ref SequenceStartFace);
+            serializer.SerializeValue(ref SequenceEndFace);
+            serializer.SerializeValue(ref MaxPerBoard);
+        }
+    }
+
     public struct MatchSetupNetworkPayload : INetworkSerializable
     {
         public const byte InvalidPresetIndex = byte.MaxValue;
@@ -181,6 +196,7 @@ namespace DiceGame.Session.Network
         public byte GameMode;
         public DiceSpawnSettingsNetworkPayload SharedSpawn;
         public DiceCatalogNetworkPayload SharedCatalog;
+        public JumboDiceSettingsNetworkPayload Jumbo;
         public byte Player1IsAi;
         public byte Player1DeviceKind;
         public byte Player1GamepadIndex;
@@ -205,6 +221,7 @@ namespace DiceGame.Session.Network
             serializer.SerializeValue(ref GameMode);
             SharedSpawn.NetworkSerialize(serializer);
             SharedCatalog.NetworkSerialize(serializer);
+            Jumbo.NetworkSerialize(serializer);
             serializer.SerializeValue(ref Player1IsAi);
             serializer.SerializeValue(ref Player1DeviceKind);
             serializer.SerializeValue(ref Player1GamepadIndex);

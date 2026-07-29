@@ -13,6 +13,7 @@ namespace DiceGame.Config
                 GameMode = (byte)snapshot.GameMode,
                 SharedSpawn = ToSpawnPayload(snapshot.SharedSpawn),
                 SharedCatalog = ToCatalogPayload(snapshot.SharedCatalog),
+                Jumbo = ToJumboPayload(snapshot.Jumbo),
                 Player1IsAi = snapshot.Player1.IsAi ? (byte)1 : (byte)0,
                 Player1DeviceKind = (byte)snapshot.Player1.InputConfig.DeviceKind,
                 Player1GamepadIndex = (byte)snapshot.Player1.InputConfig.GamepadIndex,
@@ -52,6 +53,7 @@ namespace DiceGame.Config
                 GameMode = mode,
                 SharedSpawn = FromSpawnPayload(payload.SharedSpawn),
                 SharedCatalog = FromCatalogPayload(payload.SharedCatalog, defaults.SharedCatalog),
+                Jumbo = ResolveJumbo(payload.Jumbo, defaults.Jumbo),
                 Player1 = BuildPlayerSetup(
                     payload.Player1IsAi,
                     payload.Player1DeviceKind,
@@ -263,6 +265,34 @@ namespace DiceGame.Config
                 DiceCountPerVolley = payload.DiceCountPerVolley,
                 SendableKinds = kinds
             };
+        }
+
+        static JumboDiceSettingsNetworkPayload ToJumboPayload(JumboDiceSettingsData data) {
+            return new JumboDiceSettingsNetworkPayload {
+                Enabled = data.Enabled,
+                SequenceStartFace = data.SequenceStartFace,
+                SequenceEndFace = data.SequenceEndFace,
+                MaxPerBoard = data.MaxPerBoard
+            };
+        }
+
+        static JumboDiceSettingsData FromJumboPayload(JumboDiceSettingsNetworkPayload payload) {
+            return new JumboDiceSettingsData {
+                Enabled = payload.Enabled,
+                SequenceStartFace = payload.SequenceStartFace,
+                SequenceEndFace = payload.SequenceEndFace,
+                MaxPerBoard = payload.MaxPerBoard
+            };
+        }
+
+        static JumboDiceSettingsData ResolveJumbo(
+            JumboDiceSettingsNetworkPayload payload,
+            JumboDiceSettingsData defaults) {
+            if (payload.MaxPerBoard <= 0) {
+                return defaults.MaxPerBoard > 0 ? defaults : JumboDiceSettingsData.Default();
+            }
+
+            return FromJumboPayload(payload);
         }
 
         static UnityEngine.GameObject FindMesh(DiceCatalogData meshSource, DiceKind kind) {

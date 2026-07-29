@@ -15,3 +15,4 @@ MonoBehaviour:
   enabled: 1
   sequenceStartFace: 2
   sequenceEndFace: 6
+  maxPerBoard: 2

@@ -11,13 +11,26 @@ namespace DiceGame.Versus.Core
             PlayerNaturalSendSettings settings,
             System.Random random,
             out AttackVolley volley) {
+            return TryBuild(settings, random, int.MaxValue, out volley);
+        }
+
+        public static bool TryBuild(
+            PlayerNaturalSendSettings settings,
+            System.Random random,
+            int jumboSendableRemaining,
+            out AttackVolley volley) {
             volley = null;
             if (settings == null || random == null || !settings.Enabled) {
                 return false;
             }
 
             var diceCount = settings.DiceCountPerVolley;
-            if (!NaturalSendKindBreakdown.TryBuild(settings, diceCount, random, out var breakdown)) {
+            if (!NaturalSendKindBreakdown.TryBuild(
+                    settings,
+                    diceCount,
+                    random,
+                    jumboSendableRemaining,
+                    out var breakdown)) {
                 return false;
             }
 

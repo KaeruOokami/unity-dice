@@ -1,6 +1,7 @@
 using System.Collections.Generic;
 using DiceGame.Config;
 using DiceGame.Core;
+using DiceGame.Gameplay;
 using DiceGame.Grid;
 using UnityEngine;
 
@@ -215,11 +216,14 @@ namespace DiceGame.Placement
         }
 
         /// <summary>
-        /// Picks a random 2x2 anchor in the player region that stays on floor cells
-        /// and does not overlap any blocked player cells.
+        /// Picks a random 2x2 anchor in the player region that stays on floor cells,
+        /// fits entirely inside the owner region, and does not overlap blocked player cells.
+        /// Only pending spawns and jumbo occupants (including mid-erasure) block a cell; other dice are
+        /// treated as free space and cleared on landing.
         /// </summary>
         public static bool TryPickJumboSpawnAnchor(
             Board board,
+            DiceRegistry registry,
             PlayerSlot targetSlot,
             IReadOnlyList<Vector2Int> blockedCells,
             System.Random random,
@@ -236,7 +240,13 @@ namespace DiceGame.Placement
             for (var x = minCell.x; x <= maxCell.x - JumboFootprint.Size + 1; x++) {
                 for (var y = minCell.y; y <= maxCell.y - JumboFootprint.Size + 1; y++) {
                     var candidate = new Vector2Int(x, y);
-                    if (!IsValidJumboAnchor(board, layout, targetSlot, candidate, blockedCells)) {
+                    if (!IsValidJumboAnchor(
+                            board,
+                            registry,
+                            layout,
+                            targetSlot,
+                            candidate,
+                            blockedCells)) {
                         continue;
                     }
 
@@ -254,6 +264,7 @@ namespace DiceGame.Placement
 
         static bool IsValidJumboAnchor(
             Board board,
+            DiceRegistry registry,
             VersusArenaLayout layout,
             PlayerSlot targetSlot,
             Vector2Int anchor,
@@ -263,6 +274,10 @@ namespace DiceGame.Placement
                     var cell = new Vector2Int(anchor.x + dx, anchor.y + dy);
                     if (!layout.IsInsidePlayerRegion(targetSlot, cell)
                         || board.GetCell(cell) != CellType.Floor) {
+                        return false;
+                    }
+
+                    if (registry != null && !CanJumboSpawnOccupyCell(registry, cell)) {
                         return false;
                     }
 
@@ -279,6 +294,40 @@ namespace DiceGame.Placement
             }
 
             return true;
+        }
+
+        /// <summary>
+        /// Pending reservations always block. Solid cells block when occupied by any jumbo
+        /// (including mid-erasure); Normal/Ghost/Iron/etc. remain ignorable free space.
+        /// </summary>
+        static bool CanJumboSpawnOccupyCell(DiceRegistry registry, Vector2Int cell) {
+            if (registry.HasPendingBottomAt(cell) || registry.HasPendingTopAt(cell)) {
+                return false;
+            }
+
+            if (IsJumboOccupantAt(registry, cell)) {
+                return false;
+            }
+
+            return true;
+        }
+
+        static bool IsJumboOccupantAt(DiceRegistry registry, Vector2Int cell) {
+            if (registry.TryGetBottomAt(cell, out var bottom)
+                && IsBlockingJumboOccupant(bottom)) {
+                return true;
+            }
+
+            if (registry.TryGetTopAt(cell, out var top)
+                && IsBlockingJumboOccupant(top)) {
+                return true;
+            }
+
+            return false;
+        }
+
+        static bool IsBlockingJumboOccupant(DiceController dice) {
+            return dice != null && dice.Capabilities.HasExpandedFootprint;
         }
     }
 }

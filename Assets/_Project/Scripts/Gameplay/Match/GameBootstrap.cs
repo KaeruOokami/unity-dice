@@ -1,4 +1,5 @@
 using System;
+using System.Collections;
 using System.Collections.Generic;
 using DiceGame.Config;
 using DiceGame.Gameplay.AI.Application;
@@ -355,6 +356,7 @@ namespace DiceGame.Gameplay
                 attackController.Configure(
                     versusSettings,
                     board,
+                    registry,
                     spawnSystem,
                     erasureSystem,
                     spawnRandom,
@@ -396,10 +398,22 @@ namespace DiceGame.Gameplay
                 BindOnlineDualSim();
             }
 
-            // Dual-sim: both peers run continuous spawn from the shared match RNG path.
-            spawnSystem.StartSpawning();
-
             sessionStarted = true;
+            if (attackController != null) {
+                StartCoroutine(StartSpawningAfterIconWarmup());
+            } else {
+                spawnSystem.StartSpawning();
+            }
+        }
+
+        IEnumerator StartSpawningAfterIconWarmup() {
+            while (attackController != null && !attackController.AreIconsReady) {
+                yield return null;
+            }
+
+            if (spawnSystem != null) {
+                spawnSystem.StartSpawning();
+            }
         }
 
         System.Random ResolveMatchRandom(out int usedSeed) {
@@ -477,7 +491,8 @@ namespace DiceGame.Gameplay
                 ownershipContext,
                 spawnSystem,
                 attackController,
-                erasureSystem);
+                erasureSystem,
+                GetComponent<JumboDiceSequenceController>());
         }
 
         void DestroyLegacyOnlineSyncComponents() {

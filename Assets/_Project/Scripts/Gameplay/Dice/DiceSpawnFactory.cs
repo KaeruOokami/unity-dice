@@ -687,6 +687,16 @@ namespace DiceGame.Gameplay
             DiceKind kind,
             int pip,
             DiceSpawnSettings spawnSettings) {
+            if (kind == DiceKind.Jumbo) {
+                return SpawnJumboDice(
+                    targetSlot,
+                    pip,
+                    spawnSettings,
+                    blockedCells: null,
+                    assignOwner: true,
+                    networkReason: 2);
+            }
+
             var catalog = ResolveCatalog(targetSlot);
             if (!gameplayEnabled
                 || spawnSettings == null
@@ -753,6 +763,22 @@ namespace DiceGame.Gameplay
             int topFace,
             DiceSpawnSettings spawnSettings,
             IReadOnlyList<Vector2Int> blockedCells) {
+            return SpawnJumboDice(
+                targetSlot,
+                topFace,
+                spawnSettings,
+                blockedCells,
+                assignOwner: false,
+                networkReason: 3);
+        }
+
+        DiceController SpawnJumboDice(
+            PlayerSlot targetSlot,
+            int topFace,
+            DiceSpawnSettings spawnSettings,
+            IReadOnlyList<Vector2Int> blockedCells,
+            bool assignOwner,
+            byte networkReason) {
             var catalog = ResolveCatalog(targetSlot);
             if (!gameplayEnabled
                 || spawnSettings == null
@@ -773,11 +799,12 @@ namespace DiceGame.Gameplay
 
             if (!DiceSpawnCellPicker.TryPickJumboSpawnAnchor(
                     board,
+                    registry,
                     targetSlot,
                     blockedCells,
                     random,
                     out var anchor)) {
-                Debug.LogError($"DiceSpawnSystem: No valid 2x2 jumbo spawn for {targetSlot}.");
+                // Expected while the board has no free 2x2; callers retry when space opens.
                 return null;
             }
 
@@ -798,6 +825,11 @@ namespace DiceGame.Gameplay
             }
 
             diceController.ConfigureMatchActionContext(matchActionContext);
+            if (assignOwner && ownershipContext != null) {
+                diceController.ConfigureOwnershipContext(ownershipContext);
+                ownershipContext.SetOwner(diceController, targetSlot);
+            }
+
             var diceView = diceController.View;
             diceController.ConfigureWithSpawnAppear(
                 board,
@@ -812,7 +844,7 @@ namespace DiceGame.Gameplay
 
             erasureSystem?.EnsureDiceSubscribed(diceController);
             if (emitNetworkSpawns) {
-                NetworkSpawnEmitted?.Invoke(diceController, 3, true, true);
+                NetworkSpawnEmitted?.Invoke(diceController, networkReason, true, true);
             }
 
             return diceController;

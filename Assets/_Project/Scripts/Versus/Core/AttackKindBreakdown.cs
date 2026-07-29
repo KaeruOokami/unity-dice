@@ -1,6 +1,7 @@
 using System.Collections.Generic;
 using DiceGame.Config;
 using DiceGame.Core;
+using UnityEngine;
 
 namespace DiceGame.Versus.Core
 {
@@ -19,6 +20,16 @@ namespace DiceGame.Versus.Core
             float power,
             System.Random random,
             out List<(DiceKind kind, int count)> breakdown) {
+            return TryBuild(sendableKinds, totalCount, power, random, int.MaxValue, out breakdown);
+        }
+
+        public static bool TryBuild(
+            SendableKindLimit[] sendableKinds,
+            int totalCount,
+            float power,
+            System.Random random,
+            int jumboSendableRemaining,
+            out List<(DiceKind kind, int count)> breakdown) {
             breakdown = new List<(DiceKind, int)>();
             if (sendableKinds == null || sendableKinds.Length == 0 || totalCount <= 0 || random == null) {
                 return false;
@@ -34,12 +45,20 @@ namespace DiceGame.Versus.Core
                     continue;
                 }
 
+                var remaining = JumboSendCap.CapKindRemaining(
+                    limit.Kind,
+                    limit.MaxCountPerVolley,
+                    jumboSendableRemaining);
+                if (remaining <= 0) {
+                    continue;
+                }
+
                 slots.Add(new KindSlot {
                     Kind = limit.Kind,
-                    Remaining = limit.MaxCountPerVolley,
+                    Remaining = remaining,
                     Weight = limit.SelectionWeight
                 });
-                pickCapacity += limit.MaxCountPerVolley;
+                pickCapacity += remaining;
             }
 
             if (slots.Count == 0) {
