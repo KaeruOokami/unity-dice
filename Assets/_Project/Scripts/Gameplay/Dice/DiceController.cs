@@ -531,6 +531,27 @@ namespace DiceGame.Gameplay
             StateChanged?.Invoke(currentState);
         }
 
+        /// <summary>
+        /// Called by <see cref="DiceRegistry"/> when Bottom support leaves this die's
+        /// pending Top cell — reservation is already moved to Bottom.
+        /// </summary>
+        public void NotifyPendingSpawnRetargetedToBottom() {
+            if (!isSpawning || currentState.Tier == DiceStackTier.Bottom) {
+                return;
+            }
+
+            currentState = new DiceState(
+                currentState.GridPos,
+                currentState.Orientation,
+                DiceStackTier.Bottom,
+                currentState.Kind);
+            spawnAppearMode = DiceSpawnAppearMode.FallFromAbove;
+            diceView?.RetargetActiveSpawnLanding(currentState);
+            // Keep logicalSpawnRemaining — do not sample View Offset (lockstep). Visual may run
+            // slightly longer toward the lower ground; commit uses updated Bottom state.
+            StateChanged?.Invoke(currentState);
+        }
+
         void ConfigurePushBody() {
             var pushBody = GetComponentInChildren<DicePushBody>();
             pushBody?.Configure(board);

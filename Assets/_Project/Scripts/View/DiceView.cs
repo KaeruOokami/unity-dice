@@ -689,7 +689,8 @@ namespace DiceGame.View
         }
 
         /// <summary>
-        /// Mid-spawn: Bottom landing was claimed — continue/fall toward Top height without a visual jump.
+        /// Mid-spawn: landing tier changed (Bottom↔Top) — continue toward the new rest height
+        /// without a visual jump.
         /// </summary>
         public void RetargetActiveSpawnLanding(DiceState newState) {
             if (positionRoot == null || activeSpawnBoard == null) {

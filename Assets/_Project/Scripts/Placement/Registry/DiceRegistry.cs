@@ -224,7 +224,8 @@ namespace DiceGame.Placement
         }
 
         /// <summary>
-        /// If Bottom was taken while a Bottom spawn was still pending, commit as Top when possible.
+        /// Resolve final tier at spawn commit. Mid-flight retarget should already have aligned
+        /// pending reservation + die state; this is the last consistency check before Place.
         /// </summary>
         DiceStackTier ResolveSpawnCommitTier(Vector2Int gridPos, DiceStackTier requestedTier) {
             if (requestedTier == DiceStackTier.Bottom) {
@@ -242,7 +243,19 @@ namespace DiceGame.Placement
                 return DiceStackTier.Top;
             }
 
-            if (!HasBottomAt(gridPos) || HasTopAt(gridPos) || HasPendingTopAt(gridPos)) {
+            // Top requested but support gone — demote (mid-flight retarget should have done this).
+            if (!HasBottomAt(gridPos)) {
+                if (HasTopAt(gridPos)) {
+                    Debug.LogError(
+                        $"DiceRegistry: spawn commit Top demote blocked at ({gridPos.x},{gridPos.y}); " +
+                        "Top already occupied.");
+                    return DiceStackTier.Top;
+                }
+
+                return DiceStackTier.Bottom;
+            }
+
+            if (HasTopAt(gridPos) || HasPendingTopAt(gridPos)) {
                 Debug.LogError(
                     $"DiceRegistry: spawn commit Top unavailable at ({gridPos.x},{gridPos.y}).");
             }
@@ -882,6 +895,38 @@ namespace DiceGame.Placement
             pending.NotifyPendingSpawnRetargetedToTop();
         }
 
+        /// <summary>
+        /// When committed Bottom leaves a cell that still has a pending Top spawn,
+        /// demote that spawn to Bottom immediately (reservation + spawning die state/visual).
+        /// Skips when Bottom support remains (batched replace) or pending Bottom already exists
+        /// (e.g. jumbo registers both tiers).
+        /// </summary>
+        void TryRetargetPendingTopSpawnWhenBottomVacated(Vector2Int gridPos, DiceController excluding) {
+            if (!TryGetPendingTopAt(gridPos, out var pending) || pending == null || pending == excluding) {
+                return;
+            }
+
+            if (HasBottomAt(gridPos) || HasPendingBottomAt(gridPos)) {
+                return;
+            }
+
+            if (HasTopAt(gridPos)) {
+                Debug.LogError(
+                    $"DiceRegistry: cannot retarget pending Top spawn at ({gridPos.x},{gridPos.y}); " +
+                    "committed Top already occupied.");
+                return;
+            }
+
+            if (!pendingSpawns.TryGetValue(gridPos, out var pendingStack)) {
+                return;
+            }
+
+            pendingStack.Top = null;
+            pendingStack.Bottom = pending;
+            pendingSpawns[gridPos] = pendingStack;
+            pending.NotifyPendingSpawnRetargetedToBottom();
+        }
+
         void ClearDiceAt(
             Vector2Int gridPos,
             DiceController dice,
@@ -910,8 +955,11 @@ namespace DiceGame.Placement
                 byGrid[gridPos] = stack;
             }
 
-            if (notifySupportLoss && removedBottom != null) {
-                NotifyTopAfterBottomRemoved(gridPos, removedBottom, topAfterBottomRemoved);
+            if (removedBottom != null) {
+                TryRetargetPendingTopSpawnWhenBottomVacated(gridPos, excluding: removedBottom);
+                if (notifySupportLoss) {
+                    NotifyTopAfterBottomRemoved(gridPos, removedBottom, topAfterBottomRemoved);
+                }
             }
         }
 

@@ -191,7 +191,7 @@ namespace DiceGame.Core
 
         /// <summary>
         /// Mutable spawn-fall target so landing height can change mid-animation
-        /// (e.g. pending Bottom retargeted to Top after an interrupt).
+        /// (e.g. pending Bottom↔Top retarget when support occupancy changes).
         /// </summary>
         public sealed class SpawnFallSession
         {

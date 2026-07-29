@@ -40,8 +40,8 @@
      <Compile Include="Assets\_Project\Scripts\Editor\DiceEntityPrefabCreator.cs" />
      <Compile Include="Assets\_Project\Scripts\Editor\OnlineSessionSetupMenu.cs" />
      <Compile Include="Assets\_Project\Scripts\Editor\SelectScene.cs" />
-     <Compile Include="Assets\_Project\Tests\Editor\HeightTransferActionSelectorTests.cs" />
      <Compile Include="Assets\_Project\Tests\Editor\MoveActionSelectorTests.cs" />
+     <Compile Include="Assets\_Project\Tests\Editor\HeightTransferActionSelectorTests.cs" />
     <Reference Include="UnityEngine">
         <HintPath>D:\Program Files\Unity\Hub\Editor\2021.3.10f1\Editor\Data\Managed\UnityEngine\UnityEngine.dll</HintPath>
     </Reference>
