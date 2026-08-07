@@ -1,4 +1,6 @@
 using System;
+using DiceGame.Config;
+using TMPro;
 using UnityEngine;
 using UnityEngine.EventSystems;
 using UnityEngine.UI;
@@ -15,18 +17,26 @@ namespace DiceGame.Gameplay
 
     public sealed class PauseMenuUi : MonoBehaviour
     {
+        UiFontSettings uiFontSettings;
+
         Canvas canvas;
         GameObject panel;
         Button resumeButton;
         Button titleButton;
-        Text subtitleText;
+        TextMeshProUGUI subtitleText;
         PauseMenuRole currentRole = PauseMenuRole.Host;
         bool canOperatePause = true;
 
         public event Action ResumeClicked;
         public event Action ReturnToTitleClicked;
 
-        public void Configure() {
+        public void Configure(UiFontSettings fontSettings) {
+            if (fontSettings == null || !fontSettings.TryGetPrimaryFont(out _)) {
+                Debug.LogError("[PauseMenuUi] UiFontSettings is not assigned or primary font is missing.");
+                return;
+            }
+
+            uiFontSettings = fontSettings;
             EnsureEventSystem();
             BuildUi();
             Hide();
@@ -111,7 +121,7 @@ namespace DiceGame.Gameplay
         }
 
         static void EnsureEventSystem() {
-            if (FindObjectOfType<EventSystem>() != null) {
+            if (FindFirstObjectByType<EventSystem>() != null) {
                 return;
             }
 
@@ -129,7 +139,7 @@ namespace DiceGame.Gameplay
             return panelObject;
         }
 
-        static Text CreateText(
+        TextMeshProUGUI CreateText(
             Transform parent,
             string name,
             string content,
@@ -139,18 +149,19 @@ namespace DiceGame.Gameplay
             go.transform.SetParent(parent, false);
             var rect = go.AddComponent<RectTransform>();
             StretchFull(rect);
-            var text = go.AddComponent<Text>();
+            var text = go.AddComponent<TextMeshProUGUI>();
+            text.font = uiFontSettings.PrimaryFont;
             text.text = content;
-            text.font = Resources.GetBuiltinResource<Font>("Arial.ttf");
             text.fontSize = fontSize;
-            text.alignment = anchor;
+            text.alignment = ToTextAlignment(anchor);
             text.color = Color.white;
-            text.horizontalOverflow = HorizontalWrapMode.Wrap;
-            text.verticalOverflow = VerticalWrapMode.Overflow;
+            text.enableWordWrapping = true;
+            text.overflowMode = TextOverflowModes.Overflow;
+            text.raycastTarget = false;
             return text;
         }
 
-        static Button CreateButton(
+        Button CreateButton(
             Transform parent,
             string name,
             string label,
@@ -185,6 +196,21 @@ namespace DiceGame.Gameplay
             rect.pivot = new Vector2(0.5f, 0.5f);
             rect.sizeDelta = size;
             rect.anchoredPosition = Vector2.zero;
+        }
+
+        static TextAlignmentOptions ToTextAlignment(TextAnchor anchor) {
+            return anchor switch {
+                TextAnchor.UpperLeft => TextAlignmentOptions.TopLeft,
+                TextAnchor.UpperCenter => TextAlignmentOptions.Top,
+                TextAnchor.UpperRight => TextAlignmentOptions.TopRight,
+                TextAnchor.MiddleLeft => TextAlignmentOptions.MidlineLeft,
+                TextAnchor.MiddleCenter => TextAlignmentOptions.Center,
+                TextAnchor.MiddleRight => TextAlignmentOptions.MidlineRight,
+                TextAnchor.LowerLeft => TextAlignmentOptions.BottomLeft,
+                TextAnchor.LowerCenter => TextAlignmentOptions.Bottom,
+                TextAnchor.LowerRight => TextAlignmentOptions.BottomRight,
+                _ => TextAlignmentOptions.MidlineLeft
+            };
         }
     }
 }

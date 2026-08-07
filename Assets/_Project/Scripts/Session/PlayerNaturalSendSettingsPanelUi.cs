@@ -26,17 +26,17 @@ namespace DiceGame.Session
         }
 
         public static Bindings Build(Transform parent, string sectionLabel, PlayerNaturalSendSettingsData template) {
-            var section = LobbyUiFactory.CreateVerticalSection(parent, sectionLabel);
-            LobbyUiFactory.CreateLayoutLabel(section, sectionLabel, 20, 28f);
+            var section = SessionUiFactory.CreateVerticalSection(parent, sectionLabel);
+            SessionUiFactory.CreateLayoutLabel(section, sectionLabel, 20, 28f);
 
             var bindings = new Bindings {
                 SectionRoot = section,
-                Enabled = LobbyUiFactory.CreateLabeledToggle(section, "Natural Send Enabled"),
-                DiceCountPerVolley = LobbyUiFactory.CreateLabeledIntInput(section, "Dice Count / Volley"),
-                ListRoot = LobbyUiFactory.CreateVerticalSection(section, "SendableKinds")
+                Enabled = SessionUiFactory.CreateLabeledToggle(section, "Natural Send Enabled"),
+                DiceCountPerVolley = SessionUiFactory.CreateLabeledIntInput(section, "Dice Count / Volley"),
+                ListRoot = SessionUiFactory.CreateVerticalSection(section, "SendableKinds")
             };
 
-            LobbyUiFactory.CreateLayoutButton(section, "AddKindButton", "Add Kind", 36f, () => {
+            SessionUiFactory.CreateLayoutButton(section, "AddKindButton", "Add Kind", 36f, () => {
                 AddKind(bindings);
             });
 
@@ -112,17 +112,17 @@ namespace DiceGame.Session
         }
 
         static void RebuildKindRows(Bindings bindings, List<NaturalSendKindLimitData> kinds) {
-            LobbyUiFactory.ClearChildren(bindings.ListRoot);
+            SessionUiFactory.ClearChildren(bindings.ListRoot);
             bindings.KindRows.Clear();
 
-            var kindLabels = LobbyUiFactory.GetDiceKindOptionLabels();
+            var kindLabels = SessionUiFactory.GetDiceKindOptionLabels();
             for (var i = 0; i < kinds.Count; i++) {
                 var index = i;
-                var kindSection = LobbyUiFactory.CreateVerticalSection(bindings.ListRoot, $"Kind_{i}");
-                LobbyUiFactory.CreateLayoutLabel(kindSection, $"Kind {i + 1}", 18, 24f);
+                var kindSection = SessionUiFactory.CreateVerticalSection(bindings.ListRoot, $"Kind_{i}");
+                SessionUiFactory.CreateLayoutLabel(kindSection, $"Kind {i + 1}", 18, 24f);
 
-                LobbyUiFactory.CreateLayoutLabel(kindSection, "Kind", 18, 24f);
-                var kindDropdown = LobbyUiFactory.CreateLayoutDropdown(
+                SessionUiFactory.CreateLayoutLabel(kindSection, "Kind", 18, 24f);
+                var kindDropdown = SessionUiFactory.CreateLayoutDropdown(
                     kindSection,
                     "KindDropdown",
                     kindLabels,
@@ -130,12 +130,12 @@ namespace DiceGame.Session
                 kindDropdown.value = (int)kinds[i].Kind;
                 kindDropdown.RefreshShownValue();
 
-                var maxField = LobbyUiFactory.CreateLabeledIntInput(kindSection, "Max / Volley");
+                var maxField = SessionUiFactory.CreateLabeledIntInput(kindSection, "Max / Volley");
                 SetInputText(maxField, kinds[i].MaxCountPerVolley.ToString());
-                var weightField = LobbyUiFactory.CreateLabeledFloatInput(kindSection, "Weight");
+                var weightField = SessionUiFactory.CreateLabeledFloatInput(kindSection, "Weight");
                 SetInputText(weightField, kinds[i].SelectionWeight.ToString("0.###"));
 
-                LobbyUiFactory.CreateLayoutButton(kindSection, "RemoveKindButton", "Remove Kind", 36f, () => {
+                SessionUiFactory.CreateLayoutButton(kindSection, "RemoveKindButton", "Remove Kind", 36f, () => {
                     RemoveKind(bindings, index);
                 });
 
@@ -146,9 +146,9 @@ namespace DiceGame.Session
                 });
             }
 
-            LobbyUiFactory.ForceRebuildLayout(bindings.SectionRoot);
+            SessionUiFactory.ForceRebuildLayout(bindings.SectionRoot);
             if (bindings.SectionRoot.parent is RectTransform parentRect) {
-                LobbyUiFactory.ForceRebuildLayout(parentRect);
+                SessionUiFactory.ForceRebuildLayout(parentRect);
             }
         }
 

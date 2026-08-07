@@ -44,7 +44,7 @@ namespace DiceGame.Session.Network
         uint lastAppliedLocalCorrectionSequence;
         readonly List<GameCharacterController> characters = new();
         readonly InputHistoryEntry[] inputHistory =
-            new InputHistoryEntry[OnlineSessionConstants.CharacterRollbackHistorySize];
+            new InputHistoryEntry[SessionConstants.CharacterRollbackHistorySize];
         int inputHistoryCount;
         int inputHistoryStart;
 
@@ -199,7 +199,7 @@ namespace DiceGame.Session.Network
                 localInputSequence);
             PushInputHistory(historyPayload, delta);
 
-            var shouldSend = inputTimer >= OnlineSessionConstants.InputSendIntervalSeconds
+            var shouldSend = inputTimer >= SessionConstants.InputSendIntervalSeconds
                 || lift
                 || jump
                 || hasDirection
@@ -232,7 +232,7 @@ namespace DiceGame.Session.Network
             }
 
             characterStateTimer += Time.unscaledDeltaTime;
-            if (characterStateTimer < OnlineSessionConstants.CharacterStateSendIntervalSeconds) {
+            if (characterStateTimer < SessionConstants.CharacterStateSendIntervalSeconds) {
                 return;
             }
 
@@ -345,7 +345,7 @@ namespace DiceGame.Session.Network
                 return;
             }
 
-            var stepDt = OnlineSessionConstants.InputSendIntervalSeconds;
+            var stepDt = SessionConstants.InputSendIntervalSeconds;
             for (var i = 0; i < inputHistoryCount; i++) {
                 var entry = inputHistory[(inputHistoryStart + i) % inputHistory.Length];
                 if (entry.Sequence <= payload.Sequence) {

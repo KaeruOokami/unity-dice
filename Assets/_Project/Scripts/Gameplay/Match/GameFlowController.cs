@@ -35,7 +35,7 @@ namespace DiceGame.Gameplay
         int activeRequiredPlayerCount;
         GameFlowInputReader inputReader;
         PauseMenuUi pauseMenuUi;
-        OnlineSessionController sessionController;
+        SessionController sessionController;
         float playingTimeScale;
         bool isConfigured;
         bool ownsTimeScale;
@@ -78,7 +78,7 @@ namespace DiceGame.Gameplay
             activeGameMode = resolvedSetup?.GameMode ?? targetSessionSettings.GameMode;
             activeRequiredPlayerCount = resolvedSetup?.RequiredPlayerCount ?? targetSessionSettings.RequiredPlayerCount;
             playingTimeScale = Time.timeScale;
-            sessionController = FindObjectOfType<OnlineSessionController>();
+            sessionController = FindObjectOfType<SessionController>();
 
             inputReader = GetComponent<GameFlowInputReader>();
             if (inputReader == null)
@@ -94,7 +94,7 @@ namespace DiceGame.Gameplay
                 pauseMenuUi = gameObject.AddComponent<PauseMenuUi>();
             }
 
-            pauseMenuUi.Configure();
+            pauseMenuUi.Configure(ResolveUiFontSettings());
             pauseMenuUi.ResumeClicked -= OnPauseMenuResumeClicked;
             pauseMenuUi.ReturnToTitleClicked -= OnPauseMenuReturnToTitleClicked;
             pauseMenuUi.ResumeClicked += OnPauseMenuResumeClicked;
@@ -121,6 +121,17 @@ namespace DiceGame.Gameplay
             {
                 Time.timeScale = playingTimeScale;
             }
+        }
+
+        static UiFontSettings ResolveUiFontSettings() {
+            var session = FindFirstObjectByType<SessionController>();
+            if (session == null || session.UiFontSettings == null) {
+                Debug.LogError(
+                    "GameFlowController: SessionController.UiFontSettings is not assigned.");
+                return null;
+            }
+
+            return session.UiFontSettings;
         }
 
         void Update()
@@ -234,7 +245,7 @@ namespace DiceGame.Gameplay
         {
             if (IsOnlineClient())
             {
-                sessionController.Messenger?.SendFlowRequestToServer(OnlineSessionConstants.FlowPause);
+                sessionController.Messenger?.SendFlowRequestToServer(SessionConstants.FlowPause);
                 return;
             }
 
@@ -245,7 +256,7 @@ namespace DiceGame.Gameplay
         {
             if (IsOnlineClient())
             {
-                sessionController.Messenger?.SendFlowRequestToServer(OnlineSessionConstants.FlowResume);
+                sessionController.Messenger?.SendFlowRequestToServer(SessionConstants.FlowResume);
                 return;
             }
 
@@ -266,7 +277,7 @@ namespace DiceGame.Gameplay
         {
             if (IsOnlineClient())
             {
-                sessionController.Messenger?.SendFlowRequestToServer(OnlineSessionConstants.FlowReturnToTitle);
+                sessionController.Messenger?.SendFlowRequestToServer(SessionConstants.FlowReturnToTitle);
                 return;
             }
 
@@ -291,7 +302,7 @@ namespace DiceGame.Gameplay
             if (broadcast && !applyingRemoteFlow)
             {
                 sessionController?.Messenger?.BroadcastFlowCommand(
-                    OnlineSessionConstants.FlowPause,
+                    SessionConstants.FlowPause,
                     pausedByHost ? 1 : 0);
             }
 
@@ -309,7 +320,7 @@ namespace DiceGame.Gameplay
 
             if (broadcast && !applyingRemoteFlow)
             {
-                sessionController?.Messenger?.BroadcastFlowCommand(OnlineSessionConstants.FlowResume);
+                sessionController?.Messenger?.BroadcastFlowCommand(SessionConstants.FlowResume);
             }
 
             pauseMenuUi?.Hide();
@@ -339,19 +350,19 @@ namespace DiceGame.Gameplay
             if (broadcast && !applyingRemoteFlow)
             {
                 sessionController?.Messenger?.BroadcastFlowCommand(
-                    OnlineSessionConstants.FlowResetMatch,
+                    SessionConstants.FlowResetMatch,
                     matchSeed);
             }
 
             if (matchSeed != 0)
             {
-                OnlineSessionState.Instance?.SetMatchSeed(matchSeed);
+                SessionState.Instance?.SetMatchSeed(matchSeed);
             }
 
-            var playMode = OnlineSessionState.Instance != null
-                ? OnlineSessionState.Instance.PlayMode
-                : OnlinePlayMode.Local;
-            var setup = OnlineSessionState.Instance?.CurrentSetup;
+            var playMode = SessionState.Instance != null
+                ? SessionState.Instance.PlayMode
+                : SessionPlayMode.Local;
+            var setup = SessionState.Instance?.CurrentSetup;
             MatchFlowFlags.ArmMatchRestart(playMode, setup, matchSeed);
             ReloadActiveScene();
         }
@@ -360,7 +371,7 @@ namespace DiceGame.Gameplay
         {
             if (broadcast && !applyingRemoteFlow)
             {
-                sessionController?.Messenger?.BroadcastFlowCommand(OnlineSessionConstants.FlowReturnToTitle);
+                sessionController?.Messenger?.BroadcastFlowCommand(SessionConstants.FlowReturnToTitle);
             }
 
             MatchFlowFlags.ArmTitleReturn();
@@ -430,21 +441,21 @@ namespace DiceGame.Gameplay
 
             switch (command)
             {
-                case OnlineSessionConstants.FlowPause:
+                case SessionConstants.FlowPause:
                     // Client requested the pause: client owns it.
                     ApplyPause(broadcast: true, pausedByHost: false);
                     break;
-                case OnlineSessionConstants.FlowResume:
+                case SessionConstants.FlowResume:
                     // Only the pause owner may resume; ignore stray client requests.
                     if (!pauseOwnerIsHost)
                     {
                         ApplyResume(broadcast: true);
                     }
                     break;
-                case OnlineSessionConstants.FlowResetMatch:
+                case SessionConstants.FlowResetMatch:
                     // Match reset is host-local only; ignore client requests.
                     break;
-                case OnlineSessionConstants.FlowReturnToTitle:
+                case SessionConstants.FlowReturnToTitle:
                     // Return to title is host-only.
                     break;
             }
@@ -463,16 +474,16 @@ namespace DiceGame.Gameplay
             {
                 switch (command)
                 {
-                    case OnlineSessionConstants.FlowPause:
+                    case SessionConstants.FlowPause:
                         ApplyPause(broadcast: false, pausedByHost: data != 0);
                         break;
-                    case OnlineSessionConstants.FlowResume:
+                    case SessionConstants.FlowResume:
                         ApplyResume(broadcast: false);
                         break;
-                    case OnlineSessionConstants.FlowResetMatch:
+                    case SessionConstants.FlowResetMatch:
                         ApplyResetMatch(broadcast: false, explicitSeed: data);
                         break;
-                    case OnlineSessionConstants.FlowReturnToTitle:
+                    case SessionConstants.FlowReturnToTitle:
                         ApplyReturnToTitle(broadcast: false);
                         break;
                 }
@@ -485,16 +496,16 @@ namespace DiceGame.Gameplay
 
         bool IsOnlineHost()
         {
-            return OnlineSessionState.Instance != null
-                && OnlineSessionState.Instance.PlayMode == OnlinePlayMode.OnlineHost
+            return SessionState.Instance != null
+                && SessionState.Instance.PlayMode == SessionPlayMode.OnlineHost
                 && NetworkManager.Singleton != null
                 && NetworkManager.Singleton.IsServer;
         }
 
         bool IsOnlineClient()
         {
-            return OnlineSessionState.Instance != null
-                && OnlineSessionState.Instance.PlayMode == OnlinePlayMode.OnlineClient
+            return SessionState.Instance != null
+                && SessionState.Instance.PlayMode == SessionPlayMode.OnlineClient
                 && NetworkManager.Singleton != null
                 && NetworkManager.Singleton.IsClient
                 && !NetworkManager.Singleton.IsServer;
@@ -507,7 +518,7 @@ namespace DiceGame.Gameplay
 
         bool LocalIsPauseOwner()
         {
-            var session = OnlineSessionState.Instance;
+            var session = SessionState.Instance;
             if (session == null || !session.IsOnline)
             {
                 return true;

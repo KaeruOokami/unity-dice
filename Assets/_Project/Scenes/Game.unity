@@ -626,6 +626,7 @@ GameObject:
   - component: {fileID: 1900000012}
   - component: {fileID: 1900000013}
   - component: {fileID: 1900000014}
+  - component: {fileID: 1900000015}
   m_Layer: 0
   m_Name: GameBootstrap
   m_TagString: Untagged
@@ -706,5 +707,17 @@ MonoBehaviour:
   gameBootstrap: {fileID: 1900000013}
   matchSetupPresetRegistry: {fileID: 11400000, guid: f1e2d3c4b5a6478990abcdef10000002,
     type: 2}
-  lobbyUiFont: {fileID: 11400000, guid: 8f586378b4e144a9851e7b34d9b748ee, type: 2}
+  uiFontSettings: {fileID: 11400000, guid: d9f5a2b30c8e4f7a9b1c2d3e4f5a6b7c, type: 2}
   showLobbyOnStart: 1
+--- !u!114 &1900000015
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1900000011}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 969b5536420c02a40ab6303a525b174a, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 

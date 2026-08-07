@@ -56,11 +56,11 @@ namespace DiceGame.Session
         }
 
         static RelayServerData ToRelayServerData(Allocation allocation) {
-            return new RelayServerData(allocation, OnlineSessionConstants.RelayConnectionType);
+            return new RelayServerData(allocation, SessionConstants.RelayConnectionType);
         }
 
         static RelayServerData ToRelayServerData(JoinAllocation allocation) {
-            return new RelayServerData(allocation, OnlineSessionConstants.RelayConnectionType);
+            return new RelayServerData(allocation, SessionConstants.RelayConnectionType);
         }
     }
 }

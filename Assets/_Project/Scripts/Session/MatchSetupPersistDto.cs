@@ -112,7 +112,7 @@ namespace DiceGame.Session
 
     public static class MatchSetupPersistMapper
     {
-        public static MatchSetupPersistFile FromNetworkPayload(MatchSetupNetworkPayload payload) {
+        public static MatchSetupPersistFile FromPayload(MatchSetupPayload payload) {
             return new MatchSetupPersistFile {
                 Version = MatchSetupPersistence.CurrentVersion,
                 GameMode = payload.GameMode,
@@ -138,10 +138,10 @@ namespace DiceGame.Session
             };
         }
 
-        public static MatchSetupNetworkPayload ToNetworkPayload(MatchSetupPersistFile file) {
+        public static MatchSetupPayload ToPayload(MatchSetupPersistFile file) {
             var player1 = file.Player1 ?? new PlayerSlotPersistDto();
             var player2 = file.Player2 ?? new PlayerSlotPersistDto();
-            return new MatchSetupNetworkPayload {
+            return new MatchSetupPayload {
                 GameMode = file.GameMode,
                 SharedSpawn = ToSpawn(file.SharedSpawn),
                 SharedCatalog = ToCatalog(file.SharedCatalog),
@@ -167,10 +167,10 @@ namespace DiceGame.Session
             byte isAi,
             byte deviceKind,
             byte gamepadIndex,
-            DiceSpawnSettingsNetworkPayload spawn,
-            DiceCatalogNetworkPayload catalog,
-            PlayerAttackSettingsNetworkPayload attack,
-            PlayerNaturalSendSettingsNetworkPayload naturalSend) {
+            DiceSpawnSettingsPayload spawn,
+            DiceCatalogPayload catalog,
+            PlayerAttackSettingsPayload attack,
+            PlayerNaturalSendSettingsPayload naturalSend) {
             return new PlayerSlotPersistDto {
                 IsAi = isAi != 0,
                 DeviceKind = deviceKind,
@@ -182,7 +182,7 @@ namespace DiceGame.Session
             };
         }
 
-        static DiceSpawnSettingsPersistDto FromSpawn(DiceSpawnSettingsNetworkPayload payload) {
+        static DiceSpawnSettingsPersistDto FromSpawn(DiceSpawnSettingsPayload payload) {
             return new DiceSpawnSettingsPersistDto {
                 InitialDiceCount = payload.InitialDiceCount,
                 AnimateInitialDiceSpawn = payload.AnimateInitialDiceSpawn,
@@ -193,9 +193,9 @@ namespace DiceGame.Session
             };
         }
 
-        static DiceSpawnSettingsNetworkPayload ToSpawn(DiceSpawnSettingsPersistDto dto) {
+        static DiceSpawnSettingsPayload ToSpawn(DiceSpawnSettingsPersistDto dto) {
             dto ??= new DiceSpawnSettingsPersistDto();
-            return new DiceSpawnSettingsNetworkPayload {
+            return new DiceSpawnSettingsPayload {
                 InitialDiceCount = dto.InitialDiceCount,
                 AnimateInitialDiceSpawn = dto.AnimateInitialDiceSpawn,
                 ContinuousSpawnEnabled = dto.ContinuousSpawnEnabled,
@@ -205,8 +205,8 @@ namespace DiceGame.Session
             };
         }
 
-        static DiceCatalogPersistDto FromCatalog(DiceCatalogNetworkPayload payload) {
-            var source = payload.Entries ?? Array.Empty<DiceCatalogEntryNetworkPayload>();
+        static DiceCatalogPersistDto FromCatalog(DiceCatalogPayload payload) {
+            var source = payload.Entries ?? Array.Empty<DiceCatalogEntryPayload>();
             var entries = new DiceCatalogEntryPersistDto[source.Length];
             for (var i = 0; i < source.Length; i++) {
                 entries[i] = new DiceCatalogEntryPersistDto {
@@ -218,24 +218,24 @@ namespace DiceGame.Session
             return new DiceCatalogPersistDto { Entries = entries };
         }
 
-        static DiceCatalogNetworkPayload ToCatalog(DiceCatalogPersistDto dto) {
+        static DiceCatalogPayload ToCatalog(DiceCatalogPersistDto dto) {
             var source = dto?.Entries ?? Array.Empty<DiceCatalogEntryPersistDto>();
-            var entries = new DiceCatalogEntryNetworkPayload[source.Length];
+            var entries = new DiceCatalogEntryPayload[source.Length];
             for (var i = 0; i < source.Length; i++) {
-                entries[i] = new DiceCatalogEntryNetworkPayload {
+                entries[i] = new DiceCatalogEntryPayload {
                     Kind = source[i].Kind,
                     SpawnWeight = source[i].SpawnWeight
                 };
             }
 
-            return new DiceCatalogNetworkPayload { Entries = entries };
+            return new DiceCatalogPayload { Entries = entries };
         }
 
-        static PlayerAttackSettingsPersistDto FromAttack(PlayerAttackSettingsNetworkPayload payload) {
-            var source = payload.FaceSendProfiles ?? Array.Empty<FaceAttackSendProfileNetworkPayload>();
+        static PlayerAttackSettingsPersistDto FromAttack(PlayerAttackSettingsPayload payload) {
+            var source = payload.FaceSendProfiles ?? Array.Empty<FaceAttackSendProfilePayload>();
             var profiles = new FaceAttackSendProfilePersistDto[source.Length];
             for (var i = 0; i < source.Length; i++) {
-                var kindsSource = source[i].SendableKinds ?? Array.Empty<SendableKindLimitNetworkPayload>();
+                var kindsSource = source[i].SendableKinds ?? Array.Empty<SendableKindLimitPayload>();
                 var kinds = new SendableKindLimitPersistDto[kindsSource.Length];
                 for (var j = 0; j < kindsSource.Length; j++) {
                     kinds[j] = new SendableKindLimitPersistDto {
@@ -271,15 +271,15 @@ namespace DiceGame.Session
             };
         }
 
-        static PlayerAttackSettingsNetworkPayload ToAttack(PlayerAttackSettingsPersistDto dto) {
+        static PlayerAttackSettingsPayload ToAttack(PlayerAttackSettingsPersistDto dto) {
             dto ??= new PlayerAttackSettingsPersistDto();
             var source = dto.FaceSendProfiles ?? Array.Empty<FaceAttackSendProfilePersistDto>();
-            var profiles = new FaceAttackSendProfileNetworkPayload[source.Length];
+            var profiles = new FaceAttackSendProfilePayload[source.Length];
             for (var i = 0; i < source.Length; i++) {
                 var kindsSource = source[i].SendableKinds ?? Array.Empty<SendableKindLimitPersistDto>();
-                var kinds = new SendableKindLimitNetworkPayload[kindsSource.Length];
+                var kinds = new SendableKindLimitPayload[kindsSource.Length];
                 for (var j = 0; j < kindsSource.Length; j++) {
-                    kinds[j] = new SendableKindLimitNetworkPayload {
+                    kinds[j] = new SendableKindLimitPayload {
                         Kind = kindsSource[j].Kind,
                         MaxCountPerVolley = kindsSource[j].MaxCountPerVolley,
                         MinimumPower = kindsSource[j].MinimumPower,
@@ -290,13 +290,13 @@ namespace DiceGame.Session
                 var faces = source[i].TriggerFaces ?? Array.Empty<int>();
                 var copiedFaces = new int[faces.Length];
                 Array.Copy(faces, copiedFaces, faces.Length);
-                profiles[i] = new FaceAttackSendProfileNetworkPayload {
+                profiles[i] = new FaceAttackSendProfilePayload {
                     TriggerFaces = copiedFaces,
                     SendableKinds = kinds
                 };
             }
 
-            return new PlayerAttackSettingsNetworkPayload {
+            return new PlayerAttackSettingsPayload {
                 FaceSendProfiles = profiles,
                 AttackMultiplier = dto.AttackMultiplier,
                 FaceGain = dto.FaceGain,
@@ -312,8 +312,8 @@ namespace DiceGame.Session
             };
         }
 
-        static PlayerNaturalSendSettingsPersistDto FromNaturalSend(PlayerNaturalSendSettingsNetworkPayload payload) {
-            var source = payload.SendableKinds ?? Array.Empty<NaturalSendKindLimitNetworkPayload>();
+        static PlayerNaturalSendSettingsPersistDto FromNaturalSend(PlayerNaturalSendSettingsPayload payload) {
+            var source = payload.SendableKinds ?? Array.Empty<NaturalSendKindLimitPayload>();
             var kinds = new NaturalSendKindLimitPersistDto[source.Length];
             for (var i = 0; i < source.Length; i++) {
                 kinds[i] = new NaturalSendKindLimitPersistDto {
@@ -330,26 +330,26 @@ namespace DiceGame.Session
             };
         }
 
-        static PlayerNaturalSendSettingsNetworkPayload ToNaturalSend(PlayerNaturalSendSettingsPersistDto dto) {
+        static PlayerNaturalSendSettingsPayload ToNaturalSend(PlayerNaturalSendSettingsPersistDto dto) {
             dto ??= new PlayerNaturalSendSettingsPersistDto();
             var source = dto.SendableKinds ?? Array.Empty<NaturalSendKindLimitPersistDto>();
-            var kinds = new NaturalSendKindLimitNetworkPayload[source.Length];
+            var kinds = new NaturalSendKindLimitPayload[source.Length];
             for (var i = 0; i < source.Length; i++) {
-                kinds[i] = new NaturalSendKindLimitNetworkPayload {
+                kinds[i] = new NaturalSendKindLimitPayload {
                     Kind = source[i].Kind,
                     MaxCountPerVolley = source[i].MaxCountPerVolley,
                     SelectionWeight = source[i].SelectionWeight
                 };
             }
 
-            return new PlayerNaturalSendSettingsNetworkPayload {
+            return new PlayerNaturalSendSettingsPayload {
                 Enabled = dto.Enabled,
                 DiceCountPerVolley = dto.DiceCountPerVolley,
                 SendableKinds = kinds
             };
         }
 
-        static JumboDiceSettingsPersistDto FromJumbo(JumboDiceSettingsNetworkPayload payload) {
+        static JumboDiceSettingsPersistDto FromJumbo(JumboDiceSettingsPayload payload) {
             return new JumboDiceSettingsPersistDto {
                 Enabled = payload.Enabled,
                 SequenceStartFace = payload.SequenceStartFace,
@@ -358,11 +358,11 @@ namespace DiceGame.Session
             };
         }
 
-        static JumboDiceSettingsNetworkPayload ToJumbo(JumboDiceSettingsPersistDto dto) {
+        static JumboDiceSettingsPayload ToJumbo(JumboDiceSettingsPersistDto dto) {
             dto ??= new JumboDiceSettingsPersistDto();
             var defaults = JumboDiceSettingsData.Default();
             if (dto.MaxPerBoard <= 0) {
-                return new JumboDiceSettingsNetworkPayload {
+                return new JumboDiceSettingsPayload {
                     Enabled = defaults.Enabled,
                     SequenceStartFace = defaults.SequenceStartFace,
                     SequenceEndFace = defaults.SequenceEndFace,
@@ -370,7 +370,7 @@ namespace DiceGame.Session
                 };
             }
 
-            return new JumboDiceSettingsNetworkPayload {
+            return new JumboDiceSettingsPayload {
                 Enabled = dto.Enabled,
                 SequenceStartFace = dto.SequenceStartFace,
                 SequenceEndFace = dto.SequenceEndFace,

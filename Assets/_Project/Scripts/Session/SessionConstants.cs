@@ -1,0 +1,147 @@
+namespace DiceGame.Session
+{
+    public static class SessionConstants
+    {
+        public const int MaxPlayers = 2;
+        public const string LobbyDataRelayJoinCode = "RelayJoinCode";
+        public const string LobbyDataRelayRegion = "RelayRegion";
+        public const string LobbyDataGameMode = "GameMode";
+        public const string MessageInput = "DiceOnlineInput";
+        public const string MessageSnapshot = "DiceOnlineSnapshot";
+        public const string MessageDiceMotion = "DiceOnlineDiceMotion";
+        public const string MessageAttackQueue = "DiceOnlineAttackQueue";
+        public const string MessageDiceSpawn = "DiceOnlineDiceSpawn";
+        public const string MessageCharacterState = "DiceOnlineCharacterState";
+        public const string MessageMatchStart = "DiceOnlineMatchStart";
+        public const string MessageMatchStartAck = "DiceOnlineMatchStartAck";
+        public const string MessageMatchSetupBroadcast = "DiceOnlineMatchSetupBroadcast";
+        public const string MessageMatchSetupUpdate = "DiceOnlineMatchSetupUpdate";
+        public const string MessagePlayerIdentity = "DiceOnlinePlayerIdentity";
+        public const string MessagePlayerIdentityRequest = "DiceOnlinePlayerIdentityRequest";
+        public const string MessageFlowCommand = "DiceOnlineFlowCommand";
+        public const string MessageFlowRequest = "DiceOnlineFlowRequest";
+        public const string MessageLockstepReady = "DiceOnlineLockstepReady";
+        public const string MessageSimHash = "DiceOnlineSimHash";
+        public const string MessageSimResync = "DiceOnlineSimResync";
+        public const string RelayConnectionType = "dtls";
+
+        public const byte FlowPause = 1;
+        public const byte FlowResume = 2;
+        public const byte FlowResetMatch = 3;
+        public const byte FlowReturnToTitle = 4;
+        public const float LobbyHeartbeatSeconds = 15f;
+        /// <summary>
+        /// Phase B lockstep: fixed simulation rate (both peers step with this dt).
+        /// </summary>
+        public const int SimTickHz = 60;
+        public const float SimTickSeconds = 1f / SimTickHz;
+        /// <summary>
+        /// Local input is scheduled this many ticks ahead (delayed lockstep).
+        /// ~50ms at <see cref="SimTickHz"/>; Unreliable input + redundancy covers Relay jitter.
+        /// </summary>
+        public const int InputDelayTicks = 3;
+        /// <summary>
+        /// How many tick inputs to retain in the lockstep buffer.
+        /// </summary>
+        public const int LockstepInputBufferTicks = 180;
+        /// <summary>
+        /// Each outgoing input packet also carries this many prior ticks so a single
+        /// lost packet is recovered by the following batch (redundancy window).
+        /// </summary>
+        public const int LockstepInputRedundancyTicks = 16;
+        /// <summary>
+        /// Keep already-consumed inputs this many ticks behind the current tick so a
+        /// lagging peer's redundant retransmissions can still be stored and matched.
+        /// </summary>
+        public const int LockstepInputRetainTicks = 64;
+        /// <summary>
+        /// Cap render-time catch-up so a hitch does not spiral the sim.
+        /// </summary>
+        public const int LockstepMaxStepsPerFrame = 4;
+        /// <summary>
+        /// Resend local inputs in [currentTick-redundancy, currentTick+delay] while peers may be catching up.
+        /// Inputs use UnreliableSequenced; redundancy recovers single-packet loss without HOL blocking.
+        /// </summary>
+        public const float LockstepInputResendIntervalSeconds = 0.1f;
+        /// <summary>
+        /// Max payloads per UnreliableSequenced input batch.
+        /// Retain-window resends can exceed NGO non-fragmented MTU (~1300B) if sent as one packet;
+        /// chunking keeps each batch under that limit (~32B/payload + header).
+        /// </summary>
+        public const int LockstepInputMaxPayloadsPerBatch = 24;
+        /// <summary>
+        /// Retry LockstepReady until the remote peer acknowledges it is listening.
+        /// </summary>
+        public const float LockstepReadyRetryIntervalSeconds = 0.25f;
+        /// <summary>
+        /// Phase C: compare sim hashes every N lockstep ticks (detection only).
+        /// </summary>
+        public const int LockstepHashIntervalTicks = 30;
+        /// <summary>
+        /// When true, host pushes a full-board snapshot after DESYNC (recovery last resort).
+        /// Keep false for normal lockstep; input + deterministic sim is the main path.
+        /// </summary>
+        public static bool LockstepAutoResyncEnabled => false;
+        /// <summary>
+        /// Minimum time between host resync dumps when <see cref="LockstepAutoResyncEnabled"/> is true.
+        /// </summary>
+        public const float LockstepResyncCooldownSeconds = 2f;
+        /// <summary>
+        /// Host → client character pose: check interval for sparse corrections (not continuous chase).
+        /// </summary>
+        public const float CharacterCorrectCheckIntervalSeconds = 0.25f;
+        /// <summary>
+        /// Only send a character pose correction if any character moved at least this far
+        /// since the last correction send.
+        /// </summary>
+        public const float CharacterCorrectMinSendDistance = 0.35f;
+        public const float AttackQueueResyncIntervalSeconds = 1f;
+        public const float InputSendIntervalSeconds = 0.05f;
+        /// <summary>
+        /// Legacy name kept for compatibility; prefer CharacterCorrectCheckIntervalSeconds.
+        /// </summary>
+        public const float SnapshotSendIntervalSeconds = CharacterCorrectCheckIntervalSeconds;
+        /// <summary>
+        /// Host → clients: unused as primary path in Phase C (input sync + sparse correct).
+        /// </summary>
+        public const float CharacterStateSendIntervalSeconds = 0.1f;
+        /// <summary>
+        /// Local input / pose history depth for character-only rollback resim.
+        /// </summary>
+        public const int CharacterRollbackHistorySize = 64;
+        /// <summary>
+        /// Soft warning for large board dumps (initial / rare resync). Fragmented delivery allows larger than MTU.
+        /// </summary>
+        public const int SnapshotReliableSoftBytes = 8000;
+        /// <summary>
+        /// Remote character only: SmoothDamp time toward latest snapshot targets.
+        /// Local character uses prediction; dice use Play* + logical SnapTo.
+        /// </summary>
+        public const float SnapshotInterpSmoothTimeSeconds = 0.1f;
+        /// <summary>
+        /// Beyond this world distance, snap character instead of interpolating / soft reconcile.
+        /// </summary>
+        public const float SnapshotInterpSnapDistance = 2f;
+        /// <summary>
+        /// Soft blend toward host pose when the local predicted character is nearly idle (0..1).
+        /// Kept low so moving prediction is not constantly tugged.
+        /// </summary>
+        public const float LocalCharacterReconcileBlend = 0.08f;
+        /// <summary>
+        /// Soft reconcile applies only while predicted move speed is at or below this.
+        /// </summary>
+        public const float LocalCharacterReconcileIdleSpeed = 0.2f;
+        public const float OnlineSetupSyncIntervalSeconds = 0.35f;
+        public const float OnlineIdentityRetryIntervalSeconds = 0.5f;
+        /// <summary>
+        /// Host resends MatchStart until the remote client acks presentation ready.
+        /// </summary>
+        public const float MatchStartAckRetryIntervalSeconds = 0.5f;
+        /// <summary>
+        /// Give up waiting for MatchStartAck and surface an error.
+        /// </summary>
+        public const float MatchStartAckTimeoutSeconds = 15f;
+        public const string MatchSetupPersistDirectory = "MatchSetup";
+        public const string MatchSetupOnlinePersistDirectory = "Online";
+    }
+}

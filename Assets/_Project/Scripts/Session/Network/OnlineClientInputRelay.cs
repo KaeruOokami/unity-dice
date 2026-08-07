@@ -64,7 +64,7 @@ namespace DiceGame.Session.Network
                 pendingDirection = direction;
             }
 
-            if (inputTimer < OnlineSessionConstants.InputSendIntervalSeconds
+            if (inputTimer < SessionConstants.InputSendIntervalSeconds
                 && !lift
                 && !jump
                 && !hasDirection

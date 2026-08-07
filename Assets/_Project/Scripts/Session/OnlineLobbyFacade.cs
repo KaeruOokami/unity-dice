@@ -25,11 +25,11 @@ namespace DiceGame.Session
                 IsPrivate = true,
                 Data = new Dictionary<string, DataObject> {
                     {
-                        OnlineSessionConstants.LobbyDataRelayJoinCode,
+                        SessionConstants.LobbyDataRelayJoinCode,
                         new DataObject(DataObject.VisibilityOptions.Member, relayJoinCode)
                     },
                     {
-                        OnlineSessionConstants.LobbyDataRelayRegion,
+                        SessionConstants.LobbyDataRelayRegion,
                         new DataObject(DataObject.VisibilityOptions.Member, relayRegion ?? string.Empty)
                     }
                 }
@@ -37,7 +37,7 @@ namespace DiceGame.Session
 
             hostLobby = await LobbyService.Instance.CreateLobbyAsync(
                 $"Dice_{Guid.NewGuid():N}".Substring(0, 12),
-                OnlineSessionConstants.MaxPlayers,
+                SessionConstants.MaxPlayers,
                 options);
             joinedLobby = null;
             heartbeatTimer = 0f;
@@ -58,7 +58,7 @@ namespace DiceGame.Session
                 new UpdateLobbyOptions {
                     Data = new Dictionary<string, DataObject> {
                         {
-                            OnlineSessionConstants.LobbyDataGameMode,
+                            SessionConstants.LobbyDataGameMode,
                             new DataObject(DataObject.VisibilityOptions.Member, gameMode.ToString())
                         }
                     }
@@ -72,7 +72,7 @@ namespace DiceGame.Session
                 return false;
             }
 
-            if (!lobby.Data.TryGetValue(OnlineSessionConstants.LobbyDataGameMode, out var data)
+            if (!lobby.Data.TryGetValue(SessionConstants.LobbyDataGameMode, out var data)
                 || string.IsNullOrEmpty(data?.Value)) {
                 return false;
             }
@@ -103,7 +103,7 @@ namespace DiceGame.Session
                 return false;
             }
 
-            if (!lobby.Data.TryGetValue(OnlineSessionConstants.LobbyDataRelayJoinCode, out var data)
+            if (!lobby.Data.TryGetValue(SessionConstants.LobbyDataRelayJoinCode, out var data)
                 || string.IsNullOrEmpty(data?.Value)) {
                 return false;
             }
@@ -118,7 +118,7 @@ namespace DiceGame.Session
             }
 
             heartbeatTimer += deltaTime;
-            if (heartbeatTimer < OnlineSessionConstants.LobbyHeartbeatSeconds) {
+            if (heartbeatTimer < SessionConstants.LobbyHeartbeatSeconds) {
                 return;
             }
 

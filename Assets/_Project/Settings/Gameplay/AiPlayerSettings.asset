@@ -35,4 +35,4 @@ MonoBehaviour:
   rollStepMaxFrames: 120
   stuckAttemptsBeforeGoalReset: 3
   goalFailureBlacklistSeconds: 12
-  debugLog: 1
+  debugLog: 0

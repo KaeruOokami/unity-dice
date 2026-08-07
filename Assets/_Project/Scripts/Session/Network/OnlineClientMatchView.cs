@@ -196,7 +196,7 @@ namespace DiceGame.Session.Network
                 pendingDirection = direction;
             }
 
-            if (inputTimer < OnlineSessionConstants.InputSendIntervalSeconds
+            if (inputTimer < SessionConstants.InputSendIntervalSeconds
                 && !lift
                 && !jump
                 && !hasDirection
@@ -451,7 +451,7 @@ namespace DiceGame.Session.Network
         }
 
         void TickCharacterInterpolation() {
-            var smoothTime = OnlineSessionConstants.SnapshotInterpSmoothTimeSeconds;
+            var smoothTime = SessionConstants.SnapshotInterpSmoothTimeSeconds;
             var delta = Time.unscaledDeltaTime;
             if (delta <= 0f) {
                 return;
@@ -519,16 +519,16 @@ namespace DiceGame.Session.Network
             }
 
             var error = entity.Position - localPredictedPosition;
-            var snapDistance = OnlineSessionConstants.SnapshotInterpSnapDistance;
+            var snapDistance = SessionConstants.SnapshotInterpSnapDistance;
             if (error.sqrMagnitude >= snapDistance * snapDistance) {
                 localPredictedPosition = entity.Position;
                 localMoveSpeed = 0f;
-            } else if (localMoveSpeed <= OnlineSessionConstants.LocalCharacterReconcileIdleSpeed) {
+            } else if (localMoveSpeed <= SessionConstants.LocalCharacterReconcileIdleSpeed) {
                 // Idle-only soft reconcile — do not tug while the player is actively predicting.
                 localPredictedPosition = Vector3.Lerp(
                     localPredictedPosition,
                     entity.Position,
-                    OnlineSessionConstants.LocalCharacterReconcileBlend);
+                    SessionConstants.LocalCharacterReconcileBlend);
             }
 
             positionTransform.position = localPredictedPosition;
@@ -692,7 +692,7 @@ namespace DiceGame.Session.Network
             state.TargetRotation = entity.Rotation;
             state.IsCharacter = true;
 
-            var snapDistance = OnlineSessionConstants.SnapshotInterpSnapDistance;
+            var snapDistance = SessionConstants.SnapshotInterpSnapDistance;
             var shouldSnap = !state.Initialized
                 || (state.CurrentPosition - state.TargetPosition).sqrMagnitude >= snapDistance * snapDistance
                 || Quaternion.Angle(state.CurrentRotation, state.TargetRotation) > 90f;

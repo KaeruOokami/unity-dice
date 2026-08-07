@@ -110,7 +110,7 @@ namespace DiceGame.Session.Network
 
             if (attackController != null) {
                 attackQueueResyncTimer += Time.unscaledDeltaTime;
-                if (attackQueueResyncTimer >= OnlineSessionConstants.AttackQueueResyncIntervalSeconds) {
+                if (attackQueueResyncTimer >= SessionConstants.AttackQueueResyncIntervalSeconds) {
                     attackQueueResyncTimer = 0f;
                     OnAttackQueueChanged();
                 }
@@ -174,7 +174,7 @@ namespace DiceGame.Session.Network
                 pendingDirection = direction;
             }
 
-            if (inputTimer < OnlineSessionConstants.InputSendIntervalSeconds
+            if (inputTimer < SessionConstants.InputSendIntervalSeconds
                 && !lift
                 && !jump
                 && !hasDirection
@@ -200,13 +200,13 @@ namespace DiceGame.Session.Network
             }
 
             characterCorrectTimer += Time.unscaledDeltaTime;
-            if (characterCorrectTimer < OnlineSessionConstants.CharacterCorrectCheckIntervalSeconds) {
+            if (characterCorrectTimer < SessionConstants.CharacterCorrectCheckIntervalSeconds) {
                 return;
             }
 
             characterCorrectTimer = 0f;
 
-            var minSend = OnlineSessionConstants.CharacterCorrectMinSendDistance;
+            var minSend = SessionConstants.CharacterCorrectMinSendDistance;
             var minSendSqr = minSend * minSend;
             var needsSend = false;
             for (var i = 0; i < characters.Count; i++) {

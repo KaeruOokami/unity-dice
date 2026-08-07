@@ -130,8 +130,8 @@ namespace DiceGame.Session
                     Directory.CreateDirectory(directory);
                 }
 
-                var payload = MatchSetupNetworkCodec.ToPayload(snapshot, registry);
-                var file = MatchSetupPersistMapper.FromNetworkPayload(payload);
+                var payload = MatchSetupCodec.ToPayload(snapshot, registry);
+                var file = MatchSetupPersistMapper.FromPayload(payload);
                 var json = JsonUtility.ToJson(file, prettyPrint: true);
                 File.WriteAllText(path, json);
                 errorMessage = null;
@@ -143,14 +143,14 @@ namespace DiceGame.Session
         }
 
         static string GetLocalDirectoryPath() {
-            return Path.Combine(Application.persistentDataPath, OnlineSessionConstants.MatchSetupPersistDirectory);
+            return Path.Combine(Application.persistentDataPath, SessionConstants.MatchSetupPersistDirectory);
         }
 
         static string GetOnlineDirectoryPath() {
             return Path.Combine(
                 Application.persistentDataPath,
-                OnlineSessionConstants.MatchSetupPersistDirectory,
-                OnlineSessionConstants.MatchSetupOnlinePersistDirectory);
+                SessionConstants.MatchSetupPersistDirectory,
+                SessionConstants.MatchSetupOnlinePersistDirectory);
         }
 
         static string SanitizeFileToken(string value) {
@@ -198,8 +198,8 @@ namespace DiceGame.Session
                     }
                 }
 
-                var payload = MatchSetupPersistMapper.ToNetworkPayload(file);
-                return MatchSetupNetworkCodec.TryFromPayload(payload, registry, out snapshot, out errorMessage);
+                var payload = MatchSetupPersistMapper.ToPayload(file);
+                return MatchSetupCodec.TryFromPayload(payload, registry, out snapshot, out errorMessage);
             } catch (Exception ex) {
                 errorMessage = ex.Message;
                 return false;

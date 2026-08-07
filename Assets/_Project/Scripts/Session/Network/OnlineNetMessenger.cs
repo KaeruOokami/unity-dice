@@ -28,9 +28,9 @@ namespace DiceGame.Session.Network
         public event Action<OnlineCharacterStateBatch> CharacterStateReceived;
         public event Action MatchStartReceived;
         public event Action<ulong> MatchStartAckReceived;
-        public event Action<MatchSetupNetworkPayload> MatchSetupReceived;
-        public event Action<MatchSetupNetworkPayload> MatchSetupBroadcastReceived;
-        public event Action<ulong, MatchSetupNetworkPayload> MatchSetupUpdateReceived;
+        public event Action<MatchSetupPayload> MatchSetupReceived;
+        public event Action<MatchSetupPayload> MatchSetupBroadcastReceived;
+        public event Action<ulong, MatchSetupPayload> MatchSetupUpdateReceived;
         public event Action<ulong, string> PlayerIdentityReceived;
         public event Action PlayerIdentityRequestReceived;
         public event Action<byte, int> FlowCommandReceived;
@@ -50,55 +50,55 @@ namespace DiceGame.Session.Network
             }
 
             networkManager.CustomMessagingManager.RegisterNamedMessageHandler(
-                OnlineSessionConstants.MessageInput,
+                SessionConstants.MessageInput,
                 OnInputMessage);
             networkManager.CustomMessagingManager.RegisterNamedMessageHandler(
-                OnlineSessionConstants.MessageSnapshot,
+                SessionConstants.MessageSnapshot,
                 OnSnapshotMessage);
             networkManager.CustomMessagingManager.RegisterNamedMessageHandler(
-                OnlineSessionConstants.MessageDiceMotion,
+                SessionConstants.MessageDiceMotion,
                 OnDiceMotionMessage);
             networkManager.CustomMessagingManager.RegisterNamedMessageHandler(
-                OnlineSessionConstants.MessageAttackQueue,
+                SessionConstants.MessageAttackQueue,
                 OnAttackQueueMessage);
             networkManager.CustomMessagingManager.RegisterNamedMessageHandler(
-                OnlineSessionConstants.MessageDiceSpawn,
+                SessionConstants.MessageDiceSpawn,
                 OnDiceSpawnMessage);
             networkManager.CustomMessagingManager.RegisterNamedMessageHandler(
-                OnlineSessionConstants.MessageCharacterState,
+                SessionConstants.MessageCharacterState,
                 OnCharacterStateMessage);
             networkManager.CustomMessagingManager.RegisterNamedMessageHandler(
-                OnlineSessionConstants.MessageMatchStart,
+                SessionConstants.MessageMatchStart,
                 OnMatchStartMessage);
             networkManager.CustomMessagingManager.RegisterNamedMessageHandler(
-                OnlineSessionConstants.MessageMatchStartAck,
+                SessionConstants.MessageMatchStartAck,
                 OnMatchStartAckMessage);
             networkManager.CustomMessagingManager.RegisterNamedMessageHandler(
-                OnlineSessionConstants.MessageMatchSetupBroadcast,
+                SessionConstants.MessageMatchSetupBroadcast,
                 OnMatchSetupBroadcastMessage);
             networkManager.CustomMessagingManager.RegisterNamedMessageHandler(
-                OnlineSessionConstants.MessageMatchSetupUpdate,
+                SessionConstants.MessageMatchSetupUpdate,
                 OnMatchSetupUpdateMessage);
             networkManager.CustomMessagingManager.RegisterNamedMessageHandler(
-                OnlineSessionConstants.MessagePlayerIdentity,
+                SessionConstants.MessagePlayerIdentity,
                 OnPlayerIdentityMessage);
             networkManager.CustomMessagingManager.RegisterNamedMessageHandler(
-                OnlineSessionConstants.MessagePlayerIdentityRequest,
+                SessionConstants.MessagePlayerIdentityRequest,
                 OnPlayerIdentityRequestMessage);
             networkManager.CustomMessagingManager.RegisterNamedMessageHandler(
-                OnlineSessionConstants.MessageFlowCommand,
+                SessionConstants.MessageFlowCommand,
                 OnFlowCommandMessage);
             networkManager.CustomMessagingManager.RegisterNamedMessageHandler(
-                OnlineSessionConstants.MessageFlowRequest,
+                SessionConstants.MessageFlowRequest,
                 OnFlowRequestMessage);
             networkManager.CustomMessagingManager.RegisterNamedMessageHandler(
-                OnlineSessionConstants.MessageLockstepReady,
+                SessionConstants.MessageLockstepReady,
                 OnLockstepReadyMessage);
             networkManager.CustomMessagingManager.RegisterNamedMessageHandler(
-                OnlineSessionConstants.MessageSimHash,
+                SessionConstants.MessageSimHash,
                 OnSimHashMessage);
             networkManager.CustomMessagingManager.RegisterNamedMessageHandler(
-                OnlineSessionConstants.MessageSimResync,
+                SessionConstants.MessageSimResync,
                 OnSimResyncMessage);
             registered = true;
         }
@@ -109,39 +109,39 @@ namespace DiceGame.Session.Network
             }
 
             networkManager.CustomMessagingManager.UnregisterNamedMessageHandler(
-                OnlineSessionConstants.MessageInput);
+                SessionConstants.MessageInput);
             networkManager.CustomMessagingManager.UnregisterNamedMessageHandler(
-                OnlineSessionConstants.MessageSnapshot);
+                SessionConstants.MessageSnapshot);
             networkManager.CustomMessagingManager.UnregisterNamedMessageHandler(
-                OnlineSessionConstants.MessageDiceMotion);
+                SessionConstants.MessageDiceMotion);
             networkManager.CustomMessagingManager.UnregisterNamedMessageHandler(
-                OnlineSessionConstants.MessageAttackQueue);
+                SessionConstants.MessageAttackQueue);
             networkManager.CustomMessagingManager.UnregisterNamedMessageHandler(
-                OnlineSessionConstants.MessageDiceSpawn);
+                SessionConstants.MessageDiceSpawn);
             networkManager.CustomMessagingManager.UnregisterNamedMessageHandler(
-                OnlineSessionConstants.MessageCharacterState);
+                SessionConstants.MessageCharacterState);
             networkManager.CustomMessagingManager.UnregisterNamedMessageHandler(
-                OnlineSessionConstants.MessageMatchStart);
+                SessionConstants.MessageMatchStart);
             networkManager.CustomMessagingManager.UnregisterNamedMessageHandler(
-                OnlineSessionConstants.MessageMatchStartAck);
+                SessionConstants.MessageMatchStartAck);
             networkManager.CustomMessagingManager.UnregisterNamedMessageHandler(
-                OnlineSessionConstants.MessageMatchSetupBroadcast);
+                SessionConstants.MessageMatchSetupBroadcast);
             networkManager.CustomMessagingManager.UnregisterNamedMessageHandler(
-                OnlineSessionConstants.MessageMatchSetupUpdate);
+                SessionConstants.MessageMatchSetupUpdate);
             networkManager.CustomMessagingManager.UnregisterNamedMessageHandler(
-                OnlineSessionConstants.MessagePlayerIdentity);
+                SessionConstants.MessagePlayerIdentity);
             networkManager.CustomMessagingManager.UnregisterNamedMessageHandler(
-                OnlineSessionConstants.MessagePlayerIdentityRequest);
+                SessionConstants.MessagePlayerIdentityRequest);
             networkManager.CustomMessagingManager.UnregisterNamedMessageHandler(
-                OnlineSessionConstants.MessageFlowCommand);
+                SessionConstants.MessageFlowCommand);
             networkManager.CustomMessagingManager.UnregisterNamedMessageHandler(
-                OnlineSessionConstants.MessageFlowRequest);
+                SessionConstants.MessageFlowRequest);
             networkManager.CustomMessagingManager.UnregisterNamedMessageHandler(
-                OnlineSessionConstants.MessageLockstepReady);
+                SessionConstants.MessageLockstepReady);
             networkManager.CustomMessagingManager.UnregisterNamedMessageHandler(
-                OnlineSessionConstants.MessageSimHash);
+                SessionConstants.MessageSimHash);
             networkManager.CustomMessagingManager.UnregisterNamedMessageHandler(
-                OnlineSessionConstants.MessageSimResync);
+                SessionConstants.MessageSimResync);
             registered = false;
         }
 
@@ -163,7 +163,7 @@ namespace DiceGame.Session.Network
             using var writer = new FastBufferWriter(InputBatchWriterSize(payload), Allocator.Temp);
             writer.WriteNetworkSerializable(payload);
             networkManager.CustomMessagingManager.SendNamedMessage(
-                OnlineSessionConstants.MessageInput,
+                SessionConstants.MessageInput,
                 NetworkManager.ServerClientId,
                 writer,
                 NetworkDelivery.UnreliableSequenced);
@@ -198,7 +198,7 @@ namespace DiceGame.Session.Network
                 using var writer = new FastBufferWriter(InputBatchWriterSize(payload), Allocator.Temp);
                 writer.WriteNetworkSerializable(payload);
                 customMessaging.SendNamedMessage(
-                    OnlineSessionConstants.MessageInput,
+                    SessionConstants.MessageInput,
                     clientId,
                     writer,
                     NetworkDelivery.UnreliableSequenced);
@@ -207,7 +207,7 @@ namespace DiceGame.Session.Network
 
         static bool TryValidateInputBatchSize(OnlineInputBatchPayload payload, string caller) {
             var count = payload.Inputs?.Length ?? 0;
-            var max = OnlineSessionConstants.LockstepInputMaxPayloadsPerBatch;
+            var max = SessionConstants.LockstepInputMaxPayloadsPerBatch;
             if (count <= max) {
                 return true;
             }
@@ -240,7 +240,7 @@ namespace DiceGame.Session.Network
             using var writer = new FastBufferWriter(64, Allocator.Temp, 256);
             writer.WriteNetworkSerializable(command);
             customMessaging.SendNamedMessageToAll(
-                OnlineSessionConstants.MessageDiceSpawn,
+                SessionConstants.MessageDiceSpawn,
                 writer,
                 NetworkDelivery.Reliable);
             Debug.Log(
@@ -271,7 +271,7 @@ namespace DiceGame.Session.Network
             using var writer = new FastBufferWriter(128, Allocator.Temp, 512);
             writer.WriteNetworkSerializable(batch);
             customMessaging.SendNamedMessageToAll(
-                OnlineSessionConstants.MessageCharacterState,
+                SessionConstants.MessageCharacterState,
                 writer,
                 NetworkDelivery.UnreliableSequenced);
         }
@@ -313,14 +313,14 @@ namespace DiceGame.Session.Network
 
                 using var writer = new FastBufferWriter(1024, Allocator.Temp, 8192);
                 writer.WriteNetworkSerializable(chunk);
-                if (writer.Length > OnlineSessionConstants.SnapshotReliableSoftBytes) {
+                if (writer.Length > SessionConstants.SnapshotReliableSoftBytes) {
                     Debug.LogWarning(
                         $"OnlineNetMessenger.SendSnapshotToClients: snapshot is {writer.Length} bytes " +
-                        $"(soft limit {OnlineSessionConstants.SnapshotReliableSoftBytes}). Keep shrinking payload.");
+                        $"(soft limit {SessionConstants.SnapshotReliableSoftBytes}). Keep shrinking payload.");
                 }
 
                 customMessaging.SendNamedMessage(
-                    OnlineSessionConstants.MessageSnapshot,
+                    SessionConstants.MessageSnapshot,
                     clientId,
                     writer,
                     NetworkDelivery.ReliableFragmentedSequenced);
@@ -334,7 +334,7 @@ namespace DiceGame.Session.Network
             LogSnapshotSendThrottled(
                 $"send remotes={sent} entities={entities.Length} chunks=1 " +
                 $"seq={snapshotSequence} delivery=ReliableFragmentedSequenced " +
-                $"interval={OnlineSessionConstants.SnapshotSendIntervalSeconds:0.###}s");
+                $"interval={SessionConstants.SnapshotSendIntervalSeconds:0.###}s");
         }
 
         public void SendDiceMotionToClients(OnlineDiceMotionEvent motionEvent) {
@@ -357,7 +357,7 @@ namespace DiceGame.Session.Network
                 using var writer = new FastBufferWriter(128, Allocator.Temp, 512);
                 writer.WriteNetworkSerializable(motionEvent);
                 customMessaging.SendNamedMessage(
-                    OnlineSessionConstants.MessageDiceMotion,
+                    SessionConstants.MessageDiceMotion,
                     clientId,
                     writer,
                     NetworkDelivery.Reliable);
@@ -393,7 +393,7 @@ namespace DiceGame.Session.Network
                 using var writer = new FastBufferWriter(256, Allocator.Temp, 2048);
                 writer.WriteNetworkSerializable(queueSnapshot);
                 customMessaging.SendNamedMessage(
-                    OnlineSessionConstants.MessageAttackQueue,
+                    SessionConstants.MessageAttackQueue,
                     clientId,
                     writer,
                     NetworkDelivery.Reliable);
@@ -424,7 +424,7 @@ namespace DiceGame.Session.Network
             Debug.Log($"OnlineNetMessenger.SendSnapshotToClients: {message}");
         }
 
-        public void SendMatchStartToClients(MatchSetupNetworkPayload setupPayload) {
+        public void SendMatchStartToClients(MatchSetupPayload setupPayload) {
             if (networkManager == null || !networkManager.IsServer) {
                 Debug.LogWarning(
                     $"OnlineNetMessenger.SendMatchStartToClients: skipped " +
@@ -459,7 +459,7 @@ namespace DiceGame.Session.Network
                 writer.WriteValueSafe(matchSeed);
                 try {
                     customMessaging.SendNamedMessage(
-                        OnlineSessionConstants.MessageMatchStart,
+                        SessionConstants.MessageMatchStart,
                         clientId,
                         writer,
                         NetworkDelivery.Reliable);
@@ -493,7 +493,7 @@ namespace DiceGame.Session.Network
             using var writer = new FastBufferWriter(16, Allocator.Temp);
             writer.WriteValueSafe((byte)1);
             customMessaging.SendNamedMessage(
-                OnlineSessionConstants.MessageMatchStartAck,
+                SessionConstants.MessageMatchStartAck,
                 NetworkManager.ServerClientId,
                 writer,
                 NetworkDelivery.Reliable);
@@ -513,7 +513,7 @@ namespace DiceGame.Session.Network
             using var writer = new FastBufferWriter(8, Allocator.Temp);
             writer.WriteValueSafe((byte)1);
             customMessaging.SendNamedMessage(
-                OnlineSessionConstants.MessageLockstepReady,
+                SessionConstants.MessageLockstepReady,
                 NetworkManager.ServerClientId,
                 writer,
                 NetworkDelivery.Reliable);
@@ -538,7 +538,7 @@ namespace DiceGame.Session.Network
                 using var writer = new FastBufferWriter(8, Allocator.Temp);
                 writer.WriteValueSafe((byte)1);
                 customMessaging.SendNamedMessage(
-                    OnlineSessionConstants.MessageLockstepReady,
+                    SessionConstants.MessageLockstepReady,
                     clientId,
                     writer,
                     NetworkDelivery.Reliable);
@@ -558,7 +558,7 @@ namespace DiceGame.Session.Network
             using var writer = new FastBufferWriter(16, Allocator.Temp);
             writer.WriteNetworkSerializable(payload);
             customMessaging.SendNamedMessage(
-                OnlineSessionConstants.MessageSimHash,
+                SessionConstants.MessageSimHash,
                 NetworkManager.ServerClientId,
                 writer,
                 NetworkDelivery.ReliableSequenced);
@@ -583,7 +583,7 @@ namespace DiceGame.Session.Network
                 using var writer = new FastBufferWriter(1024, Allocator.Temp, 8192);
                 writer.WriteNetworkSerializable(payload);
                 customMessaging.SendNamedMessage(
-                    OnlineSessionConstants.MessageSimResync,
+                    SessionConstants.MessageSimResync,
                     clientId,
                     writer,
                     NetworkDelivery.ReliableFragmentedSequenced);
@@ -594,7 +594,7 @@ namespace DiceGame.Session.Network
                 $"entities={payload.Entities?.Length ?? 0}");
         }
 
-        public void BroadcastMatchSetup(MatchSetupNetworkPayload setupPayload) {
+        public void BroadcastMatchSetup(MatchSetupPayload setupPayload) {
             if (networkManager == null || !networkManager.IsServer) {
                 return;
             }
@@ -602,12 +602,12 @@ namespace DiceGame.Session.Network
             using var writer = new FastBufferWriter(MatchSetupWriterSize, Allocator.Temp);
             writer.WriteNetworkSerializable(setupPayload);
             networkManager.CustomMessagingManager.SendNamedMessageToAll(
-                OnlineSessionConstants.MessageMatchSetupBroadcast,
+                SessionConstants.MessageMatchSetupBroadcast,
                 writer,
                 NetworkDelivery.Reliable);
         }
 
-        public void SendMatchSetupUpdateToServer(MatchSetupNetworkPayload setupPayload) {
+        public void SendMatchSetupUpdateToServer(MatchSetupPayload setupPayload) {
             if (networkManager == null || !networkManager.IsConnectedClient || networkManager.IsServer) {
                 return;
             }
@@ -615,7 +615,7 @@ namespace DiceGame.Session.Network
             using var writer = new FastBufferWriter(MatchSetupWriterSize, Allocator.Temp);
             writer.WriteNetworkSerializable(setupPayload);
             networkManager.CustomMessagingManager.SendNamedMessage(
-                OnlineSessionConstants.MessageMatchSetupUpdate,
+                SessionConstants.MessageMatchSetupUpdate,
                 NetworkManager.ServerClientId,
                 writer,
                 NetworkDelivery.Reliable);
@@ -637,7 +637,7 @@ namespace DiceGame.Session.Network
             using var writer = new FastBufferWriter(IdentityWriterSize, Allocator.Temp);
             writer.WriteValueSafe(fixedId);
             networkManager.CustomMessagingManager.SendNamedMessage(
-                OnlineSessionConstants.MessagePlayerIdentity,
+                SessionConstants.MessagePlayerIdentity,
                 NetworkManager.ServerClientId,
                 writer,
                 NetworkDelivery.Reliable);
@@ -658,7 +658,7 @@ namespace DiceGame.Session.Network
             using var writer = new FastBufferWriter(8, Allocator.Temp);
             writer.WriteValueSafe((byte)1);
             networkManager.CustomMessagingManager.SendNamedMessage(
-                OnlineSessionConstants.MessagePlayerIdentityRequest,
+                SessionConstants.MessagePlayerIdentityRequest,
                 clientId,
                 writer,
                 NetworkDelivery.Reliable);
@@ -673,7 +673,7 @@ namespace DiceGame.Session.Network
             writer.WriteValueSafe(command);
             writer.WriteValueSafe(data);
             networkManager.CustomMessagingManager.SendNamedMessageToAll(
-                OnlineSessionConstants.MessageFlowCommand,
+                SessionConstants.MessageFlowCommand,
                 writer,
                 NetworkDelivery.Reliable);
         }
@@ -686,7 +686,7 @@ namespace DiceGame.Session.Network
             using var writer = new FastBufferWriter(8, Allocator.Temp);
             writer.WriteValueSafe(command);
             networkManager.CustomMessagingManager.SendNamedMessage(
-                OnlineSessionConstants.MessageFlowRequest,
+                SessionConstants.MessageFlowRequest,
                 NetworkManager.ServerClientId,
                 writer,
                 NetworkDelivery.Reliable);
@@ -778,7 +778,7 @@ namespace DiceGame.Session.Network
                 $"OnlineNetMessenger.OnMatchStartMessage received: sender={senderClientId} " +
                 $"subscribers={MatchStartReceived?.GetInvocationList().Length ?? 0}");
             try {
-                reader.ReadNetworkSerializable(out MatchSetupNetworkPayload setupPayload);
+                reader.ReadNetworkSerializable(out MatchSetupPayload setupPayload);
                 reader.ReadValueSafe(out int matchSeed);
                 if (matchSeed != 0) {
                     setupPayload.MatchSeed = matchSeed;
@@ -832,7 +832,7 @@ namespace DiceGame.Session.Network
         }
 
         void OnMatchSetupBroadcastMessage(ulong senderClientId, FastBufferReader reader) {
-            reader.ReadNetworkSerializable(out MatchSetupNetworkPayload setupPayload);
+            reader.ReadNetworkSerializable(out MatchSetupPayload setupPayload);
             MatchSetupBroadcastReceived?.Invoke(setupPayload);
         }
 
@@ -841,7 +841,7 @@ namespace DiceGame.Session.Network
                 return;
             }
 
-            reader.ReadNetworkSerializable(out MatchSetupNetworkPayload setupPayload);
+            reader.ReadNetworkSerializable(out MatchSetupPayload setupPayload);
             MatchSetupUpdateReceived?.Invoke(senderClientId, setupPayload);
         }
 

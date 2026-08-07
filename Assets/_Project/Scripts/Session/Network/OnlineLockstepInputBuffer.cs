@@ -13,7 +13,7 @@ namespace DiceGame.Session.Network
         readonly int capacityTicks;
 
         public OnlineLockstepInputBuffer(int capacityTicks) {
-            this.capacityTicks = capacityTicks > 0 ? capacityTicks : OnlineSessionConstants.LockstepInputBufferTicks;
+            this.capacityTicks = capacityTicks > 0 ? capacityTicks : SessionConstants.LockstepInputBufferTicks;
         }
 
         public bool TryGet(PlayerSlot slot, uint tick, out OnlineInputPayload payload) {
