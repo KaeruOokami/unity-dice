@@ -345,7 +345,7 @@ namespace DiceGame.Gameplay
             // match differs; a client applying the host's broadcast reuses its seed.
             var matchSeed = applyingRemoteFlow
                 ? explicitSeed
-                : UnityEngine.Random.Range(1, int.MaxValue);
+                : MatchRandom.CreateMatchSeed();
 
             if (broadcast && !applyingRemoteFlow)
             {

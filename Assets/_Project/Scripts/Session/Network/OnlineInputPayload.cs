@@ -42,9 +42,10 @@ namespace DiceGame.Session.Network
             Direction direction,
             uint sequence = 0,
             uint tick = 0) {
+            var quantized = LockstepInputQuantizer.QuantizeMove(move);
             return new OnlineInputPayload {
-                MoveX = move.x,
-                MoveY = move.y,
+                MoveX = quantized.x,
+                MoveY = quantized.y,
                 LiftPressed = lift,
                 JumpPressed = jump,
                 HasDirection = hasDirection,

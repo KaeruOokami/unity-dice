@@ -39,6 +39,10 @@ namespace DiceGame.Gameplay
         Action pendingLogicalComplete;
         float logicalSpawnRemaining;
         Action pendingSpawnComplete;
+        float logicalErasureProgress;
+        float logicalErasureDuration;
+        Action pendingErasureComplete;
+        bool wasLogicalErasureGhost;
 
         public bool IsSpawning => isSpawning;
         public DiceSpawnAppearMode SpawnAppearMode => spawnAppearMode;
@@ -58,8 +62,17 @@ namespace DiceGame.Gameplay
         public bool IsRadianceErasing => erasureKind == ErasureKind.Radiance;
         public ErasureKind ErasureKind => erasureKind;
         public bool IsVanishing => isVanishing;
+        /// <summary>
+        /// Authoritative sink/radiance erasure progress (0..1). View mirrors this; do not read View.
+        /// </summary>
+        public float LogicalErasureProgress => logicalErasureProgress;
+
         public bool IsErasureGhost =>
-            IsSinkErasing && diceView != null && diceView.IsErasureGhost;
+            IsSinkErasing
+            && !Capabilities.SuppressesErasureGhost
+            && TryGetSinkGhostThreshold(out var ghostThreshold)
+            && logicalErasureProgress >= ghostThreshold;
+
         /// <summary>
         /// True while this jumbo currently occupies Top footprint slots.
         /// Driven by <see cref="DiceRegistry.SyncJumboSinkOccupancy"/> (progress threshold + stack gate).
@@ -76,8 +89,7 @@ namespace DiceGame.Gameplay
         public bool WantsJumboTopOccupancy =>
             !Capabilities.HasExpandedFootprint
             || !IsSinkErasing
-            || (diceView != null
-                && diceView.ErasureProgress < JumboFootprint.SinkTopOccupancyThreshold);
+            || logicalErasureProgress < JumboFootprint.SinkTopOccupancyThreshold;
         public bool IsCarried => isCarried;
         public bool IsBusy => IsRolling || isSpawning || IsErasing || isVanishing || isCarried;
         public DiceState CurrentState => currentState;
@@ -164,6 +176,105 @@ namespace DiceGame.Gameplay
                     pendingLogicalComplete = null;
                     complete?.Invoke();
                 }
+            }
+
+            if (IsErasing && logicalErasureDuration > 0f) {
+                logicalErasureProgress = Mathf.Min(
+                    1f,
+                    logicalErasureProgress + deltaTime / logicalErasureDuration);
+                SyncLogicalErasureSideEffects();
+                diceView?.SyncErasureProgressFromSim(logicalErasureProgress);
+                if (logicalErasureProgress >= 1f) {
+                    FinishLogicalErasure();
+                }
+            }
+        }
+
+        bool TryGetSinkGhostThreshold(out float threshold) {
+            threshold = 0f;
+            var settings = diceView != null ? diceView.ErasureSettings : null;
+            if (settings == null) {
+                return false;
+            }
+
+            threshold = settings.SinkGhostThreshold;
+            return true;
+        }
+
+        void SyncLogicalErasureSideEffects() {
+            if (!IsSinkErasing) {
+                return;
+            }
+
+            NotifyErasureProgressChanged();
+
+            if (Capabilities.SuppressesErasureGhost) {
+                return;
+            }
+
+            var ghost = IsErasureGhost;
+            if (ghost && !wasLogicalErasureGhost) {
+                wasLogicalErasureGhost = true;
+                OnBecameErasureGhost();
+            } else if (!ghost && wasLogicalErasureGhost) {
+                wasLogicalErasureGhost = false;
+                OnCeasedErasureGhost();
+            }
+        }
+
+        void BeginLogicalErasure(ErasureKind kind, Action onComplete) {
+            var settings = diceView != null ? diceView.ErasureSettings : null;
+            if (settings == null) {
+                Debug.LogError("DiceController.BeginLogicalErasure: DiceErasureSettings missing on DiceView.");
+                erasureKind = ErasureKind.None;
+                onComplete?.Invoke();
+                return;
+            }
+
+            logicalErasureProgress = 0f;
+            wasLogicalErasureGhost = false;
+            pendingErasureComplete = onComplete;
+            if (kind == ErasureKind.Radiance) {
+                logicalErasureDuration = Mathf.Max(0.0001f, settings.RadianceDuration);
+            } else {
+                var duration = settings.SinkDuration;
+                var sinkMultiplier = Capabilities.SinkDurationMultiplier;
+                if (sinkMultiplier > 0f) {
+                    duration *= sinkMultiplier;
+                }
+
+                logicalErasureDuration = Mathf.Max(0.0001f, duration);
+            }
+        }
+
+        void FinishLogicalErasure() {
+            var complete = pendingErasureComplete;
+            ClearLogicalErasureState();
+            diceView?.CancelErasure();
+            registry?.Unregister(this);
+            erasureKind = ErasureKind.None;
+            Erased?.Invoke(this);
+            complete?.Invoke();
+            Destroy(gameObject);
+        }
+
+        void ClearLogicalErasureState() {
+            logicalErasureProgress = 0f;
+            logicalErasureDuration = 0f;
+            pendingErasureComplete = null;
+            wasLogicalErasureGhost = false;
+        }
+
+        void ApplyLogicalErasureDelta(float delta) {
+            if (!IsErasing || logicalErasureDuration <= 0f) {
+                return;
+            }
+
+            logicalErasureProgress = Mathf.Clamp01(logicalErasureProgress + delta);
+            SyncLogicalErasureSideEffects();
+            diceView?.SyncErasureProgressFromSim(logicalErasureProgress);
+            if (logicalErasureProgress >= 1f) {
+                FinishLogicalErasure();
             }
         }
 
@@ -1203,13 +1314,10 @@ namespace DiceGame.Gameplay
                 ConfigurePushBody();
             }
 
-            diceView.PlayErasure(kind, currentState, board, registry, emissionColor, () => {
-                registry?.Unregister(this);
-                erasureKind = ErasureKind.None;
-                Erased?.Invoke(this);
-                onComplete?.Invoke();
-                Destroy(gameObject);
-            });
+            BeginLogicalErasure(kind, onComplete);
+            // View mirrors logical progress; completion is owned by TickLogicalMotion.
+            diceView.PlayErasure(kind, currentState, board, registry, emissionColor, onComplete: null);
+            diceView.SyncErasureProgressFromSim(logicalErasureProgress);
         }
 
         public void BeginErasureForCurrentTier(Color? emissionColor, Action onComplete) {
@@ -1224,18 +1332,18 @@ namespace DiceGame.Gameplay
         }
 
         public void RetreatErasure(float amount) {
-            if (!IsErasing || diceView == null) {
+            if (!IsErasing) {
                 return;
             }
 
             // Match sink progress rate: Jumbo (duration ×2) retreats half as far in progress space.
             var sinkMultiplier = Capabilities.SinkDurationMultiplier;
             var scaledAmount = sinkMultiplier > 0f ? amount / sinkMultiplier : amount;
-            diceView.RetreatErasure(scaledAmount);
+            ApplyLogicalErasureDelta(-scaledAmount);
         }
 
         public void AdvanceErasure(float amount) {
-            if (!IsSinkErasing || diceView == null) {
+            if (!IsSinkErasing) {
                 return;
             }
 
@@ -1243,7 +1351,7 @@ namespace DiceGame.Gameplay
                 return;
             }
 
-            diceView.AdvanceErasure(amount);
+            ApplyLogicalErasureDelta(amount);
         }
 
         public void BeginOneVanish(DiceOneVanishSettings settings, Color emissionColor, Action onComplete) {
@@ -1375,6 +1483,7 @@ namespace DiceGame.Gameplay
                 return;
             }
 
+            ClearLogicalErasureState();
             diceView?.CancelErasure();
             erasureKind = ErasureKind.None;
             registry?.Unregister(this);

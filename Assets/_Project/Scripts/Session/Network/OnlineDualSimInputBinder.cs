@@ -410,18 +410,19 @@ namespace DiceGame.Session.Network
 
             GameplaySimClock.BeginStep(simDt);
             try {
-                registry?.TickLogicalMotions(simDt);
+                // Keep order aligned with SimTickSchedule (Phase A / Quantum Frame contract).
+                registry?.TickLogicalMotions(simDt); // DiceLogicalMotions
 
-                ApplyTickInput(PlayerSlot.Player1, p1);
+                ApplyTickInput(PlayerSlot.Player1, p1); // ApplyInputs
                 ApplyTickInput(PlayerSlot.Player2, p2);
 
-                player1Character.SimulateLockstepFrame(simDt);
+                player1Character.SimulateLockstepFrame(simDt); // Characters
                 player2Character.SimulateLockstepFrame(simDt);
 
-                spawnSystem?.SimulateLockstepTick(simDt);
-                attackController?.SimulateLockstepTick(simDt);
-                jumboSequenceController?.SimulateLockstepTick();
-                erasureSystem?.SimulateLockstepTick();
+                spawnSystem?.SimulateLockstepTick(simDt); // Spawn
+                attackController?.SimulateLockstepTick(simDt); // VersusAttack
+                jumboSequenceController?.SimulateLockstepTick(); // JumboSequence
+                erasureSystem?.SimulateLockstepTick(); // ErasureMatch
 
                 currentTick++;
                 inputBuffer.DiscardBefore(
@@ -566,7 +567,7 @@ namespace DiceGame.Session.Network
             }
 
             var move = localHardwareInput != null
-                ? localHardwareInput.ReadMove()
+                ? LockstepInputQuantizer.QuantizeMove(localHardwareInput.ReadMove())
                 : Vector2.zero;
             localInputSequence++;
             var payload = OnlineInputPayload.FromSource(

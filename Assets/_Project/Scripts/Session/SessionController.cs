@@ -335,7 +335,7 @@ namespace DiceGame.Session
 
             SessionState.Instance.SetCurrentSetup(setup);
             var payload = MatchSetupCodec.ToPayload(setup, matchSetupPresetRegistry);
-            payload.MatchSeed = UnityEngine.Random.Range(1, int.MaxValue);
+            payload.MatchSeed = MatchRandom.CreateMatchSeed();
             SessionState.Instance.SetMatchSeed(payload.MatchSeed);
 
             if (messenger == null) {

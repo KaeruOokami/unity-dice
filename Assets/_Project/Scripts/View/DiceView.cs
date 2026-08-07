@@ -76,6 +76,7 @@ namespace DiceGame.View
 
         public bool IsAnimating => isAnimating;
         public float ErasureProgress => erasureProgress;
+        public DiceErasureSettings ErasureSettings => erasureSettings;
         public float GroundRollProgress => groundRollProgress;
         public float OneVanishProgress => oneVanishProgress;
         public bool IsOneVanishing => oneVanishCoroutine != null;
@@ -930,6 +931,18 @@ namespace DiceGame.View
 
             erasureProgress = Mathf.Min(1f, erasureProgress + amount);
             ApplyErasureVisual(erasureBoard, erasureProgress);
+        }
+
+        /// <summary>
+        /// Presentation mirror of sim-owned erasure progress. Does not drive gameplay occupancy.
+        /// </summary>
+        public void SyncErasureProgressFromSim(float progress) {
+            if (erasureBoard == null || activeErasureKind == ErasureKind.None) {
+                erasureProgress = Mathf.Clamp01(progress);
+                return;
+            }
+
+            ApplyErasureVisual(erasureBoard, Mathf.Clamp01(progress));
         }
 
         public void CancelErasure() {
@@ -1995,25 +2008,20 @@ namespace DiceGame.View
             }
 
             positionRoot.SetParent(transform);
+            EnsureDiceController();
 
-            var duration = kind == ErasureKind.Radiance
-                ? erasureSettings.RadianceDuration
-                : erasureSettings.SinkDuration;
-            if (kind == ErasureKind.Sink) {
-                var sinkMultiplier = ResolveVisualCapabilities().SinkDurationMultiplier;
-                if (sinkMultiplier > 0f) {
-                    duration *= sinkMultiplier;
-                }
-            }
-
-            while (erasureProgress < 1f) {
-                erasureProgress = Mathf.Min(1f, erasureProgress + GameplaySimClock.DeltaTime / duration);
-                ApplyErasureVisual(board, erasureProgress);
+            // Progress is advanced by DiceController.TickLogicalMotion; view only mirrors.
+            while (diceController != null
+                && diceController.IsErasing
+                && diceController.LogicalErasureProgress < 1f) {
+                ApplyErasureVisual(board, diceController.LogicalErasureProgress);
                 yield return null;
             }
 
-            erasureProgress = 1f;
-            ApplyErasureVisual(board, erasureProgress);
+            if (diceController != null) {
+                ApplyErasureVisual(board, diceController.LogicalErasureProgress);
+            }
+
             isAnimating = false;
             erasureCoroutine = null;
             erasureBoard = null;
@@ -2038,8 +2046,6 @@ namespace DiceGame.View
             ApplySurfaceLayout(board, progress);
             ApplySinkGhostVisual(progress);
             SyncStackedTopDuringErasure();
-            EnsureDiceController();
-            diceController?.NotifyErasureProgressChanged();
         }
 
         /// <summary>
@@ -2112,21 +2118,9 @@ namespace DiceGame.View
             ApplyErasureAlpha(progress, allowGhostAlpha: !suppressGhost);
             ApplyErasureEmission(progress);
             EnsurePushBody();
-            // Jumbo keeps collision until fully erased.
+            // Jumbo keeps collision until fully erased. Ghost gameplay is driven by DiceController.
             pushBody?.SetCollisionEnabled(suppressGhost || !IsErasureGhost);
-
-            if (suppressGhost) {
-                return;
-            }
-
-            EnsureDiceController();
-            if (IsErasureGhost && !wasErasureGhost) {
-                wasErasureGhost = true;
-                diceController?.OnBecameErasureGhost();
-            } else if (!IsErasureGhost && wasErasureGhost) {
-                wasErasureGhost = false;
-                diceController?.OnCeasedErasureGhost();
-            }
+            wasErasureGhost = IsErasureGhost;
         }
 
         void ResetErasureVisuals() {

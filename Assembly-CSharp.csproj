@@ -90,6 +90,7 @@
      <Compile Include="Assets\_Project\Scripts\Placement\Movement\MoveFacts.cs" />
      <Compile Include="Assets\Photon\Quantum\Runtime\QuantumMapLoader.cs" />
      <Compile Include="Assets\Photon\Quantum\Runtime\QuantumGraphProfilerUserScripts.cs" />
+     <Compile Include="Assets\_Project\Scripts\Session\Network\LockstepReplayHashGate.cs" />
      <Compile Include="Assets\_Project\Scripts\Core\Behavior\DiceBehaviorResolver.cs" />
      <Compile Include="Assets\_Project\Scripts\Gameplay\AI\Application\AiExecutionContext.cs" />
      <Compile Include="Assets\Photon\Quantum\Runtime\QuantumGraphProfilerMarkers.cs" />
@@ -159,6 +160,7 @@
      <Compile Include="Assets\_Project\Scripts\Placement\Interaction\CarryPlacementPassability.cs" />
      <Compile Include="Assets\Photon\Quantum\Runtime\QuantumUnityDB.cs" />
      <Compile Include="Assets\_Project\Scripts\Placement\Occupancy\HeightStepLimits.cs" />
+     <Compile Include="Assets\_Project\Scripts\Session\Network\LockstepInputQuantizer.cs" />
      <Compile Include="Assets\_Project\Scripts\Gameplay\Match\DeferredMatchSnapshot.cs" />
      <Compile Include="Assets\_Project\Scripts\Placement\Movement\Grid\IceElasticSlideExecutor.cs" />
      <Compile Include="Assets\Photon\Quantum\Runtime\QuantumGraphProfilerFrameTime.cs" />
@@ -270,6 +272,7 @@
      <Compile Include="Assets\_Project\Scripts\Session\Network\OnlineSimStateHasher.cs" />
      <Compile Include="Assets\_Project\Scripts\Config\PlayerNaturalSendSettings.cs" />
      <Compile Include="Assets\_Project\Scripts\Placement\Movement\Walk\TransferFootingPolicy.cs" />
+     <Compile Include="Assets\_Project\Scripts\Gameplay\Match\SimTickSchedule.cs" />
      <Compile Include="Assets\_Project\Scripts\Placement\Movement\Walk\HeightTransferFactResolver.cs" />
      <Compile Include="Assets\_Project\Scripts\Placement\Registry\PlacementService.cs" />
      <Compile Include="Assets\_Project\Scripts\Versus\Core\AttackVolleyBuilder.cs" />
@@ -354,6 +357,7 @@
      <Compile Include="Assets\Photon\Quantum\Runtime\QuantumGraphProfilingStatistics.cs" />
      <Compile Include="Assets\_Project\Scripts\Gameplay\AI\Domain\MatchGoal.cs" />
      <Compile Include="Assets\Photon\Quantum\Runtime\QuantumStaticBoxCollider3D.cs" />
+     <Compile Include="Assets\_Project\Scripts\Gameplay\Match\MatchRandom.cs" />
      <Compile Include="Assets\_Project\Scripts\Config\DiceAnimationSettings.cs" />
      <Compile Include="Assets\_Project\Scripts\Versus\SinkingGroupTracker.cs" />
      <Compile Include="Assets\_Project\Scripts\Versus\Core\JumboSendCap.cs" />

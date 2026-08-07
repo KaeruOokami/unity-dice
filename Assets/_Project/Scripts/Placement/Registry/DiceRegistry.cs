@@ -38,7 +38,8 @@ namespace DiceGame.Placement
                 return;
             }
 
-            for (var i = 0; i < allDice.Count; i++) {
+            // Reverse: TickLogicalMotion may Unregister (erasure complete) and shrink allDice.
+            for (var i = allDice.Count - 1; i >= 0; i--) {
                 var dice = allDice[i];
                 if (dice != null) {
                     dice.TickLogicalMotion(deltaTime);

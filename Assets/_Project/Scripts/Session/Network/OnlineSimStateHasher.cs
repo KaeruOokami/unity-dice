@@ -10,7 +10,7 @@ namespace DiceGame.Session.Network
 {
     /// <summary>
     /// Logical board fingerprint for lockstep desync detection.
-    /// Excludes visual/busy timing and fine world poses (those are not authoritative in lockstep).
+    /// Includes sim-owned erasure/busy progress; excludes Transform-only presentation poses.
     /// </summary>
     public static class OnlineSimStateHasher
     {
@@ -84,6 +84,15 @@ namespace DiceGame.Session.Network
             hash = Mix(hash, dice.IsCarried ? 1u : 0u);
             hash = Mix(hash, dice.IsErasing ? 1u : 0u);
             hash = Mix(hash, dice.IsVanishing ? 1u : 0u);
+            hash = Mix(hash, dice.IsErasureGhost ? 1u : 0u);
+            hash = Mix(hash, dice.WantsJumboTopOccupancy ? 1u : 0u);
+            hash = Mix(hash, Quantize01(dice.LogicalErasureProgress));
+            hash = Mix(hash, Quantize01(dice.LogicalMotionProgress));
+            hash = Mix(hash, dice.IsRolling ? 1u : 0u);
+        }
+
+        static uint Quantize01(float value) {
+            return (uint)Mathf.Clamp(Mathf.RoundToInt(value * 1000f), 0, 1000);
         }
 
         static GameCharacterController FindCharacter(

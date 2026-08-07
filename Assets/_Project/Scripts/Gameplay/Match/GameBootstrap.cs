@@ -79,11 +79,13 @@ namespace DiceGame.Gameplay
         DiceSpawnSystem spawnSystem;
         VersusAttackController attackController;
         System.Random spawnRandom;
+        MatchRandom matchRandom;
         readonly List<CharacterController> characters = new();
         bool sessionStarted;
         ResolvedSessionSetup resolvedSetup;
 
         public Board Board => board;
+        public MatchRandom MatchRandom => matchRandom;
         public GameObject DiceEntityPrefab => diceEntityPrefab;
         public GameObject CharacterPrefab => characterPrefab;
         public PlayerInputSettings PlayerInputSettings => playerInputSettings;
@@ -275,7 +277,7 @@ namespace DiceGame.Gameplay
                     characterMovementSettings.MaxJumpStepPlayerOnly,
                     characterMovementSettings.MaxJumpStepCoupled));
             spawnRandom = ResolveMatchRandom(out var matchSeed);
-            UnityEngine.Random.InitState(matchSeed);
+            // Gameplay RNG is System.Random only; do not InitState UnityEngine.Random for sim draws.
             if (session != null && session.IsOnline) {
                 Debug.Log(
                     $"GameBootstrap: online match seed={matchSeed} " +
@@ -426,7 +428,8 @@ namespace DiceGame.Gameplay
                 }
 
                 usedSeed = session.MatchSeed != 0 ? session.MatchSeed : 1;
-                return new System.Random(usedSeed);
+                matchRandom = new MatchRandom(usedSeed);
+                return matchRandom.Source;
             }
 
             usedSeed = randomSeed != 0 ? randomSeed : Environment.TickCount;
@@ -434,7 +437,8 @@ namespace DiceGame.Gameplay
                 usedSeed = 1;
             }
 
-            return new System.Random(usedSeed);
+            matchRandom = new MatchRandom(usedSeed);
+            return matchRandom.Source;
         }
 
         static void AbortPendingSessionStart() {
