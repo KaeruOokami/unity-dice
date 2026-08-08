@@ -52,11 +52,91 @@ namespace Quantum.Prototypes {
   [System.SerializableAttribute()]
   [Quantum.Prototypes.Prototype(typeof(Quantum.Input))]
   public unsafe partial class InputPrototype : StructPrototype {
-    [HideInInspector()]
-    public Int32 _empty_prototype_dummy_field_;
+    public Button MoveN;
+    public Button MoveE;
+    public Button MoveS;
+    public Button MoveW;
+    public Button Lift;
+    public Button Jump;
     partial void MaterializeUser(Frame frame, ref Quantum.Input result, in PrototypeMaterializationContext context);
     public void Materialize(Frame frame, ref Quantum.Input result, in PrototypeMaterializationContext context = default) {
+        result.MoveN = this.MoveN;
+        result.MoveE = this.MoveE;
+        result.MoveS = this.MoveS;
+        result.MoveW = this.MoveW;
+        result.Lift = this.Lift;
+        result.Jump = this.Jump;
         MaterializeUser(frame, ref result, in context);
+    }
+  }
+  [System.SerializableAttribute()]
+  [Quantum.Prototypes.Prototype(typeof(Quantum.PhaseBBoard))]
+  public unsafe partial class PhaseBBoardPrototype : ComponentPrototype<Quantum.PhaseBBoard> {
+    public Int32 Width;
+    public Int32 Height;
+    public QBoolean Initialized;
+    partial void MaterializeUser(Frame frame, ref Quantum.PhaseBBoard result, in PrototypeMaterializationContext context);
+    public override Boolean AddToEntity(FrameBase f, EntityRef entity, in PrototypeMaterializationContext context) {
+        Quantum.PhaseBBoard component = default;
+        Materialize((Frame)f, ref component, in context);
+        return f.Set(entity, component) == SetResult.ComponentAdded;
+    }
+    public void Materialize(Frame frame, ref Quantum.PhaseBBoard result, in PrototypeMaterializationContext context = default) {
+        result.Width = this.Width;
+        result.Height = this.Height;
+        result.Initialized = this.Initialized;
+        MaterializeUser(frame, ref result, in context);
+    }
+  }
+  [System.SerializableAttribute()]
+  [Quantum.Prototypes.Prototype(typeof(Quantum.PhaseBDice))]
+  public unsafe partial class PhaseBDicePrototype : ComponentPrototype<Quantum.PhaseBDice> {
+    public Int32 FaceValue;
+    public QBoolean IsCarried;
+    partial void MaterializeUser(Frame frame, ref Quantum.PhaseBDice result, in PrototypeMaterializationContext context);
+    public override Boolean AddToEntity(FrameBase f, EntityRef entity, in PrototypeMaterializationContext context) {
+        Quantum.PhaseBDice component = default;
+        Materialize((Frame)f, ref component, in context);
+        return f.Set(entity, component) == SetResult.ComponentAdded;
+    }
+    public void Materialize(Frame frame, ref Quantum.PhaseBDice result, in PrototypeMaterializationContext context = default) {
+        result.FaceValue = this.FaceValue;
+        result.IsCarried = this.IsCarried;
+        MaterializeUser(frame, ref result, in context);
+    }
+  }
+  [System.SerializableAttribute()]
+  [Quantum.Prototypes.Prototype(typeof(Quantum.PhaseBGridPose))]
+  public unsafe partial class PhaseBGridPosePrototype : ComponentPrototype<Quantum.PhaseBGridPose> {
+    public Int32 X;
+    public Int32 Y;
+    partial void MaterializeUser(Frame frame, ref Quantum.PhaseBGridPose result, in PrototypeMaterializationContext context);
+    public override Boolean AddToEntity(FrameBase f, EntityRef entity, in PrototypeMaterializationContext context) {
+        Quantum.PhaseBGridPose component = default;
+        Materialize((Frame)f, ref component, in context);
+        return f.Set(entity, component) == SetResult.ComponentAdded;
+    }
+    public void Materialize(Frame frame, ref Quantum.PhaseBGridPose result, in PrototypeMaterializationContext context = default) {
+        result.X = this.X;
+        result.Y = this.Y;
+        MaterializeUser(frame, ref result, in context);
+    }
+  }
+  [System.SerializableAttribute()]
+  [Quantum.Prototypes.Prototype(typeof(Quantum.PhaseBPlayerPawn))]
+  public unsafe class PhaseBPlayerPawnPrototype : ComponentPrototype<Quantum.PhaseBPlayerPawn> {
+    public PlayerRef Player;
+    public MapEntityId CarriedDice;
+    public QBoolean HasCarriedDice;
+    public override Boolean AddToEntity(FrameBase f, EntityRef entity, in PrototypeMaterializationContext context) {
+        Quantum.PhaseBPlayerPawn component = default;
+        Materialize((Frame)f, ref component, in context);
+        return f.Set(entity, component) == SetResult.ComponentAdded;
+    }
+    public void Materialize(Frame frame, ref Quantum.PhaseBPlayerPawn result, in PrototypeMaterializationContext context = default) {
+        result.Player = this.Player;
+        PrototypeValidator.FindMapEntity(this.CarriedDice, in context, out result.CarriedDice);
+        result.HasCarriedDice = this.HasCarriedDice;
     }
   }
 }

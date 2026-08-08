@@ -46,6 +46,7 @@
      <Compile Include="Assets\_Project\Scripts\Gameplay\AI\Domain\SinkingChainEvaluator.cs" />
      <Compile Include="Assets\_Project\Scripts\Placement\Interaction\CharacterPushExecutor.cs" />
      <Compile Include="Assets\Photon\Quantum\Runtime\QuantumGameGizmosSettingsScriptableObject.cs" />
+     <Compile Include="Assets\QuantumUser\View\PhaseB\PhaseBSliceViewBinder.cs" />
      <Compile Include="Assets\_Project\Scripts\Session\MatchSetupPanelUi.cs" />
      <Compile Include="Assets\Photon\Quantum\Runtime\QuantumMapData.cs" />
      <Compile Include="Assets\Photon\Quantum\Runtime\QuantumRunnerBehaviour.cs" />
@@ -378,6 +379,7 @@
      <Compile Include="Assets\_Project\Scripts\Placement\Movement\Jump\JumpInputPolicy.cs" />
      <Compile Include="Assets\_Project\Scripts\Core\Motion\GhostLandingMode.cs" />
      <Compile Include="Assets\_Project\Scripts\Session\OnlineSessionConstants.cs" />
+     <Compile Include="Assets\QuantumUser\View\PhaseB\PhaseBInputPoller.cs" />
      <Compile Include="Assets\_Project\Scripts\Session\OnlinePlayMode.cs" />
      <Compile Include="Assets\_Project\Scripts\Gameplay\AI\Domain\LiftJoinPlanner.cs" />
      <Compile Include="Assets\_Project\Scripts\View\BoardView.cs" />

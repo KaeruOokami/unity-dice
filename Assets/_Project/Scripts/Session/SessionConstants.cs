@@ -36,6 +36,11 @@ namespace DiceGame.Session
         public const int SimTickHz = 60;
         public const float SimTickSeconds = 1f / SimTickHz;
         /// <summary>
+        /// Quantum Phase B vertical slice lives in <c>Assets/QuantumUser/Scenes/QuantumGameScene</c>.
+        /// The UGS dual-sim path below remains the active online gameplay path until Phase D.
+        /// </summary>
+        public const string QuantumPhaseBSceneName = "QuantumGameScene";
+        /// <summary>
         /// Local input is scheduled this many ticks ahead (delayed lockstep).
         /// ~50ms at <see cref="SimTickHz"/>; Unreliable input + redundancy covers Relay jitter.
         /// </summary>

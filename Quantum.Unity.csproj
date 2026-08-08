@@ -46,6 +46,7 @@
      <Compile Include="Assets\Packages\Photon\Quantum\Runtime\QPrototypeNavMeshPathfinder.cs" />
      <Compile Include="Assets\Packages\Photon\Quantum\Runtime\QuantumMultiClientRunner.cs" />
      <Compile Include="Assets\Packages\Photon\Quantum\Runtime\QuantumUnityDB.cs" />
+     <Compile Include="Assets\QuantumUser\View\Generated\QPrototypePhaseBPlayerPawn.cs" />
      <Compile Include="Assets\Packages\Photon\Quantum\Runtime\QuantumGraphProfilerFrameTime.cs" />
      <Compile Include="Assets\Packages\Photon\Quantum\Runtime\QuantumRunnerLocalReplay.cs" />
      <Compile Include="Assets\Packages\Photon\Quantum\Runtime\QuantumDebugInput.cs" />
@@ -69,6 +70,7 @@
      <Compile Include="Assets\Packages\Photon\Quantum\Runtime\QuantumEntityPrototype.cs" />
      <Compile Include="Assets\Packages\Photon\Quantum\Runtime\CustomCallbacks.cs" />
      <Compile Include="Assets\Packages\Photon\Quantum\Runtime\QuantumStaticPolygonCollider2D.cs" />
+     <Compile Include="Assets\QuantumUser\View\Generated\QPrototypePhaseBDice.cs" />
      <Compile Include="Assets\Packages\Photon\Quantum\Runtime\QuantumFrameDiffer.cs" />
      <Compile Include="Assets\Packages\Photon\Quantum\Runtime\QPrototypeCharacterController3D.cs" />
      <Compile Include="Assets\Packages\Photon\Quantum\Runtime\QuantumMachineId.cs" />
@@ -87,6 +89,7 @@
      <Compile Include="Assets\Packages\Photon\Quantum\Runtime\QuantumStaticBoxCollider3D.cs" />
      <Compile Include="Assets\Packages\Photon\Quantum\Runtime\QPrototypeNavMeshAvoidanceObstacle.cs" />
      <Compile Include="Assets\Packages\Photon\Quantum\Runtime\QPrototypeTransform2DVertical.cs" />
+     <Compile Include="Assets\QuantumUser\View\Generated\QPrototypePhaseBBoard.cs" />
      <Compile Include="Assets\Packages\Photon\Quantum\Runtime\QuantumRunnerLocalDebug.cs" />
      <Compile Include="Assets\Packages\Photon\Quantum\Runtime\QPrototypePhysicsBody3D.cs" />
      <Compile Include="Assets\Packages\Photon\Quantum\Runtime\QuantumMenuSceneInfo.cs" />
@@ -106,6 +109,7 @@
      <Compile Include="Assets\Packages\Photon\Quantum\Runtime\QPrototypeNavMeshSteeringAgent.cs" />
      <Compile Include="Assets\Packages\Photon\Quantum\Runtime\QuantumGraphProfilerPredictedFrames.cs" />
      <Compile Include="Assets\Packages\Photon\Quantum\Runtime\QuantumSimpleConnectionGUI.cs" />
+     <Compile Include="Assets\QuantumUser\View\Generated\QPrototypePhaseBGridPose.cs" />
      <Compile Include="Assets\Packages\Photon\Quantum\Runtime\QuantumStaticEdgeCollider2D.cs" />
      <Compile Include="Assets\Packages\Photon\Quantum\Runtime\QuantumGraphProfilerUserScripts.cs" />
      <Compile Include="Assets\Packages\Photon\Quantum\Runtime\QPrototypePhysicsJoints3D.cs" />

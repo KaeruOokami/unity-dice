@@ -49,6 +49,21 @@ namespace Quantum.Prototypes.Unity {
   using RuntimeInitializeOnLoadMethodAttribute = UnityEngine.RuntimeInitializeOnLoadMethodAttribute;
   #endif //;
   
+  [System.SerializableAttribute()]
+  public unsafe partial class PhaseBPlayerPawnPrototype : Quantum.QuantumUnityPrototypeAdapter<Quantum.Prototypes.PhaseBPlayerPawnPrototype> {
+    public PlayerRef Player;
+    public Quantum.QuantumEntityPrototype CarriedDice;
+    public QBoolean HasCarriedDice;
+    partial void ConvertUser(Quantum.QuantumEntityPrototypeConverter converter, ref Quantum.Prototypes.PhaseBPlayerPawnPrototype prototype);
+    public override Quantum.Prototypes.PhaseBPlayerPawnPrototype Convert(Quantum.QuantumEntityPrototypeConverter converter) {
+      var result = new Quantum.Prototypes.PhaseBPlayerPawnPrototype();
+      converter.Convert(this.Player, out result.Player);
+      converter.Convert(this.CarriedDice, out result.CarriedDice);
+      converter.Convert(this.HasCarriedDice, out result.HasCarriedDice);
+      ConvertUser(converter, ref result);
+      return result;
+    }
+  }
 }
 #pragma warning restore 0109
 #pragma warning restore 1591

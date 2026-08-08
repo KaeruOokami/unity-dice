@@ -51,6 +51,12 @@ namespace Quantum {
   
   [System.FlagsAttribute()]
   public enum InputButtons : int {
+    MoveN = 1 << 0,
+    MoveE = 1 << 1,
+    MoveS = 1 << 2,
+    MoveW = 1 << 3,
+    Lift = 1 << 4,
+    Jump = 1 << 5,
   }
   public static unsafe partial class FlagsExtensions {
     public static Boolean IsFlagSet(this InputButtons self, InputButtons flag) {
@@ -511,13 +517,29 @@ namespace Quantum {
   }
   [StructLayout(LayoutKind.Explicit)]
   public unsafe partial struct Input {
-    public const Int32 SIZE = 4;
+    public const Int32 SIZE = 72;
     public const Int32 ALIGNMENT = 4;
+    [FieldOffset(36)]
+    public Button MoveN;
+    [FieldOffset(24)]
+    public Button MoveE;
+    [FieldOffset(48)]
+    public Button MoveS;
+    [FieldOffset(60)]
+    public Button MoveW;
+    [FieldOffset(12)]
+    public Button Lift;
     [FieldOffset(0)]
-    private fixed Byte _alignment_padding_[4];
+    public Button Jump;
     public override readonly Int32 GetHashCode() {
       unchecked { 
         var hash = 19249;
+        hash = hash * 31 + MoveN.GetHashCode();
+        hash = hash * 31 + MoveE.GetHashCode();
+        hash = hash * 31 + MoveS.GetHashCode();
+        hash = hash * 31 + MoveW.GetHashCode();
+        hash = hash * 31 + Lift.GetHashCode();
+        hash = hash * 31 + Jump.GetHashCode();
         return hash;
       }
     }
@@ -526,21 +548,39 @@ namespace Quantum {
     }
     public Boolean IsDown(InputButtons button) {
       switch (button) {
+        case InputButtons.MoveN: return MoveN.IsDown;
+        case InputButtons.MoveE: return MoveE.IsDown;
+        case InputButtons.MoveS: return MoveS.IsDown;
+        case InputButtons.MoveW: return MoveW.IsDown;
+        case InputButtons.Lift: return Lift.IsDown;
+        case InputButtons.Jump: return Jump.IsDown;
         default: return false;
       }
     }
     public Boolean WasPressed(InputButtons button) {
       switch (button) {
+        case InputButtons.MoveN: return MoveN.WasPressed;
+        case InputButtons.MoveE: return MoveE.WasPressed;
+        case InputButtons.MoveS: return MoveS.WasPressed;
+        case InputButtons.MoveW: return MoveW.WasPressed;
+        case InputButtons.Lift: return Lift.WasPressed;
+        case InputButtons.Jump: return Jump.WasPressed;
         default: return false;
       }
     }
     static partial void SerializeCodeGen(void* ptr, FrameSerializer serializer) {
         var p = (Input*)ptr;
+        Button.Serialize(&p->Jump, serializer);
+        Button.Serialize(&p->Lift, serializer);
+        Button.Serialize(&p->MoveE, serializer);
+        Button.Serialize(&p->MoveN, serializer);
+        Button.Serialize(&p->MoveS, serializer);
+        Button.Serialize(&p->MoveW, serializer);
     }
   }
   [StructLayout(LayoutKind.Explicit)]
   public unsafe partial struct _globals_ {
-    public const Int32 SIZE = 640;
+    public const Int32 SIZE = 1048;
     public const Int32 ALIGNMENT = 8;
     [FieldOffset(0)]
     public AssetRef<Map> Map;
@@ -564,12 +604,12 @@ namespace Quantum {
     public Int32 PlayerConnectedCount;
     [FieldOffset(604)]
     [FramePrinter.FixedArrayAttribute(typeof(Input), 6)]
-    private fixed Byte _input_[24];
-    [FieldOffset(632)]
+    private fixed Byte _input_[432];
+    [FieldOffset(1040)]
     public BitSet6 PlayerLastConnectionState;
     public readonly FixedArray<Input> input {
       get {
-        fixed (byte* p = _input_) { return new FixedArray<Input>(p, 4, 6); }
+        fixed (byte* p = _input_) { return new FixedArray<Input>(p, 72, 6); }
       }
     }
     public override readonly Int32 GetHashCode() {
@@ -606,6 +646,102 @@ namespace Quantum {
         Quantum.BitSet6.Serialize(&p->PlayerLastConnectionState, serializer);
     }
   }
+  [StructLayout(LayoutKind.Explicit)]
+  public unsafe partial struct PhaseBBoard : Quantum.IComponentSingleton {
+    public const Int32 SIZE = 12;
+    public const Int32 ALIGNMENT = 4;
+    [FieldOffset(4)]
+    public Int32 Width;
+    [FieldOffset(0)]
+    public Int32 Height;
+    [FieldOffset(8)]
+    public QBoolean Initialized;
+    public override readonly Int32 GetHashCode() {
+      unchecked { 
+        var hash = 11939;
+        hash = hash * 31 + Width.GetHashCode();
+        hash = hash * 31 + Height.GetHashCode();
+        hash = hash * 31 + Initialized.GetHashCode();
+        return hash;
+      }
+    }
+    public static void Serialize(void* ptr, FrameSerializer serializer) {
+        var p = (PhaseBBoard*)ptr;
+        serializer.Stream.Serialize(&p->Height);
+        serializer.Stream.Serialize(&p->Width);
+        QBoolean.Serialize(&p->Initialized, serializer);
+    }
+  }
+  [StructLayout(LayoutKind.Explicit)]
+  public unsafe partial struct PhaseBDice : Quantum.IComponent {
+    public const Int32 SIZE = 8;
+    public const Int32 ALIGNMENT = 4;
+    [FieldOffset(0)]
+    public Int32 FaceValue;
+    [FieldOffset(4)]
+    public QBoolean IsCarried;
+    public override readonly Int32 GetHashCode() {
+      unchecked { 
+        var hash = 8761;
+        hash = hash * 31 + FaceValue.GetHashCode();
+        hash = hash * 31 + IsCarried.GetHashCode();
+        return hash;
+      }
+    }
+    public static void Serialize(void* ptr, FrameSerializer serializer) {
+        var p = (PhaseBDice*)ptr;
+        serializer.Stream.Serialize(&p->FaceValue);
+        QBoolean.Serialize(&p->IsCarried, serializer);
+    }
+  }
+  [StructLayout(LayoutKind.Explicit)]
+  public unsafe partial struct PhaseBGridPose : Quantum.IComponent {
+    public const Int32 SIZE = 8;
+    public const Int32 ALIGNMENT = 4;
+    [FieldOffset(0)]
+    public Int32 X;
+    [FieldOffset(4)]
+    public Int32 Y;
+    public override readonly Int32 GetHashCode() {
+      unchecked { 
+        var hash = 3061;
+        hash = hash * 31 + X.GetHashCode();
+        hash = hash * 31 + Y.GetHashCode();
+        return hash;
+      }
+    }
+    public static void Serialize(void* ptr, FrameSerializer serializer) {
+        var p = (PhaseBGridPose*)ptr;
+        serializer.Stream.Serialize(&p->X);
+        serializer.Stream.Serialize(&p->Y);
+    }
+  }
+  [StructLayout(LayoutKind.Explicit)]
+  public unsafe partial struct PhaseBPlayerPawn : Quantum.IComponent {
+    public const Int32 SIZE = 16;
+    public const Int32 ALIGNMENT = 8;
+    [FieldOffset(0)]
+    public PlayerRef Player;
+    [FieldOffset(8)]
+    public EntityRef CarriedDice;
+    [FieldOffset(4)]
+    public QBoolean HasCarriedDice;
+    public override readonly Int32 GetHashCode() {
+      unchecked { 
+        var hash = 15173;
+        hash = hash * 31 + Player.GetHashCode();
+        hash = hash * 31 + CarriedDice.GetHashCode();
+        hash = hash * 31 + HasCarriedDice.GetHashCode();
+        return hash;
+      }
+    }
+    public static void Serialize(void* ptr, FrameSerializer serializer) {
+        var p = (PhaseBPlayerPawn*)ptr;
+        PlayerRef.Serialize(&p->Player, serializer);
+        QBoolean.Serialize(&p->HasCarriedDice, serializer);
+        EntityRef.Serialize(&p->CarriedDice, serializer);
+    }
+  }
   public static unsafe partial class Constants {
   }
   public unsafe partial class Frame {
@@ -636,6 +772,14 @@ namespace Quantum {
       BuildSignalsArrayOnComponentRemoved<NavMeshPathfinder>();
       BuildSignalsArrayOnComponentAdded<NavMeshSteeringAgent>();
       BuildSignalsArrayOnComponentRemoved<NavMeshSteeringAgent>();
+      BuildSignalsArrayOnComponentAdded<Quantum.PhaseBBoard>();
+      BuildSignalsArrayOnComponentRemoved<Quantum.PhaseBBoard>();
+      BuildSignalsArrayOnComponentAdded<Quantum.PhaseBDice>();
+      BuildSignalsArrayOnComponentRemoved<Quantum.PhaseBDice>();
+      BuildSignalsArrayOnComponentAdded<Quantum.PhaseBGridPose>();
+      BuildSignalsArrayOnComponentRemoved<Quantum.PhaseBGridPose>();
+      BuildSignalsArrayOnComponentAdded<Quantum.PhaseBPlayerPawn>();
+      BuildSignalsArrayOnComponentRemoved<Quantum.PhaseBPlayerPawn>();
       BuildSignalsArrayOnComponentAdded<PhysicsBody2D>();
       BuildSignalsArrayOnComponentRemoved<PhysicsBody2D>();
       BuildSignalsArrayOnComponentAdded<PhysicsBody3D>();
@@ -664,6 +808,12 @@ namespace Quantum {
     partial void SetPlayerInputCodeGen(PlayerRef player, Input input) {
       if ((int)player >= (int)_globals->input.Length) { throw new System.ArgumentOutOfRangeException("player"); }
       var i = _globals->input.GetPointer(player);
+      i->MoveN = i->MoveN.Update(this.Number, input.MoveN);
+      i->MoveE = i->MoveE.Update(this.Number, input.MoveE);
+      i->MoveS = i->MoveS.Update(this.Number, input.MoveS);
+      i->MoveW = i->MoveW.Update(this.Number, input.MoveW);
+      i->Lift = i->Lift.Update(this.Number, input.Lift);
+      i->Jump = i->Jump.Update(this.Number, input.Jump);
     }
     public Input* GetPlayerInput(PlayerRef player) {
       if ((int)player >= (int)_globals->input.Length) { throw new System.ArgumentOutOfRangeException("player"); }
@@ -741,6 +891,10 @@ namespace Quantum {
       typeRegistry.Register(typeof(NullableFPVector2), NullableFPVector2.SIZE);
       typeRegistry.Register(typeof(NullableFPVector3), NullableFPVector3.SIZE);
       typeRegistry.Register(typeof(NullableNonNegativeFP), NullableNonNegativeFP.SIZE);
+      typeRegistry.Register(typeof(Quantum.PhaseBBoard), Quantum.PhaseBBoard.SIZE);
+      typeRegistry.Register(typeof(Quantum.PhaseBDice), Quantum.PhaseBDice.SIZE);
+      typeRegistry.Register(typeof(Quantum.PhaseBGridPose), Quantum.PhaseBGridPose.SIZE);
+      typeRegistry.Register(typeof(Quantum.PhaseBPlayerPawn), Quantum.PhaseBPlayerPawn.SIZE);
       typeRegistry.Register(typeof(PhysicsBody2D), PhysicsBody2D.SIZE);
       typeRegistry.Register(typeof(PhysicsBody3D), PhysicsBody3D.SIZE);
       typeRegistry.Register(typeof(PhysicsCallbacks2D), PhysicsCallbacks2D.SIZE);
@@ -769,8 +923,12 @@ namespace Quantum {
       typeRegistry.Register(typeof(Quantum._globals_), Quantum._globals_.SIZE);
     }
     static partial void InitComponentTypeIdGen() {
-      ComponentTypeId.Reset(ComponentTypeId.BuiltInComponentCount + 0)
+      ComponentTypeId.Reset(ComponentTypeId.BuiltInComponentCount + 4)
         .AddBuiltInComponents()
+        .Add<Quantum.PhaseBBoard>(Quantum.PhaseBBoard.Serialize, null, null, ComponentFlags.Singleton)
+        .Add<Quantum.PhaseBDice>(Quantum.PhaseBDice.Serialize, null, null, ComponentFlags.None)
+        .Add<Quantum.PhaseBGridPose>(Quantum.PhaseBGridPose.Serialize, null, null, ComponentFlags.None)
+        .Add<Quantum.PhaseBPlayerPawn>(Quantum.PhaseBPlayerPawn.Serialize, null, null, ComponentFlags.None)
         .Finish();
     }
     [Preserve()]

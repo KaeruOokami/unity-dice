@@ -52,8 +52,10 @@
      <Compile Include="Assets\Packages\QuantumUser\Simulation\Generated\Quantum.CodeGen.Events.cs" />
      <Compile Include="Assets\Packages\QuantumUser\Simulation\SystemSetup.User.cs" />
      <Compile Include="Assets\Packages\QuantumUser\Simulation\Frame.User.cs" />
+     <Compile Include="Assets\QuantumUser\Simulation\PhaseB\PhaseBPlayerActionSystem.cs" />
      <Compile Include="Assets\QuantumUser\Simulation\Generated\Quantum.CodeGen.Core.cs" />
      <Compile Include="Assets\QuantumUser\Simulation\RuntimePlayer.User.cs" />
+     <Compile Include="Assets\QuantumUser\Simulation\PhaseB\PhaseBBootstrapSystem.cs" />
      <Compile Include="Assets\Packages\Photon\Quantum\Simulation\SystemsConfig.cs" />
      <Compile Include="Assets\QuantumUser\Simulation\FrameContext.User.cs" />
      <Compile Include="Assets\QuantumUser\Simulation\SimulationConfig.User.cs" />
@@ -62,9 +64,11 @@
      <Compile Include="Assets\Packages\QuantumUser\Simulation\SimulationConfig.User.cs" />
      <Compile Include="Assets\QuantumUser\Simulation\RuntimeConfig.User.cs" />
      <Compile Include="Assets\QuantumUser\Simulation\Generated\Quantum.CodeGen.Prototypes.cs" />
+     <Compile Include="Assets\QuantumUser\Simulation\PhaseB\PhaseBSimDefaults.cs" />
      <Compile Include="Assets\Packages\Photon\Quantum\Simulation\SimulationConfig.cs" />
      <Compile Include="Assets\Packages\QuantumUser\Simulation\Generated\Quantum.CodeGen.Core.cs" />
      <None Include="Assets\QuantumUser\Simulation\Quantum.Simulation.asmref" />
+     <None Include="Assets\QuantumUser\Simulation\PhaseB\PhaseB.qtn" />
     <Reference Include="UnityEngine">
         <HintPath>D:\Program Files\Unity\Hub\Editor\6000.0.81f1\Editor\Data\Managed\UnityEngine\UnityEngine.dll</HintPath>
     </Reference>

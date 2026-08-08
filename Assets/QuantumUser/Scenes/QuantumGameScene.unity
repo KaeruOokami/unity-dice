@@ -221,8 +221,9 @@ GameObject:
   m_Component:
   - component: {fileID: 559165071}
   - component: {fileID: 559165070}
+  - component: {fileID: 559165072}
   m_Layer: 0
-  m_Name: QuantumDebugInput
+  m_Name: PhaseBInputPoller
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
@@ -237,9 +238,27 @@ MonoBehaviour:
   m_GameObject: {fileID: 559165069}
   m_Enabled: 1
   m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: d80a0dde3922e0f47b2e12ce66a4cfdd, type: 3}
+  m_Script: {fileID: 11500000, guid: a1b2c3d4e5f64789a0b1c2d3e4f50607, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
+  stickDeadZone: 0.2
+--- !u!114 &559165072
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 559165069}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: b2c3d4e5f6478901a2b3c4d5e6f70819, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  pawnScale: 0.7
+  diceScale: 0.45
+  pawnColor: {r: 0.2, g: 0.65, b: 1, a: 1}
+  diceColor: {r: 1, g: 0.85, b: 0.2, a: 1}
+  carriedDiceColor: {r: 1, g: 0.45, b: 0.1, a: 1}
 --- !u!4 &559165071
 Transform:
   m_ObjectHideFlags: 0
@@ -620,10 +639,19 @@ MonoBehaviour:
     SystemsConfig:
       Id:
         Value: 4503962405290483672
+    PhaseBBoardWidth: 4
+    PhaseBBoardHeight: 6
+    PhaseBInitialDiceCount: 3
+    PhaseBCellSize:
+      RawValue: 65536
   UseRandomSeed: 0
   SessionConfig: {fileID: 0}
-  LocalPlayers: []
-  MaxPlayerCount: 0
+  LocalPlayers:
+  - PlayerAvatar:
+      Id:
+        Value: 0
+    PlayerNickname: PhaseB-P1
+  MaxPlayerCount: 2
   SimulationSpeedMultiplier: 1
   DisplaySaveAndReloadButton: 0
   PreloadAddressables: 0

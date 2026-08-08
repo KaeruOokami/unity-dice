@@ -1,0 +1,36 @@
+﻿// Phase B vertical slice: quantized grid input + board/pawn/dice components.
+input
+{
+    button MoveN;
+    button MoveE;
+    button MoveS;
+    button MoveW;
+    button Lift;
+    button Jump;
+}
+
+singleton component PhaseBBoard
+{
+    Int32 Width;
+    Int32 Height;
+    Boolean Initialized;
+}
+
+component PhaseBGridPose
+{
+    Int32 X;
+    Int32 Y;
+}
+
+component PhaseBPlayerPawn
+{
+    PlayerRef Player;
+    EntityRef CarriedDice;
+    Boolean HasCarriedDice;
+}
+
+component PhaseBDice
+{
+    Int32 FaceValue;
+    Boolean IsCarried;
+}
