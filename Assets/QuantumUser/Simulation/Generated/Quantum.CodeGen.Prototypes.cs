@@ -50,6 +50,75 @@ namespace Quantum.Prototypes {
   #endif //;
   
   [System.SerializableAttribute()]
+  [Quantum.Prototypes.Prototype(typeof(Quantum.Board))]
+  public unsafe partial class BoardPrototype : ComponentPrototype<Quantum.Board> {
+    public Int32 Width;
+    public Int32 Height;
+    public QBoolean Initialized;
+    partial void MaterializeUser(Frame frame, ref Quantum.Board result, in PrototypeMaterializationContext context);
+    public override Boolean AddToEntity(FrameBase f, EntityRef entity, in PrototypeMaterializationContext context) {
+        Quantum.Board component = default;
+        Materialize((Frame)f, ref component, in context);
+        return f.Set(entity, component) == SetResult.ComponentAdded;
+    }
+    public void Materialize(Frame frame, ref Quantum.Board result, in PrototypeMaterializationContext context = default) {
+        result.Width = this.Width;
+        result.Height = this.Height;
+        result.Initialized = this.Initialized;
+        MaterializeUser(frame, ref result, in context);
+    }
+  }
+  [System.SerializableAttribute()]
+  [Quantum.Prototypes.Prototype(typeof(Quantum.Dice))]
+  public unsafe partial class DicePrototype : ComponentPrototype<Quantum.Dice> {
+    public Quantum.QEnum32<DiceKind> Kind;
+    public Quantum.QEnum32<DiceStackTier> Tier;
+    public Int32 TopFace;
+    public Int32 NorthFace;
+    public Int32 EastFace;
+    public QBoolean IsCarried;
+    public QBoolean IsErasing;
+    public Int32 EraseTicksRemaining;
+    public Int32 EraseTicksTotal;
+    public PlayerRef Owner;
+    partial void MaterializeUser(Frame frame, ref Quantum.Dice result, in PrototypeMaterializationContext context);
+    public override Boolean AddToEntity(FrameBase f, EntityRef entity, in PrototypeMaterializationContext context) {
+        Quantum.Dice component = default;
+        Materialize((Frame)f, ref component, in context);
+        return f.Set(entity, component) == SetResult.ComponentAdded;
+    }
+    public void Materialize(Frame frame, ref Quantum.Dice result, in PrototypeMaterializationContext context = default) {
+        result.Kind = this.Kind;
+        result.Tier = this.Tier;
+        result.TopFace = this.TopFace;
+        result.NorthFace = this.NorthFace;
+        result.EastFace = this.EastFace;
+        result.IsCarried = this.IsCarried;
+        result.IsErasing = this.IsErasing;
+        result.EraseTicksRemaining = this.EraseTicksRemaining;
+        result.EraseTicksTotal = this.EraseTicksTotal;
+        result.Owner = this.Owner;
+        MaterializeUser(frame, ref result, in context);
+    }
+  }
+  [System.SerializableAttribute()]
+  [Quantum.Prototypes.Prototype(typeof(Quantum.GridPose))]
+  public unsafe partial class GridPosePrototype : ComponentPrototype<Quantum.GridPose> {
+    public Int32 X;
+    public Int32 Y;
+    partial void MaterializeUser(Frame frame, ref Quantum.GridPose result, in PrototypeMaterializationContext context);
+    public override Boolean AddToEntity(FrameBase f, EntityRef entity, in PrototypeMaterializationContext context) {
+        Quantum.GridPose component = default;
+        Materialize((Frame)f, ref component, in context);
+        return f.Set(entity, component) == SetResult.ComponentAdded;
+    }
+    public void Materialize(Frame frame, ref Quantum.GridPose result, in PrototypeMaterializationContext context = default) {
+        result.X = this.X;
+        result.Y = this.Y;
+        MaterializeUser(frame, ref result, in context);
+    }
+  }
+  [System.SerializableAttribute()]
   [Quantum.Prototypes.Prototype(typeof(Quantum.Input))]
   public unsafe partial class InputPrototype : StructPrototype {
     public Button MoveN;
@@ -70,73 +139,89 @@ namespace Quantum.Prototypes {
     }
   }
   [System.SerializableAttribute()]
-  [Quantum.Prototypes.Prototype(typeof(Quantum.PhaseBBoard))]
-  public unsafe partial class PhaseBBoardPrototype : ComponentPrototype<Quantum.PhaseBBoard> {
-    public Int32 Width;
-    public Int32 Height;
-    public QBoolean Initialized;
-    partial void MaterializeUser(Frame frame, ref Quantum.PhaseBBoard result, in PrototypeMaterializationContext context);
+  [Quantum.Prototypes.Prototype(typeof(Quantum.MatchPending))]
+  public unsafe class MatchPendingPrototype : ComponentPrototype<Quantum.MatchPending> {
+    public QBoolean HasPending;
+    public MapEntityId ActionDice;
+    public PlayerRef ActingPlayer;
     public override Boolean AddToEntity(FrameBase f, EntityRef entity, in PrototypeMaterializationContext context) {
-        Quantum.PhaseBBoard component = default;
+        Quantum.MatchPending component = default;
         Materialize((Frame)f, ref component, in context);
         return f.Set(entity, component) == SetResult.ComponentAdded;
     }
-    public void Materialize(Frame frame, ref Quantum.PhaseBBoard result, in PrototypeMaterializationContext context = default) {
-        result.Width = this.Width;
-        result.Height = this.Height;
-        result.Initialized = this.Initialized;
-        MaterializeUser(frame, ref result, in context);
+    public void Materialize(Frame frame, ref Quantum.MatchPending result, in PrototypeMaterializationContext context = default) {
+        result.HasPending = this.HasPending;
+        PrototypeValidator.FindMapEntity(this.ActionDice, in context, out result.ActionDice);
+        result.ActingPlayer = this.ActingPlayer;
     }
   }
   [System.SerializableAttribute()]
-  [Quantum.Prototypes.Prototype(typeof(Quantum.PhaseBDice))]
-  public unsafe partial class PhaseBDicePrototype : ComponentPrototype<Quantum.PhaseBDice> {
-    public Int32 FaceValue;
-    public QBoolean IsCarried;
-    partial void MaterializeUser(Frame frame, ref Quantum.PhaseBDice result, in PrototypeMaterializationContext context);
-    public override Boolean AddToEntity(FrameBase f, EntityRef entity, in PrototypeMaterializationContext context) {
-        Quantum.PhaseBDice component = default;
-        Materialize((Frame)f, ref component, in context);
-        return f.Set(entity, component) == SetResult.ComponentAdded;
-    }
-    public void Materialize(Frame frame, ref Quantum.PhaseBDice result, in PrototypeMaterializationContext context = default) {
-        result.FaceValue = this.FaceValue;
-        result.IsCarried = this.IsCarried;
-        MaterializeUser(frame, ref result, in context);
-    }
-  }
-  [System.SerializableAttribute()]
-  [Quantum.Prototypes.Prototype(typeof(Quantum.PhaseBGridPose))]
-  public unsafe partial class PhaseBGridPosePrototype : ComponentPrototype<Quantum.PhaseBGridPose> {
-    public Int32 X;
-    public Int32 Y;
-    partial void MaterializeUser(Frame frame, ref Quantum.PhaseBGridPose result, in PrototypeMaterializationContext context);
-    public override Boolean AddToEntity(FrameBase f, EntityRef entity, in PrototypeMaterializationContext context) {
-        Quantum.PhaseBGridPose component = default;
-        Materialize((Frame)f, ref component, in context);
-        return f.Set(entity, component) == SetResult.ComponentAdded;
-    }
-    public void Materialize(Frame frame, ref Quantum.PhaseBGridPose result, in PrototypeMaterializationContext context = default) {
-        result.X = this.X;
-        result.Y = this.Y;
-        MaterializeUser(frame, ref result, in context);
-    }
-  }
-  [System.SerializableAttribute()]
-  [Quantum.Prototypes.Prototype(typeof(Quantum.PhaseBPlayerPawn))]
-  public unsafe class PhaseBPlayerPawnPrototype : ComponentPrototype<Quantum.PhaseBPlayerPawn> {
+  [Quantum.Prototypes.Prototype(typeof(Quantum.PlayerPawn))]
+  public unsafe class PlayerPawnPrototype : ComponentPrototype<Quantum.PlayerPawn> {
     public PlayerRef Player;
     public MapEntityId CarriedDice;
     public QBoolean HasCarriedDice;
+    public QBoolean IsOnFloor;
+    public Quantum.QEnum32<DiceStackTier> StandingTier;
+    public Int32 FacingX;
+    public Int32 FacingY;
     public override Boolean AddToEntity(FrameBase f, EntityRef entity, in PrototypeMaterializationContext context) {
-        Quantum.PhaseBPlayerPawn component = default;
+        Quantum.PlayerPawn component = default;
         Materialize((Frame)f, ref component, in context);
         return f.Set(entity, component) == SetResult.ComponentAdded;
     }
-    public void Materialize(Frame frame, ref Quantum.PhaseBPlayerPawn result, in PrototypeMaterializationContext context = default) {
+    public void Materialize(Frame frame, ref Quantum.PlayerPawn result, in PrototypeMaterializationContext context = default) {
         result.Player = this.Player;
         PrototypeValidator.FindMapEntity(this.CarriedDice, in context, out result.CarriedDice);
         result.HasCarriedDice = this.HasCarriedDice;
+        result.IsOnFloor = this.IsOnFloor;
+        result.StandingTier = this.StandingTier;
+        result.FacingX = this.FacingX;
+        result.FacingY = this.FacingY;
+    }
+  }
+  [System.SerializableAttribute()]
+  [Quantum.Prototypes.Prototype(typeof(Quantum.SpawnState))]
+  public unsafe partial class SpawnStatePrototype : ComponentPrototype<Quantum.SpawnState> {
+    public QBoolean Enabled;
+    public Int32 CooldownTicksP1;
+    public Int32 CooldownTicksP2;
+    partial void MaterializeUser(Frame frame, ref Quantum.SpawnState result, in PrototypeMaterializationContext context);
+    public override Boolean AddToEntity(FrameBase f, EntityRef entity, in PrototypeMaterializationContext context) {
+        Quantum.SpawnState component = default;
+        Materialize((Frame)f, ref component, in context);
+        return f.Set(entity, component) == SetResult.ComponentAdded;
+    }
+    public void Materialize(Frame frame, ref Quantum.SpawnState result, in PrototypeMaterializationContext context = default) {
+        result.Enabled = this.Enabled;
+        result.CooldownTicksP1 = this.CooldownTicksP1;
+        result.CooldownTicksP2 = this.CooldownTicksP2;
+        MaterializeUser(frame, ref result, in context);
+    }
+  }
+  [System.SerializableAttribute()]
+  [Quantum.Prototypes.Prototype(typeof(Quantum.VersusAttackState))]
+  public unsafe partial class VersusAttackStatePrototype : ComponentPrototype<Quantum.VersusAttackState> {
+    public Int32 DelayTicksP1;
+    public Int32 RemainingDiceP1;
+    public Int32 AttackFaceP1;
+    public Int32 DelayTicksP2;
+    public Int32 RemainingDiceP2;
+    public Int32 AttackFaceP2;
+    partial void MaterializeUser(Frame frame, ref Quantum.VersusAttackState result, in PrototypeMaterializationContext context);
+    public override Boolean AddToEntity(FrameBase f, EntityRef entity, in PrototypeMaterializationContext context) {
+        Quantum.VersusAttackState component = default;
+        Materialize((Frame)f, ref component, in context);
+        return f.Set(entity, component) == SetResult.ComponentAdded;
+    }
+    public void Materialize(Frame frame, ref Quantum.VersusAttackState result, in PrototypeMaterializationContext context = default) {
+        result.DelayTicksP1 = this.DelayTicksP1;
+        result.RemainingDiceP1 = this.RemainingDiceP1;
+        result.AttackFaceP1 = this.AttackFaceP1;
+        result.DelayTicksP2 = this.DelayTicksP2;
+        result.RemainingDiceP2 = this.RemainingDiceP2;
+        result.AttackFaceP2 = this.AttackFaceP2;
+        MaterializeUser(frame, ref result, in context);
     }
   }
 }

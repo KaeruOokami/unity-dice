@@ -1,0 +1,90 @@
+﻿// Dice game Quantum DSL: input, board, dice ledger, spawn, versus.
+input
+{
+    button MoveN;
+    button MoveE;
+    button MoveS;
+    button MoveW;
+    button Lift;
+    button Jump;
+}
+
+enum DiceKind
+{
+    Normal,
+    Wood,
+    Iron,
+    Magnet,
+    Ice,
+    Stone,
+    Ghost,
+    Jumbo
+}
+
+enum DiceStackTier
+{
+    Bottom,
+    Top
+}
+
+singleton component Board
+{
+    Int32 Width;
+    Int32 Height;
+    Boolean Initialized;
+}
+
+component GridPose
+{
+    Int32 X;
+    Int32 Y;
+}
+
+component PlayerPawn
+{
+    PlayerRef Player;
+    EntityRef CarriedDice;
+    Boolean HasCarriedDice;
+    Boolean IsOnFloor;
+    DiceStackTier StandingTier;
+    Int32 FacingX;
+    Int32 FacingY;
+}
+
+component Dice
+{
+    DiceKind Kind;
+    DiceStackTier Tier;
+    Int32 TopFace;
+    Int32 NorthFace;
+    Int32 EastFace;
+    Boolean IsCarried;
+    Boolean IsErasing;
+    Int32 EraseTicksRemaining;
+    Int32 EraseTicksTotal;
+    PlayerRef Owner;
+}
+
+singleton component MatchPending
+{
+    Boolean HasPending;
+    EntityRef ActionDice;
+    PlayerRef ActingPlayer;
+}
+
+singleton component SpawnState
+{
+    Boolean Enabled;
+    Int32 CooldownTicksP1;
+    Int32 CooldownTicksP2;
+}
+
+singleton component VersusAttackState
+{
+    Int32 DelayTicksP1;
+    Int32 RemainingDiceP1;
+    Int32 AttackFaceP1;
+    Int32 DelayTicksP2;
+    Int32 RemainingDiceP2;
+    Int32 AttackFaceP2;
+}

@@ -5,16 +5,27 @@
 
     public partial class RuntimeConfig
     {
-        /// <summary>Phase B board width in cells. Non-positive falls back to <see cref="PhaseBSimDefaults.BoardWidth"/>.</summary>
-        public Int32 PhaseBBoardWidth = PhaseBSimDefaults.BoardWidth;
+        /// <summary>Board width in cells. Non-positive falls back to <see cref="BoardDefaults.BoardWidth"/>.</summary>
+        public Int32 BoardWidth = BoardDefaults.BoardWidth;
 
-        /// <summary>Phase B board height in cells. Non-positive falls back to <see cref="PhaseBSimDefaults.BoardHeight"/>.</summary>
-        public Int32 PhaseBBoardHeight = PhaseBSimDefaults.BoardHeight;
+        /// <summary>Board height in cells. Non-positive falls back to <see cref="BoardDefaults.BoardHeight"/>.</summary>
+        public Int32 BoardHeight = BoardDefaults.BoardHeight;
 
-        /// <summary>How many dice the Phase B bootstrap spawns. Non-positive falls back to <see cref="PhaseBSimDefaults.InitialDiceCount"/>.</summary>
-        public Int32 PhaseBInitialDiceCount = PhaseBSimDefaults.InitialDiceCount;
+        /// <summary>Extra random dice after the scripted seed. Non-positive falls back to defaults.</summary>
+        public Int32 InitialDiceCount = BoardDefaults.InitialDiceCount;
 
         /// <summary>World units per grid cell for Transform2D / view sync.</summary>
-        public FP PhaseBCellSize = FP._1;
+        public FP CellSize = FP._1;
+
+        public Int32 SinkEraseTicks = MatchSimDefaults.SinkEraseTicks;
+        public Int32 RadianceEraseTicks = MatchSimDefaults.RadianceEraseTicks;
+        public Int32 SpawnIntervalTicks = MatchSimDefaults.SpawnIntervalTicks;
+        public Int32 SpawnJitterTicks = MatchSimDefaults.SpawnJitterTicks;
+        public Int32 BottomSpawnWeightPermille = MatchSimDefaults.BottomSpawnWeightPermille;
+        public Int32 AttackQueueDelayTicks = MatchSimDefaults.AttackQueueDelayTicks;
+        public Int32 AttackMaxVolley = MatchSimDefaults.AttackMaxVolley;
+        public Int32 AttackMultiplierPermille = MatchSimDefaults.AttackMultiplierPermille;
+        public Int32 AttackFaceGainPermille = MatchSimDefaults.AttackFaceGainPermille;
+        public Int32 AttackSizeGainPermille = MatchSimDefaults.AttackSizeGainPermille;
     }
 }

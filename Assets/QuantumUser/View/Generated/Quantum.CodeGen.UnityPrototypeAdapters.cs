@@ -50,16 +50,39 @@ namespace Quantum.Prototypes.Unity {
   #endif //;
   
   [System.SerializableAttribute()]
-  public unsafe partial class PhaseBPlayerPawnPrototype : Quantum.QuantumUnityPrototypeAdapter<Quantum.Prototypes.PhaseBPlayerPawnPrototype> {
+  public unsafe partial class MatchPendingPrototype : Quantum.QuantumUnityPrototypeAdapter<Quantum.Prototypes.MatchPendingPrototype> {
+    public QBoolean HasPending;
+    public Quantum.QuantumEntityPrototype ActionDice;
+    public PlayerRef ActingPlayer;
+    partial void ConvertUser(Quantum.QuantumEntityPrototypeConverter converter, ref Quantum.Prototypes.MatchPendingPrototype prototype);
+    public override Quantum.Prototypes.MatchPendingPrototype Convert(Quantum.QuantumEntityPrototypeConverter converter) {
+      var result = new Quantum.Prototypes.MatchPendingPrototype();
+      converter.Convert(this.HasPending, out result.HasPending);
+      converter.Convert(this.ActionDice, out result.ActionDice);
+      converter.Convert(this.ActingPlayer, out result.ActingPlayer);
+      ConvertUser(converter, ref result);
+      return result;
+    }
+  }
+  [System.SerializableAttribute()]
+  public unsafe partial class PlayerPawnPrototype : Quantum.QuantumUnityPrototypeAdapter<Quantum.Prototypes.PlayerPawnPrototype> {
     public PlayerRef Player;
     public Quantum.QuantumEntityPrototype CarriedDice;
     public QBoolean HasCarriedDice;
-    partial void ConvertUser(Quantum.QuantumEntityPrototypeConverter converter, ref Quantum.Prototypes.PhaseBPlayerPawnPrototype prototype);
-    public override Quantum.Prototypes.PhaseBPlayerPawnPrototype Convert(Quantum.QuantumEntityPrototypeConverter converter) {
-      var result = new Quantum.Prototypes.PhaseBPlayerPawnPrototype();
+    public QBoolean IsOnFloor;
+    public Quantum.QEnum32<DiceStackTier> StandingTier;
+    public Int32 FacingX;
+    public Int32 FacingY;
+    partial void ConvertUser(Quantum.QuantumEntityPrototypeConverter converter, ref Quantum.Prototypes.PlayerPawnPrototype prototype);
+    public override Quantum.Prototypes.PlayerPawnPrototype Convert(Quantum.QuantumEntityPrototypeConverter converter) {
+      var result = new Quantum.Prototypes.PlayerPawnPrototype();
       converter.Convert(this.Player, out result.Player);
       converter.Convert(this.CarriedDice, out result.CarriedDice);
       converter.Convert(this.HasCarriedDice, out result.HasCarriedDice);
+      converter.Convert(this.IsOnFloor, out result.IsOnFloor);
+      converter.Convert(this.StandingTier, out result.StandingTier);
+      converter.Convert(this.FacingX, out result.FacingX);
+      converter.Convert(this.FacingY, out result.FacingY);
       ConvertUser(converter, ref result);
       return result;
     }

@@ -223,7 +223,7 @@ GameObject:
   - component: {fileID: 559165070}
   - component: {fileID: 559165072}
   m_Layer: 0
-  m_Name: PhaseBInputPoller
+  m_Name: DiceInputPoller
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
@@ -639,10 +639,10 @@ MonoBehaviour:
     SystemsConfig:
       Id:
         Value: 4503962405290483672
-    PhaseBBoardWidth: 4
-    PhaseBBoardHeight: 6
-    PhaseBInitialDiceCount: 3
-    PhaseBCellSize:
+    BoardWidth: 4
+    BoardHeight: 6
+    InitialDiceCount: 8
+    CellSize:
       RawValue: 65536
   UseRandomSeed: 0
   SessionConfig: {fileID: 0}
@@ -650,7 +650,7 @@ MonoBehaviour:
   - PlayerAvatar:
       Id:
         Value: 0
-    PlayerNickname: PhaseB-P1
+    PlayerNickname: Local-P1
   MaxPlayerCount: 2
   SimulationSpeedMultiplier: 1
   DisplaySaveAndReloadButton: 0

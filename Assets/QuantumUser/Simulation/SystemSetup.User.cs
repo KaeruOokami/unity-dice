@@ -10,9 +10,14 @@
             SimulationConfig simulationConfig,
             SystemsConfig systemsConfig)
         {
-            // Phase B vertical slice (local QuantumGameScene). Keep UGS dual-sim on the main game path.
-            systems.Add(new PhaseBBootstrapSystem());
-            systems.Add(new PhaseBPlayerActionSystem());
+            // Mirrors SimTickSchedule / OnlineDualSimInputBinder.StepSimulationTick.
+            // JumboSequence deferred (2x2 footprint / bridged match). Ice slide & Magnet chain deferred.
+            systems.Add(new BoardBootstrapSystem());
+            systems.Add(new DiceLogicalMotionSystem()); // 0 DiceLogicalMotions
+            systems.Add(new PlayerActionSystem());      // 1+2 ApplyInputs / Characters
+            systems.Add(new DiceSpawnSystem());         // 3 Spawn
+            systems.Add(new VersusAttackSystem());      // 4 VersusAttack
+            systems.Add(new DiceMatchErasureSystem());  // 6 ErasureMatch
         }
     }
 }
