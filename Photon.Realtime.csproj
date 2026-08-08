@@ -36,52 +36,48 @@
     <ImplicitlyExpandDesignTimeFacades>false</ImplicitlyExpandDesignTimeFacades>
   </PropertyGroup>
   <ItemGroup>
-    <Analyzer Include="D:\Document\Unity\Project\Dice\Assets\Photon\Quantum\Assemblies\Quantum.Engine.dll" />
-    <Analyzer Include="D:\Document\Unity\Project\Dice\Assets\Photon\PhotonLibs\netstandard2.0\debug\PhotonClient.dll" />
-    <Analyzer Include="D:\Document\Unity\Project\Dice\Assets\Photon\Quantum\Assemblies\Quantum.Log.dll" />
-    <Analyzer Include="D:\Document\Unity\Project\Dice\Assets\Photon\Quantum\Assemblies\Quantum.Deterministic.dll" />
-    <Analyzer Include="D:\Document\Unity\Project\Dice\Assets\Photon\PhotonLibs\netstandard2.0\release\PhotonClient.dll" />
     <Analyzer Include="D:\Program Files\Unity\Hub\Editor\6000.0.81f1\Editor\Data\Tools\Unity.SourceGenerators\Unity.SourceGenerators.dll" />
     <Analyzer Include="D:\Program Files\Unity\Hub\Editor\6000.0.81f1\Editor\Data\Tools\Unity.SourceGenerators\Unity.Properties.SourceGenerator.dll" />
     <Analyzer Include="D:\Program Files\Unity\Hub\Editor\6000.0.81f1\Editor\Data\Tools\Unity.SourceGenerators\Unity.UIToolkit.SourceGenerator.dll" />
   </ItemGroup>
   <ItemGroup>
-     <Compile Include="Assets\Photon\PhotonRealtime\Code\FindFriendsArgs.cs" />
-     <Compile Include="Assets\Photon\PhotonRealtime\Code\Extensions.cs" />
-     <Compile Include="Assets\Photon\PhotonRealtime\Code\ProtocolPorts.cs" />
-     <Compile Include="Assets\Photon\PhotonRealtime\Code\RegionHandler.cs" />
-     <Compile Include="Assets\Photon\PhotonRealtime\Code\MatchmakingExtensions.cs" />
-     <Compile Include="Assets\Photon\PhotonRealtime\Code\RaiseEventArgs.cs" />
-     <Compile Include="Assets\Photon\PhotonRealtime\Code\RealtimeClientOps.cs" />
-     <Compile Include="Assets\Photon\PhotonRealtime\Code\ErrorInfo.cs" />
-     <Compile Include="Assets\Photon\PhotonRealtime\Code\Callbacks.cs" />
-     <Compile Include="Assets\Photon\PhotonRealtime\Code\FriendInfo.cs" />
-     <Compile Include="Assets\Photon\PhotonRealtime\Code\AsyncExtensions.cs" />
-     <Compile Include="Assets\Photon\PhotonRealtime\Code\EnterRoomArgs.cs" />
-     <Compile Include="Assets\Photon\PhotonRealtime\Code\RoomOptions.cs" />
-     <Compile Include="Assets\Photon\PhotonRealtime\Code\AuthenticationValues.cs" />
-     <Compile Include="Assets\Photon\PhotonRealtime\Code\Lobby.cs" />
-     <Compile Include="Assets\Photon\PhotonRealtime\Code\EventBetter.cs" />
-     <Compile Include="Assets\Photon\PhotonRealtime\Code\Region.cs" />
-     <Compile Include="Assets\Photon\PhotonRealtime\Code\Room.cs" />
-     <Compile Include="Assets\Photon\PhotonRealtime\Code\RealtimeClient.cs" />
-     <Compile Include="Assets\Photon\PhotonRealtime\Code\Player.cs" />
-     <Compile Include="Assets\Photon\PhotonRealtime\Code\ConnectionHandler.cs" />
-     <Compile Include="Assets\Photon\PhotonRealtime\Code\CustomTypesUnity.cs" />
-     <Compile Include="Assets\Photon\PhotonRealtime\Code\AppSettings.cs" />
-     <Compile Include="Assets\Photon\PhotonRealtime\Code\PhotonPing.cs" />
-     <Compile Include="Assets\Photon\PhotonRealtime\Code\RoomInfo.cs" />
-     <Compile Include="Assets\Photon\PhotonRealtime\Code\Enums.cs" />
-     <Compile Include="Assets\Photon\PhotonRealtime\Code\Log.cs" />
-     <Compile Include="Assets\Photon\PhotonRealtime\Code\JoinRandomRoomArgs.cs" />
-     <Compile Include="Assets\Photon\PhotonRealtime\Code\RealtimeClientVersion.cs" />
-     <None Include="Assets\Photon\PhotonRealtime\Code\changes-realtime.txt" />
-     <None Include="Assets\Photon\PhotonRealtime\Code\Photon.Realtime.asmdef" />
+     <Compile Include="Assets\Packages\Photon\PhotonRealtime\Code\AuthenticationValues.cs" />
+     <Compile Include="Assets\Packages\Photon\PhotonRealtime\Code\Log.cs" />
+     <Compile Include="Assets\Packages\Photon\PhotonRealtime\Code\JoinRandomRoomArgs.cs" />
+     <Compile Include="Assets\Packages\Photon\PhotonRealtime\Code\Player.cs" />
+     <Compile Include="Assets\Packages\Photon\PhotonRealtime\Code\RealtimeClient.cs" />
+     <Compile Include="Assets\Packages\Photon\PhotonRealtime\Code\EventBetter.cs" />
+     <Compile Include="Assets\Packages\Photon\PhotonRealtime\Code\Extensions.cs" />
+     <Compile Include="Assets\Packages\Photon\PhotonRealtime\Code\MatchmakingExtensions.cs" />
+     <Compile Include="Assets\Packages\Photon\PhotonRealtime\Code\RoomOptions.cs" />
+     <Compile Include="Assets\Packages\Photon\PhotonRealtime\Code\Enums.cs" />
+     <Compile Include="Assets\Packages\Photon\PhotonRealtime\Code\RealtimeClientVersion.cs" />
+     <Compile Include="Assets\Packages\Photon\PhotonRealtime\Code\RaiseEventArgs.cs" />
+     <Compile Include="Assets\Packages\Photon\PhotonRealtime\Code\ProtocolPorts.cs" />
+     <Compile Include="Assets\Packages\Photon\PhotonRealtime\Code\ErrorInfo.cs" />
+     <Compile Include="Assets\Packages\Photon\PhotonRealtime\Code\EnterRoomArgs.cs" />
+     <Compile Include="Assets\Packages\Photon\PhotonRealtime\Code\ConnectionHandler.cs" />
+     <Compile Include="Assets\Packages\Photon\PhotonRealtime\Code\AppSettings.cs" />
+     <Compile Include="Assets\Packages\Photon\PhotonRealtime\Code\Lobby.cs" />
+     <Compile Include="Assets\Packages\Photon\PhotonRealtime\Code\FindFriendsArgs.cs" />
+     <Compile Include="Assets\Packages\Photon\PhotonRealtime\Code\FriendInfo.cs" />
+     <Compile Include="Assets\Packages\Photon\PhotonRealtime\Code\Region.cs" />
+     <Compile Include="Assets\Packages\Photon\PhotonRealtime\Code\Callbacks.cs" />
+     <Compile Include="Assets\Packages\Photon\PhotonRealtime\Code\RegionHandler.cs" />
+     <Compile Include="Assets\Packages\Photon\PhotonRealtime\Code\Room.cs" />
+     <Compile Include="Assets\Packages\Photon\PhotonRealtime\Code\PhotonPing.cs" />
+     <Compile Include="Assets\Packages\Photon\PhotonRealtime\Code\RoomInfo.cs" />
+     <Compile Include="Assets\Packages\Photon\PhotonRealtime\Code\CustomTypesUnity.cs" />
+     <Compile Include="Assets\Packages\Photon\PhotonRealtime\Code\AsyncExtensions.cs" />
+     <Compile Include="Assets\Packages\Photon\PhotonRealtime\Code\RealtimeClientOps.cs" />
     <Reference Include="UnityEngine">
         <HintPath>D:\Program Files\Unity\Hub\Editor\6000.0.81f1\Editor\Data\Managed\UnityEngine\UnityEngine.dll</HintPath>
     </Reference>
     <Reference Include="UnityEngine.AIModule">
         <HintPath>D:\Program Files\Unity\Hub\Editor\6000.0.81f1\Editor\Data\Managed\UnityEngine\UnityEngine.AIModule.dll</HintPath>
+    </Reference>
+    <Reference Include="UnityEngine.AMDModule">
+        <HintPath>D:\Program Files\Unity\Hub\Editor\6000.0.81f1\Editor\Data\Managed\UnityEngine\UnityEngine.AMDModule.dll</HintPath>
     </Reference>
     <Reference Include="UnityEngine.ARModule">
         <HintPath>D:\Program Files\Unity\Hub\Editor\6000.0.81f1\Editor\Data\Managed\UnityEngine\UnityEngine.ARModule.dll</HintPath>
@@ -175,6 +171,9 @@
     </Reference>
     <Reference Include="UnityEngine.MultiplayerModule">
         <HintPath>D:\Program Files\Unity\Hub\Editor\6000.0.81f1\Editor\Data\Managed\UnityEngine\UnityEngine.MultiplayerModule.dll</HintPath>
+    </Reference>
+    <Reference Include="UnityEngine.NVIDIAModule">
+        <HintPath>D:\Program Files\Unity\Hub\Editor\6000.0.81f1\Editor\Data\Managed\UnityEngine\UnityEngine.NVIDIAModule.dll</HintPath>
     </Reference>
     <Reference Include="UnityEngine.ParticleSystemModule">
         <HintPath>D:\Program Files\Unity\Hub\Editor\6000.0.81f1\Editor\Data\Managed\UnityEngine\UnityEngine.ParticleSystemModule.dll</HintPath>
@@ -869,14 +868,16 @@
     <Reference Include="System.Xml.Serialization">
         <HintPath>D:\Program Files\Unity\Hub\Editor\6000.0.81f1\Editor\Data\NetStandard\compat\2.1.0\shims\netfx\System.Xml.Serialization.dll</HintPath>
     </Reference>
-    <Reference Include="UnityEditor.UI">
-        <HintPath>D:\Document\Unity\Project\Dice\Library\ScriptAssemblies\UnityEditor.UI.dll</HintPath>
-    </Reference>
-    <Reference Include="UnityEngine.UI">
-        <HintPath>D:\Document\Unity\Project\Dice\Library\ScriptAssemblies\UnityEngine.UI.dll</HintPath>
-    </Reference>
   </ItemGroup>
   <ItemGroup>
+    <ProjectReference Include="UnityEditor.UI.csproj">
+      <Project>{13470c0f-d0c9-2797-7469-c1d4b35d35a9}</Project>
+      <Name>UnityEditor.UI</Name>
+    </ProjectReference>
+    <ProjectReference Include="UnityEngine.UI.csproj">
+      <Project>{448056cb-ccea-2d5b-db39-3c56850e8480}</Project>
+      <Name>UnityEngine.UI</Name>
+    </ProjectReference>
   </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
   <!-- To modify your build process, add your task inside one of the targets below and uncomment it.

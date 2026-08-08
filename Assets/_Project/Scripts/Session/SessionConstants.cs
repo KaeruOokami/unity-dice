@@ -37,9 +37,15 @@ namespace DiceGame.Session
         public const float SimTickSeconds = 1f / SimTickHz;
         /// <summary>
         /// Quantum gameplay slice scene (<c>Assets/QuantumUser/Scenes/QuantumGameScene</c>).
-        /// Jumbo / Ice-slide / Magnet-chain remain deferred. UGS dual-sim until Session swap.
+        /// Jumbo / Ice-slide / Magnet-chain remain deferred.
         /// </summary>
         public const string QuantumGameSceneName = "QuantumGameScene";
+        public const string QuantumPluginName = "QuantumPlugin";
+        public const string QuantumRoomSeedProperty = "QSeed";
+        public const string QuantumRoomMatchStartProperty = "QStart";
+        public const int QuantumRoomCodeLength = 6;
+        public const float QuantumRoomSeedWaitSeconds = 10f;
+        public const float QuantumMatchStartWaitSeconds = 60f;
         /// <summary>
         /// Local input is scheduled this many ticks ahead (delayed lockstep).
         /// ~50ms at <see cref="SimTickHz"/>; Unreliable input + redundancy covers Relay jitter.

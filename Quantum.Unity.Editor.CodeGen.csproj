@@ -36,25 +36,19 @@
     <ImplicitlyExpandDesignTimeFacades>false</ImplicitlyExpandDesignTimeFacades>
   </PropertyGroup>
   <ItemGroup>
-    <Analyzer Include="D:\Document\Unity\Project\Dice\Assets\Photon\Quantum\Assemblies\Quantum.Engine.dll" />
-    <Analyzer Include="D:\Document\Unity\Project\Dice\Assets\Photon\PhotonLibs\netstandard2.0\debug\PhotonClient.dll" />
-    <Analyzer Include="D:\Document\Unity\Project\Dice\Assets\Photon\Quantum\Assemblies\Quantum.Log.dll" />
-    <Analyzer Include="D:\Document\Unity\Project\Dice\Assets\Photon\Quantum\Assemblies\Quantum.Deterministic.dll" />
-    <Analyzer Include="D:\Document\Unity\Project\Dice\Assets\Photon\PhotonLibs\netstandard2.0\release\PhotonClient.dll" />
     <Analyzer Include="D:\Program Files\Unity\Hub\Editor\6000.0.81f1\Editor\Data\Tools\Unity.SourceGenerators\Unity.SourceGenerators.dll" />
     <Analyzer Include="D:\Program Files\Unity\Hub\Editor\6000.0.81f1\Editor\Data\Tools\Unity.SourceGenerators\Unity.Properties.SourceGenerator.dll" />
     <Analyzer Include="D:\Program Files\Unity\Hub\Editor\6000.0.81f1\Editor\Data\Tools\Unity.SourceGenerators\Unity.UIToolkit.SourceGenerator.dll" />
   </ItemGroup>
   <ItemGroup>
-     <Compile Include="Assets\Photon\Quantum\Editor\CodeGen\QuantumQtnAssetEditor.cs" />
-     <Compile Include="Assets\Photon\Quantum\Editor\CodeGen\QuantumCodeGenQtn.cs" />
-     <Compile Include="Assets\Photon\Quantum\Editor\CodeGen\QuantumCodeGenSettings.cs" />
-     <Compile Include="Assets\Photon\Quantum\Editor\CodeGen\QuantumQtnAsset.cs" />
+     <Compile Include="Assets\Packages\QuantumUser\Editor\CodeGen\QuantumCodeGenSettings.User.cs" />
+     <Compile Include="Assets\Packages\Photon\Quantum\Editor\CodeGen\QuantumCodeGenQtn.cs" />
+     <Compile Include="Assets\Packages\Photon\Quantum\Editor\CodeGen\QuantumQtnAssetEditor.cs" />
+     <Compile Include="Assets\Packages\Photon\Quantum\Editor\CodeGen\QuantumQtnAsset.cs" />
+     <Compile Include="Assets\Packages\Photon\Quantum\Editor\CodeGen\QuantumCodeGenSettings.cs" />
      <Compile Include="Assets\QuantumUser\Editor\CodeGen\QuantumCodeGenSettings.User.cs" />
-     <Compile Include="Assets\Photon\Quantum\Editor\CodeGen\QuantumQtnAssetImporter.cs" />
+     <Compile Include="Assets\Packages\Photon\Quantum\Editor\CodeGen\QuantumQtnAssetImporter.cs" />
      <None Include="Assets\QuantumUser\Editor\CodeGen\Quantum.Unity.Editor.CodeGen.asmref" />
-     <None Include="Assets\Photon\Quantum\Editor\CodeGen\QuantumCodeGenQtn.Version.txt" />
-     <None Include="Assets\Photon\Quantum\Editor\CodeGen\Quantum.Unity.Editor.CodeGen.asmdef" />
     <Reference Include="UnityEngine">
         <HintPath>D:\Program Files\Unity\Hub\Editor\6000.0.81f1\Editor\Data\Managed\UnityEngine\UnityEngine.dll</HintPath>
     </Reference>
@@ -823,20 +817,16 @@
     <Reference Include="System.Xml.XPath.XDocument">
         <HintPath>D:\Program Files\Unity\Hub\Editor\6000.0.81f1\Editor\Data\UnityReferenceAssemblies\unity-4.8-api\Facades\System.Xml.XPath.XDocument.dll</HintPath>
     </Reference>
-    <Reference Include="UnityEditor.UI">
-        <HintPath>D:\Document\Unity\Project\Dice\Library\ScriptAssemblies\UnityEditor.UI.dll</HintPath>
-    </Reference>
-    <Reference Include="UnityEngine.UI">
-        <HintPath>D:\Document\Unity\Project\Dice\Library\ScriptAssemblies\UnityEngine.UI.dll</HintPath>
-    </Reference>
-    <Reference Include="UnityEngine.TestRunner">
-        <HintPath>D:\Document\Unity\Project\Dice\Library\ScriptAssemblies\UnityEngine.TestRunner.dll</HintPath>
-    </Reference>
-    <Reference Include="UnityEditor.TestRunner">
-        <HintPath>D:\Document\Unity\Project\Dice\Library\ScriptAssemblies\UnityEditor.TestRunner.dll</HintPath>
-    </Reference>
   </ItemGroup>
   <ItemGroup>
+    <ProjectReference Include="UnityEditor.UI.csproj">
+      <Project>{13470c0f-d0c9-2797-7469-c1d4b35d35a9}</Project>
+      <Name>UnityEditor.UI</Name>
+    </ProjectReference>
+    <ProjectReference Include="UnityEngine.UI.csproj">
+      <Project>{448056cb-ccea-2d5b-db39-3c56850e8480}</Project>
+      <Name>UnityEngine.UI</Name>
+    </ProjectReference>
   </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
   <!-- To modify your build process, add your task inside one of the targets below and uncomment it.
