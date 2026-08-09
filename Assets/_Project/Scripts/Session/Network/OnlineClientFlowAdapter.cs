@@ -89,7 +89,7 @@ namespace DiceGame.Session.Network
                     break;
                 case SessionConstants.FlowReturnToTitle:
                     MatchFlowFlags.ArmTitleReturn();
-                    var session = FindObjectOfType<SessionController>();
+                    var session = FindFirstObjectByType<SessionController>();
                     session?.PrepareReturnToTitle();
                     Time.timeScale = playingTimeScale;
                     UnityEngine.SceneManagement.SceneManager.LoadScene(

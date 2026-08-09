@@ -8,7 +8,8 @@
     {
         public const int BoardWidth = 4;
         public const int BoardHeight = 6;
-        public const int InitialDiceCount = 8;
+        /// <summary>Matches <c>DiceSpawnSettings</c> default initial count.</summary>
+        public const int InitialDiceCount = 3;
         public const int MinFaceValue = 1;
         public const int MaxFaceValue = 6;
     }

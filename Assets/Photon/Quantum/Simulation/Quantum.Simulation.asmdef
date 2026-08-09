@@ -1,7 +1,10 @@
 {
     "name": "Quantum.Simulation",
     "rootNamespace": "Quantum",
-    "references": [],
+    "references": [
+        "DiceGame.SimShared",
+        "DiceGame.Core"
+    ],
     "includePlatforms": [],
     "excludePlatforms": [],
     "allowUnsafeCode": true,

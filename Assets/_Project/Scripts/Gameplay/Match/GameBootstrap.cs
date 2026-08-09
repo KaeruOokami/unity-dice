@@ -88,6 +88,11 @@ namespace DiceGame.Gameplay
         public MatchRandom MatchRandom => matchRandom;
         public GameObject DiceEntityPrefab => diceEntityPrefab;
         public GameObject CharacterPrefab => characterPrefab;
+        public DiceCatalog SharedDiceCatalog => diceCatalog;
+        public PhysicsSettings PhysicsSettings => physicsSettings;
+        public DiceAnimationSettings DiceAnimationSettings => diceAnimationSettings;
+        public DiceErasureSettings DiceErasureSettings => diceErasureSettings;
+        public CharacterMovementSettings CharacterMovementSettings => characterMovementSettings;
         public PlayerInputSettings PlayerInputSettings => playerInputSettings;
         public GameSessionSettings GameSessionSettings => gameSessionSettings;
         public bool IsSessionActive => sessionStarted;
@@ -99,7 +104,7 @@ namespace DiceGame.Gameplay
         }
 
         void Start() {
-            var sessionController = FindObjectOfType<SessionController>();
+            var sessionController = FindFirstObjectByType<SessionController>();
             var session = SessionState.Instance;
             if (sessionController != null) {
                 if (session == null) {
@@ -446,7 +451,7 @@ namespace DiceGame.Gameplay
         }
 
         void BindOnlineDualSim() {
-            var sessionController = FindObjectOfType<SessionController>();
+            var sessionController = FindFirstObjectByType<SessionController>();
             if (sessionController?.Messenger == null) {
                 Debug.LogError("GameBootstrap: Online dual-sim requires messenger.");
                 return;
@@ -519,7 +524,7 @@ namespace DiceGame.Gameplay
         }
 
         MatchSetupPresetRegistry FindPresetRegistry() {
-            var sessionController = FindObjectOfType<SessionController>();
+            var sessionController = FindFirstObjectByType<SessionController>();
             return sessionController != null ? sessionController.MatchSetupPresetRegistry : null;
         }
 

@@ -155,7 +155,7 @@ namespace DiceGame.Gameplay
             text.fontSize = fontSize;
             text.alignment = ToTextAlignment(anchor);
             text.color = Color.white;
-            text.enableWordWrapping = true;
+            text.textWrappingMode = TextWrappingModes.Normal;
             text.overflowMode = TextOverflowModes.Overflow;
             text.raycastTarget = false;
             return text;

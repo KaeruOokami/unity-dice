@@ -20,6 +20,7 @@ namespace DiceGame.Session
 
         readonly OnlineLobbyFacade lobbyFacade = new();
         readonly QuantumSessionLauncher quantumLauncher = new();
+        QuantumMatchSetupSync quantumSetupSync;
         OnlineNetMessenger messenger;
         TitleMenuUi titleMenuUi;
         bool busy;
@@ -32,13 +33,15 @@ namespace DiceGame.Session
         float matchStartAckWaitElapsed;
         bool quantumClientWaitingForMatchStart;
         bool quantumHostModePanelShown;
+        bool quantumClientSetupVisible;
 
         public OnlineNetMessenger Messenger => messenger;
         public MatchSetupPresetRegistry MatchSetupPresetRegistry => matchSetupPresetRegistry;
         public UiFontSettings UiFontSettings => uiFontSettings;
+        public bool UsesQuantumBackend => networkingBackend == SessionNetworkingBackend.Quantum;
+        public bool IsQuantumSessionRunning => UsesQuantumBackend && quantumLauncher.IsRunning;
         public bool IsOnlineSharedSetupReady => onlineSharedSetupReady;
         public SessionNetworkingBackend NetworkingBackend => networkingBackend;
-        public bool UsesQuantumBackend => networkingBackend == SessionNetworkingBackend.Quantum;
 
         void Awake() {
             if (SessionState.Instance == null) {
@@ -46,7 +49,7 @@ namespace DiceGame.Session
             }
 
             if (gameBootstrap == null) {
-                gameBootstrap = FindObjectOfType<GameBootstrap>();
+                gameBootstrap = FindFirstObjectByType<GameBootstrap>();
             }
         }
 
@@ -82,12 +85,15 @@ namespace DiceGame.Session
             TickIdentityHandshake();
             TickMatchStartAckWait();
             TickQuantumHostLobby();
+            TickQuantumSetupSync();
             TickQuantumClientMatchStart();
+            TickQuantumOnlineResetFollow();
         }
 
         void OnDestroy() {
             messenger?.Dispose();
             messenger = null;
+            DisposeQuantumSetupSync();
             _ = quantumLauncher.ShutdownAsync();
         }
 
@@ -319,6 +325,28 @@ namespace DiceGame.Session
             }
 
             if (UsesQuantumBackend) {
+                EnsureQuantumSetupSync();
+                if (SessionState.Instance.IsHost) {
+                    if (!quantumSetupSync.TryPublishHostSetup(
+                            snapshot,
+                            SessionState.Instance.OnlineGameMode,
+                            out errorMessage))
+                    {
+                        return false;
+                    }
+
+                    SessionState.Instance.SetCurrentSetup(snapshot);
+                    return true;
+                }
+
+                if (!quantumSetupSync.TrySendClientDraft(
+                        snapshot,
+                        SessionState.Instance.OnlineGameMode,
+                        out errorMessage))
+                {
+                    return false;
+                }
+
                 SessionState.Instance.SetCurrentSetup(snapshot);
                 return true;
             }
@@ -499,6 +527,8 @@ namespace DiceGame.Session
         async Task CleanupNetworkForTitleAsync() {
             quantumClientWaitingForMatchStart = false;
             quantumHostModePanelShown = false;
+            quantumClientSetupVisible = false;
+            DisposeQuantumSetupSync();
             await quantumLauncher.ShutdownAsync();
 
             UnbindMessengerHandlers();
@@ -1020,6 +1050,8 @@ namespace DiceGame.Session
             onlineGameModeConfirmed = false;
             quantumClientWaitingForMatchStart = false;
             quantumHostModePanelShown = false;
+            quantumClientSetupVisible = false;
+            DisposeQuantumSetupSync();
             await quantumLauncher.ShutdownAsync();
 
             UnbindMessengerHandlers();
@@ -1041,13 +1073,18 @@ namespace DiceGame.Session
 
                 var seed = MatchRandom.CreateMatchSeed();
                 SessionState.Instance.SetMatchSeed(seed);
-                var runtimeConfig = QuantumRuntimeConfigFactory.CreateFromSetup(seed, snapshot);
+                var runtimeConfig = QuantumRuntimeConfigFactory.CreateFromSetup(
+                    seed,
+                    snapshot,
+                    gameBootstrap != null ? gameBootstrap.Board : null);
                 await quantumLauncher.StartLocalAsync(
                     runtimeConfig,
                     clientId: System.Guid.NewGuid().ToString(),
                     playerNickname: "Local");
 
-                HideGameplayWorld();
+                QuantumScenePresentation.ApplyForActiveSession(gameBootstrap);
+                EnsureQuantumGameFlow();
+                ShowGameplayWorld();
                 titleMenuUi?.Hide();
                 SessionState.Instance.SetStatus("Quantum local session running.");
             } catch (Exception ex) {
@@ -1061,12 +1098,110 @@ namespace DiceGame.Session
             }
         }
 
+        public void RequestQuantumMatchReset() {
+            if (!UsesQuantumBackend || busy || !quantumLauncher.IsRunning) {
+                return;
+            }
+
+            var playMode = SessionState.Instance != null
+                ? SessionState.Instance.PlayMode
+                : SessionPlayMode.Unspecified;
+            if (playMode == SessionPlayMode.OnlineClient) {
+                return;
+            }
+
+            _ = ResetQuantumMatchAsync();
+        }
+
+        async Task ResetQuantumMatchAsync() {
+            if (busy) {
+                return;
+            }
+
+            busy = true;
+            try {
+                var setup = SessionState.Instance?.CurrentSetup;
+                if (setup == null) {
+                    Debug.LogError("SessionController: Quantum reset requires CurrentSetup.");
+                    return;
+                }
+
+                var playMode = SessionState.Instance.PlayMode;
+                var seed = MatchRandom.CreateMatchSeed();
+                SessionState.Instance.SetMatchSeed(seed);
+                SessionState.Instance.SetStatus("Resetting Quantum match...");
+
+                if (playMode == SessionPlayMode.Local) {
+                    await quantumLauncher.ShutdownAsync();
+                    var runtimeConfig = QuantumRuntimeConfigFactory.CreateFromSetup(
+                        seed,
+                        setup,
+                        gameBootstrap != null ? gameBootstrap.Board : null);
+                    await quantumLauncher.StartLocalAsync(
+                        runtimeConfig,
+                        clientId: System.Guid.NewGuid().ToString(),
+                        playerNickname: "Local");
+                    QuantumScenePresentation.ApplyForActiveSession(gameBootstrap);
+                    EnsureQuantumGameFlow();
+                    ShowGameplayWorld();
+                    titleMenuUi?.Hide();
+                    SessionState.Instance.SetStatus("Quantum local session running.");
+                    return;
+                }
+
+                if (playMode == SessionPlayMode.OnlineHost) {
+                    if (!quantumLauncher.IsConnectedToRoom) {
+                        Debug.LogError("SessionController: Quantum online reset requires an active room.");
+                        return;
+                    }
+
+                    var runtimeConfig = QuantumRuntimeConfigFactory.CreateFromSetup(
+                        seed,
+                        setup,
+                        gameBootstrap != null ? gameBootstrap.Board : null);
+                    await quantumLauncher.RestartOnlineMatchAsHostAsync(runtimeConfig, "Host", seed);
+                    QuantumScenePresentation.ApplyForActiveSession(gameBootstrap);
+                    EnsureQuantumGameFlow();
+                    ShowGameplayWorld();
+                    titleMenuUi?.Hide();
+                    SessionState.Instance.SetStatus("Quantum online session running.");
+                    return;
+                }
+
+                Debug.LogWarning($"SessionController: Quantum reset ignored for playMode={playMode}.");
+            } catch (Exception ex) {
+                Debug.LogError($"SessionController: Quantum reset failed: {ex}");
+                SessionState.Instance?.SetStatus($"Quantum reset failed: {ex.Message}");
+            } finally {
+                busy = false;
+            }
+        }
+
+        void EnsureQuantumGameFlow() {
+            if (!UsesQuantumBackend || gameBootstrap == null) {
+                return;
+            }
+
+            var flow = gameBootstrap.GetComponent<GameFlowController>();
+            if (flow == null) {
+                flow = gameBootstrap.gameObject.AddComponent<GameFlowController>();
+            }
+
+            var requiredPlayers = SessionState.Instance?.CurrentSetup?.RequiredPlayerCount ?? 1;
+            flow.ConfigureForQuantumSession(
+                gameBootstrap.PlayerInputSettings,
+                gameBootstrap.GameSessionSettings,
+                requiredPlayers,
+                this);
+        }
+
         async Task CreateQuantumHostLobbyAsync() {
             busy = true;
             onlineSharedSetupReady = false;
             onlineGameModeConfirmed = false;
             quantumClientWaitingForMatchStart = false;
             quantumHostModePanelShown = false;
+            quantumClientSetupVisible = false;
             try {
                 SessionState.Instance.SetPlayMode(SessionPlayMode.OnlineHost);
                 SessionState.Instance.ClearRemotePeerPlayerId();
@@ -1083,6 +1218,7 @@ namespace DiceGame.Session
                     isHost: true,
                     clientId: System.Guid.NewGuid().ToString());
 
+                EnsureQuantumSetupSync();
                 SessionState.Instance.SetStatus($"Quantum host ready. Join code: {roomCode}");
                 titleMenuUi?.ShowHostPanel(roomCode);
             } catch (Exception ex) {
@@ -1100,6 +1236,8 @@ namespace DiceGame.Session
             onlineSharedSetupReady = false;
             onlineGameModeConfirmed = false;
             quantumClientWaitingForMatchStart = false;
+            quantumHostModePanelShown = false;
+            quantumClientSetupVisible = false;
             try {
                 var roomCode = QuantumRoomCodes.Normalize(lobbyCode);
                 if (string.IsNullOrEmpty(roomCode)) {
@@ -1117,9 +1255,10 @@ namespace DiceGame.Session
                     isHost: false,
                     clientId: System.Guid.NewGuid().ToString());
 
+                EnsureQuantumSetupSync();
                 SessionState.Instance.SetMatchSeed(quantumLauncher.PendingMatchSeed);
                 quantumClientWaitingForMatchStart = true;
-                SessionState.Instance.SetStatus("Joined Quantum room. Waiting for host to start...");
+                SessionState.Instance.SetStatus("Joined Quantum room. Waiting for shared settings...");
                 titleMenuUi?.ShowClientWaitingPanel(roomCode);
             } catch (Exception ex) {
                 Debug.LogError($"SessionController: Quantum join failed: {ex}");
@@ -1140,7 +1279,6 @@ namespace DiceGame.Session
 
             SessionState.Instance.SetOnlineGameMode(mode);
             onlineGameModeConfirmed = true;
-            onlineSharedSetupReady = true;
 
             var snapshot = matchSetupPresetRegistry != null
                 ? matchSetupPresetRegistry.CreateDefaultSnapshot(mode)
@@ -1150,6 +1288,13 @@ namespace DiceGame.Session
                 return;
             }
 
+            EnsureQuantumSetupSync();
+            if (!quantumSetupSync.TryPublishHostSetup(snapshot, mode, out var publishError)) {
+                SessionState.Instance.SetStatus(publishError ?? "Failed to publish shared settings.");
+                return;
+            }
+
+            onlineSharedSetupReady = true;
             SessionState.Instance.SetCurrentSetup(snapshot);
             titleMenuUi?.ShowOnlineSharedSetupPanel(snapshot, isHost: true);
             SessionState.Instance.SetStatus(
@@ -1182,6 +1327,16 @@ namespace DiceGame.Session
                 return;
             }
 
+            EnsureQuantumSetupSync();
+            if (!quantumSetupSync.TryPublishHostSetup(
+                    setup,
+                    SessionState.Instance.OnlineGameMode,
+                    out var publishError))
+            {
+                SessionState.Instance.SetStatus(publishError ?? "Failed to publish final setup.");
+                return;
+            }
+
             busy = true;
             try {
                 SessionState.Instance.SetCurrentSetup(setup);
@@ -1191,16 +1346,79 @@ namespace DiceGame.Session
                     ? quantumLauncher.PendingMatchSeed
                     : MatchRandom.CreateMatchSeed();
                 SessionState.Instance.SetMatchSeed(seed);
-                var runtimeConfig = QuantumRuntimeConfigFactory.CreateFromSetup(seed, setup);
+                var runtimeConfig = QuantumRuntimeConfigFactory.CreateFromSetup(
+                    seed,
+                    setup,
+                    gameBootstrap != null ? gameBootstrap.Board : null);
                 await quantumLauncher.StartOnlineMatchAsHostAsync(runtimeConfig, "Host");
 
                 onlineSharedSetupReady = false;
-                HideGameplayWorld();
+                QuantumScenePresentation.ApplyForActiveSession(gameBootstrap);
+                EnsureQuantumGameFlow();
+                ShowGameplayWorld();
                 titleMenuUi?.Hide();
                 SessionState.Instance.SetStatus("Quantum online session running.");
             } catch (Exception ex) {
                 Debug.LogError($"SessionController: Quantum match start failed: {ex}");
                 SessionState.Instance.SetStatus($"Quantum start failed: {ex.Message}");
+            } finally {
+                busy = false;
+            }
+        }
+
+        void TickQuantumOnlineResetFollow() {
+            if (!UsesQuantumBackend
+                || busy
+                || SessionState.Instance == null
+                || SessionState.Instance.PlayMode != SessionPlayMode.OnlineClient
+                || !quantumLauncher.IsConnectedToRoom
+                || !quantumLauncher.IsRunning)
+            {
+                return;
+            }
+
+            if (!quantumLauncher.TryReadMatchStart(out var roomSeed) || roomSeed == 0) {
+                return;
+            }
+
+            if (roomSeed == SessionState.Instance.MatchSeed) {
+                return;
+            }
+
+            _ = FollowQuantumOnlineResetAsync(roomSeed);
+        }
+
+        async Task FollowQuantumOnlineResetAsync(int roomSeed) {
+            if (busy) {
+                return;
+            }
+
+            busy = true;
+            try {
+                SessionState.Instance.SetMatchSeed(roomSeed);
+                SessionState.Instance.SetStatus("Host reset the match. Restarting...");
+
+                var setup = SessionState.Instance.CurrentSetup
+                    ?? quantumSetupSync?.LastAppliedSnapshot
+                    ?? matchSetupPresetRegistry?.CreateDefaultSnapshot(GameMode.Versus);
+                if (setup == null) {
+                    throw new InvalidOperationException("Shared match setup is missing on client reset.");
+                }
+
+                SessionState.Instance.SetCurrentSetup(setup);
+                var runtimeConfig = QuantumRuntimeConfigFactory.CreateFromSetup(
+                    roomSeed,
+                    setup,
+                    gameBootstrap != null ? gameBootstrap.Board : null);
+                await quantumLauncher.RestartOnlineMatchAsClientAsync(runtimeConfig, "Client", roomSeed);
+                QuantumScenePresentation.ApplyForActiveSession(gameBootstrap);
+                EnsureQuantumGameFlow();
+                ShowGameplayWorld();
+                titleMenuUi?.Hide();
+                SessionState.Instance.SetStatus("Quantum online session running.");
+            } catch (Exception ex) {
+                Debug.LogError($"SessionController: Quantum client reset follow failed: {ex}");
+                SessionState.Instance.SetStatus($"Quantum reset follow failed: {ex.Message}");
             } finally {
                 busy = false;
             }
@@ -1212,6 +1430,10 @@ namespace DiceGame.Session
                 || busy
                 || quantumLauncher.IsRunning)
             {
+                return;
+            }
+
+            if (!quantumClientSetupVisible || !onlineSharedSetupReady) {
                 return;
             }
 
@@ -1243,6 +1465,60 @@ namespace DiceGame.Session
             titleMenuUi?.ShowOnlineModePanel();
         }
 
+        void TickQuantumSetupSync() {
+            if (!UsesQuantumBackend || quantumLauncher.IsRunning || quantumSetupSync == null) {
+                return;
+            }
+
+            if (SessionState.Instance != null && SessionState.Instance.IsHost) {
+                var pending = quantumSetupSync.PendingClientDraftEvent;
+                if (pending != null
+                    && quantumSetupSync.TryHandleIncomingClientDraft(pending, out var clientDraft))
+                {
+                    quantumSetupSync.ConsumePendingClientDraftEvent();
+                    clientDraft.GameMode = SessionState.Instance.OnlineGameMode;
+                    if (quantumSetupSync.TryPublishHostSetup(
+                            clientDraft,
+                            SessionState.Instance.OnlineGameMode,
+                            out var error))
+                    {
+                        SessionState.Instance.SetCurrentSetup(clientDraft);
+                        titleMenuUi?.ApplyOnlineSetupFromRemote(clientDraft);
+                    }
+                    else if (!string.IsNullOrEmpty(error))
+                    {
+                        Debug.LogWarning($"SessionController: Quantum client draft rejected: {error}");
+                    }
+                }
+
+                return;
+            }
+
+            if (SessionState.Instance == null
+                || SessionState.Instance.PlayMode != SessionPlayMode.OnlineClient)
+            {
+                return;
+            }
+
+            if (!quantumSetupSync.TryPullHostSetup(out var snapshot, out var isFirst)) {
+                return;
+            }
+
+            SessionState.Instance.SetOnlineGameMode(snapshot.GameMode);
+            SessionState.Instance.SetCurrentSetup(snapshot);
+            onlineGameModeConfirmed = true;
+            onlineSharedSetupReady = true;
+
+            if (isFirst || !quantumClientSetupVisible) {
+                quantumClientSetupVisible = true;
+                titleMenuUi?.ShowOnlineSharedSetupPanel(snapshot, isHost: false);
+                SessionState.Instance.SetStatus(
+                    "Shared settings ready. Waiting for host to start the match.");
+            } else {
+                titleMenuUi?.ApplyOnlineSetupFromRemote(snapshot);
+            }
+        }
+
         async Task StartQuantumOnlineMatchAsClientAsync() {
             if (busy || quantumLauncher.IsRunning) {
                 return;
@@ -1252,13 +1528,30 @@ namespace DiceGame.Session
             quantumClientWaitingForMatchStart = false;
             try {
                 SessionState.Instance.SetStatus("Starting Quantum online match...");
+                if (quantumSetupSync != null
+                    && quantumSetupSync.TryPullHostSetup(out var latestSetup, out _))
+                {
+                    SessionState.Instance.SetCurrentSetup(latestSetup);
+                }
+
                 var seed = quantumLauncher.PendingMatchSeed;
                 var setup = SessionState.Instance.CurrentSetup
+                    ?? quantumSetupSync?.LastAppliedSnapshot
                     ?? matchSetupPresetRegistry?.CreateDefaultSnapshot(GameMode.Versus);
-                var runtimeConfig = QuantumRuntimeConfigFactory.CreateFromSetup(seed, setup);
+                if (setup == null) {
+                    throw new InvalidOperationException("Shared match setup is missing on client.");
+                }
+
+                SessionState.Instance.SetCurrentSetup(setup);
+                var runtimeConfig = QuantumRuntimeConfigFactory.CreateFromSetup(
+                    seed,
+                    setup,
+                    gameBootstrap != null ? gameBootstrap.Board : null);
                 await quantumLauncher.StartOnlineMatchAsClientAsync(runtimeConfig, "Client");
 
-                HideGameplayWorld();
+                QuantumScenePresentation.ApplyForActiveSession(gameBootstrap);
+                EnsureQuantumGameFlow();
+                ShowGameplayWorld();
                 titleMenuUi?.Hide();
                 SessionState.Instance.SetMatchSeed(runtimeConfig.Seed);
                 SessionState.Instance.SetStatus("Quantum online session running.");
@@ -1269,6 +1562,16 @@ namespace DiceGame.Session
             } finally {
                 busy = false;
             }
+        }
+
+        void EnsureQuantumSetupSync() {
+            quantumSetupSync ??= new QuantumMatchSetupSync(matchSetupPresetRegistry);
+            quantumSetupSync.Bind(quantumLauncher.Client);
+        }
+
+        void DisposeQuantumSetupSync() {
+            quantumSetupSync?.Dispose();
+            quantumSetupSync = null;
         }
 
         public GameBootstrap GameBootstrap => gameBootstrap;

@@ -34,8 +34,8 @@ namespace DiceGame.Session
         public int InitialDiceCount;
         public bool AnimateInitialDiceSpawn;
         public bool ContinuousSpawnEnabled;
-        public float SpawnInterval;
-        public float SpawnIntervalJitter;
+        public int SpawnIntervalTicks;
+        public int SpawnIntervalJitterTicks;
         public float BottomSpawnWeight;
     }
 
@@ -82,7 +82,7 @@ namespace DiceGame.Session
         public float Face4Weight;
         public float Face5Weight;
         public float Face6Weight;
-        public float QueueToBoardDelay;
+        public int QueueToBoardDelayTicks;
     }
 
     [Serializable]
@@ -187,8 +187,8 @@ namespace DiceGame.Session
                 InitialDiceCount = payload.InitialDiceCount,
                 AnimateInitialDiceSpawn = payload.AnimateInitialDiceSpawn,
                 ContinuousSpawnEnabled = payload.ContinuousSpawnEnabled,
-                SpawnInterval = payload.SpawnInterval,
-                SpawnIntervalJitter = payload.SpawnIntervalJitter,
+                SpawnIntervalTicks = payload.SpawnIntervalTicks,
+                SpawnIntervalJitterTicks = payload.SpawnIntervalJitterTicks,
                 BottomSpawnWeight = payload.BottomSpawnWeight
             };
         }
@@ -199,8 +199,8 @@ namespace DiceGame.Session
                 InitialDiceCount = dto.InitialDiceCount,
                 AnimateInitialDiceSpawn = dto.AnimateInitialDiceSpawn,
                 ContinuousSpawnEnabled = dto.ContinuousSpawnEnabled,
-                SpawnInterval = dto.SpawnInterval,
-                SpawnIntervalJitter = dto.SpawnIntervalJitter,
+                SpawnIntervalTicks = dto.SpawnIntervalTicks,
+                SpawnIntervalJitterTicks = dto.SpawnIntervalJitterTicks,
                 BottomSpawnWeight = dto.BottomSpawnWeight
             };
         }
@@ -267,7 +267,7 @@ namespace DiceGame.Session
                 Face4Weight = payload.Face4Weight,
                 Face5Weight = payload.Face5Weight,
                 Face6Weight = payload.Face6Weight,
-                QueueToBoardDelay = payload.QueueToBoardDelay
+                QueueToBoardDelayTicks = payload.QueueToBoardDelayTicks
             };
         }
 
@@ -308,7 +308,7 @@ namespace DiceGame.Session
                 Face4Weight = dto.Face4Weight,
                 Face5Weight = dto.Face5Weight,
                 Face6Weight = dto.Face6Weight,
-                QueueToBoardDelay = dto.QueueToBoardDelay
+                QueueToBoardDelayTicks = dto.QueueToBoardDelayTicks
             };
         }
 

@@ -70,8 +70,8 @@
      <Compile Include="Library\PackageCache\com.unity.render-pipelines.core@8e828b9223c8\Editor\Volume\Drawers\FloatParameterDrawer.cs" />
      <Compile Include="Library\PackageCache\com.unity.render-pipelines.core@8e828b9223c8\Editor\QuaternionPropertyDrawer.cs" />
      <Compile Include="Library\PackageCache\com.unity.render-pipelines.core@8e828b9223c8\Editor\Lighting\ProbeVolume\ProbeVolumeResourceStripper.cs" />
-     <Compile Include="Library\PackageCache\com.unity.render-pipelines.core@8e828b9223c8\Editor\Lighting\LightAnchorEditorTool.cs" />
      <Compile Include="Library\PackageCache\com.unity.render-pipelines.core@8e828b9223c8\Editor\PropertyFetcher.cs" />
+     <Compile Include="Library\PackageCache\com.unity.render-pipelines.core@8e828b9223c8\Editor\Lighting\LightAnchorEditorTool.cs" />
      <Compile Include="Library\PackageCache\com.unity.render-pipelines.core@8e828b9223c8\Editor\Analytics\VolumeProfileUsageAnalytic.cs" />
      <Compile Include="Library\PackageCache\com.unity.render-pipelines.core@8e828b9223c8\Editor\LookDev\CameraController.cs" />
      <Compile Include="Library\PackageCache\com.unity.render-pipelines.core@8e828b9223c8\Editor\Lighting\ProbeVolume\ProbeVolumeBakingSetEditor.cs" />
@@ -181,8 +181,8 @@
      <Compile Include="Library\PackageCache\com.unity.render-pipelines.core@8e828b9223c8\Editor\BuildProcessors\ShaderStrippers\SRPDisabledComputeShaderVariantStripper.cs" />
      <Compile Include="Library\PackageCache\com.unity.render-pipelines.core@8e828b9223c8\Editor\RemoveComponentUtils.cs" />
      <Compile Include="Library\PackageCache\com.unity.render-pipelines.core@8e828b9223c8\Editor\Lighting\IESImporterEditor.cs" />
-     <Compile Include="Library\PackageCache\com.unity.render-pipelines.core@8e828b9223c8\Editor\Utilities\SerializedBitArray.cs" />
      <Compile Include="Library\PackageCache\com.unity.render-pipelines.core@8e828b9223c8\Editor\ExpandedState.cs" />
+     <Compile Include="Library\PackageCache\com.unity.render-pipelines.core@8e828b9223c8\Editor\Utilities\SerializedBitArray.cs" />
      <Compile Include="Library\PackageCache\com.unity.render-pipelines.core@8e828b9223c8\Editor\LookDev\DisplayWindow.EnvironmentLibrarySidePanel.cs" />
      <Compile Include="Library\PackageCache\com.unity.render-pipelines.core@8e828b9223c8\Editor\ShaderGenerator\CSharpToHLSL.cs" />
      <Compile Include="Library\PackageCache\com.unity.render-pipelines.core@8e828b9223c8\Editor\Lighting\ProbeVolume\ProbeVolumeEditor.cs" />

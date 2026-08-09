@@ -209,8 +209,8 @@
      <Compile Include="Library\PackageCache\com.unity.collab-proxy@0b1559bcd34e\Editor\Views\BranchExplorer\Drawing\Shapes\Colors\BrExLineDashPatterns.cs" />
      <Compile Include="Library\PackageCache\com.unity.collab-proxy@0b1559bcd34e\Editor\Views\BranchExplorer\Menu\BranchExplorerViewLabelMenuOperations.cs" />
      <Compile Include="Library\PackageCache\com.unity.collab-proxy@0b1559bcd34e\Editor\Inspector\Properties\SelectedRepObjectInfoData.cs" />
-     <Compile Include="Library\PackageCache\com.unity.collab-proxy@0b1559bcd34e\Editor\Views\LaunchDiffOperations.cs" />
      <Compile Include="Library\PackageCache\com.unity.collab-proxy@0b1559bcd34e\Editor\Views\Diff\UnityDiffTree.cs" />
+     <Compile Include="Library\PackageCache\com.unity.collab-proxy@0b1559bcd34e\Editor\Views\LaunchDiffOperations.cs" />
      <Compile Include="Library\PackageCache\com.unity.collab-proxy@0b1559bcd34e\Editor\WebApi\CurrentUserAdminCheckResponse.cs" />
      <Compile Include="Library\PackageCache\com.unity.collab-proxy@0b1559bcd34e\Editor\Views\BranchExplorer\Drawing\Shapes\Connections\Degrees.cs" />
      <Compile Include="Library\PackageCache\com.unity.collab-proxy@0b1559bcd34e\Editor\CodeEditor\Keyboard.cs" />
@@ -508,8 +508,8 @@
      <Compile Include="Library\PackageCache\com.unity.collab-proxy@0b1559bcd34e\Editor\Headless\HeadlessGluonUpdateReport.cs" />
      <Compile Include="Library\PackageCache\com.unity.collab-proxy@0b1559bcd34e\Editor\ViewSwitcher.cs" />
      <Compile Include="Library\PackageCache\com.unity.collab-proxy@0b1559bcd34e\Editor\Views\Merge\Gluon\IncomingChangesTreeView.cs" />
-     <Compile Include="Library\PackageCache\com.unity.collab-proxy@0b1559bcd34e\Editor\Views\Shelves\ShelvesSelection.cs" />
      <Compile Include="Library\PackageCache\com.unity.collab-proxy@0b1559bcd34e\Editor\Views\BranchExplorer\Drawing\Shapes\BranchGeometry.cs" />
+     <Compile Include="Library\PackageCache\com.unity.collab-proxy@0b1559bcd34e\Editor\Views\Shelves\ShelvesSelection.cs" />
      <Compile Include="Library\PackageCache\com.unity.collab-proxy@0b1559bcd34e\Editor\Tool\IsExeAvailable.cs" />
      <Compile Include="Library\PackageCache\com.unity.collab-proxy@0b1559bcd34e\Editor\Views\Branch\Dialogs\CreateBranchDialog.cs" />
      <Compile Include="Library\PackageCache\com.unity.collab-proxy@0b1559bcd34e\Editor\Views\Locks\DrawLocksListViewItem.cs" />

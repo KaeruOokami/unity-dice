@@ -11,7 +11,8 @@
             SystemsConfig systemsConfig)
         {
             // Mirrors SimTickSchedule / OnlineDualSimInputBinder.StepSimulationTick.
-            // JumboSequence deferred (2x2 footprint / bridged match). Ice slide & Magnet chain deferred.
+            // Match: Domain MatchClusterFinder (incl. Jumbo bridged / sinking weights).
+            // Ice until-blocked + Magnet chain: PushPassability / CoupledWalkRoll Domain.
             systems.Add(new BoardBootstrapSystem());
             systems.Add(new DiceLogicalMotionSystem()); // 0 DiceLogicalMotions
             systems.Add(new PlayerActionSystem());      // 1+2 ApplyInputs / Characters

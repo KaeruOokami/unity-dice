@@ -12,9 +12,9 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: f1a2b3c4d5e6478899aabbccddeeff03, type: 3}
   m_Name: DiceAnimationSettings
   m_EditorClassIdentifier: 
-  rollAnimationDuration: 0.2
-  jumpParallelRollDurationPerCell: 0.2
-  slideDuration: 0.2
-  fallHorizontalDuration: 0.2
-  liftDuration: 0.2
-  placeDuration: 0.2
+  rollAnimationDurationTicks: 18
+  jumpParallelRollDurationPerCellTicks: 12
+  slideDurationTicks: 12
+  fallHorizontalDurationTicks: 12
+  liftDurationTicks: 12
+  placeDurationTicks: 12

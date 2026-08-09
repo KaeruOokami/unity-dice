@@ -41,14 +41,15 @@
     <Analyzer Include="D:\Program Files\Unity\Hub\Editor\6000.0.81f1\Editor\Data\Tools\Unity.SourceGenerators\Unity.UIToolkit.SourceGenerator.dll" />
   </ItemGroup>
   <ItemGroup>
-     <Compile Include="Assets\Packages\QuantumUser\Editor\CodeGen\QuantumCodeGenSettings.User.cs" />
-     <Compile Include="Assets\Packages\Photon\Quantum\Editor\CodeGen\QuantumCodeGenQtn.cs" />
-     <Compile Include="Assets\Packages\Photon\Quantum\Editor\CodeGen\QuantumQtnAssetEditor.cs" />
-     <Compile Include="Assets\Packages\Photon\Quantum\Editor\CodeGen\QuantumQtnAsset.cs" />
-     <Compile Include="Assets\Packages\Photon\Quantum\Editor\CodeGen\QuantumCodeGenSettings.cs" />
+     <Compile Include="Assets\Photon\Quantum\Editor\CodeGen\QuantumQtnAssetEditor.cs" />
+     <Compile Include="Assets\Photon\Quantum\Editor\CodeGen\QuantumCodeGenQtn.cs" />
+     <Compile Include="Assets\Photon\Quantum\Editor\CodeGen\QuantumCodeGenSettings.cs" />
+     <Compile Include="Assets\Photon\Quantum\Editor\CodeGen\QuantumQtnAsset.cs" />
      <Compile Include="Assets\QuantumUser\Editor\CodeGen\QuantumCodeGenSettings.User.cs" />
-     <Compile Include="Assets\Packages\Photon\Quantum\Editor\CodeGen\QuantumQtnAssetImporter.cs" />
+     <Compile Include="Assets\Photon\Quantum\Editor\CodeGen\QuantumQtnAssetImporter.cs" />
      <None Include="Assets\QuantumUser\Editor\CodeGen\Quantum.Unity.Editor.CodeGen.asmref" />
+     <None Include="Assets\Photon\Quantum\Editor\CodeGen\QuantumCodeGenQtn.Version.txt" />
+     <None Include="Assets\Photon\Quantum\Editor\CodeGen\Quantum.Unity.Editor.CodeGen.asmdef" />
     <Reference Include="UnityEngine">
         <HintPath>D:\Program Files\Unity\Hub\Editor\6000.0.81f1\Editor\Data\Managed\UnityEngine\UnityEngine.dll</HintPath>
     </Reference>

@@ -69,7 +69,7 @@ namespace DiceGame.Session
             bindings.Face4Weight = SessionUiFactory.CreateLabeledFloatInput(section, "Face 4 Weight");
             bindings.Face5Weight = SessionUiFactory.CreateLabeledFloatInput(section, "Face 5 Weight");
             bindings.Face6Weight = SessionUiFactory.CreateLabeledFloatInput(section, "Face 6 Weight");
-            bindings.QueueToBoardDelay = SessionUiFactory.CreateLabeledFloatInput(section, "Queue To Board Delay");
+            bindings.QueueToBoardDelay = SessionUiFactory.CreateLabeledIntInput(section, "Queue To Board Delay Ticks");
 
             RebuildProfiles(bindings, CloneProfiles(template.FaceSendProfiles));
             return bindings;
@@ -90,7 +90,7 @@ namespace DiceGame.Session
             SetInputText(bindings.Face4Weight, data.Face4Weight.ToString("0.###"));
             SetInputText(bindings.Face5Weight, data.Face5Weight.ToString("0.###"));
             SetInputText(bindings.Face6Weight, data.Face6Weight.ToString("0.###"));
-            SetInputText(bindings.QueueToBoardDelay, data.QueueToBoardDelay.ToString("0.###"));
+            SetInputText(bindings.QueueToBoardDelay, data.QueueToBoardDelayTicks.ToString());
             RebuildProfiles(bindings, CloneProfiles(data.FaceSendProfiles));
         }
 
@@ -111,7 +111,7 @@ namespace DiceGame.Session
                 || !TryParseFloat(bindings.Face4Weight, out var face4)
                 || !TryParseFloat(bindings.Face5Weight, out var face5)
                 || !TryParseFloat(bindings.Face6Weight, out var face6)
-                || !TryParseFloat(bindings.QueueToBoardDelay, out var queueDelay)) {
+                || !TryParseInt(bindings.QueueToBoardDelay, out var queueDelayTicks)) {
                 errorMessage = "Attack settings contain invalid numbers.";
                 return false;
             }
@@ -132,7 +132,7 @@ namespace DiceGame.Session
                 Face4Weight = face4,
                 Face5Weight = face5,
                 Face6Weight = face6,
-                QueueToBoardDelay = queueDelay
+                QueueToBoardDelayTicks = queueDelayTicks
             };
 
             if (!data.TryValidate(out errorMessage)) {

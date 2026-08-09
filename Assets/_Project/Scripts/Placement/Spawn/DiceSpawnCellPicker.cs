@@ -3,6 +3,7 @@ using DiceGame.Config;
 using DiceGame.Core;
 using DiceGame.Gameplay;
 using DiceGame.Grid;
+using DiceGame.SimShared.Spawn;
 using UnityEngine;
 
 namespace DiceGame.Placement
@@ -18,20 +19,30 @@ namespace DiceGame.Placement
         }
     }
 
-    struct SpawnSlotBuckets
-    {
-        public List<Vector2Int> BottomCells;
-        public List<Vector2Int> TopCells;
-
-        public bool HasAny =>
-            BottomCells != null && BottomCells.Count > 0
-            || TopCells != null && TopCells.Count > 0;
-    }
-
+    /// <summary>
+    /// Unity adapter over shared <see cref="SpawnSlotPicker"/> (single algorithm with Quantum).
+    /// </summary>
     public static class DiceSpawnCellPicker
     {
         public static bool HasAnySpawnSlot(Board board, DiceRegistry registry) {
-            return CollectSpawnBuckets(board, registry, null).HasAny;
+            if (board == null || registry == null) {
+                return false;
+            }
+
+            var query = new RegistrySpawnBoardQuery(board, registry, null);
+            for (var y = 0; y < query.Height; y++) {
+                for (var x = 0; x < query.Width; x++) {
+                    if (!query.IsCellAllowed(x, y)) {
+                        continue;
+                    }
+
+                    if (query.CanPlaceBottom(x, y) || query.CanPlaceTop(x, y)) {
+                        return true;
+                    }
+                }
+            }
+
+            return false;
         }
 
         public static List<DiceSpawnSlot> PickRandomSpawnSlots(
@@ -50,20 +61,21 @@ namespace DiceGame.Placement
             int count,
             float bottomSpawnWeight,
             System.Random random) {
-            var buckets = CollectSpawnBuckets(board, registry, ownerSlot);
             var results = new List<DiceSpawnSlot>();
-            if (board == null || registry == null || count <= 0 || !buckets.HasAny) {
+            if (board == null || registry == null || count <= 0 || random == null) {
                 return results;
             }
 
-            var weight = Mathf.Clamp01(bottomSpawnWeight);
-            for (var i = 0; i < count && buckets.HasAny; i++) {
-                if (!TryPickWeightedSlot(buckets, weight, random, out var slot)) {
-                    break;
-                }
-
-                results.Add(slot);
-                RemoveSlot(ref buckets, slot);
+            var buffer = new SpawnCellSlot[count];
+            var query = new RegistrySpawnBoardQuery(board, registry, ownerSlot);
+            var n = SpawnSlotPicker.PickRandomSlots(
+                query,
+                count,
+                bottomSpawnWeight,
+                random.Next,
+                buffer);
+            for (var i = 0; i < n; i++) {
+                results.Add(ToUnitySlot(buffer[i]));
             }
 
             return results;
@@ -85,13 +97,17 @@ namespace DiceGame.Placement
             float bottomSpawnWeight,
             System.Random random,
             out DiceSpawnSlot slot) {
-            var slots = PickRandomSpawnSlots(board, registry, ownerSlot, 1, bottomSpawnWeight, random);
-            if (slots.Count == 0) {
-                slot = default;
+            slot = default;
+            if (board == null || registry == null || random == null) {
                 return false;
             }
 
-            slot = slots[0];
+            var query = new RegistrySpawnBoardQuery(board, registry, ownerSlot);
+            if (!SpawnSlotPicker.TryPickRandomSlot(query, bottomSpawnWeight, random.Next, out var shared)) {
+                return false;
+            }
+
+            slot = ToUnitySlot(shared);
             return true;
         }
 
@@ -113,7 +129,7 @@ namespace DiceGame.Placement
                 return false;
             }
 
-            // Always scan from the region edge (index 0) so vacated edge cells refill first.
+            // Region-local edge-first scan (Versus). Shared full-board attack pick is for Quantum.
             for (var index = 0; index < cellCount; index++) {
                 var x = minCell.x + index % width;
                 var y = maxCell.y - index / width;
@@ -137,81 +153,44 @@ namespace DiceGame.Placement
             return false;
         }
 
-        static SpawnSlotBuckets CollectSpawnBuckets(Board board, DiceRegistry registry, PlayerSlot? ownerSlot) {
-            var buckets = new SpawnSlotBuckets {
-                BottomCells = new List<Vector2Int>(),
-                TopCells = new List<Vector2Int>()
-            };
-
-            if (board == null || registry == null) {
-                return buckets;
-            }
-
-            for (var x = 0; x < board.Width; x++) {
-                for (var z = 0; z < board.Height; z++) {
-                    var cell = new Vector2Int(x, z);
-                    if (ownerSlot.HasValue
-                        && board.VersusLayout != null
-                        && !board.VersusLayout.IsInsidePlayerRegion(ownerSlot.Value, cell)) {
-                        continue;
-                    }
-
-                    if (registry.HasErasingDiceAt(cell)) {
-                        continue;
-                    }
-
-                    if (registry.CanPlaceBottomDiceAt(cell)) {
-                        buckets.BottomCells.Add(cell);
-                    }
-
-                    if (registry.CanPlaceTopDiceAt(cell)) {
-                        buckets.TopCells.Add(cell);
-                    }
-                }
-            }
-
-            return buckets;
+        static DiceSpawnSlot ToUnitySlot(SpawnCellSlot shared) {
+            return new DiceSpawnSlot(
+                new Vector2Int(shared.X, shared.Y),
+                shared.IsTop ? DiceStackTier.Top : DiceStackTier.Bottom);
         }
 
-        static bool TryPickWeightedSlot(
-            SpawnSlotBuckets buckets,
-            float bottomSpawnWeight,
-            System.Random random,
-            out DiceSpawnSlot slot) {
-            slot = default;
-            var hasBottom = buckets.BottomCells.Count > 0;
-            var hasTop = buckets.TopCells.Count > 0;
+        sealed class RegistrySpawnBoardQuery : ISpawnBoardQuery
+        {
+            readonly Board board;
+            readonly DiceRegistry registry;
+            readonly PlayerSlot? ownerSlot;
 
-            if (!hasBottom && !hasTop) {
-                return false;
+            public RegistrySpawnBoardQuery(Board board, DiceRegistry registry, PlayerSlot? ownerSlot) {
+                this.board = board;
+                this.registry = registry;
+                this.ownerSlot = ownerSlot;
             }
 
-            DiceStackTier tier;
-            if (hasBottom && !hasTop) {
-                tier = DiceStackTier.Bottom;
-            } else if (!hasBottom && hasTop) {
-                tier = DiceStackTier.Top;
-            } else {
-                tier = random.NextDouble() < bottomSpawnWeight
-                    ? DiceStackTier.Bottom
-                    : DiceStackTier.Top;
-            }
+            public int Width => board.Width;
+            public int Height => board.Height;
 
-            var cells = tier == DiceStackTier.Top ? buckets.TopCells : buckets.BottomCells;
-            var index = random.Next(cells.Count);
-            slot = new DiceSpawnSlot(cells[index], tier);
-            return true;
-        }
-
-        static void RemoveSlot(ref SpawnSlotBuckets buckets, DiceSpawnSlot slot) {
-            var cells = slot.Tier == DiceStackTier.Top ? buckets.TopCells : buckets.BottomCells;
-            for (var i = 0; i < cells.Count; i++) {
-                if (cells[i] != slot.Cell) {
-                    continue;
+            public bool IsCellAllowed(int x, int y) {
+                var cell = new Vector2Int(x, y);
+                if (ownerSlot.HasValue
+                    && board.VersusLayout != null
+                    && !board.VersusLayout.IsInsidePlayerRegion(ownerSlot.Value, cell)) {
+                    return false;
                 }
 
-                cells.RemoveAt(i);
-                return;
+                return !registry.HasErasingDiceAt(cell);
+            }
+
+            public bool CanPlaceBottom(int x, int y) {
+                return registry.CanPlaceBottomDiceAt(new Vector2Int(x, y));
+            }
+
+            public bool CanPlaceTop(int x, int y) {
+                return registry.CanPlaceTopDiceAt(new Vector2Int(x, y));
             }
         }
 
@@ -296,10 +275,6 @@ namespace DiceGame.Placement
             return true;
         }
 
-        /// <summary>
-        /// Pending reservations always block. Solid cells block when occupied by any jumbo
-        /// (including mid-erasure); Normal/Ghost/Iron/etc. remain ignorable free space.
-        /// </summary>
         static bool CanJumboSpawnOccupyCell(DiceRegistry registry, Vector2Int cell) {
             if (registry.HasPendingBottomAt(cell) || registry.HasPendingTopAt(cell)) {
                 return false;

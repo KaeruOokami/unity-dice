@@ -32,6 +32,8 @@ singleton component Board
     Int32 Width;
     Int32 Height;
     Boolean Initialized;
+    // Versus partition column (0 = disabled). Production VersusArenaLayout.PartitionX.
+    Int32 PartitionX;
 }
 
 component GridPose
@@ -49,6 +51,44 @@ component PlayerPawn
     DiceStackTier StandingTier;
     Int32 FacingX;
     Int32 FacingY;
+    // Continuous surface pose (Phase 1). GridPose remains the logical standing cell.
+    Boolean HasWorldPose;
+    FP WorldX;
+    FP WorldZ;
+    FP MoveSpeed;
+    // Phase 2 push-follow (tracks pushed dice — contact, not ride).
+    Boolean HasPushFollow;
+    EntityRef PushFollowDice;
+    Int32 PushFollowDirX;
+    Int32 PushFollowDirY;
+    Int32 PushFollowFromX;
+    Int32 PushFollowFromY;
+    Int32 PushFollowTicksRemaining;
+    Int32 PushFollowTicksTotal;
+    // Domain CoupledWalkRoll session (roll + ride lock as one unit).
+    Boolean HasCoupledWalkRoll;
+    EntityRef CoupledWalkRollDice;
+    Int32 CoupledWalkRollDirX;
+    Int32 CoupledWalkRollDirY;
+    Int32 CoupledWalkRollFromX;
+    Int32 CoupledWalkRollFromY;
+    Int32 CoupledWalkRollDestX;
+    Int32 CoupledWalkRollDestY;
+    Int32 CoupledWalkRollTicksRemaining;
+    Int32 CoupledWalkRollTicksTotal;
+    Int32 CoupledWalkRollStandingTier;
+    FP CoupledWalkRollCellSize;
+    // Production JumpPhase.Airborne (GravityMotion + JumpInputPolicy).
+    Boolean IsJumping;
+    Boolean JumpDiceGridMoved;
+    Boolean IsJumpArc;
+    FP JumpOffsetY;
+    FP JumpVelocityY;
+    FP JumpHeight;
+    FP JumpLaunchVy;
+    // Production LiftPhase (Domain LiftMotionTiming).
+    Int32 LiftPhase;
+    Int32 LiftBusyTicksRemaining;
 }
 
 component Dice
@@ -60,9 +100,16 @@ component Dice
     Int32 EastFace;
     Boolean IsCarried;
     Boolean IsErasing;
+    Boolean IsSpawning;
     Int32 EraseTicksRemaining;
     Int32 EraseTicksTotal;
     PlayerRef Owner;
+    // Phase 2: gates re-push / lift while View roll/slide plays.
+    Boolean IsMotionBusy;
+    Int32 MotionTicksRemaining;
+    // Match after settle (production ActionCompleted): evaluate when !IsMotionBusy.
+    Boolean HasPendingMatch;
+    PlayerRef PendingMatchPlayer;
 }
 
 singleton component MatchPending

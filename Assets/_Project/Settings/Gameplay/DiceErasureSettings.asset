@@ -12,11 +12,11 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: f1a2b3c4d5e6478899aabbccddeeff04, type: 3}
   m_Name: DiceErasureSettings
   m_EditorClassIdentifier: 
-  sinkDuration: 10
+  sinkDurationTicks: 600
   sinkGhostThreshold: 0.7
   sinkGhostAlpha: 0.4
-  radianceDuration: 4
-  radianceRampUpDuration: 0.1
+  radianceDurationTicks: 240
+  radianceRampUpDurationTicks: 6
   neutralEmissionColor: {r: 1, g: 1, b: 1, a: 1}
   player1EmissionColor: {r: 0.2, g: 0.6, b: 1, a: 1}
   player2EmissionColor: {r: 1, g: 0.35, b: 0.2, a: 1}

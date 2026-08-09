@@ -1837,18 +1837,7 @@ namespace DiceGame.Gameplay
         }
 
         static bool TryInputToDirection(Vector2 input, out Direction direction) {
-            direction = default;
-            if (input.sqrMagnitude <= 0f) {
-                return false;
-            }
-
-            if (Mathf.Abs(input.x) >= Mathf.Abs(input.y)) {
-                direction = input.x > 0f ? Direction.East : Direction.West;
-            } else {
-                direction = input.y > 0f ? Direction.North : Direction.South;
-            }
-
-            return true;
+            return InputDirection.TryFromVector2(input, out direction);
         }
 
         void UpdateElasticInputLock(Vector2 input) {

@@ -1,4 +1,5 @@
 using UnityEngine;
+using UnityEngine.Serialization;
 
 namespace DiceGame.Config
 {
@@ -13,8 +14,15 @@ namespace DiceGame.Config
         [SerializeField] float maxWalkStep = 0.5f;
         [SerializeField] float maxJumpStepPlayerOnly = 0.5f;
         [SerializeField] float maxJumpStepCoupled = 1f;
-        [SerializeField] float pushHoldDuration = 0.25f;
-        [SerializeField] float dissolveDescentHoldDuration = 0.35f;
+        [Header("Hold durations — ticks @ SimTiming.TickHz")]
+        [FormerlySerializedAs("pushHoldDuration")]
+        [Min(1)]
+        [SerializeField] int pushHoldDurationTicks = 15;
+        [FormerlySerializedAs("dissolveDescentHoldDuration")]
+        [Min(1)]
+        [SerializeField] int dissolveDescentHoldDurationTicks = 21;
+        [Min(0)]
+        [SerializeField] int pushContactRadiusMilli = 250;
         [Range(0f, 1f)]
         [SerializeField] float rollCancelWindowProgress = 0.1f;
         [SerializeField] float pushInputAlignment = 0.7f;
@@ -37,8 +45,11 @@ namespace DiceGame.Config
         }
         public float MaxJumpStepPlayerOnly => maxJumpStepPlayerOnly;
         public float MaxJumpStepCoupled => maxJumpStepCoupled;
-        public float PushHoldDuration => pushHoldDuration;
-        public float DissolveDescentHoldDuration => dissolveDescentHoldDuration;
+        public int PushHoldDurationTicks => Mathf.Max(1, pushHoldDurationTicks);
+        public int DissolveDescentHoldDurationTicks => Mathf.Max(1, dissolveDescentHoldDurationTicks);
+        public int PushContactRadiusMilli => Mathf.Max(0, pushContactRadiusMilli);
+        public float PushHoldDuration => SimTiming.TicksToSeconds(PushHoldDurationTicks);
+        public float DissolveDescentHoldDuration => SimTiming.TicksToSeconds(DissolveDescentHoldDurationTicks);
         public float RollCancelWindowProgress => rollCancelWindowProgress;
         public float PushInputAlignment => pushInputAlignment;
         public float CarryVerticalOffset => carryVerticalOffset;
@@ -50,6 +61,9 @@ namespace DiceGame.Config
 
         void OnValidate() {
             jumpLandingSinkAdvance = Mathf.Clamp01(jumpLandingSinkAdvance);
+            pushHoldDurationTicks = Mathf.Max(1, pushHoldDurationTicks);
+            dissolveDescentHoldDurationTicks = Mathf.Max(1, dissolveDescentHoldDurationTicks);
+            pushContactRadiusMilli = Mathf.Max(0, pushContactRadiusMilli);
         }
     }
 }

@@ -57,12 +57,7 @@
 
         static bool TrySpawnOne(Frame frame, Board board, PlayerRef owner)
         {
-            var bottomWeight = frame.RuntimeConfig.BottomSpawnWeightPermille;
-            if (bottomWeight <= 0)
-            {
-                bottomWeight = MatchSimDefaults.BottomSpawnWeightPermille;
-            }
-
+            var bottomWeight = DiceSpawnRolls.ResolveBottomWeightPermille(frame);
             if (!DiceSpawnCellPicker.TryPickRandomSpawnSlot(
                     frame,
                     board,
@@ -74,17 +69,14 @@
                 return false;
             }
 
-            var face = frame.RNG->Next(BoardDefaults.MinFaceValue, BoardDefaults.MaxFaceValue + 1);
-            var kindRoll = frame.RNG->Next(0, 6);
-            var kind = kindRoll switch
-            {
-                0 => DiceKind.Wood,
-                1 => DiceKind.Ice,
-                2 => DiceKind.Magnet,
-                _ => DiceKind.Normal,
-            };
-
-            return BoardBootstrapSystem.TrySpawnDice(frame, x, y, kind, tier, face, owner);
+            return BoardBootstrapSystem.TrySpawnDice(
+                frame,
+                x,
+                y,
+                DiceSpawnRolls.RollKind(frame),
+                tier,
+                DiceSpawnRolls.RollTopFace(frame),
+                owner);
         }
 
         static int SampleDelay(Frame frame)

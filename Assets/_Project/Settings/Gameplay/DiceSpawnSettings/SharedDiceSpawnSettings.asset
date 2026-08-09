@@ -15,6 +15,6 @@ MonoBehaviour:
   initialDiceCount: 20
   animateInitialDiceSpawn: 1
   continuousSpawnEnabled: 1
-  spawnInterval: 4
-  spawnIntervalJitter: 1
+  spawnIntervalTicks: 240
+  spawnIntervalJitterTicks: 60
   bottomSpawnWeight: 0.95

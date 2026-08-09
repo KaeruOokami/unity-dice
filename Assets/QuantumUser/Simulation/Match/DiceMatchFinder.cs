@@ -1,15 +1,12 @@
 ﻿namespace Quantum
 {
+    using DiceGame.Core;
+
     /// <summary>
-    /// Lite match: same-tier orthogonal flood-fill where cluster weight &gt;= TopFace (faces 2窶・).
-    /// Begins timed erasure (LogicalMotions finishes destroy). Jumbo bridges deferred.
+    /// Frame adapter over production <see cref="MatchClusterFinder"/> (Jumbo bridged + sinking weights).
     /// </summary>
     public static unsafe class DiceMatchFinder
     {
-        const int MaxCluster = 64;
-        static readonly int[] NeighborX = { 0, 1, 0, -1 };
-        static readonly int[] NeighborY = { 1, 0, -1, 0 };
-
         public static bool TryBeginEraseClustersTouching(
             Frame frame,
             EntityRef actionDice,
@@ -23,7 +20,8 @@
             if (!actionDice.IsValid
                 || !frame.TryGet<Dice>(actionDice, out var action)
                 || action.IsCarried
-                || action.IsErasing)
+                || action.IsErasing
+                || action.IsSpawning)
             {
                 return false;
             }
@@ -34,45 +32,53 @@
                 return false;
             }
 
-            if (!frame.TryGet<GridPose>(actionDice, out var actionPose))
+            var snapshots = new MatchDiceSnapshot[MatchClusterFinder.MaxDice];
+            var entities = new EntityRef[MatchClusterFinder.MaxDice];
+            var diceCount = CollectSnapshots(frame, snapshots, entities);
+            if (diceCount <= 0)
             {
                 return false;
             }
 
-            var members = stackalloc EntityRef[MaxCluster];
-            var count = FloodFillSameTierFace(
-                frame,
-                actionPose.X,
-                actionPose.Y,
-                action.Tier,
-                face,
-                members,
-                MaxCluster);
-
-            if (count < face)
+            var actionId = -1;
+            for (var i = 0; i < diceCount; i++)
             {
-                return false;
-            }
-
-            var hasAction = false;
-            for (var i = 0; i < count; i++)
-            {
-                if (members[i] == actionDice)
+                if (entities[i] == actionDice)
                 {
-                    hasAction = true;
+                    actionId = snapshots[i].Id;
                     break;
                 }
             }
 
-            if (!hasAction)
+            if (actionId < 0)
             {
                 return false;
             }
 
-            clusterSize = count;
-            for (var i = 0; i < count; i++)
+            var memberIds = new int[MatchClusterFinder.MaxCluster];
+            var memberCount = MatchClusterFinder.TryFindClusterTouching(
+                snapshots,
+                diceCount,
+                actionId,
+                face,
+                memberIds);
+            if (memberCount <= 0)
             {
-                BeginErase(frame, members[i], actingPlayer);
+                return false;
+            }
+
+            clusterSize = memberCount;
+            for (var i = 0; i < memberCount; i++)
+            {
+                var id = memberIds[i];
+                for (var d = 0; d < diceCount; d++)
+                {
+                    if (snapshots[d].Id == id)
+                    {
+                        BeginErase(frame, entities[d], actingPlayer);
+                        break;
+                    }
+                }
             }
 
             return true;
@@ -109,6 +115,54 @@
             }
         }
 
+        static int CollectSnapshots(Frame frame, MatchDiceSnapshot[] snapshots, EntityRef[] entities)
+        {
+            var count = 0;
+            var filter = frame.Filter<Dice, GridPose>();
+            while (filter.Next(out var entity, out var dice, out var pose) && count < MatchClusterFinder.MaxDice)
+            {
+                var caps = CoreDiceBridge.GetCapabilities(dice.Kind);
+                var isSink = dice.IsErasing && dice.Tier == DiceStackTier.Bottom;
+                // Production: spawning/rolling/carried excluded; erasing non-jumbo excluded from new clusters
+                // via Eligible + weight. Keep erasing jumbo eligible for sinking pass.
+                var eligible = !dice.IsCarried
+                    && !dice.IsSpawning
+                    && !dice.IsMotionBusy
+                    && (!dice.IsErasing || (caps.HasExpandedFootprint && isSink));
+
+                snapshots[count] = new MatchDiceSnapshot
+                {
+                    Id = count,
+                    CellX = pose.X,
+                    CellY = pose.Y,
+                    Tier = dice.Tier == DiceStackTier.Top ? 1 : 0,
+                    TopFace = dice.TopFace,
+                    HasExpandedFootprint = caps.HasExpandedFootprint,
+                    IsSinkErasing = isSink,
+                    KeepsJumboTopOccupancy = caps.HasExpandedFootprint && isSink && ResolveKeepsJumboTop(dice),
+                    ParticipatesInBothTiersWhileSinking = caps.ParticipatesInBothTiersWhileSinking,
+                    SinkingMatchWeightPerTier = caps.SinkingMatchWeightPerTier,
+                    Eligible = eligible,
+                };
+                entities[count] = entity;
+                count++;
+            }
+
+            return count;
+        }
+
+        static bool ResolveKeepsJumboTop(in Dice dice)
+        {
+            if (!dice.IsErasing || dice.EraseTicksTotal <= 0)
+            {
+                return true;
+            }
+
+            // Production releases Top occupancy after SinkTopOccupancyThreshold of sink progress.
+            var progress = 1f - (dice.EraseTicksRemaining / (float)dice.EraseTicksTotal);
+            return progress < JumboFootprintCells.SinkTopOccupancyThreshold;
+        }
+
         static void BeginErase(Frame frame, EntityRef entity, PlayerRef actingPlayer)
         {
             if (!frame.Unsafe.TryGetPointer<Dice>(entity, out var dice) || dice->IsErasing)
@@ -116,9 +170,15 @@
                 return;
             }
 
+            var caps = CoreDiceBridge.GetCapabilities(dice->Kind);
             var ticks = dice->Tier == DiceStackTier.Top
                 ? ResolveRadianceTicks(frame)
                 : ResolveSinkTicks(frame);
+
+            if (caps.SinkDurationMultiplier > 1f)
+            {
+                ticks = (int)(ticks * caps.SinkDurationMultiplier);
+            }
 
             dice->IsErasing = true;
             dice->EraseTicksRemaining = ticks;
@@ -139,97 +199,6 @@
         {
             var ticks = frame.RuntimeConfig.RadianceEraseTicks;
             return ticks > 0 ? ticks : MatchSimDefaults.RadianceEraseTicks;
-        }
-
-        static int FloodFillSameTierFace(
-            Frame frame,
-            int startX,
-            int startY,
-            DiceStackTier tier,
-            int face,
-            EntityRef* members,
-            int capacity)
-        {
-            var boardW = BoardDefaults.BoardWidth;
-            var boardH = BoardDefaults.BoardHeight;
-            if (frame.TryGetSingleton<Board>(out var board) && board.Initialized)
-            {
-                boardW = board.Width;
-                boardH = board.Height;
-            }
-
-            var visitCount = boardW * boardH;
-            if (visitCount <= 0)
-            {
-                return 0;
-            }
-
-            var visitFlags = stackalloc byte[visitCount];
-            for (var i = 0; i < visitCount; i++)
-            {
-                visitFlags[i] = 0;
-            }
-
-            var queueX = stackalloc int[MaxCluster];
-            var queueY = stackalloc int[MaxCluster];
-            var head = 0;
-            var tail = 0;
-            var count = 0;
-            queueX[tail] = startX;
-            queueY[tail] = startY;
-            tail++;
-
-            while (head < tail && count < capacity)
-            {
-                var x = queueX[head];
-                var y = queueY[head];
-                head++;
-
-                if (x < 0 || y < 0 || x >= boardW || y >= boardH)
-                {
-                    continue;
-                }
-
-                var flagIndex = y * boardW + x;
-                if (visitFlags[flagIndex] != 0)
-                {
-                    continue;
-                }
-
-                visitFlags[flagIndex] = 1;
-
-                if (!CellOccupancy.TryGetAt(frame, x, y, tier, out var entity, out var dice))
-                {
-                    continue;
-                }
-
-                if (dice.TopFace != face || dice.IsCarried || dice.IsErasing)
-                {
-                    continue;
-                }
-
-                // Jumbo footprint matching deferred.
-                if (DiceKindCapabilities.For(dice.Kind).HasExpandedFootprint)
-                {
-                    continue;
-                }
-
-                members[count++] = entity;
-
-                for (var i = 0; i < 4; i++)
-                {
-                    if (tail >= MaxCluster)
-                    {
-                        break;
-                    }
-
-                    queueX[tail] = x + NeighborX[i];
-                    queueY[tail] = y + NeighborY[i];
-                    tail++;
-                }
-            }
-
-            return count;
         }
     }
 }

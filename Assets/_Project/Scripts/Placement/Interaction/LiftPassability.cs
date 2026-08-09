@@ -1,5 +1,6 @@
 using DiceGame.Core;
 using DiceGame.Gameplay;
+using DiceGame.SimShared.Lift;
 
 namespace DiceGame.Placement
 {
@@ -10,49 +11,38 @@ namespace DiceGame.Placement
             bool isOnFloor,
             DiceController standingDice,
             DiceController dice,
-            DiceRegistry registry) {
-            if (dice == null || registry == null) {
+            DiceRegistry registry)
+        {
+            if (dice == null || registry == null)
+            {
                 return false;
             }
 
-            if (standingDice != null && dice == standingDice) {
+            if (!IsReachable(standing, dice))
+            {
                 return false;
             }
 
-            if (dice.IsErasing || dice.IsVanishing) {
-                return false;
-            }
-
-            if (!dice.Capabilities.CanBeLiftedByPlayer) {
-                return false;
-            }
-
-            if (!DiceEffectiveBehaviorFactory.For(dice, registry).IsPlayerMovable) {
-                return false;
-            }
-
-            if (!IsReachable(standing, dice)) {
-                return false;
-            }
-
-            if (isOnFloor) {
-                if (dice.CurrentState.Tier == DiceStackTier.Top) {
-                    return true;
-                }
-
-                return dice.CurrentState.Tier == DiceStackTier.Bottom
-                    && !registry.HasTopAt(dice.CurrentState.GridPos);
-            }
-
-            if (standing.Tier == DiceStackTier.Bottom) {
-                return true;
-            }
-
-            return dice.CurrentState.Tier == DiceStackTier.Top;
+            var effective = DiceEffectiveBehaviorFactory.For(dice, registry);
+            var hasTop = registry.HasTopAt(dice.CurrentState.GridPos);
+            return LiftEligibility.CanLift(
+                isOnFloor,
+                standing.IsOnFloor ? 0 : (standing.Tier == DiceStackTier.Top ? 1 : 0),
+                standingDice != null && dice == standingDice,
+                dice.Capabilities.CanBeLiftedByPlayer,
+                effective.IsPlayerMovable,
+                isCarried: false,
+                dice.IsErasing || dice.IsVanishing,
+                dice.IsBusy,
+                dice.IsSpawning,
+                dice.CurrentState.Tier == DiceStackTier.Top ? 1 : 0,
+                hasTop);
         }
 
-        public static bool IsReachable(CharacterPlacement standing, DiceController dice) {
-            if (dice == null) {
+        public static bool IsReachable(CharacterPlacement standing, DiceController dice)
+        {
+            if (dice == null)
+            {
                 return false;
             }
 

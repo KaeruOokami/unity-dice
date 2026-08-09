@@ -316,7 +316,7 @@ namespace DiceGame.Gameplay
                 board,
                 registry,
                 initialCount,
-                spawnSettings.BottomSpawnWeight,
+                bottomSpawnWeight: 1f,
                 random);
 
             if (slots.Count == 0) {
@@ -399,7 +399,7 @@ namespace DiceGame.Gameplay
                 registry,
                 PlayerSlot.Player1,
                 initialCount,
-                player1Channel.Settings.BottomSpawnWeight,
+                bottomSpawnWeight: 1f,
                 random);
             if (slots.Count == 0) {
                 Debug.LogError("DiceSpawnSystem: No valid spawn slots for Player1.");
@@ -526,7 +526,7 @@ namespace DiceGame.Gameplay
                 registry,
                 channel.Slot,
                 initialCount,
-                channel.Settings.BottomSpawnWeight,
+                bottomSpawnWeight: 1f,
                 random);
             if (slots.Count == 0) {
                 Debug.LogError($"DiceSpawnSystem: No valid spawn slots for {channel.Slot}.");

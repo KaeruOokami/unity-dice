@@ -1,7 +1,9 @@
 ﻿namespace Quantum
 {
+    using DiceGame.SimShared.Spawn;
+
     /// <summary>
-    /// Quantum port of <c>DiceSpawnCellPicker</c> (random continuous + sequential attack edge fill).
+    /// Quantum adapter over shared <see cref="SpawnSlotPicker"/> (same algorithm as Unity Placement).
     /// </summary>
     public static unsafe class DiceSpawnCellPicker
     {
@@ -17,50 +19,21 @@
             y = 0;
             tier = DiceStackTier.Bottom;
 
-            var bottomCandidates = stackalloc int[64];
-            var topCandidates = stackalloc int[64];
-            var bottomCount = 0;
-            var topCount = 0;
-
-            for (var cy = 0; cy < board.Height; cy++)
+            var weight = bottomWeightPermille / 1000f;
+            var query = new FrameSpawnBoardQuery(frame, board);
+            if (!SpawnSlotPicker.TryPickRandomSlot(
+                    query,
+                    weight,
+                    (min, maxExclusive) => frame.RNG->Next(min, maxExclusive),
+                    out var slot))
             {
-                for (var cx = 0; cx < board.Width; cx++)
-                {
-                    if (CellOccupancy.CanPlaceBottomAt(frame, board, cx, cy) && bottomCount < 64)
-                    {
-                        bottomCandidates[bottomCount++] = Encode(cx, cy, board.Width);
-                    }
-
-                    if (CellOccupancy.CanPlaceTopAt(frame, board, cx, cy) && topCount < 64)
-                    {
-                        topCandidates[topCount++] = Encode(cx, cy, board.Width);
-                    }
-                }
+                return false;
             }
 
-            var wantBottom = frame.RNG->Next(0, 1000) < bottomWeightPermille;
-            if (wantBottom && bottomCount > 0)
-            {
-                Decode(bottomCandidates[frame.RNG->Next(0, bottomCount)], board.Width, out x, out y);
-                tier = DiceStackTier.Bottom;
-                return true;
-            }
-
-            if (topCount > 0)
-            {
-                Decode(topCandidates[frame.RNG->Next(0, topCount)], board.Width, out x, out y);
-                tier = DiceStackTier.Top;
-                return true;
-            }
-
-            if (bottomCount > 0)
-            {
-                Decode(bottomCandidates[frame.RNG->Next(0, bottomCount)], board.Width, out x, out y);
-                tier = DiceStackTier.Bottom;
-                return true;
-            }
-
-            return false;
+            x = slot.X;
+            y = slot.Y;
+            tier = slot.IsTop ? DiceStackTier.Top : DiceStackTier.Bottom;
+            return true;
         }
 
         public static bool TryPickAttackSpawnSlot(
@@ -70,47 +43,47 @@
             out int y,
             out DiceStackTier tier)
         {
-            // Edge-first refill (bottom preference) similar to TryPickSequentialAttackSpawnSlot.
-            for (var cy = 0; cy < board.Height; cy++)
-            {
-                for (var cx = 0; cx < board.Width; cx++)
-                {
-                    if (CellOccupancy.CanPlaceBottomAt(frame, board, cx, cy))
-                    {
-                        x = cx;
-                        y = cy;
-                        tier = DiceStackTier.Bottom;
-                        return true;
-                    }
-                }
-            }
-
-            for (var cy = 0; cy < board.Height; cy++)
-            {
-                for (var cx = 0; cx < board.Width; cx++)
-                {
-                    if (CellOccupancy.CanPlaceTopAt(frame, board, cx, cy))
-                    {
-                        x = cx;
-                        y = cy;
-                        tier = DiceStackTier.Top;
-                        return true;
-                    }
-                }
-            }
-
             x = 0;
             y = 0;
             tier = default;
-            return false;
+
+            var query = new FrameSpawnBoardQuery(frame, board);
+            if (!SpawnSlotPicker.TryPickAttackSlot(query, out var slot))
+            {
+                return false;
+            }
+
+            x = slot.X;
+            y = slot.Y;
+            tier = slot.IsTop ? DiceStackTier.Top : DiceStackTier.Bottom;
+            return true;
         }
 
-        static int Encode(int x, int y, int width) => y * width + x;
-
-        static void Decode(int packed, int width, out int x, out int y)
+        sealed class FrameSpawnBoardQuery : ISpawnBoardQuery
         {
-            x = packed % width;
-            y = packed / width;
+            readonly Frame frame;
+            readonly Board board;
+
+            public FrameSpawnBoardQuery(Frame frame, Board board)
+            {
+                this.frame = frame;
+                this.board = board;
+            }
+
+            public int Width => board.Width;
+            public int Height => board.Height;
+
+            public bool IsCellAllowed(int x, int y) => true;
+
+            public bool CanPlaceBottom(int x, int y)
+            {
+                return CellOccupancy.CanPlaceBottomAt(frame, board, x, y);
+            }
+
+            public bool CanPlaceTop(int x, int y)
+            {
+                return CellOccupancy.CanPlaceTopAt(frame, board, x, y);
+            }
         }
     }
 }

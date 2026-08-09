@@ -106,9 +106,10 @@ namespace DiceGame.Config
         [Min(0f)]
         [SerializeField] float face6Weight = 1f;
 
-        [Header("Queue")]
-        [Min(0f)]
-        [SerializeField] float queueToBoardDelay = 1.5f;
+        [Header("Queue — ticks @ SimTiming.TickHz")]
+        [UnityEngine.Serialization.FormerlySerializedAs("queueToBoardDelay")]
+        [Min(0)]
+        [SerializeField] int queueToBoardDelayTicks = 90;
 
         public FaceAttackSendProfile[] FaceSendProfiles => faceSendProfiles ?? Array.Empty<FaceAttackSendProfile>();
         public float AttackMultiplier => Mathf.Max(0f, attackMultiplier);
@@ -116,7 +117,8 @@ namespace DiceGame.Config
         public float ChainGain => Mathf.Max(0f, chainGain);
         public float SizeGain => Mathf.Max(0f, sizeGain);
         public float SnatchMultiplier => Mathf.Max(0f, snatchMultiplier);
-        public float QueueToBoardDelay => Mathf.Max(0f, queueToBoardDelay);
+        public int QueueToBoardDelayTicks => Mathf.Max(0, queueToBoardDelayTicks);
+        public float QueueToBoardDelay => SimTiming.TicksToSeconds(QueueToBoardDelayTicks);
 
         public float GetFaceWeight(int face) {
             return face switch {
@@ -127,6 +129,24 @@ namespace DiceGame.Config
                 6 => Mathf.Max(0f, face6Weight),
                 _ => 1f
             };
+        }
+
+        /// <summary>
+        /// Upper bound used by Quantum RuntimeConfig.AttackMaxVolley (max MaxCountPerVolley).
+        /// </summary>
+        public int ResolveMaxVolleyCap() {
+            var max = 0;
+            var profiles = FaceSendProfiles;
+            for (var i = 0; i < profiles.Length; i++) {
+                var kinds = profiles[i].SendableKinds;
+                for (var j = 0; j < kinds.Length; j++) {
+                    if (kinds[j].MaxCountPerVolley > max) {
+                        max = kinds[j].MaxCountPerVolley;
+                    }
+                }
+            }
+
+            return max;
         }
 
         public bool TryGetSendableKindsForFace(int face, out SendableKindLimit[] sendableKinds) {
@@ -224,7 +244,7 @@ namespace DiceGame.Config
             face4Weight = Mathf.Max(0f, data.Face4Weight);
             face5Weight = Mathf.Max(0f, data.Face5Weight);
             face6Weight = Mathf.Max(0f, data.Face6Weight);
-            queueToBoardDelay = Mathf.Max(0f, data.QueueToBoardDelay);
+            queueToBoardDelayTicks = Mathf.Max(0, data.QueueToBoardDelayTicks);
 
             var profiles = data.FaceSendProfiles ?? Array.Empty<FaceAttackSendProfileData>();
             faceSendProfiles = new FaceAttackSendProfile[profiles.Length];

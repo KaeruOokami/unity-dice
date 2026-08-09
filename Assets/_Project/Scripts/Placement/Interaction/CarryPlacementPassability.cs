@@ -1,4 +1,5 @@
 using DiceGame.Core;
+using DiceGame.SimShared.Lift;
 using UnityEngine;
 
 namespace DiceGame.Placement
@@ -9,38 +10,44 @@ namespace DiceGame.Placement
             Vector2Int targetGrid,
             IDicePlacement placement,
             out DiceStackTier targetTier,
-            out string rejectReason) {
+            out string rejectReason)
+        {
             targetTier = default;
             rejectReason = null;
-
-            if (placement.CanPlaceBottomDiceAt(targetGrid)) {
-                targetTier = DiceStackTier.Bottom;
-                return true;
+            if (placement == null)
+            {
+                rejectReason = "no-placement";
+                return false;
             }
 
-            if (placement.CanPlaceTopDiceAt(targetGrid)) {
-                targetTier = DiceStackTier.Top;
-                return true;
+            if (!CarryPlacementRules.TryResolveTarget(
+                    targetGrid.x,
+                    targetGrid.y,
+                    (x, y) => placement.CanPlaceBottomDiceAt(new Vector2Int(x, y)),
+                    (x, y) => placement.CanPlaceTopDiceAt(new Vector2Int(x, y)),
+                    (x, y) => placement.CanAcceptTopDiceAt(new Vector2Int(x, y)),
+                    out var tierNorm))
+            {
+                rejectReason = $"target={FormatGrid(targetGrid)} occupied";
+                return false;
             }
 
-            if (placement.CanAcceptTopDiceAt(targetGrid)) {
-                targetTier = DiceStackTier.Top;
-                return true;
-            }
-
-            rejectReason = $"target={FormatGrid(targetGrid)} occupied";
-            return false;
+            targetTier = tierNorm == 1 ? DiceStackTier.Top : DiceStackTier.Bottom;
+            return true;
         }
 
         public static bool CanPlaceAt(
             Vector2Int targetGrid,
             DiceStackTier targetTier,
             IDicePlacement placement,
-            out string rejectReason) {
+            out string rejectReason)
+        {
             rejectReason = null;
-            if (targetTier == DiceStackTier.Top) {
+            if (targetTier == DiceStackTier.Top)
+            {
                 if (!placement.CanPlaceTopDiceAt(targetGrid)
-                    && !placement.CanAcceptTopDiceAt(targetGrid)) {
+                    && !placement.CanAcceptTopDiceAt(targetGrid))
+                {
                     rejectReason = $"target={FormatGrid(targetGrid)} cannot-place-top";
                     return false;
                 }
@@ -48,7 +55,8 @@ namespace DiceGame.Placement
                 return true;
             }
 
-            if (!placement.CanPlaceBottomDiceAt(targetGrid)) {
+            if (!placement.CanPlaceBottomDiceAt(targetGrid))
+            {
                 rejectReason = $"target={FormatGrid(targetGrid)} cannot-place-bottom";
                 return false;
             }
@@ -56,7 +64,8 @@ namespace DiceGame.Placement
             return true;
         }
 
-        static string FormatGrid(Vector2Int grid) {
+        static string FormatGrid(Vector2Int grid)
+        {
             return $"({grid.x},{grid.y})";
         }
     }

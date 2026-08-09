@@ -662,54 +662,68 @@ namespace Quantum {
   }
   [StructLayout(LayoutKind.Explicit)]
   public unsafe partial struct Board : Quantum.IComponentSingleton {
-    public const Int32 SIZE = 12;
+    public const Int32 SIZE = 16;
     public const Int32 ALIGNMENT = 4;
-    [FieldOffset(4)]
+    [FieldOffset(8)]
     public Int32 Width;
     [FieldOffset(0)]
     public Int32 Height;
-    [FieldOffset(8)]
+    [FieldOffset(12)]
     public QBoolean Initialized;
+    [FieldOffset(4)]
+    public Int32 PartitionX;
     public override readonly Int32 GetHashCode() {
       unchecked { 
         var hash = 10831;
         hash = hash * 31 + Width.GetHashCode();
         hash = hash * 31 + Height.GetHashCode();
         hash = hash * 31 + Initialized.GetHashCode();
+        hash = hash * 31 + PartitionX.GetHashCode();
         return hash;
       }
     }
     public static void Serialize(void* ptr, FrameSerializer serializer) {
         var p = (Board*)ptr;
         serializer.Stream.Serialize(&p->Height);
+        serializer.Stream.Serialize(&p->PartitionX);
         serializer.Stream.Serialize(&p->Width);
         QBoolean.Serialize(&p->Initialized, serializer);
     }
   }
   [StructLayout(LayoutKind.Explicit)]
   public unsafe partial struct Dice : Quantum.IComponent {
-    public const Int32 SIZE = 40;
+    public const Int32 SIZE = 60;
     public const Int32 ALIGNMENT = 4;
     [FieldOffset(0)]
     public DiceKind Kind;
     [FieldOffset(4)]
     public DiceStackTier Tier;
-    [FieldOffset(24)]
+    [FieldOffset(28)]
     public Int32 TopFace;
-    [FieldOffset(20)]
+    [FieldOffset(24)]
     public Int32 NorthFace;
     [FieldOffset(8)]
     public Int32 EastFace;
-    [FieldOffset(32)]
+    [FieldOffset(44)]
     public QBoolean IsCarried;
-    [FieldOffset(36)]
+    [FieldOffset(48)]
     public QBoolean IsErasing;
+    [FieldOffset(56)]
+    public QBoolean IsSpawning;
     [FieldOffset(12)]
     public Int32 EraseTicksRemaining;
     [FieldOffset(16)]
     public Int32 EraseTicksTotal;
-    [FieldOffset(28)]
+    [FieldOffset(32)]
     public PlayerRef Owner;
+    [FieldOffset(52)]
+    public QBoolean IsMotionBusy;
+    [FieldOffset(20)]
+    public Int32 MotionTicksRemaining;
+    [FieldOffset(40)]
+    public QBoolean HasPendingMatch;
+    [FieldOffset(36)]
+    public PlayerRef PendingMatchPlayer;
     public override readonly Int32 GetHashCode() {
       unchecked { 
         var hash = 2459;
@@ -720,9 +734,14 @@ namespace Quantum {
         hash = hash * 31 + EastFace.GetHashCode();
         hash = hash * 31 + IsCarried.GetHashCode();
         hash = hash * 31 + IsErasing.GetHashCode();
+        hash = hash * 31 + IsSpawning.GetHashCode();
         hash = hash * 31 + EraseTicksRemaining.GetHashCode();
         hash = hash * 31 + EraseTicksTotal.GetHashCode();
         hash = hash * 31 + Owner.GetHashCode();
+        hash = hash * 31 + IsMotionBusy.GetHashCode();
+        hash = hash * 31 + MotionTicksRemaining.GetHashCode();
+        hash = hash * 31 + HasPendingMatch.GetHashCode();
+        hash = hash * 31 + PendingMatchPlayer.GetHashCode();
         return hash;
       }
     }
@@ -733,11 +752,16 @@ namespace Quantum {
         serializer.Stream.Serialize(&p->EastFace);
         serializer.Stream.Serialize(&p->EraseTicksRemaining);
         serializer.Stream.Serialize(&p->EraseTicksTotal);
+        serializer.Stream.Serialize(&p->MotionTicksRemaining);
         serializer.Stream.Serialize(&p->NorthFace);
         serializer.Stream.Serialize(&p->TopFace);
         PlayerRef.Serialize(&p->Owner, serializer);
+        PlayerRef.Serialize(&p->PendingMatchPlayer, serializer);
+        QBoolean.Serialize(&p->HasPendingMatch, serializer);
         QBoolean.Serialize(&p->IsCarried, serializer);
         QBoolean.Serialize(&p->IsErasing, serializer);
+        QBoolean.Serialize(&p->IsMotionBusy, serializer);
+        QBoolean.Serialize(&p->IsSpawning, serializer);
     }
   }
   [StructLayout(LayoutKind.Explicit)]
@@ -790,22 +814,88 @@ namespace Quantum {
   }
   [StructLayout(LayoutKind.Explicit)]
   public unsafe partial struct PlayerPawn : Quantum.IComponent {
-    public const Int32 SIZE = 32;
+    public const Int32 SIZE = 208;
     public const Int32 ALIGNMENT = 8;
-    [FieldOffset(12)]
+    [FieldOffset(80)]
     public PlayerRef Player;
-    [FieldOffset(24)]
+    [FieldOffset(120)]
     public EntityRef CarriedDice;
-    [FieldOffset(16)]
+    [FieldOffset(84)]
     public QBoolean HasCarriedDice;
-    [FieldOffset(20)]
+    [FieldOffset(108)]
     public QBoolean IsOnFloor;
     [FieldOffset(0)]
     public DiceStackTier StandingTier;
-    [FieldOffset(4)]
+    [FieldOffset(40)]
     public Int32 FacingX;
-    [FieldOffset(8)]
+    [FieldOffset(44)]
     public Int32 FacingY;
+    [FieldOffset(96)]
+    public QBoolean HasWorldPose;
+    [FieldOffset(192)]
+    public FP WorldX;
+    [FieldOffset(200)]
+    public FP WorldZ;
+    [FieldOffset(184)]
+    public FP MoveSpeed;
+    [FieldOffset(92)]
+    public QBoolean HasPushFollow;
+    [FieldOffset(136)]
+    public EntityRef PushFollowDice;
+    [FieldOffset(56)]
+    public Int32 PushFollowDirX;
+    [FieldOffset(60)]
+    public Int32 PushFollowDirY;
+    [FieldOffset(64)]
+    public Int32 PushFollowFromX;
+    [FieldOffset(68)]
+    public Int32 PushFollowFromY;
+    [FieldOffset(72)]
+    public Int32 PushFollowTicksRemaining;
+    [FieldOffset(76)]
+    public Int32 PushFollowTicksTotal;
+    [FieldOffset(88)]
+    public QBoolean HasCoupledWalkRoll;
+    [FieldOffset(128)]
+    public EntityRef CoupledWalkRollDice;
+    [FieldOffset(12)]
+    public Int32 CoupledWalkRollDirX;
+    [FieldOffset(16)]
+    public Int32 CoupledWalkRollDirY;
+    [FieldOffset(20)]
+    public Int32 CoupledWalkRollFromX;
+    [FieldOffset(24)]
+    public Int32 CoupledWalkRollFromY;
+    [FieldOffset(4)]
+    public Int32 CoupledWalkRollDestX;
+    [FieldOffset(8)]
+    public Int32 CoupledWalkRollDestY;
+    [FieldOffset(32)]
+    public Int32 CoupledWalkRollTicksRemaining;
+    [FieldOffset(36)]
+    public Int32 CoupledWalkRollTicksTotal;
+    [FieldOffset(28)]
+    public Int32 CoupledWalkRollStandingTier;
+    [FieldOffset(144)]
+    public FP CoupledWalkRollCellSize;
+    [FieldOffset(104)]
+    public QBoolean IsJumping;
+    [FieldOffset(112)]
+    public QBoolean JumpDiceGridMoved;
+    [FieldOffset(100)]
+    public QBoolean IsJumpArc;
+    [FieldOffset(168)]
+    public FP JumpOffsetY;
+    [FieldOffset(176)]
+    public FP JumpVelocityY;
+    [FieldOffset(152)]
+    public FP JumpHeight;
+    [FieldOffset(160)]
+    public FP JumpLaunchVy;
+    [FieldOffset(52)]
+    public Int32 LiftPhase;
+    [FieldOffset(48)]
+    public Int32 LiftBusyTicksRemaining;
     public override readonly Int32 GetHashCode() {
       unchecked { 
         var hash = 11719;
@@ -816,18 +906,84 @@ namespace Quantum {
         hash = hash * 31 + (Int32)StandingTier;
         hash = hash * 31 + FacingX.GetHashCode();
         hash = hash * 31 + FacingY.GetHashCode();
+        hash = hash * 31 + HasWorldPose.GetHashCode();
+        hash = hash * 31 + WorldX.GetHashCode();
+        hash = hash * 31 + WorldZ.GetHashCode();
+        hash = hash * 31 + MoveSpeed.GetHashCode();
+        hash = hash * 31 + HasPushFollow.GetHashCode();
+        hash = hash * 31 + PushFollowDice.GetHashCode();
+        hash = hash * 31 + PushFollowDirX.GetHashCode();
+        hash = hash * 31 + PushFollowDirY.GetHashCode();
+        hash = hash * 31 + PushFollowFromX.GetHashCode();
+        hash = hash * 31 + PushFollowFromY.GetHashCode();
+        hash = hash * 31 + PushFollowTicksRemaining.GetHashCode();
+        hash = hash * 31 + PushFollowTicksTotal.GetHashCode();
+        hash = hash * 31 + HasCoupledWalkRoll.GetHashCode();
+        hash = hash * 31 + CoupledWalkRollDice.GetHashCode();
+        hash = hash * 31 + CoupledWalkRollDirX.GetHashCode();
+        hash = hash * 31 + CoupledWalkRollDirY.GetHashCode();
+        hash = hash * 31 + CoupledWalkRollFromX.GetHashCode();
+        hash = hash * 31 + CoupledWalkRollFromY.GetHashCode();
+        hash = hash * 31 + CoupledWalkRollDestX.GetHashCode();
+        hash = hash * 31 + CoupledWalkRollDestY.GetHashCode();
+        hash = hash * 31 + CoupledWalkRollTicksRemaining.GetHashCode();
+        hash = hash * 31 + CoupledWalkRollTicksTotal.GetHashCode();
+        hash = hash * 31 + CoupledWalkRollStandingTier.GetHashCode();
+        hash = hash * 31 + CoupledWalkRollCellSize.GetHashCode();
+        hash = hash * 31 + IsJumping.GetHashCode();
+        hash = hash * 31 + JumpDiceGridMoved.GetHashCode();
+        hash = hash * 31 + IsJumpArc.GetHashCode();
+        hash = hash * 31 + JumpOffsetY.GetHashCode();
+        hash = hash * 31 + JumpVelocityY.GetHashCode();
+        hash = hash * 31 + JumpHeight.GetHashCode();
+        hash = hash * 31 + JumpLaunchVy.GetHashCode();
+        hash = hash * 31 + LiftPhase.GetHashCode();
+        hash = hash * 31 + LiftBusyTicksRemaining.GetHashCode();
         return hash;
       }
     }
     public static void Serialize(void* ptr, FrameSerializer serializer) {
         var p = (PlayerPawn*)ptr;
         serializer.Stream.Serialize((Int32*)&p->StandingTier);
+        serializer.Stream.Serialize(&p->CoupledWalkRollDestX);
+        serializer.Stream.Serialize(&p->CoupledWalkRollDestY);
+        serializer.Stream.Serialize(&p->CoupledWalkRollDirX);
+        serializer.Stream.Serialize(&p->CoupledWalkRollDirY);
+        serializer.Stream.Serialize(&p->CoupledWalkRollFromX);
+        serializer.Stream.Serialize(&p->CoupledWalkRollFromY);
+        serializer.Stream.Serialize(&p->CoupledWalkRollStandingTier);
+        serializer.Stream.Serialize(&p->CoupledWalkRollTicksRemaining);
+        serializer.Stream.Serialize(&p->CoupledWalkRollTicksTotal);
         serializer.Stream.Serialize(&p->FacingX);
         serializer.Stream.Serialize(&p->FacingY);
+        serializer.Stream.Serialize(&p->LiftBusyTicksRemaining);
+        serializer.Stream.Serialize(&p->LiftPhase);
+        serializer.Stream.Serialize(&p->PushFollowDirX);
+        serializer.Stream.Serialize(&p->PushFollowDirY);
+        serializer.Stream.Serialize(&p->PushFollowFromX);
+        serializer.Stream.Serialize(&p->PushFollowFromY);
+        serializer.Stream.Serialize(&p->PushFollowTicksRemaining);
+        serializer.Stream.Serialize(&p->PushFollowTicksTotal);
         PlayerRef.Serialize(&p->Player, serializer);
         QBoolean.Serialize(&p->HasCarriedDice, serializer);
+        QBoolean.Serialize(&p->HasCoupledWalkRoll, serializer);
+        QBoolean.Serialize(&p->HasPushFollow, serializer);
+        QBoolean.Serialize(&p->HasWorldPose, serializer);
+        QBoolean.Serialize(&p->IsJumpArc, serializer);
+        QBoolean.Serialize(&p->IsJumping, serializer);
         QBoolean.Serialize(&p->IsOnFloor, serializer);
+        QBoolean.Serialize(&p->JumpDiceGridMoved, serializer);
         EntityRef.Serialize(&p->CarriedDice, serializer);
+        EntityRef.Serialize(&p->CoupledWalkRollDice, serializer);
+        EntityRef.Serialize(&p->PushFollowDice, serializer);
+        FP.Serialize(&p->CoupledWalkRollCellSize, serializer);
+        FP.Serialize(&p->JumpHeight, serializer);
+        FP.Serialize(&p->JumpLaunchVy, serializer);
+        FP.Serialize(&p->JumpOffsetY, serializer);
+        FP.Serialize(&p->JumpVelocityY, serializer);
+        FP.Serialize(&p->MoveSpeed, serializer);
+        FP.Serialize(&p->WorldX, serializer);
+        FP.Serialize(&p->WorldZ, serializer);
     }
   }
   [StructLayout(LayoutKind.Explicit)]

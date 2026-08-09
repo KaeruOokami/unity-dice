@@ -647,7 +647,7 @@ namespace DiceGame.Session
         }
 
         static void EnsureEventSystem() {
-            if (FindObjectOfType<EventSystem>() != null) {
+            if (FindFirstObjectByType<EventSystem>() != null) {
                 return;
             }
 

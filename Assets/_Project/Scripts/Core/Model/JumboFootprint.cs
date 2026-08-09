@@ -3,44 +3,46 @@ using UnityEngine;
 
 namespace DiceGame.Core
 {
+    /// <summary>
+    /// Unity-facing jumbo helpers; cell math lives in <see cref="JumboFootprintCells"/>.
+    /// </summary>
     public static class JumboFootprint
     {
-        public const int Size = 2;
-        public const int CellCount = Size * Size;
-        /// <summary>Match weight before sink erasure (one logical die).</summary>
-        public const int MatchWeightBeforeErasure = 1;
-        /// <summary>Match weight per tier while sink-erasing (Bottom 4 / Top 4).</summary>
-        public const int MatchWeightPerTierWhileErasing = 4;
-        /// <summary>
-        /// Sink progress at which Top footprint occupancy is released (Bottom-only stage).
-        /// </summary>
-        public const float SinkTopOccupancyThreshold = 0.5f;
+        public const int Size = JumboFootprintCells.Size;
+        public const int CellCount = JumboFootprintCells.CellCount;
+        public const int MatchWeightBeforeErasure = JumboFootprintCells.MatchWeightBeforeErasure;
+        public const int MatchWeightPerTierWhileErasing = JumboFootprintCells.MatchWeightPerTierWhileErasing;
+        public const float SinkTopOccupancyThreshold = JumboFootprintCells.SinkTopOccupancyThreshold;
 
-        public static void AppendCells(Vector2Int anchor, List<Vector2Int> results) {
-            if (results == null) {
+        public static void AppendCells(Vector2Int anchor, List<Vector2Int> results)
+        {
+            if (results == null)
+            {
                 return;
             }
 
-            for (var dx = 0; dx < Size; dx++) {
-                for (var dy = 0; dy < Size; dy++) {
-                    results.Add(new Vector2Int(anchor.x + dx, anchor.y + dy));
-                }
+            var xs = new int[CellCount];
+            var ys = new int[CellCount];
+            JumboFootprintCells.AppendCells(anchor.x, anchor.y, xs, ys, out var count);
+            for (var i = 0; i < count; i++)
+            {
+                results.Add(new Vector2Int(xs[i], ys[i]));
             }
         }
 
-        public static bool Contains(Vector2Int anchor, Vector2Int cell) {
-            return cell.x >= anchor.x
-                && cell.x < anchor.x + Size
-                && cell.y >= anchor.y
-                && cell.y < anchor.y + Size;
+        public static bool Contains(Vector2Int anchor, Vector2Int cell)
+        {
+            return JumboFootprintCells.Contains(anchor.x, anchor.y, cell.x, cell.y);
         }
 
-        public static Vector3 GetCenterWorldOffset(float cellSize) {
+        public static Vector3 GetCenterWorldOffset(float cellSize)
+        {
             var half = cellSize * 0.5f;
             return new Vector3(half, 0f, half);
         }
 
-        public static float GetTopSurfaceHeightAboveFloor(float cellSize) {
+        public static float GetTopSurfaceHeightAboveFloor(float cellSize)
+        {
             return cellSize * Size;
         }
     }

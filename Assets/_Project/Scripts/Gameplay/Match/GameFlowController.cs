@@ -41,9 +41,67 @@ namespace DiceGame.Gameplay
         bool ownsTimeScale;
         bool applyingRemoteFlow;
         bool pauseOwnerIsHost;
+        bool quantumSessionMode;
 
         public GameFlowState State { get; private set; } = GameFlowState.Playing;
         public bool IsSimulationFrozen => State != GameFlowState.Playing;
+
+        /// <summary>
+        /// Quantum path: reuse GameFlow input/UI without Unity DiceRegistry/spawn dependencies.
+        /// Reset/return delegate to <see cref="SessionController"/> Quantum session APIs.
+        /// </summary>
+        public void ConfigureForQuantumSession(
+            PlayerInputSettings playerInputSettings,
+            GameSessionSettings targetSessionSettings,
+            int requiredPlayerCount,
+            SessionController session)
+        {
+            if (playerInputSettings == null || targetSessionSettings == null || session == null)
+            {
+                Debug.LogError("GameFlowController.ConfigureForQuantumSession: Required dependencies are not assigned.");
+                return;
+            }
+
+            board = Object.FindAnyObjectByType<GameBootstrap>()?.Board;
+            registry = null;
+            spawnSystem = null;
+            versusAttackController = null;
+            sessionSettings = targetSessionSettings;
+            activeGameMode = targetSessionSettings.GameMode;
+            activeRequiredPlayerCount = Mathf.Max(1, requiredPlayerCount);
+            playingTimeScale = Time.timeScale > 0f ? Time.timeScale : 1f;
+            sessionController = session;
+            quantumSessionMode = true;
+
+            inputReader = GetComponent<GameFlowInputReader>();
+            if (inputReader == null)
+            {
+                inputReader = gameObject.AddComponent<GameFlowInputReader>();
+            }
+
+            inputReader.Configure(playerInputSettings, activeRequiredPlayerCount);
+
+            pauseMenuUi = GetComponent<PauseMenuUi>();
+            if (pauseMenuUi == null)
+            {
+                pauseMenuUi = gameObject.AddComponent<PauseMenuUi>();
+            }
+
+            pauseMenuUi.Configure(ResolveUiFontSettings());
+            pauseMenuUi.ResumeClicked -= OnPauseMenuResumeClicked;
+            pauseMenuUi.ReturnToTitleClicked -= OnPauseMenuReturnToTitleClicked;
+            pauseMenuUi.ResumeClicked += OnPauseMenuResumeClicked;
+            pauseMenuUi.ReturnToTitleClicked += OnPauseMenuReturnToTitleClicked;
+
+            BindOnlineFlowEvents(false);
+
+            State = GameFlowState.Playing;
+            isConfigured = true;
+            if (board != null)
+            {
+                GameWorldVisibility.SetBoardVisible(board, true);
+            }
+        }
 
         public void Configure(
             Board targetBoard,
@@ -78,7 +136,7 @@ namespace DiceGame.Gameplay
             activeGameMode = resolvedSetup?.GameMode ?? targetSessionSettings.GameMode;
             activeRequiredPlayerCount = resolvedSetup?.RequiredPlayerCount ?? targetSessionSettings.RequiredPlayerCount;
             playingTimeScale = Time.timeScale;
-            sessionController = FindObjectOfType<SessionController>();
+            sessionController = FindFirstObjectByType<SessionController>();
 
             inputReader = GetComponent<GameFlowInputReader>();
             if (inputReader == null)
@@ -104,6 +162,7 @@ namespace DiceGame.Gameplay
 
             State = GameFlowState.Playing;
             isConfigured = true;
+            quantumSessionMode = false;
             GameWorldVisibility.SetBoardVisible(board, true);
         }
 
@@ -178,6 +237,11 @@ namespace DiceGame.Gameplay
 
         void EvaluateGameOver()
         {
+            if (quantumSessionMode || board == null || registry == null)
+            {
+                return;
+            }
+
             if (activeGameMode != GameMode.Versus)
             {
                 if (BoardFillEvaluator.IsStandardBottomFull(board, registry))
@@ -270,6 +334,12 @@ namespace DiceGame.Gameplay
                 return;
             }
 
+            if (quantumSessionMode)
+            {
+                sessionController?.RequestQuantumMatchReset();
+                return;
+            }
+
             ApplyResetMatch(broadcast: IsOnlineHost());
         }
 
@@ -278,6 +348,12 @@ namespace DiceGame.Gameplay
             if (IsOnlineClient())
             {
                 sessionController.Messenger?.SendFlowRequestToServer(SessionConstants.FlowReturnToTitle);
+                return;
+            }
+
+            if (quantumSessionMode)
+            {
+                sessionController?.LeaveSession();
                 return;
             }
 
@@ -326,11 +402,15 @@ namespace DiceGame.Gameplay
             pauseMenuUi?.Hide();
             Time.timeScale = playingTimeScale;
             ownsTimeScale = false;
-            spawnSystem.SetGameplayEnabled(true);
-            versusAttackController?.SetGameplayEnabled(true);
-            // Dual-sim: both peers run attack detection locally (no client follower mode).
-            versusAttackController?.SetNetworkFollowerMode(false);
-            inputReader.SetGameplayInputEnabled(true);
+            if (!quantumSessionMode)
+            {
+                spawnSystem?.SetGameplayEnabled(true);
+                versusAttackController?.SetGameplayEnabled(true);
+                // Dual-sim: both peers run attack detection locally (no client follower mode).
+                versusAttackController?.SetNetworkFollowerMode(false);
+            }
+
+            inputReader?.SetGameplayInputEnabled(true);
             State = GameFlowState.Playing;
         }
 
@@ -394,8 +474,12 @@ namespace DiceGame.Gameplay
         void FreezeSimulation()
         {
             inputReader.SetGameplayInputEnabled(false);
-            spawnSystem.SetGameplayEnabled(false);
-            versusAttackController?.SetGameplayEnabled(false);
+            if (!quantumSessionMode)
+            {
+                spawnSystem.SetGameplayEnabled(false);
+                versusAttackController?.SetGameplayEnabled(false);
+            }
+
             Time.timeScale = 0f;
             ownsTimeScale = true;
         }

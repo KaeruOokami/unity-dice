@@ -5,60 +5,46 @@ namespace DiceGame.Gameplay
 {
     public static class DiceMatchWeight
     {
-        public static int Get(DiceController dice, DiceStackTier matchTier) {
-            if (dice == null) {
+        public static int Get(DiceController dice, DiceStackTier matchTier)
+        {
+            if (dice == null)
+            {
                 return 0;
             }
 
             var capabilities = dice.Capabilities;
-            if (!capabilities.HasExpandedFootprint) {
-                return dice.CurrentState.Tier == matchTier ? 1 : 0;
-            }
-
-            if (dice.IsSinkErasing) {
-                if (!capabilities.ParticipatesInBothTiersWhileSinking
-                    && dice.CurrentState.Tier != matchTier) {
-                    return 0;
-                }
-
-                // Top occupancy released: jumbo is Bottom-only — do not match Top dice stacked on it.
-                if (matchTier == DiceStackTier.Top && !dice.KeepsJumboTopOccupancy) {
-                    return 0;
-                }
-
-                var sinkingWeight = capabilities.SinkingMatchWeightPerTier;
-                return sinkingWeight > 0
-                    ? sinkingWeight
-                    : JumboFootprint.MatchWeightPerTierWhileErasing;
-            }
-
-            // Pre-sink weight is applied once via GetPreSinkBridgedWeight in the bridged finder.
-            // Per-tier Get returns 0 so the sinking/same-tier pass ignores pre-sink jumbos.
-            return 0;
+            return MatchWeightRules.GetSameTier(
+                capabilities.HasExpandedFootprint,
+                dice.IsSinkErasing,
+                dice.CurrentState.Tier == DiceStackTier.Top ? 1 : 0,
+                matchTier == DiceStackTier.Top ? 1 : 0,
+                dice.KeepsJumboTopOccupancy,
+                capabilities.ParticipatesInBothTiersWhileSinking,
+                capabilities.SinkingMatchWeightPerTier);
         }
 
-        /// <summary>
-        /// Pre-sink jumbo counts as one die; normals count as 1.
-        /// </summary>
-        public static int GetPreSinkBridgedWeight(DiceController dice) {
-            if (dice == null) {
+        public static int GetPreSinkBridgedWeight(DiceController dice)
+        {
+            if (dice == null)
+            {
                 return 0;
             }
 
-            if (dice.Capabilities.HasExpandedFootprint && !dice.IsSinkErasing) {
-                return JumboFootprint.MatchWeightBeforeErasure;
-            }
-
-            return 1;
+            return MatchWeightRules.GetPreSinkBridged(
+                dice.Capabilities.HasExpandedFootprint,
+                dice.IsSinkErasing);
         }
 
-        public static int Sum(IReadOnlyList<DiceController> members, DiceStackTier matchTier) {
+        public static int Sum(IReadOnlyList<DiceController> members, DiceStackTier matchTier)
+        {
             var total = 0;
-            if (members == null) {
+            if (members == null)
+            {
                 return total;
             }
 
-            for (var i = 0; i < members.Count; i++) {
+            for (var i = 0; i < members.Count; i++)
+            {
                 total += Get(members[i], matchTier);
             }
 

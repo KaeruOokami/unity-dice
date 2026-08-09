@@ -55,6 +55,7 @@ namespace Quantum.Prototypes {
     public Int32 Width;
     public Int32 Height;
     public QBoolean Initialized;
+    public Int32 PartitionX;
     partial void MaterializeUser(Frame frame, ref Quantum.Board result, in PrototypeMaterializationContext context);
     public override Boolean AddToEntity(FrameBase f, EntityRef entity, in PrototypeMaterializationContext context) {
         Quantum.Board component = default;
@@ -65,6 +66,7 @@ namespace Quantum.Prototypes {
         result.Width = this.Width;
         result.Height = this.Height;
         result.Initialized = this.Initialized;
+        result.PartitionX = this.PartitionX;
         MaterializeUser(frame, ref result, in context);
     }
   }
@@ -78,9 +80,14 @@ namespace Quantum.Prototypes {
     public Int32 EastFace;
     public QBoolean IsCarried;
     public QBoolean IsErasing;
+    public QBoolean IsSpawning;
     public Int32 EraseTicksRemaining;
     public Int32 EraseTicksTotal;
     public PlayerRef Owner;
+    public QBoolean IsMotionBusy;
+    public Int32 MotionTicksRemaining;
+    public QBoolean HasPendingMatch;
+    public PlayerRef PendingMatchPlayer;
     partial void MaterializeUser(Frame frame, ref Quantum.Dice result, in PrototypeMaterializationContext context);
     public override Boolean AddToEntity(FrameBase f, EntityRef entity, in PrototypeMaterializationContext context) {
         Quantum.Dice component = default;
@@ -95,9 +102,14 @@ namespace Quantum.Prototypes {
         result.EastFace = this.EastFace;
         result.IsCarried = this.IsCarried;
         result.IsErasing = this.IsErasing;
+        result.IsSpawning = this.IsSpawning;
         result.EraseTicksRemaining = this.EraseTicksRemaining;
         result.EraseTicksTotal = this.EraseTicksTotal;
         result.Owner = this.Owner;
+        result.IsMotionBusy = this.IsMotionBusy;
+        result.MotionTicksRemaining = this.MotionTicksRemaining;
+        result.HasPendingMatch = this.HasPendingMatch;
+        result.PendingMatchPlayer = this.PendingMatchPlayer;
         MaterializeUser(frame, ref result, in context);
     }
   }
@@ -165,6 +177,39 @@ namespace Quantum.Prototypes {
     public Quantum.QEnum32<DiceStackTier> StandingTier;
     public Int32 FacingX;
     public Int32 FacingY;
+    public QBoolean HasWorldPose;
+    public FP WorldX;
+    public FP WorldZ;
+    public FP MoveSpeed;
+    public QBoolean HasPushFollow;
+    public MapEntityId PushFollowDice;
+    public Int32 PushFollowDirX;
+    public Int32 PushFollowDirY;
+    public Int32 PushFollowFromX;
+    public Int32 PushFollowFromY;
+    public Int32 PushFollowTicksRemaining;
+    public Int32 PushFollowTicksTotal;
+    public QBoolean HasCoupledWalkRoll;
+    public MapEntityId CoupledWalkRollDice;
+    public Int32 CoupledWalkRollDirX;
+    public Int32 CoupledWalkRollDirY;
+    public Int32 CoupledWalkRollFromX;
+    public Int32 CoupledWalkRollFromY;
+    public Int32 CoupledWalkRollDestX;
+    public Int32 CoupledWalkRollDestY;
+    public Int32 CoupledWalkRollTicksRemaining;
+    public Int32 CoupledWalkRollTicksTotal;
+    public Int32 CoupledWalkRollStandingTier;
+    public FP CoupledWalkRollCellSize;
+    public QBoolean IsJumping;
+    public QBoolean JumpDiceGridMoved;
+    public QBoolean IsJumpArc;
+    public FP JumpOffsetY;
+    public FP JumpVelocityY;
+    public FP JumpHeight;
+    public FP JumpLaunchVy;
+    public Int32 LiftPhase;
+    public Int32 LiftBusyTicksRemaining;
     public override Boolean AddToEntity(FrameBase f, EntityRef entity, in PrototypeMaterializationContext context) {
         Quantum.PlayerPawn component = default;
         Materialize((Frame)f, ref component, in context);
@@ -178,6 +223,39 @@ namespace Quantum.Prototypes {
         result.StandingTier = this.StandingTier;
         result.FacingX = this.FacingX;
         result.FacingY = this.FacingY;
+        result.HasWorldPose = this.HasWorldPose;
+        result.WorldX = this.WorldX;
+        result.WorldZ = this.WorldZ;
+        result.MoveSpeed = this.MoveSpeed;
+        result.HasPushFollow = this.HasPushFollow;
+        PrototypeValidator.FindMapEntity(this.PushFollowDice, in context, out result.PushFollowDice);
+        result.PushFollowDirX = this.PushFollowDirX;
+        result.PushFollowDirY = this.PushFollowDirY;
+        result.PushFollowFromX = this.PushFollowFromX;
+        result.PushFollowFromY = this.PushFollowFromY;
+        result.PushFollowTicksRemaining = this.PushFollowTicksRemaining;
+        result.PushFollowTicksTotal = this.PushFollowTicksTotal;
+        result.HasCoupledWalkRoll = this.HasCoupledWalkRoll;
+        PrototypeValidator.FindMapEntity(this.CoupledWalkRollDice, in context, out result.CoupledWalkRollDice);
+        result.CoupledWalkRollDirX = this.CoupledWalkRollDirX;
+        result.CoupledWalkRollDirY = this.CoupledWalkRollDirY;
+        result.CoupledWalkRollFromX = this.CoupledWalkRollFromX;
+        result.CoupledWalkRollFromY = this.CoupledWalkRollFromY;
+        result.CoupledWalkRollDestX = this.CoupledWalkRollDestX;
+        result.CoupledWalkRollDestY = this.CoupledWalkRollDestY;
+        result.CoupledWalkRollTicksRemaining = this.CoupledWalkRollTicksRemaining;
+        result.CoupledWalkRollTicksTotal = this.CoupledWalkRollTicksTotal;
+        result.CoupledWalkRollStandingTier = this.CoupledWalkRollStandingTier;
+        result.CoupledWalkRollCellSize = this.CoupledWalkRollCellSize;
+        result.IsJumping = this.IsJumping;
+        result.JumpDiceGridMoved = this.JumpDiceGridMoved;
+        result.IsJumpArc = this.IsJumpArc;
+        result.JumpOffsetY = this.JumpOffsetY;
+        result.JumpVelocityY = this.JumpVelocityY;
+        result.JumpHeight = this.JumpHeight;
+        result.JumpLaunchVy = this.JumpLaunchVy;
+        result.LiftPhase = this.LiftPhase;
+        result.LiftBusyTicksRemaining = this.LiftBusyTicksRemaining;
     }
   }
   [System.SerializableAttribute()]

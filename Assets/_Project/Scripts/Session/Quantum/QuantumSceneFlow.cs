@@ -4,59 +4,72 @@ namespace DiceGame.Session
     using UnityEngine.SceneManagement;
 
     /// <summary>
-    /// Loads / unloads <see cref="SessionConstants.QuantumGameSceneName"/> for Quantum sessions.
+    /// Hosts Quantum on the product <see cref="SceneNames.Game"/> scene (no Additive QuantumGameScene).
     /// </summary>
     public static class QuantumSceneFlow
     {
-        public static bool IsQuantumSceneLoaded
+        public static bool IsGameSceneLoaded
         {
             get
             {
-                var scene = SceneManager.GetSceneByName(SessionConstants.QuantumGameSceneName);
+                var scene = SceneManager.GetSceneByName(SceneNames.Game);
                 return scene.IsValid() && scene.isLoaded;
             }
         }
 
         public static async Task EnsureLoadedAsync()
         {
-            if (IsQuantumSceneLoaded)
+            if (!IsGameSceneLoaded)
             {
-                return;
+                var op = SceneManager.LoadSceneAsync(SceneNames.Game, LoadSceneMode.Additive);
+                if (op == null)
+                {
+                    throw new System.InvalidOperationException(
+                        $"Failed to load scene '{SceneNames.Game}'.");
+                }
+
+                while (!op.isDone)
+                {
+                    await Task.Yield();
+                }
             }
 
-            var op = SceneManager.LoadSceneAsync(
-                SessionConstants.QuantumGameSceneName,
-                LoadSceneMode.Additive);
-            if (op == null)
+            // Drop legacy QuantumGameScene if it was left loaded from older builds.
+            var legacy = SceneManager.GetSceneByName(SessionConstants.QuantumGameSceneName);
+            if (legacy.IsValid() && legacy.isLoaded)
             {
-                throw new System.InvalidOperationException(
-                    $"Failed to load scene '{SessionConstants.QuantumGameSceneName}'. " +
-                    "Enable it in Editor Build Settings.");
+                var unload = SceneManager.UnloadSceneAsync(legacy);
+                if (unload != null)
+                {
+                    while (!unload.isDone)
+                    {
+                        await Task.Yield();
+                    }
+                }
             }
 
-            while (!op.isDone)
-            {
-                await Task.Yield();
-            }
+            QuantumGameHost.EnsureReady();
+            await Task.Yield();
         }
 
         public static async Task UnloadAsync()
         {
-            if (!IsQuantumSceneLoaded)
+            QuantumGameHost.Teardown();
+
+            var legacy = SceneManager.GetSceneByName(SessionConstants.QuantumGameSceneName);
+            if (legacy.IsValid() && legacy.isLoaded)
             {
-                return;
+                var unload = SceneManager.UnloadSceneAsync(legacy);
+                if (unload != null)
+                {
+                    while (!unload.isDone)
+                    {
+                        await Task.Yield();
+                    }
+                }
             }
 
-            var op = SceneManager.UnloadSceneAsync(SessionConstants.QuantumGameSceneName);
-            if (op == null)
-            {
-                return;
-            }
-
-            while (!op.isDone)
-            {
-                await Task.Yield();
-            }
+            await Task.Yield();
         }
     }
 }

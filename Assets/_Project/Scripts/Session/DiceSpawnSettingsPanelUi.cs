@@ -30,8 +30,8 @@ namespace DiceGame.Session
                     : null,
                 AnimateInitialDiceSpawn = SessionUiFactory.CreateLabeledToggle(section, "Animate Initial Spawn"),
                 ContinuousSpawnEnabled = SessionUiFactory.CreateLabeledToggle(section, "Continuous Spawn Enabled"),
-                SpawnInterval = SessionUiFactory.CreateLabeledFloatInput(section, "Spawn Interval"),
-                SpawnIntervalJitter = SessionUiFactory.CreateLabeledFloatInput(section, "Spawn Interval Jitter")
+                SpawnInterval = SessionUiFactory.CreateLabeledIntInput(section, "Spawn Interval Ticks"),
+                SpawnIntervalJitter = SessionUiFactory.CreateLabeledIntInput(section, "Spawn Interval Jitter Ticks")
             };
 
             SessionUiFactory.CreateLayoutLabel(section, "Bottom Spawn Weight", 18, 24f);
@@ -55,8 +55,8 @@ namespace DiceGame.Session
 
             bindings.AnimateInitialDiceSpawn.isOn = data.AnimateInitialDiceSpawn;
             bindings.ContinuousSpawnEnabled.isOn = data.ContinuousSpawnEnabled;
-            SetInputText(bindings.SpawnInterval, data.SpawnInterval.ToString("0.###"));
-            SetInputText(bindings.SpawnIntervalJitter, data.SpawnIntervalJitter.ToString("0.###"));
+            SetInputText(bindings.SpawnInterval, data.SpawnIntervalTicks.ToString());
+            SetInputText(bindings.SpawnIntervalJitter, data.SpawnIntervalJitterTicks.ToString());
             bindings.BottomSpawnWeight.value = data.BottomSpawnWeight;
             if (bindings.BottomSpawnWeightLabel != null) {
                 bindings.BottomSpawnWeightLabel.text = data.BottomSpawnWeight.ToString("0.00");
@@ -89,13 +89,13 @@ namespace DiceGame.Session
             data.AnimateInitialDiceSpawn = bindings.AnimateInitialDiceSpawn.isOn;
             data.ContinuousSpawnEnabled = bindings.ContinuousSpawnEnabled.isOn;
 
-            if (!TryParseFloat(bindings.SpawnInterval, out data.SpawnInterval)) {
-                errorMessage = "Spawn Interval must be a number.";
+            if (!TryParseInt(bindings.SpawnInterval, out data.SpawnIntervalTicks)) {
+                errorMessage = "Spawn Interval Ticks must be an integer.";
                 return false;
             }
 
-            if (!TryParseFloat(bindings.SpawnIntervalJitter, out data.SpawnIntervalJitter)) {
-                errorMessage = "Spawn Interval Jitter must be a number.";
+            if (!TryParseInt(bindings.SpawnIntervalJitter, out data.SpawnIntervalJitterTicks)) {
+                errorMessage = "Spawn Interval Jitter Ticks must be an integer.";
                 return false;
             }
 

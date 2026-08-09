@@ -106,8 +106,8 @@ namespace DiceGame.Config
                 InitialDiceCount = data.InitialDiceCount,
                 AnimateInitialDiceSpawn = data.AnimateInitialDiceSpawn,
                 ContinuousSpawnEnabled = data.ContinuousSpawnEnabled,
-                SpawnInterval = data.SpawnInterval,
-                SpawnIntervalJitter = data.SpawnIntervalJitter,
+                SpawnIntervalTicks = data.SpawnIntervalTicks,
+                SpawnIntervalJitterTicks = data.SpawnIntervalJitterTicks,
                 BottomSpawnWeight = data.BottomSpawnWeight
             };
         }
@@ -117,8 +117,8 @@ namespace DiceGame.Config
                 InitialDiceCount = payload.InitialDiceCount,
                 AnimateInitialDiceSpawn = payload.AnimateInitialDiceSpawn,
                 ContinuousSpawnEnabled = payload.ContinuousSpawnEnabled,
-                SpawnInterval = payload.SpawnInterval,
-                SpawnIntervalJitter = payload.SpawnIntervalJitter,
+                SpawnIntervalTicks = payload.SpawnIntervalTicks,
+                SpawnIntervalJitterTicks = payload.SpawnIntervalJitterTicks,
                 BottomSpawnWeight = payload.BottomSpawnWeight
             };
         }
@@ -187,7 +187,7 @@ namespace DiceGame.Config
                 Face4Weight = data.Face4Weight,
                 Face5Weight = data.Face5Weight,
                 Face6Weight = data.Face6Weight,
-                QueueToBoardDelay = data.QueueToBoardDelay
+                QueueToBoardDelayTicks = data.QueueToBoardDelayTicks
             };
         }
 
@@ -227,7 +227,7 @@ namespace DiceGame.Config
                 Face4Weight = payload.Face4Weight,
                 Face5Weight = payload.Face5Weight,
                 Face6Weight = payload.Face6Weight,
-                QueueToBoardDelay = payload.QueueToBoardDelay
+                QueueToBoardDelayTicks = payload.QueueToBoardDelayTicks
             };
         }
 

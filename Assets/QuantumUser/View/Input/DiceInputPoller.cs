@@ -1,79 +1,140 @@
 ﻿namespace Quantum
 {
+    using DiceGame.Config;
     using Photon.Deterministic;
     using UnityEngine;
     using UnityEngine.InputSystem;
+    using CoreDirection = DiceGame.Core.Direction;
+    using CoreInputDirection = DiceGame.Core.InputDirection;
 
     /// <summary>
-    /// Polls local player input into Quantum <see cref="Input"/> buttons.
-    /// Replaces <see cref="QuantumDebugInput"/> on <c>QuantumGameScene</c>.
-    /// Main UGS dual-sim path is unchanged.
+    /// Polls the same <see cref="PlayerInputSettings"/> / InputActions as production
+    /// <c>CharacterInputReader</c> into Quantum <see cref="Input"/> (J jump, K lift).
     /// </summary>
     public sealed class DiceInputPoller : MonoBehaviour
     {
-        [SerializeField] Key moveNorth = Key.W;
-        [SerializeField] Key moveSouth = Key.S;
-        [SerializeField] Key moveEast = Key.D;
-        [SerializeField] Key moveWest = Key.A;
-        [SerializeField] Key moveNorthAlt = Key.UpArrow;
-        [SerializeField] Key moveSouthAlt = Key.DownArrow;
-        [SerializeField] Key moveEastAlt = Key.RightArrow;
-        [SerializeField] Key moveWestAlt = Key.LeftArrow;
-        [SerializeField] Key lift = Key.Space;
-        [SerializeField] Key jump = Key.LeftShift;
-        [SerializeField] float stickDeadZone = 0.2f;
+        [SerializeField] PlayerInputSettings inputSettings;
+        [SerializeField] PlayerSlot playerSlot = PlayerSlot.Player1;
+
+        InputActionMap playerMap;
+        InputAction moveAction;
+        InputAction liftAction;
+        InputAction jumpAction;
+        bool bound;
 
         void OnEnable()
         {
+            BindActions();
+            playerMap?.Enable();
             QuantumCallback.Subscribe(this, (CallbackPollInput callback) => PollInput(callback));
+        }
+
+        void OnDisable()
+        {
+            playerMap?.Disable();
+        }
+
+        void BindActions()
+        {
+            bound = false;
+            if (inputSettings == null)
+            {
+                var bootstrap = Object.FindAnyObjectByType<DiceGame.Gameplay.GameBootstrap>();
+                inputSettings = bootstrap != null ? bootstrap.PlayerInputSettings : null;
+            }
+
+            if (inputSettings == null)
+            {
+                Debug.LogError(
+                    "DiceInputPoller: assign PlayerInputSettings (same asset as CharacterInputReader).");
+                return;
+            }
+
+            if (inputSettings.InputActions == null)
+            {
+                Debug.LogError("DiceInputPoller: PlayerInputSettings.InputActions is null.");
+                return;
+            }
+
+            var mapName = inputSettings.GetActionMapName(playerSlot);
+            playerMap = inputSettings.InputActions.FindActionMap(mapName, throwIfNotFound: false);
+            if (playerMap == null)
+            {
+                Debug.LogError($"DiceInputPoller: action map '{mapName}' not found.");
+                return;
+            }
+
+            moveAction = playerMap.FindAction("Move", throwIfNotFound: false);
+            liftAction = playerMap.FindAction("Lift", throwIfNotFound: false);
+            jumpAction = playerMap.FindAction("Jump", throwIfNotFound: false);
+            if (moveAction == null || liftAction == null || jumpAction == null)
+            {
+                Debug.LogError("DiceInputPoller: Move/Lift/Jump actions missing on action map.");
+                return;
+            }
+
+            var slotConfig = inputSettings.GetSlotConfig(playerSlot);
+            playerMap.bindingMask = InputBinding.MaskByGroup(PlayerInputSettings.GetControlScheme(slotConfig));
+            ApplyDeviceFilter(slotConfig);
+            bound = true;
+        }
+
+        void ApplyDeviceFilter(PlayerSlotInputConfig slotConfig)
+        {
+            if (playerMap == null)
+            {
+                return;
+            }
+
+            if (slotConfig.DeviceKind == PlayerInputDeviceKind.Gamepad)
+            {
+                var gamepads = Gamepad.all;
+                if (slotConfig.GamepadIndex >= gamepads.Count)
+                {
+                    playerMap.devices = null;
+                    return;
+                }
+
+                playerMap.devices = new InputDevice[] { gamepads[slotConfig.GamepadIndex] };
+                return;
+            }
+
+            var keyboard = Keyboard.current;
+            playerMap.devices = keyboard != null ? new InputDevice[] { keyboard } : null;
         }
 
         void PollInput(CallbackPollInput callback)
         {
             var input = new Input();
-            var keyboard = Keyboard.current;
-            var gamepad = Gamepad.current;
-
-            var stick = Vector2.zero;
-            if (gamepad != null)
+            if (!bound)
             {
-                stick = gamepad.leftStick.ReadValue();
-                if (stick.sqrMagnitude < stickDeadZone * stickDeadZone)
+                callback.SetInput(input, DeterministicInputFlags.Repeatable);
+                return;
+            }
+
+            var axis = moveAction.ReadValue<Vector2>();
+            if (CoreInputDirection.TryFromVector2(axis, out var direction))
+            {
+                switch (direction)
                 {
-                    stick = Vector2.zero;
+                    case CoreDirection.North:
+                        input.MoveN = true;
+                        break;
+                    case CoreDirection.South:
+                        input.MoveS = true;
+                        break;
+                    case CoreDirection.East:
+                        input.MoveE = true;
+                        break;
+                    case CoreDirection.West:
+                        input.MoveW = true;
+                        break;
                 }
             }
 
-            var north = IsPressed(keyboard, moveNorth) || IsPressed(keyboard, moveNorthAlt) || stick.y > stickDeadZone;
-            var south = IsPressed(keyboard, moveSouth) || IsPressed(keyboard, moveSouthAlt) || stick.y < -stickDeadZone;
-            var east = IsPressed(keyboard, moveEast) || IsPressed(keyboard, moveEastAlt) || stick.x > stickDeadZone;
-            var west = IsPressed(keyboard, moveWest) || IsPressed(keyboard, moveWestAlt) || stick.x < -stickDeadZone;
-
-            // Cardinal priority matches Phase A lockstep quantization spirit (one direction per tick).
-            if (Mathf.Abs(stick.x) >= Mathf.Abs(stick.y) && stick.sqrMagnitude > 0f)
-            {
-                north = false;
-                south = false;
-            }
-            else if (stick.sqrMagnitude > 0f)
-            {
-                east = false;
-                west = false;
-            }
-
-            input.MoveN = north;
-            input.MoveS = south;
-            input.MoveE = east;
-            input.MoveW = west;
-            input.Lift = IsPressed(keyboard, lift) || (gamepad != null && gamepad.buttonSouth.isPressed);
-            input.Jump = IsPressed(keyboard, jump) || (gamepad != null && gamepad.buttonNorth.isPressed);
-
+            input.Lift = liftAction.IsPressed();
+            input.Jump = jumpAction.IsPressed();
             callback.SetInput(input, DeterministicInputFlags.Repeatable);
-        }
-
-        static bool IsPressed(Keyboard keyboard, Key key)
-        {
-            return keyboard != null && keyboard[key].isPressed;
         }
     }
 }

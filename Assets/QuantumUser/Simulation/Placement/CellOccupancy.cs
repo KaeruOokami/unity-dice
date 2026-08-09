@@ -45,19 +45,19 @@
             return TryGetAt(frame, x, y, DiceStackTier.Top, out entity, out dice);
         }
 
-        public static bool IsPlayerPassThrough(Dice dice)
+        public static bool IsPlayerPassThrough(Frame frame, in Dice dice)
         {
-            return DiceKindCapabilities.For(dice.Kind).IsPlayerPassThrough;
+            return EffectiveDiceQuery.Resolve(frame, in dice).IsPlayerPassThrough;
         }
 
         public static bool HasSolidBottomAt(Frame frame, int x, int y)
         {
-            return TryGetBottomAt(frame, x, y, out _, out var dice) && !IsPlayerPassThrough(dice);
+            return TryGetBottomAt(frame, x, y, out _, out var dice) && !IsPlayerPassThrough(frame, in dice);
         }
 
         public static bool HasSolidTopAt(Frame frame, int x, int y)
         {
-            return TryGetTopAt(frame, x, y, out _, out var dice) && !IsPlayerPassThrough(dice);
+            return TryGetTopAt(frame, x, y, out _, out var dice) && !IsPlayerPassThrough(frame, in dice);
         }
 
         public static bool CanPlaceBottomAt(Frame frame, Board board, int x, int y)
@@ -99,20 +99,21 @@
             int y,
             out DiceStackTier tier)
         {
-            if (CanPlaceBottomAt(frame, board, x, y))
-            {
-                tier = DiceStackTier.Bottom;
-                return true;
-            }
-
-            if (CanPlaceTopAt(frame, board, x, y))
-            {
-                tier = DiceStackTier.Top;
-                return true;
-            }
-
             tier = default;
-            return false;
+            if (!DiceGame.SimShared.Lift.CarryPlacementRules.TryResolveTarget(
+                    x,
+                    y,
+                    (cx, cy) => CanPlaceBottomAt(frame, board, cx, cy),
+                    (cx, cy) => CanPlaceTopAt(frame, board, cx, cy),
+                    // Quantum occupancy: accept-top == place-top for now (Ghost accept deferred).
+                    (cx, cy) => CanPlaceTopAt(frame, board, cx, cy),
+                    out var tierNorm))
+            {
+                return false;
+            }
+
+            tier = tierNorm == 1 ? DiceStackTier.Top : DiceStackTier.Bottom;
+            return true;
         }
 
         public static bool CanPawnEnterCell(Frame frame, Board board, int x, int y, EntityRef ignorePawn)
@@ -138,7 +139,14 @@
             out bool isOnFloor,
             out DiceStackTier standingTier)
         {
-            if (HasSolidBottomAt(frame, x, y) && !HasSolidTopAt(frame, x, y))
+            if (HasSolidTopAt(frame, x, y))
+            {
+                isOnFloor = false;
+                standingTier = DiceStackTier.Top;
+                return;
+            }
+
+            if (HasSolidBottomAt(frame, x, y))
             {
                 isOnFloor = false;
                 standingTier = DiceStackTier.Bottom;
@@ -156,7 +164,19 @@
                 return EntityRef.None;
             }
 
-            return TryGetBottomAt(frame, x, y, out var entity, out _) ? entity : EntityRef.None;
+            if (TryGetTopAt(frame, x, y, out var topEntity, out var topDice)
+                && !IsPlayerPassThrough(frame, in topDice))
+            {
+                return topEntity;
+            }
+
+            if (TryGetBottomAt(frame, x, y, out var bottomEntity, out var bottomDice)
+                && !IsPlayerPassThrough(frame, in bottomDice))
+            {
+                return bottomEntity;
+            }
+
+            return EntityRef.None;
         }
     }
 }

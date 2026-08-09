@@ -273,7 +273,10 @@ namespace DiceGame.Session
             }
         }
 
-        public async Task ShutdownAsync()
+        /// <summary>
+        /// Stops the Quantum runner but keeps the Photon room connection (online rematch / reset).
+        /// </summary>
+        public async Task ShutdownSimulationAsync()
         {
             if (cancellation != null)
             {
@@ -284,9 +287,6 @@ namespace DiceGame.Session
 
             pluginDisconnectSubscription?.Dispose();
             pluginDisconnectSubscription = null;
-
-            connectionService?.Dispose();
-            connectionService = null;
 
             if (Runner != null)
             {
@@ -301,6 +301,14 @@ namespace DiceGame.Session
 
                 Runner = null;
             }
+        }
+
+        public async Task ShutdownAsync()
+        {
+            await ShutdownSimulationAsync();
+
+            connectionService?.Dispose();
+            connectionService = null;
 
             if (Client != null)
             {
@@ -318,6 +326,60 @@ namespace DiceGame.Session
 
             PendingMatchSeed = 0;
             await QuantumSceneFlow.UnloadAsync();
+        }
+
+        /// <summary>
+        /// Host publishes a new match seed and starts a fresh online session in the same room.
+        /// </summary>
+        public async Task RestartOnlineMatchAsHostAsync(
+            RuntimeConfig runtimeConfig,
+            string playerNickname,
+            int matchSeed,
+            CancellationToken externalToken = default)
+        {
+            if (!IsConnectedToRoom || Client == null)
+            {
+                throw new InvalidOperationException("Host is not connected to a Quantum room.");
+            }
+
+            await ShutdownSimulationAsync();
+            BeginCancellation(externalToken);
+
+            PendingMatchSeed = matchSeed;
+            runtimeConfig.Seed = matchSeed;
+
+            var props = new PhotonHashtable
+            {
+                { SessionConstants.QuantumRoomSeedProperty, matchSeed },
+                { SessionConstants.QuantumRoomMatchStartProperty, 1 },
+            };
+            Client.CurrentRoom.SetCustomProperties(props);
+
+            await StartConnectedSessionAsync(runtimeConfig, playerNickname);
+            ClearCancellation();
+        }
+
+        /// <summary>
+        /// Client restarts after the host publishes a new match seed in the same room.
+        /// </summary>
+        public async Task RestartOnlineMatchAsClientAsync(
+            RuntimeConfig runtimeConfig,
+            string playerNickname,
+            int matchSeed,
+            CancellationToken externalToken = default)
+        {
+            if (!IsConnectedToRoom)
+            {
+                throw new InvalidOperationException("Client is not connected to a Quantum room.");
+            }
+
+            await ShutdownSimulationAsync();
+            BeginCancellation(externalToken);
+
+            PendingMatchSeed = matchSeed;
+            runtimeConfig.Seed = matchSeed;
+            await StartConnectedSessionAsync(runtimeConfig, playerNickname);
+            ClearCancellation();
         }
 
         async Task StartConnectedSessionAsync(RuntimeConfig runtimeConfig, string playerNickname)
@@ -368,10 +430,29 @@ namespace DiceGame.Session
 
         static void ApplyMapAndSimulation(RuntimeConfig runtimeConfig)
         {
+            QuantumGameHost.EnsureReady();
+
             var mapData = UnityEngine.Object.FindAnyObjectByType<QuantumMapData>();
-            if (mapData != null)
+            if (mapData != null && mapData.AssetRef.Id.IsValid)
             {
                 runtimeConfig.Map = mapData.AssetRef;
+            }
+            else if (QuantumUnityDB.TryGetGlobalAsset<Map>(
+                         "QuantumUser/Resources/QuantumMap",
+                         out var map)
+                     && map != null)
+            {
+                runtimeConfig.Map = map;
+                if (mapData != null)
+                {
+                    mapData.AssetRef = map;
+                }
+            }
+
+            var bootstrap = UnityEngine.Object.FindAnyObjectByType<DiceGame.Gameplay.GameBootstrap>();
+            if (bootstrap?.Board != null && bootstrap.Board.CellSize > 0f)
+            {
+                runtimeConfig.CellSize = FP.FromFloat_UNSAFE(bootstrap.Board.CellSize);
             }
 
             if (runtimeConfig.SimulationConfig.Id.IsValid == false

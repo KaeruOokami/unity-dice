@@ -1,5 +1,7 @@
 namespace DiceGame.Session
 {
+    using DiceGame.Config;
+
     public static class SessionConstants
     {
         public const int MaxPlayers = 2;
@@ -33,16 +35,24 @@ namespace DiceGame.Session
         /// <summary>
         /// Phase B lockstep: fixed simulation rate (both peers step with this dt).
         /// </summary>
-        public const int SimTickHz = 60;
-        public const float SimTickSeconds = 1f / SimTickHz;
+        public const int SimTickHz = SimTiming.TickHz;
+        public const float SimTickSeconds = SimTiming.TickSeconds;
         /// <summary>
-        /// Quantum gameplay slice scene (<c>Assets/QuantumUser/Scenes/QuantumGameScene</c>).
-        /// Jumbo / Ice-slide / Magnet-chain remain deferred.
+        /// Legacy Quantum slice scene name (no longer loaded for product play).
+        /// Quantum runs in <see cref="SceneNames.Game"/> via <see cref="QuantumGameHost"/>.
         /// </summary>
         public const string QuantumGameSceneName = "QuantumGameScene";
         public const string QuantumPluginName = "QuantumPlugin";
         public const string QuantumRoomSeedProperty = "QSeed";
         public const string QuantumRoomMatchStartProperty = "QStart";
+        public const string QuantumRoomGameModeProperty = "QMode";
+        public const string QuantumRoomSetupRevisionProperty = "QSetupRev";
+        public const string QuantumRoomSetupProperty = "QSetup";
+        public const string QuantumRoomSetupPartCountProperty = "QSetupParts";
+        public const string QuantumRoomSetupChunkPropertyPrefix = "QSetup";
+        public const string QuantumSetupEventJsonKey = "json";
+        public const byte QuantumSetupDraftEventCode = 51;
+        public const int QuantumSetupPropertyChunkSize = 400;
         public const int QuantumRoomCodeLength = 6;
         public const float QuantumRoomSeedWaitSeconds = 10f;
         public const float QuantumMatchStartWaitSeconds = 60f;

@@ -33,7 +33,7 @@ namespace DiceGame.Config
         public float Face4Weight;
         public float Face5Weight;
         public float Face6Weight;
-        public float QueueToBoardDelay;
+        public int QueueToBoardDelayTicks;
 
         public static PlayerAttackSettingsData FromTemplate(PlayerAttackSettings template) {
             if (template == null) {
@@ -78,7 +78,7 @@ namespace DiceGame.Config
                 Face4Weight = template.GetFaceWeight(4),
                 Face5Weight = template.GetFaceWeight(5),
                 Face6Weight = template.GetFaceWeight(6),
-                QueueToBoardDelay = template.QueueToBoardDelay
+                QueueToBoardDelayTicks = template.QueueToBoardDelayTicks
             };
         }
 
@@ -113,7 +113,7 @@ namespace DiceGame.Config
                 Face4Weight = 1f,
                 Face5Weight = 1f,
                 Face6Weight = 1f,
-                QueueToBoardDelay = 1.5f
+                QueueToBoardDelayTicks = 90
             };
         }
 

@@ -1,7 +1,7 @@
 ﻿namespace Quantum
 {
     /// <summary>
-    /// SimTickSchedule stage 0: DiceLogicalMotions 窶・tick erasure timers then finish.
+    /// SimTickSchedule stage 0: DiceLogicalMotions — tick motion/spawn busy then erasure finish.
     /// </summary>
     public unsafe class DiceLogicalMotionSystem : SystemMainThread
     {
@@ -15,12 +15,26 @@
             var filter = frame.Filter<Dice>();
             while (filter.Next(out var entity, out var dice))
             {
-                if (!dice.IsErasing)
+                if (!frame.Unsafe.TryGetPointer<Dice>(entity, out var dicePtr))
                 {
                     continue;
                 }
 
-                if (!frame.Unsafe.TryGetPointer<Dice>(entity, out var dicePtr))
+                if (dicePtr->IsMotionBusy)
+                {
+                    dicePtr->MotionTicksRemaining -= 1;
+                    if (dicePtr->MotionTicksRemaining <= 0)
+                    {
+                        dicePtr->IsMotionBusy = false;
+                        dicePtr->MotionTicksRemaining = 0;
+                        if (dicePtr->IsSpawning)
+                        {
+                            dicePtr->IsSpawning = false;
+                        }
+                    }
+                }
+
+                if (!dicePtr->IsErasing)
                 {
                     continue;
                 }

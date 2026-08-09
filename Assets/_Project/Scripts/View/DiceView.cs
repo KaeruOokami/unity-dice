@@ -844,14 +844,15 @@ namespace DiceGame.View
 
         /// <summary>
         /// Client presentation only. Applies erasure / one-vanish materials without driving gameplay.
-        /// World position / rotation are expected to come from the network snapshot separately.
+        /// Pass <paramref name="board"/> for floor-anchored Sink / Radiance layout (Quantum path).
         /// </summary>
         public void ApplyNetworkVisualPresentation(
             byte visualKind,
             float progress,
             int topFace,
             Color? emissionColor,
-            DiceOneVanishSettings oneVanishSettings) {
+            DiceOneVanishSettings oneVanishSettings,
+            Board board = null) {
             EnsureMesh();
             ResolveHierarchy();
             if (dissolvePivot == null || erasureSettings == null) {
@@ -861,6 +862,9 @@ namespace DiceGame.View
             progress = Mathf.Clamp01(progress);
             currentTopFace = topFace is >= 1 and <= 6 ? topFace : currentTopFace;
             erasureEmissionColorOverride = emissionColor;
+            if (board != null) {
+                erasureBoard = board;
+            }
 
             if (visualKind == 0 || progress <= 0f) {
                 ClearNetworkVisualPresentation();
@@ -871,7 +875,12 @@ namespace DiceGame.View
                 activeErasureKind = ErasureKind.Radiance;
                 erasureProgress = progress;
                 oneVanishProgress = 0f;
-                dissolvePivot.localScale = GetDissolveLocalScale(currentTopFace, 1f);
+                if (board != null && positionRoot != null && rotationRoot != null) {
+                    ApplyRadianceLayout(board);
+                } else {
+                    dissolvePivot.localScale = GetDissolveLocalScale(currentTopFace, 1f);
+                }
+
                 ApplyErasureAlpha(0f, allowGhostAlpha: false);
                 ApplyErasureEmission(GetRadianceEmissionFactor(progress));
                 return;
@@ -896,8 +905,13 @@ namespace DiceGame.View
             activeErasureKind = ErasureKind.Sink;
             erasureProgress = progress;
             oneVanishProgress = 0f;
-            var squash = 1f - progress;
-            dissolvePivot.localScale = GetDissolveLocalScale(currentTopFace, squash);
+            if (board != null && positionRoot != null && rotationRoot != null) {
+                ApplySurfaceLayout(board, progress);
+            } else {
+                var squash = 1f - progress;
+                dissolvePivot.localScale = GetDissolveLocalScale(currentTopFace, squash);
+            }
+
             ApplyErasureAlpha(progress, allowGhostAlpha: true);
             ApplyErasureEmission(progress);
         }
@@ -1249,17 +1263,21 @@ namespace DiceGame.View
             }
 
             var baseY = board.FloorSurfaceWorldY;
-            if (state.Tier == DiceStackTier.Top
-                && registry != null
+            if (state.Tier != DiceStackTier.Top) {
+                return baseY;
+            }
+
+            if (registry != null
                 && registry.TryGetBottomAt(state.GridPos, out var bottom)
                 && bottom != null) {
                 // Follow support standing height (jumbo sink stage included).
-                baseY = bottom.Capabilities.HasExpandedFootprint
+                return bottom.Capabilities.HasExpandedFootprint
                     ? bottom.GetLogicalStandingSurfaceWorldY(SurfaceHeightLevel.Bottom)
                     : bottom.GetLogicalTopSurfaceWorldY();
             }
 
-            return baseY;
+            // Quantum / registry-less presentation: Top sits one cell above the floor.
+            return baseY + board.CellSize;
         }
 
         void RaiseVisualMotion(DiceVisualMotionRequest request) {
@@ -1763,7 +1781,7 @@ namespace DiceGame.View
 
             var startOffset = positionRoot.position.y - targetWorld.y;
             var state = GravityMotion.CreateDrop(startOffset);
-            yield return GravityMotion.AnimateVerticalDropCoroutine(
+            yield return GravityMotionPlayback.AnimateVerticalDropCoroutine(
                 state,
                 ResolveFallGravity(ResolveVisualCapabilities().FallGravityScale),
                 targetWorld.y,
@@ -1813,7 +1831,7 @@ namespace DiceGame.View
                 GroundWorldY = landedWorld.y
             };
 
-            yield return GravityMotion.AnimateSpawnBounceDropCoroutine(
+            yield return GravityMotionPlayback.AnimateSpawnBounceDropCoroutine(
                 activeSpawnFallSession,
                 ResolveFallGravity(fallGravityScale),
                 bounceRestitution,
@@ -1840,7 +1858,7 @@ namespace DiceGame.View
                 yield break;
             }
 
-            yield return GravityMotion.AnimateSpawnBounceDropCoroutine(
+            yield return GravityMotionPlayback.AnimateSpawnBounceDropCoroutine(
                 activeSpawnFallSession,
                 ResolveFallGravity(activeSpawnFallGravityScale),
                 activeSpawnBounceRestitution,

@@ -19,8 +19,9 @@ MonoBehaviour:
   maxWalkStep: 0.5
   maxJumpStepPlayerOnly: 0.6
   maxJumpStepCoupled: 1.1
-  pushHoldDuration: 0.25
-  dissolveDescentHoldDuration: 0.35
+  pushHoldDurationTicks: 15
+  dissolveDescentHoldDurationTicks: 21
+  pushContactRadiusMilli: 250
   rollCancelWindowProgress: 0.5
   pushInputAlignment: 0.7
   carryVerticalOffset: 1.05

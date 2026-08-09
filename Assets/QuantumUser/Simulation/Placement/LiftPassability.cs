@@ -1,13 +1,12 @@
 ﻿namespace Quantum
 {
+    using DiceGame.SimShared.Lift;
+
     /// <summary>
-    /// Quantum port of <c>LiftPassability</c> + <c>CharacterLiftTargetQuery</c> (adjacent lift only).
+    /// Frame adapter over production <see cref="LiftEligibility"/> / facing-only lift target.
     /// </summary>
     public static unsafe class LiftPassability
     {
-        static readonly int[] NeighborX = { 0, 1, 0, -1 };
-        static readonly int[] NeighborY = { 1, 0, -1, 0 };
-
         public static bool TryResolveLiftTarget(
             Frame frame,
             Board board,
@@ -16,37 +15,27 @@
             out EntityRef target)
         {
             target = EntityRef.None;
+            if (!LiftEligibility.HasFacing(pawn.FacingX, pawn.FacingY))
+            {
+                return false;
+            }
+
             var standingDice = CellOccupancy.TryGetStandingDice(frame, pose.X, pose.Y, pawn.IsOnFloor);
-
-            if ((pawn.FacingX != 0 || pawn.FacingY != 0)
-                && TryResolveAtNeighbor(
-                    frame,
-                    board,
-                    in pawn,
-                    standingDice,
-                    pose.X + pawn.FacingX,
-                    pose.Y + pawn.FacingY,
-                    out target))
-            {
-                return true;
-            }
-
-            for (var i = 0; i < 4; i++)
-            {
-                if (TryResolveAtNeighbor(
-                        frame,
-                        board,
-                        in pawn,
-                        standingDice,
-                        pose.X + NeighborX[i],
-                        pose.Y + NeighborY[i],
-                        out target))
-                {
-                    return true;
-                }
-            }
-
-            return false;
+            LiftAdjacency.FacingNeighbor(
+                pose.X,
+                pose.Y,
+                pawn.FacingX,
+                pawn.FacingY,
+                out var nx,
+                out var ny);
+            return TryResolveAtNeighbor(
+                frame,
+                board,
+                in pawn,
+                standingDice,
+                nx,
+                ny,
+                out target);
         }
 
         static bool TryResolveAtNeighbor(
@@ -90,38 +79,20 @@
             int diceX,
             int diceY)
         {
-            if (dice.IsCarried || dice.IsErasing)
-            {
-                return false;
-            }
-
-            if (standingDice.IsValid && standingDice == diceEntity)
-            {
-                return false;
-            }
-
-            if (!DiceKindCapabilities.For(dice.Kind).CanBeLiftedByPlayer)
-            {
-                return false;
-            }
-
-            if (pawn.IsOnFloor)
-            {
-                if (dice.Tier == DiceStackTier.Top)
-                {
-                    return true;
-                }
-
-                return dice.Tier == DiceStackTier.Bottom
-                    && !CellOccupancy.TryGetTopAt(frame, diceX, diceY, out _, out _);
-            }
-
-            if (pawn.StandingTier == DiceStackTier.Bottom)
-            {
-                return true;
-            }
-
-            return dice.Tier == DiceStackTier.Top;
+            var effective = EffectiveDiceQuery.ResolveAt(frame, diceEntity, in dice, diceX, diceY);
+            var hasTop = CellOccupancy.TryGetTopAt(frame, diceX, diceY, out _, out _);
+            return LiftEligibility.CanLift(
+                pawn.IsOnFloor,
+                pawn.StandingTier == DiceStackTier.Top ? 1 : 0,
+                standingDice.IsValid && standingDice == diceEntity,
+                effective.Capabilities.CanBeLiftedByPlayer,
+                effective.IsPlayerMovable,
+                dice.IsCarried,
+                dice.IsErasing,
+                dice.IsMotionBusy,
+                dice.IsSpawning,
+                dice.Tier == DiceStackTier.Top ? 1 : 0,
+                hasTop);
         }
     }
 }

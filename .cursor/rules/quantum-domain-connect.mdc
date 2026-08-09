@@ -1,0 +1,12 @@
+---
+description: Quantum must connect library-ized production Domain — no lite reimplementation
+alwaysApply: true
+---
+
+# Quantum Domain Connect Policy
+
+- Do **not** add degraded rule copies in `SimShared` or `QuantumUser/Simulation` (subset Capabilities, lite MatchFinder, one-cell-only Ice, etc.).
+- Production logic under `Assets/_Project/Scripts/` is the source of truth. **Library-ize** (noEngine Domain assemblies) then **connect** Quantum via Frame adapters.
+- Quantum Systems / qtn / bootstrap may only: map Frame ↔ Domain inputs, apply Domain commits, schedule ticks.
+- Prefer moving existing classes into `DiceGame.Core` (and later Placement Domain) over writing new parallel rules.
+- When a production gate exists (`IsSpawning`, EffectiveBehavior, Ice until-blocked, Match participants/chain), Quantum must call that Domain API — not invent a shorter path.

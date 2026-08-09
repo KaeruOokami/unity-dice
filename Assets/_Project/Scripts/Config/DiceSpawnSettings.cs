@@ -1,4 +1,5 @@
 using UnityEngine;
+using UnityEngine.Serialization;
 
 namespace DiceGame.Config
 {
@@ -11,18 +12,24 @@ namespace DiceGame.Config
         [SerializeField] int initialDiceCount = 3;
         [SerializeField] bool animateInitialDiceSpawn = true;
 
-        [Header("Continuous Spawn")]
+        [Header("Continuous Spawn — ticks @ SimTiming.TickHz")]
         [SerializeField] bool continuousSpawnEnabled = true;
-        [SerializeField] float spawnInterval = 2f;
-        [SerializeField] float spawnIntervalJitter = 0.5f;
+        [FormerlySerializedAs("spawnInterval")]
+        [Min(0)]
+        [SerializeField] int spawnIntervalTicks = 120;
+        [FormerlySerializedAs("spawnIntervalJitter")]
+        [Min(0)]
+        [SerializeField] int spawnIntervalJitterTicks = 30;
         [Range(0f, 1f)]
         [SerializeField] float bottomSpawnWeight = 0.5f;
 
         public int InitialDiceCount => initialDiceCount;
         public bool AnimateInitialDiceSpawn => animateInitialDiceSpawn;
         public bool ContinuousSpawnEnabled => continuousSpawnEnabled;
-        public float SpawnInterval => spawnInterval;
-        public float SpawnIntervalJitter => spawnIntervalJitter;
+        public int SpawnIntervalTicks => Mathf.Max(0, spawnIntervalTicks);
+        public int SpawnIntervalJitterTicks => Mathf.Max(0, spawnIntervalJitterTicks);
+        public float SpawnInterval => SimTiming.TicksToSeconds(SpawnIntervalTicks);
+        public float SpawnIntervalJitter => SimTiming.TicksToSeconds(SpawnIntervalJitterTicks);
         public float BottomSpawnWeight => bottomSpawnWeight;
         public float TopSpawnWeight => 1f - bottomSpawnWeight;
 
@@ -36,13 +43,19 @@ namespace DiceGame.Config
             SetInitialDiceCount(data.InitialDiceCount);
             animateInitialDiceSpawn = data.AnimateInitialDiceSpawn;
             continuousSpawnEnabled = data.ContinuousSpawnEnabled;
-            spawnInterval = Mathf.Max(0f, data.SpawnInterval);
-            spawnIntervalJitter = Mathf.Max(0f, data.SpawnIntervalJitter);
+            spawnIntervalTicks = Mathf.Max(0, data.SpawnIntervalTicks);
+            spawnIntervalJitterTicks = Mathf.Max(0, data.SpawnIntervalJitterTicks);
             bottomSpawnWeight = Mathf.Clamp01(data.BottomSpawnWeight);
         }
 
         public void SetInitialDiceCount(int count) {
             initialDiceCount = Mathf.Max(1, count);
+        }
+
+        void OnValidate() {
+            spawnIntervalTicks = Mathf.Max(0, spawnIntervalTicks);
+            spawnIntervalJitterTicks = Mathf.Max(0, spawnIntervalJitterTicks);
+            bottomSpawnWeight = Mathf.Clamp01(bottomSpawnWeight);
         }
     }
 }

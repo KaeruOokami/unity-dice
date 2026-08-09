@@ -5,14 +5,13 @@ using DiceGame.Gameplay;
 using DiceGame.Grid;
 using DiceGame.Placement;
 using DiceGame.Placement.Support;
+using DiceGame.SimShared.Move;
 using UnityEngine;
 
 namespace DiceGame.Gameplay.Character
 {
     public sealed class CharacterTransformDriver
     {
-        const float EdgeEpsilon = 0.001f;
-
         Board board;
         Transform characterTransform;
         Func<CharacterSupportState> getSupportState;
@@ -76,9 +75,10 @@ namespace DiceGame.Gameplay.Character
 
         public Vector2 ClampToCellInterior(Vector2 position, Vector2Int cell, float halfExtent) {
             var center = GetCellCenterXZ(cell);
-            return new Vector2(
-                Mathf.Clamp(position.x, center.x - halfExtent, center.x + halfExtent),
-                Mathf.Clamp(position.y, center.y - halfExtent, center.y + halfExtent));
+            var x = position.x;
+            var z = position.y;
+            CellSurfaceMotion.ClampToCellInterior(ref x, ref z, center.x, center.y, halfExtent);
+            return new Vector2(x, z);
         }
 
         public Vector2 ClampToBoardBounds(Vector2 position) {
@@ -163,52 +163,23 @@ namespace DiceGame.Gameplay.Character
 
         public bool IsAtOrPastRollTrigger(Vector2 xz, Vector2Int cell, Direction direction, float triggerHalfExtent) {
             var center = GetCellCenterXZ(cell);
-
-            switch (direction) {
-                case Direction.East:
-                    return xz.x >= center.x + triggerHalfExtent - EdgeEpsilon;
-                case Direction.West:
-                    return xz.x <= center.x - triggerHalfExtent + EdgeEpsilon;
-                case Direction.North:
-                    return xz.y >= center.y + triggerHalfExtent - EdgeEpsilon;
-                case Direction.South:
-                    return xz.y <= center.y - triggerHalfExtent + EdgeEpsilon;
-                default:
-                    return false;
-            }
+            InputDirection.ToGridDelta(direction, out var dx, out var dy);
+            return CellSurfaceMotion.IsAtOrPastRollTrigger(
+                xz.x,
+                xz.y,
+                center.x,
+                center.y,
+                dx,
+                dy,
+                triggerHalfExtent);
         }
 
         public static Vector2 CancelMoveIntoDirection(Vector2 current, Vector2 proposed, Direction direction) {
-            var result = proposed;
-
-            switch (direction) {
-                case Direction.East:
-                    if (proposed.x > current.x) {
-                        result.x = current.x;
-                    }
-
-                    break;
-                case Direction.West:
-                    if (proposed.x < current.x) {
-                        result.x = current.x;
-                    }
-
-                    break;
-                case Direction.North:
-                    if (proposed.y > current.y) {
-                        result.y = current.y;
-                    }
-
-                    break;
-                case Direction.South:
-                    if (proposed.y < current.y) {
-                        result.y = current.y;
-                    }
-
-                    break;
-            }
-
-            return result;
+            var x = proposed.x;
+            var z = proposed.y;
+            InputDirection.ToGridDelta(direction, out var dx, out var dy);
+            CellSurfaceMotion.CancelMoveIntoDirection(current.x, current.y, ref x, ref z, dx, dy);
+            return new Vector2(x, z);
         }
     }
 }

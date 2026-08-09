@@ -1,6 +1,6 @@
 using DiceGame.Core;
 using DiceGame.Gameplay;
-using UnityEngine;
+using DiceGame.SimShared.Magnet;
 
 namespace DiceGame.Placement
 {
@@ -10,44 +10,53 @@ namespace DiceGame.Placement
     /// </summary>
     public static class IronAdjacencyBlock
     {
-        static readonly Direction[] CardinalDirections = {
-            Direction.East, Direction.West, Direction.North, Direction.South
-        };
-
-        public static bool IsPlayerMovable(DiceController dice, DiceRegistry registry) {
+        public static bool IsPlayerMovable(DiceController dice, DiceRegistry registry)
+        {
             return DiceEffectiveBehaviorFactory.For(dice, registry).IsPlayerMovable;
         }
 
-        public static bool CanJumpCoupleWithPlayer(DiceController dice, DiceRegistry registry) {
-            if (dice == null) {
+        public static bool CanJumpCoupleWithPlayer(DiceController dice, DiceRegistry registry)
+        {
+            if (dice == null)
+            {
                 return true;
             }
 
             return DiceEffectiveBehaviorFactory.For(dice, registry).CanJumpCoupleWithPlayer;
         }
 
-        public static bool HasAdjacentMagnetBlocker(DiceController dice, DiceRegistry registry) {
-            if (dice == null || registry == null) {
+        public static bool HasAdjacentMagnetBlocker(DiceController dice, DiceRegistry registry)
+        {
+            if (dice == null || registry == null)
+            {
                 return false;
             }
 
             var tier = dice.CurrentState.Tier;
             var cell = dice.CurrentState.GridPos;
+            var tierNorm = tier == DiceStackTier.Top ? 1 : 0;
 
-            foreach (var direction in CardinalDirections) {
-                var neighborCell = cell + direction.ToGridDelta();
-                if (!registry.TryGetDiceAt(neighborCell, tier, out var neighborDice) || neighborDice == null) {
-                    continue;
+            return MagnetAdjacencyBlock.HasAdjacentMagnetBlocker(
+                cell.x,
+                cell.y,
+                tierNorm,
+                Query);
+
+            bool Query(int x, int y, int t, out bool blocks, out bool erasing)
+            {
+                blocks = false;
+                erasing = false;
+                var stackTier = t == 1 ? DiceStackTier.Top : DiceStackTier.Bottom;
+                if (!registry.TryGetDiceAt(new UnityEngine.Vector2Int(x, y), stackTier, out var neighbor)
+                    || neighbor == null)
+                {
+                    return false;
                 }
 
-                if (neighborDice.Capabilities.BlocksAdjacentMagnet
-                    && !neighborDice.IsErasing
-                    && !neighborDice.IsVanishing) {
-                    return true;
-                }
+                blocks = neighbor.Capabilities.BlocksAdjacentMagnet;
+                erasing = neighbor.IsErasing || neighbor.IsVanishing;
+                return true;
             }
-
-            return false;
         }
     }
 }

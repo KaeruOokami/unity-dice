@@ -7,16 +7,16 @@ namespace DiceGame.Session.Network
         public int InitialDiceCount;
         public bool AnimateInitialDiceSpawn;
         public bool ContinuousSpawnEnabled;
-        public float SpawnInterval;
-        public float SpawnIntervalJitter;
+        public int SpawnIntervalTicks;
+        public int SpawnIntervalJitterTicks;
         public float BottomSpawnWeight;
 
         public void NetworkSerialize<T>(BufferSerializer<T> serializer) where T : IReaderWriter {
             serializer.SerializeValue(ref InitialDiceCount);
             serializer.SerializeValue(ref AnimateInitialDiceSpawn);
             serializer.SerializeValue(ref ContinuousSpawnEnabled);
-            serializer.SerializeValue(ref SpawnInterval);
-            serializer.SerializeValue(ref SpawnIntervalJitter);
+            serializer.SerializeValue(ref SpawnIntervalTicks);
+            serializer.SerializeValue(ref SpawnIntervalJitterTicks);
             serializer.SerializeValue(ref BottomSpawnWeight);
         }
     }
@@ -109,7 +109,7 @@ namespace DiceGame.Session.Network
         public float Face4Weight;
         public float Face5Weight;
         public float Face6Weight;
-        public float QueueToBoardDelay;
+        public int QueueToBoardDelayTicks;
 
         public void NetworkSerialize<T>(BufferSerializer<T> serializer) where T : IReaderWriter {
             var count = FaceSendProfiles?.Length ?? 0;
@@ -134,7 +134,7 @@ namespace DiceGame.Session.Network
             serializer.SerializeValue(ref Face4Weight);
             serializer.SerializeValue(ref Face5Weight);
             serializer.SerializeValue(ref Face6Weight);
-            serializer.SerializeValue(ref QueueToBoardDelay);
+            serializer.SerializeValue(ref QueueToBoardDelayTicks);
         }
     }
 

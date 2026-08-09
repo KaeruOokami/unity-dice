@@ -1,9 +1,13 @@
 using DiceGame.Config;
 using DiceGame.Core;
 using DiceGame.Gameplay;
+using SharedJump = DiceGame.SimShared.Jump;
 
 namespace DiceGame.Placement
 {
+    /// <summary>
+    /// Production wrapper over <see cref="SharedJump.JumpInputPolicy"/> (copied Domain).
+    /// </summary>
     public readonly struct JumpCoupledMoveCapability
     {
         public bool IsJumping { get; }
@@ -19,7 +23,8 @@ namespace DiceGame.Placement
             bool allowDiceGridMove,
             int maxDistance,
             bool allowTierChange,
-            float timeline) {
+            float timeline)
+        {
             IsJumping = isJumping;
             AllowCrossCellMove = allowCrossCellMove;
             AllowDiceGridMove = allowDiceGridMove;
@@ -27,140 +32,96 @@ namespace DiceGame.Placement
             AllowTierChange = allowTierChange;
             Timeline = timeline;
         }
+
+        public static JumpCoupledMoveCapability FromShared(SharedJump.JumpCoupledMoveCapability c)
+        {
+            return new JumpCoupledMoveCapability(
+                c.IsJumping,
+                c.AllowCrossCellMove,
+                c.AllowDiceGridMove,
+                c.MaxDistance,
+                c.AllowTierChange,
+                c.Timeline);
+        }
     }
 
     public static class JumpInputPolicy
     {
-        const float TimelineEpsilon = 0.001f;
-        const float ApexTimeline = 0.5f;
-
         public static bool TryEvaluate(
             bool isJumping,
             bool jumpDiceGridMoved,
             PhysicsSettings physicsSettings,
             VerticalMotionState jumpMotion,
             float jumpHeight,
-            out JumpCoupledMoveCapability capability) {
+            out JumpCoupledMoveCapability capability)
+        {
             capability = default;
-            if (!isJumping) {
+            if (physicsSettings == null)
+            {
                 return false;
             }
 
-            if (jumpDiceGridMoved || physicsSettings == null || jumpHeight <= 0f) {
-                capability = new JumpCoupledMoveCapability(true, false, false, 0, false, 0f);
-                return true;
+            var config = new SharedJump.JumpInputPolicy.WindowConfig
+            {
+                Gravity = physicsSettings.Gravity,
+                TwoCellMaxTimeline = physicsSettings.JumpGridMoveTwoCellMaxTimeline,
+                OneCellMaxTimeline = physicsSettings.JumpGridMoveOneCellMaxTimeline,
+                TierChangeMinTimeline = physicsSettings.JumpGridMoveTierChangeMinTimeline,
+                TierChangeMaxTimeline = physicsSettings.JumpGridMoveTierChangeMaxTimeline,
+            };
+
+            if (!SharedJump.JumpInputPolicy.TryEvaluate(
+                    isJumping,
+                    jumpDiceGridMoved,
+                    in config,
+                    jumpMotion,
+                    jumpHeight,
+                    out var result))
+            {
+                return false;
             }
 
-            if (!TryGetAscentTimeline(physicsSettings, jumpMotion, jumpHeight, out var timeline)) {
-                TryGetFullTimeline(physicsSettings, jumpMotion, jumpHeight, out timeline);
-                capability = new JumpCoupledMoveCapability(true, false, false, 0, false, timeline);
-                return true;
-            }
-
-            var twoCellMax = physicsSettings.JumpGridMoveTwoCellMaxTimeline;
-            var oneCellMax = physicsSettings.JumpGridMoveOneCellMaxTimeline;
-            if (timeline > oneCellMax + TimelineEpsilon) {
-                capability = new JumpCoupledMoveCapability(true, false, false, 0, false, timeline);
-                return true;
-            }
-
-            var maxDistance = timeline <= twoCellMax + TimelineEpsilon
-                ? DiceGridRollLimits.MaxParallelRollDistance
-                : 1;
-            var tierMin = physicsSettings.JumpGridMoveTierChangeMinTimeline;
-            var tierMax = physicsSettings.JumpGridMoveTierChangeMaxTimeline;
-            var allowTierChange = timeline + TimelineEpsilon >= tierMin
-                && timeline <= tierMax + TimelineEpsilon;
-            capability = new JumpCoupledMoveCapability(
-                true,
-                true,
-                true,
-                maxDistance,
-                allowTierChange,
-                timeline);
+            capability = JumpCoupledMoveCapability.FromShared(result);
             return true;
         }
 
         public static JumpCoupledMoveCapability ApplyPlayerOnlyJumpOverride(
             JumpCoupledMoveCapability capability,
-            bool canJumpCoupleWithPlayer) {
-            if (!capability.IsJumping || canJumpCoupleWithPlayer) {
-                return capability;
-            }
-
-            return new JumpCoupledMoveCapability(
+            bool canJumpCoupleWithPlayer)
+        {
+            var shared = new SharedJump.JumpCoupledMoveCapability(
                 capability.IsJumping,
-                allowCrossCellMove: true,
-                allowDiceGridMove: false,
-                maxDistance: 0,
-                allowTierChange: true,
+                capability.AllowCrossCellMove,
+                capability.AllowDiceGridMove,
+                capability.MaxDistance,
+                capability.AllowTierChange,
                 capability.Timeline);
+            return JumpCoupledMoveCapability.FromShared(
+                SharedJump.JumpInputPolicy.ApplyPlayerOnlyJumpOverride(shared, canJumpCoupleWithPlayer));
         }
 
-        /// <summary>
-        /// Applies standing-die EffectiveBehavior overlays (couple + jump move blocks).
-        /// </summary>
         public static JumpCoupledMoveCapability ApplyStandingDiceOverrides(
             JumpCoupledMoveCapability capability,
-            DiceController standingDice) {
-            if (!capability.IsJumping) {
-                return capability;
-            }
-
-            var canJumpCoupleWithPlayer = standingDice == null
-                || (standingDice.CanJumpCoupleWithPlayer && !standingDice.IsSinkErasing);
-            capability = ApplyPlayerOnlyJumpOverride(capability, canJumpCoupleWithPlayer);
-
-            if (standingDice != null
-                && standingDice.Capabilities.BlocksJumpCrossCellMove) {
-                // Keep jump-window cross-cell for TierLanding (Bottom -> Top), but never
-                // couple a dice grid move. Outside the jump-move window this stays stationary.
-                var allowTierLanding = capability.AllowCrossCellMove;
-                return new JumpCoupledMoveCapability(
-                    capability.IsJumping,
-                    allowCrossCellMove: allowTierLanding,
-                    allowDiceGridMove: false,
-                    maxDistance: allowTierLanding ? 1 : 0,
-                    allowTierChange: allowTierLanding,
-                    capability.Timeline);
-            }
-
-            if (standingDice != null
-                && standingDice.Capabilities.BlocksJumpUpwardTierChange
-                && capability.AllowTierChange) {
-                capability = new JumpCoupledMoveCapability(
-                    capability.IsJumping,
-                    capability.AllowCrossCellMove,
-                    capability.AllowDiceGridMove,
-                    capability.MaxDistance,
-                    allowTierChange: false,
-                    capability.Timeline);
-            }
-
-            return capability;
-        }
-
-        static bool TryGetAscentTimeline(
-            PhysicsSettings physicsSettings,
-            VerticalMotionState jumpMotion,
-            float jumpHeight,
-            out float timeline) {
-            if (!TryGetFullTimeline(physicsSettings, jumpMotion, jumpHeight, out timeline)) {
-                return false;
-            }
-
-            return timeline <= ApexTimeline + TimelineEpsilon;
-        }
-
-        static bool TryGetFullTimeline(
-            PhysicsSettings physicsSettings,
-            VerticalMotionState jumpMotion,
-            float jumpHeight,
-            out float timeline) {
-            timeline = 0f;
-            var launchVelocityY = GravityMotion.ComputeLaunchVelocity(jumpHeight, physicsSettings.Gravity);
-            timeline = GravityMotion.ComputeFullJumpTimeline(jumpMotion, launchVelocityY, jumpHeight);
-            return true;
+            DiceController standingDice)
+        {
+            var shared = new SharedJump.JumpCoupledMoveCapability(
+                capability.IsJumping,
+                capability.AllowCrossCellMove,
+                capability.AllowDiceGridMove,
+                capability.MaxDistance,
+                capability.AllowTierChange,
+                capability.Timeline);
+            var canJumpCouple = standingDice == null || standingDice.CanJumpCoupleWithPlayer;
+            var blocksCross = standingDice != null && standingDice.Capabilities.BlocksJumpCrossCellMove;
+            var blocksUp = standingDice != null && standingDice.Capabilities.BlocksJumpUpwardTierChange;
+            var isSink = standingDice != null && standingDice.IsSinkErasing;
+            return JumpCoupledMoveCapability.FromShared(
+                SharedJump.JumpInputPolicy.ApplyStandingDiceOverrides(
+                    shared,
+                    canJumpCouple,
+                    isSink,
+                    blocksCross,
+                    blocksUp));
         }
     }
 }

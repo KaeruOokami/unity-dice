@@ -1,10 +1,9 @@
 ﻿namespace Quantum
 {
-    using System;
     using Photon.Deterministic;
 
     /// <summary>
-    /// Board bootstrap: board singleton, mixed-kind stacked dice seed, pawn spawn.
+    /// Board bootstrap: board singleton, production-equivalent initial dice, pawns on standing dice.
     /// </summary>
     public unsafe class BoardBootstrapSystem : SystemMainThread, ISignalOnPlayerAdded
     {
@@ -31,25 +30,43 @@
                 }
             }
 
-            var board = frame.GetSingleton<Board>();
+            if (!TryClaimStandingDice(frame, out var gridX, out var gridY, out var standingTier))
+            {
+                Log.Error(
+                    $"BoardBootstrapSystem: No standing dice available for player {player}. " +
+                    "Initial spawn must place at least one dice per player.");
+                return;
+            }
+
             var entity = frame.Create();
-            var startX = player == 0 ? 0 : board.Width - 1;
+            var cellSize = frame.RuntimeConfig.CellSize;
+            if (cellSize <= FP._0)
+            {
+                cellSize = FP._1;
+            }
+
+            var worldX = cellSize * gridX;
+            var worldZ = cellSize * gridY;
             frame.Set(entity, new PlayerPawn
             {
                 Player = player,
                 CarriedDice = EntityRef.None,
                 HasCarriedDice = false,
-                IsOnFloor = true,
-                StandingTier = DiceStackTier.Bottom,
+                IsOnFloor = false,
+                StandingTier = standingTier,
                 FacingX = 0,
                 FacingY = 1,
+                HasWorldPose = true,
+                WorldX = worldX,
+                WorldZ = worldZ,
+                MoveSpeed = FP._0,
             });
             frame.Set(entity, new GridPose
             {
-                X = startX,
-                Y = 0,
+                X = gridX,
+                Y = gridY,
             });
-            SyncTransform(frame, entity, startX, 0);
+            frame.Set(entity, Transform2D.Create(new FPVector2(worldX, worldZ)));
         }
 
         static void EnsureBoard(Frame frame)
@@ -62,60 +79,119 @@
 
             board->Width = ResolveWidth(frame);
             board->Height = ResolveHeight(frame);
+            board->PartitionX = frame.RuntimeConfig.BoardPartitionX > 0
+                ? frame.RuntimeConfig.BoardPartitionX
+                : 0;
             board->Initialized = true;
 
             frame.GetOrAddSingleton<MatchPending>();
             frame.GetOrAddSingleton<SpawnState>();
             frame.GetOrAddSingleton<VersusAttackState>();
-            SpawnInitialDice(frame, board->Width, board->Height);
+            SpawnInitialPlayerDice(frame, *board);
         }
 
-        static void SpawnInitialDice(Frame frame, int width, int height)
+        /// <summary>
+        /// Port of <c>DiceSpawnSystem.SpawnInitialPlayerDice</c> (non-versus random path):
+        /// Bottom-only slots, then spawn until InitialDiceCount (at least RequiredPlayerCount).
+        /// Continuous spawn keeps weighted Bottom/Top separately.
+        /// Standing dice for players are the first successfully spawned dice in creation order.
+        /// </summary>
+        static void SpawnInitialPlayerDice(Frame frame, Board board)
         {
-            // Scripted seed: Iron, Ghost, and a face-2 pair for match demos, then fillers.
-            // Iron (unliftable), Ghost (pass-through), stack demo, and a face-2 gap for match-by-drop.
-            TrySpawnDice(frame, 1, 1, DiceKind.Iron, DiceStackTier.Bottom, 6, default);
-            TrySpawnDice(frame, 2, 1, DiceKind.Ghost, DiceStackTier.Bottom, 3, default);
-            TrySpawnDice(frame, 1, 2, DiceKind.Normal, DiceStackTier.Bottom, 2, default);
-            TrySpawnDice(frame, 3, 2, DiceKind.Normal, DiceStackTier.Bottom, 2, default);
-            TrySpawnDice(frame, 1, 3, DiceKind.Normal, DiceStackTier.Bottom, 4, default);
-            TrySpawnDice(frame, 1, 3, DiceKind.Wood, DiceStackTier.Top, 5, default);
-            TrySpawnDice(frame, 3, 3, DiceKind.Magnet, DiceStackTier.Bottom, 3, default);
-            TrySpawnDice(frame, 2, 4, DiceKind.Normal, DiceStackTier.Bottom, 2, default);
-
-            var count = frame.RuntimeConfig.InitialDiceCount;
-            if (count <= 0)
+            var minimumStanding = frame.RuntimeConfig.RequiredPlayerCount;
+            if (minimumStanding <= 0)
             {
-                count = BoardDefaults.InitialDiceCount;
+                minimumStanding = 1;
             }
 
-            for (var i = 0; i < count; i++)
-            {
-                var x = 1 + (i % Math.Max(1, width - 1));
-                var y = 1 + ((i * 2) % Math.Max(1, height - 1));
-                var face = frame.RNG->Next(
-                    BoardDefaults.MinFaceValue,
-                    BoardDefaults.MaxFaceValue + 1);
-                var kindRoll = frame.RNG->Next(0, 5);
-                var kind = kindRoll switch
-                {
-                    0 => DiceKind.Wood,
-                    1 => DiceKind.Ice,
-                    _ => DiceKind.Normal,
-                };
+            var initialCount = DiceSpawnRolls.ResolveInitialDiceCount(frame, minimumStanding);
+            // Initial dice are Bottom only (1000‰); Top remains continuous-spawn territory.
+            const int bottomOnlyWeightPermille = 1000;
+            var spawned = 0;
 
-                if (!CellOccupancy.TryResolveDropTier(
+            for (var i = 0; i < initialCount; i++)
+            {
+                if (!DiceSpawnCellPicker.TryPickRandomSpawnSlot(
                         frame,
-                        frame.GetSingleton<Board>(),
-                        x,
-                        y,
+                        board,
+                        bottomOnlyWeightPermille,
+                        out var x,
+                        out var y,
                         out var tier))
+                {
+                    break;
+                }
+
+                if (tier != DiceStackTier.Bottom)
+                {
+                    // No Bottom slots left — stop rather than stacking Top during initial fill.
+                    break;
+                }
+
+                var face = DiceSpawnRolls.RollTopFace(frame);
+                var kind = DiceSpawnRolls.RollKind(frame);
+                if (!TrySpawnDice(frame, x, y, kind, DiceStackTier.Bottom, face, default))
                 {
                     continue;
                 }
 
-                TrySpawnDice(frame, x, y, kind, tier, face, default);
+                spawned++;
             }
+
+            if (spawned < minimumStanding)
+            {
+                Log.Error(
+                    $"BoardBootstrapSystem: Failed to spawn {minimumStanding} standing dice. Spawned {spawned}.");
+            }
+        }
+
+        /// <summary>
+        /// Claims the next initial standing die: lowest entity index among dice whose cell has no pawn.
+        /// Matches production order (first spawned dice → P1, second → P2).
+        /// </summary>
+        static bool TryClaimStandingDice(
+            Frame frame,
+            out int gridX,
+            out int gridY,
+            out DiceStackTier standingTier)
+        {
+            gridX = 0;
+            gridY = 0;
+            standingTier = DiceStackTier.Bottom;
+
+            EntityRef best = EntityRef.None;
+            var bestIndex = int.MaxValue;
+            var filter = frame.Filter<Dice, GridPose>();
+            while (filter.Next(out var entity, out var dice, out var pose))
+            {
+                if (dice.IsCarried || dice.IsErasing)
+                {
+                    continue;
+                }
+
+                if (CellOccupancy.IsPlayerPassThrough(frame, in dice))
+                {
+                    continue;
+                }
+
+                if (IsPawnOccupied(frame, pose.X, pose.Y, EntityRef.None))
+                {
+                    continue;
+                }
+
+                if (entity.Index >= bestIndex)
+                {
+                    continue;
+                }
+
+                best = entity;
+                bestIndex = entity.Index;
+                gridX = pose.X;
+                gridY = pose.Y;
+                standingTier = dice.Tier;
+            }
+
+            return best.IsValid;
         }
 
         public static bool TrySpawnDice(
@@ -146,6 +222,7 @@
             }
 
             DiceOrientation.CreateWithTopFace(topFace, out var top, out var north, out var east);
+            var spawnMotionTicks = ResolveSpawnMotionTicks(frame);
             var dice = frame.Create();
             frame.Set(dice, new Dice
             {
@@ -156,13 +233,24 @@
                 EastFace = east,
                 IsCarried = false,
                 IsErasing = false,
+                IsSpawning = true,
                 EraseTicksRemaining = 0,
                 EraseTicksTotal = 0,
                 Owner = owner,
+                IsMotionBusy = true,
+                MotionTicksRemaining = spawnMotionTicks,
+                HasPendingMatch = false,
+                PendingMatchPlayer = default,
             });
             frame.Set(dice, new GridPose { X = x, Y = y });
             SyncTransform(frame, dice, x, y, tier);
             return true;
+        }
+
+        static int ResolveSpawnMotionTicks(Frame frame)
+        {
+            var ticks = frame.RuntimeConfig.SpawnMotionTicks;
+            return ticks > 0 ? ticks : MatchSimDefaults.SpawnMotionTicks;
         }
 
         internal static void SyncTransform(

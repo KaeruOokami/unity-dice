@@ -2,13 +2,9 @@ using UnityEngine;
 
 namespace DiceGame.Core
 {
-    public enum DiceGridMoveKind
-    {
-        Parallel,
-        Stack,
-        Demote
-    }
-
+    /// <summary>
+    /// Production plan type (Unity <see cref="DiceState"/>). Enums live in noEngine Core library.
+    /// </summary>
     public struct DiceGridMovePlan
     {
         public DiceState From;
