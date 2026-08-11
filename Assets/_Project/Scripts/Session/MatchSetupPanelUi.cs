@@ -6,10 +6,22 @@ namespace DiceGame.Session
 {
     sealed class MatchSetupPanelUi
     {
+        const int VersusCategoryShared = 0;
+        const int VersusCategoryControl = 1;
+        const int VersusCategorySpawn = 2;
+        const int VersusCategoryCatalog = 3;
+        const int VersusCategoryAttack = 4;
+        const int VersusCategoryNaturalSend = 5;
+
+        const int NonVersusCategoryShared = 0;
+        const int NonVersusCategoryControl = 1;
+
         readonly MatchSetupPresetRegistry registry;
         readonly GameMode mode;
         readonly Transform contentRoot;
 
+        GameObject[] categoryRoots;
+        GameObject playerSwitcherRoot;
         DiceSpawnSettingsPanelUi.Bindings sharedSpawnUi;
         DiceCatalogPanelUi.Bindings sharedCatalogUi;
         JumboDiceSettingsPanelUi.Bindings jumboUi;
@@ -19,7 +31,11 @@ namespace DiceGame.Session
 
         sealed class PlayerSlotUi
         {
-            public GameObject Root;
+            public GameObject ControlRoot;
+            public GameObject SpawnRoot;
+            public GameObject CatalogRoot;
+            public GameObject AttackRoot;
+            public GameObject NaturalSendRoot;
             public TMP_Dropdown AiDropdown;
             public TMP_Dropdown DeviceDropdown;
             public TMP_Dropdown GamepadIndexDropdown;
@@ -46,86 +62,179 @@ namespace DiceGame.Session
                 22,
                 30f);
             var defaults = registry.CreateDefaultSnapshot(mode);
+            var categoryLabels = MatchSetupCategoryLabels.GetCategoryLabels(mode);
+            CreateCategorySwitcher(categoryLabels);
+            if (mode != GameMode.Single) {
+                CreatePlayerSlotSwitcher();
+            }
+
+            categoryRoots = new GameObject[categoryLabels.Length];
+            for (var i = 0; i < categoryLabels.Length; i++) {
+                var root = SessionUiFactory.CreateVerticalSection(contentRoot, $"Category_{categoryLabels[i]}");
+                categoryRoots[i] = root.gameObject;
+            }
 
             if (mode == GameMode.Versus) {
                 versusSharedInitialDiceCount = SessionUiFactory.CreateLabeledIntInput(
-                    contentRoot,
+                    categoryRoots[VersusCategoryShared].transform,
                     "Initial Dice Count (1P/2P Shared)");
-                jumboUi = JumboDiceSettingsPanelUi.Build(contentRoot, "Jumbo Dice Settings");
-                CreatePlayerSlotSwitcher();
-                player1Ui = CreatePlayerSection("1P", true, defaults.Player1);
-                player2Ui = CreatePlayerSection("2P", true, defaults.Player2);
+                jumboUi = JumboDiceSettingsPanelUi.Build(
+                    categoryRoots[VersusCategoryShared].transform,
+                    "Jumbo Dice Settings");
+                player1Ui = CreatePlayerPanels("1P", true, defaults.Player1);
+                player2Ui = CreatePlayerPanels("2P", true, defaults.Player2);
                 ShowPlayerSlot(0);
             } else {
-                sharedSpawnUi = DiceSpawnSettingsPanelUi.Build(contentRoot, "Shared Dice Spawn Settings");
+                sharedSpawnUi = DiceSpawnSettingsPanelUi.Build(
+                    categoryRoots[NonVersusCategoryShared].transform,
+                    "Shared Dice Spawn Settings");
                 sharedCatalogUi = DiceCatalogPanelUi.Build(
-                    contentRoot,
+                    categoryRoots[NonVersusCategoryShared].transform,
                     "Shared Dice Catalog",
                     defaults.SharedCatalog);
                 if (mode == GameMode.Coop) {
-                    CreatePlayerSlotSwitcher();
-                    player1Ui = CreatePlayerSection("1P", false, defaults.Player1);
-                    player2Ui = CreatePlayerSection("2P", false, defaults.Player2);
+                    player1Ui = CreatePlayerPanels("1P", false, defaults.Player1);
+                    player2Ui = CreatePlayerPanels("2P", false, defaults.Player2);
                     ShowPlayerSlot(0);
                 } else {
-                    player1Ui = CreatePlayerSection("1P", false, defaults.Player1);
+                    player1Ui = CreatePlayerPanels("1P", false, defaults.Player1);
                 }
             }
 
-            if (contentRoot is RectTransform contentRect) {
-                SessionUiFactory.ForceRebuildLayout(contentRect);
-            }
+            ShowCategory(0);
+        }
+
+        void CreateCategorySwitcher(string[] categoryLabels) {
+            SessionUiFactory.CreateLayoutLabel(
+                contentRoot,
+                MatchSetupCategoryLabels.Category,
+                18,
+                24f);
+            var dropdown = SessionUiFactory.CreateLayoutDropdown(
+                contentRoot,
+                MatchSetupCategoryLabels.CategoryDropdown,
+                categoryLabels,
+                40f);
+            dropdown.onValueChanged.AddListener(ShowCategory);
         }
 
         void CreatePlayerSlotSwitcher() {
-            SessionUiFactory.CreateLayoutLabel(contentRoot, "Player", 18, 24f);
-            var dropdown = SessionUiFactory.CreateLayoutDropdown(
+            playerSwitcherRoot = SessionUiFactory.CreateVerticalSection(
                 contentRoot,
-                "PlayerSlotDropdown",
+                "PlayerSwitcher").gameObject;
+            SessionUiFactory.CreateLayoutLabel(
+                playerSwitcherRoot.transform,
+                MatchSetupCategoryLabels.Player,
+                18,
+                24f);
+            var dropdown = SessionUiFactory.CreateLayoutDropdown(
+                playerSwitcherRoot.transform,
+                MatchSetupCategoryLabels.PlayerSlotDropdown,
                 new[] { "1P", "2P" },
                 40f);
             dropdown.onValueChanged.AddListener(ShowPlayerSlot);
         }
 
+        void ShowCategory(int index) {
+            if (categoryRoots == null) {
+                return;
+            }
+
+            for (var i = 0; i < categoryRoots.Length; i++) {
+                if (categoryRoots[i] != null) {
+                    categoryRoots[i].SetActive(i == index);
+                }
+            }
+
+            if (playerSwitcherRoot != null) {
+                playerSwitcherRoot.SetActive(CategoryNeedsPlayerSwitcher(index));
+            }
+
+            RebuildContentLayout();
+        }
+
+        bool CategoryNeedsPlayerSwitcher(int categoryIndex) {
+            if (mode == GameMode.Single || playerSwitcherRoot == null) {
+                return false;
+            }
+
+            if (mode == GameMode.Coop) {
+                return categoryIndex == NonVersusCategoryControl;
+            }
+
+            return categoryIndex != VersusCategoryShared;
+        }
+
         void ShowPlayerSlot(int index) {
-            if (player1Ui?.Root != null) {
-                player1Ui.Root.SetActive(index == 0);
+            SetPlayerPanelsActive(player1Ui, index == 0);
+            SetPlayerPanelsActive(player2Ui, index == 1);
+            RebuildContentLayout();
+        }
+
+        static void SetPlayerPanelsActive(PlayerSlotUi section, bool active) {
+            if (section == null) {
+                return;
             }
 
-            if (player2Ui?.Root != null) {
-                player2Ui.Root.SetActive(index == 1);
-            }
+            SetActiveIfPresent(section.ControlRoot, active);
+            SetActiveIfPresent(section.SpawnRoot, active);
+            SetActiveIfPresent(section.CatalogRoot, active);
+            SetActiveIfPresent(section.AttackRoot, active);
+            SetActiveIfPresent(section.NaturalSendRoot, active);
+        }
 
-            if (contentRoot is RectTransform contentRect) {
-                SessionUiFactory.ForceRebuildLayout(contentRect);
+        static void SetActiveIfPresent(GameObject root, bool active) {
+            if (root != null) {
+                root.SetActive(active);
             }
         }
 
-        PlayerSlotUi CreatePlayerSection(string slotLabel, bool versus, PlayerSlotSetup defaults) {
-            var root = SessionUiFactory.CreateVerticalSection(contentRoot, $"{slotLabel}Root");
-            SessionUiFactory.CreateLayoutLabel(root, $"{slotLabel} Settings", 22, 30f);
+        PlayerSlotUi CreatePlayerPanels(string slotLabel, bool versus, PlayerSlotSetup defaults) {
+            var controlParent = categoryRoots[
+                versus ? VersusCategoryControl : NonVersusCategoryControl].transform;
+            var controlRoot = SessionUiFactory.CreateVerticalSection(controlParent, $"{slotLabel}Control");
+            SessionUiFactory.CreateLayoutLabel(controlRoot, $"{slotLabel} Settings", 22, 30f);
             var section = new PlayerSlotUi {
-                Root = root.gameObject,
-                AiDropdown = CreateEnumRow(root, $"{slotLabel} Control", new[] { "Controller", "AI" }),
-                DeviceDropdown = CreateEnumRow(root, $"{slotLabel} Device", new[] { "Keyboard", "Gamepad" }),
-                GamepadIndexDropdown = CreateEnumRow(root, $"{slotLabel} Gamepad", new[] { "1", "2" })
+                ControlRoot = controlRoot.gameObject,
+                AiDropdown = CreateEnumRow(controlRoot, $"{slotLabel} Control", new[] { "Controller", "AI" }),
+                DeviceDropdown = CreateEnumRow(controlRoot, $"{slotLabel} Device", new[] { "Keyboard", "Gamepad" }),
+                GamepadIndexDropdown = CreateEnumRow(controlRoot, $"{slotLabel} Gamepad", new[] { "1", "2" })
             };
 
             if (versus) {
+                var spawnRoot = SessionUiFactory.CreateVerticalSection(
+                    categoryRoots[VersusCategorySpawn].transform,
+                    $"{slotLabel}Spawn");
+                section.SpawnRoot = spawnRoot.gameObject;
                 section.SpawnUi = DiceSpawnSettingsPanelUi.Build(
-                    root,
+                    spawnRoot,
                     $"{slotLabel} Dice Spawn Settings",
                     includeInitialDiceCount: false);
+
+                var catalogRoot = SessionUiFactory.CreateVerticalSection(
+                    categoryRoots[VersusCategoryCatalog].transform,
+                    $"{slotLabel}Catalog");
+                section.CatalogRoot = catalogRoot.gameObject;
                 section.CatalogUi = DiceCatalogPanelUi.Build(
-                    root,
+                    catalogRoot,
                     $"{slotLabel} Dice Catalog",
                     defaults.Catalog);
+
+                var attackRoot = SessionUiFactory.CreateVerticalSection(
+                    categoryRoots[VersusCategoryAttack].transform,
+                    $"{slotLabel}Attack");
+                section.AttackRoot = attackRoot.gameObject;
                 section.AttackUi = PlayerAttackSettingsPanelUi.Build(
-                    root,
+                    attackRoot,
                     $"{slotLabel} Attack Settings",
                     defaults.Attack);
+
+                var naturalSendRoot = SessionUiFactory.CreateVerticalSection(
+                    categoryRoots[VersusCategoryNaturalSend].transform,
+                    $"{slotLabel}NaturalSend");
+                section.NaturalSendRoot = naturalSendRoot.gameObject;
                 section.NaturalSendUi = PlayerNaturalSendSettingsPanelUi.Build(
-                    root,
+                    naturalSendRoot,
                     $"{slotLabel} Natural Send Settings",
                     defaults.NaturalSend);
             }
@@ -140,6 +249,10 @@ namespace DiceGame.Session
             var isAi = section.AiDropdown.value == 1;
             section.DeviceDropdown.gameObject.SetActive(!isAi);
             section.GamepadIndexDropdown.gameObject.SetActive(!isAi && section.DeviceDropdown.value == 1);
+            RebuildContentLayout();
+        }
+
+        void RebuildContentLayout() {
             if (contentRoot is RectTransform contentRect) {
                 SessionUiFactory.ForceRebuildLayout(contentRect);
             }
