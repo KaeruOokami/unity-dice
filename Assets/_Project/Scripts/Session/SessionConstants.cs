@@ -145,5 +145,7 @@ namespace DiceGame.Session
         public const string MatchSetupOnlinePersistDirectory = "Online";
         public const string InputBindingsPersistDirectory = "InputBindings";
         public const string InputBindingsPersistFileName = "binding_overrides.json";
+        public const string AttackPresetsPersistDirectory = "AttackPresets";
+        public const int AttackPresetNameMaxLength = 32;
     }
 }

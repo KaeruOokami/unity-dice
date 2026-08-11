@@ -162,6 +162,24 @@ namespace DiceGame.Session
             };
         }
 
+        public static PlayerAttackSettingsPersistDto FromAttackData(PlayerAttackSettingsData data) {
+            return FromAttack(MatchSetupNetworkCodec.ToAttackPayload(data));
+        }
+
+        public static bool TryToAttackData(
+            PlayerAttackSettingsPersistDto dto,
+            out PlayerAttackSettingsData data,
+            out string errorMessage) {
+            data = MatchSetupNetworkCodec.FromAttackPayload(ToAttack(dto));
+            if (!data.TryValidate(out errorMessage)) {
+                data = default;
+                return false;
+            }
+
+            errorMessage = null;
+            return true;
+        }
+
         static PlayerSlotPersistDto FromPlayer(
             byte isAi,
             byte deviceKind,

@@ -151,7 +151,7 @@ namespace DiceGame.Config
             return new DiceCatalogData { Entries = entries };
         }
 
-        static PlayerAttackSettingsNetworkPayload ToAttackPayload(PlayerAttackSettingsData data) {
+        public static PlayerAttackSettingsNetworkPayload ToAttackPayload(PlayerAttackSettingsData data) {
             var source = data.FaceSendProfiles ?? System.Array.Empty<FaceAttackSendProfileData>();
             var profiles = new FaceAttackSendProfileNetworkPayload[source.Length];
             for (var i = 0; i < source.Length; i++) {
@@ -190,7 +190,7 @@ namespace DiceGame.Config
             };
         }
 
-        static PlayerAttackSettingsData FromAttackPayload(PlayerAttackSettingsNetworkPayload payload) {
+        public static PlayerAttackSettingsData FromAttackPayload(PlayerAttackSettingsNetworkPayload payload) {
             var source = payload.FaceSendProfiles ?? System.Array.Empty<FaceAttackSendProfileNetworkPayload>();
             var profiles = new FaceAttackSendProfileData[source.Length];
             for (var i = 0; i < source.Length; i++) {

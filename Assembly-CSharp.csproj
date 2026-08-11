@@ -106,6 +106,7 @@
     <Compile Include="Assets\_Project\Scripts\Placement\Occupancy\BoardSurface.cs" />
     <Compile Include="Assets\_Project\Scripts\Config\MatchSetup\DiceCatalogData.cs" />
     <Compile Include="Assets\_Project\Scripts\Placement\Occupancy\CellOccupancyQuery.cs" />
+    <Compile Include="Assets\_Project\Scripts\Session\AttackPresetLabels.cs" />
     <Compile Include="Assets\_Project\Scripts\Placement\Support\SupportKind.cs" />
     <Compile Include="Assets\_Project\Scripts\Core\Behavior\DiceEffectiveBehaviorResolver.cs" />
     <Compile Include="Assets\_Project\Scripts\Session\Network\OnlineClientFlowAdapter.cs" />
@@ -233,6 +234,7 @@
     <Compile Include="Assets\_Project\Scripts\Placement\Support\CharacterSupportState.cs" />
     <Compile Include="Assets\_Project\Scripts\Gameplay\AI\Domain\WorkDieSlidePlanner.cs" />
     <Compile Include="Assets\_Project\Scripts\Config\MatchSetup\SessionSetupResolver.cs" />
+    <Compile Include="Assets\_Project\Scripts\Session\AttackPresetLibraryUi.cs" />
     <Compile Include="Assets\_Project\Scripts\Config\PlayerInputSettings.cs" />
     <Compile Include="Assets\_Project\Scripts\Session\Network\OnlineEntityIdMap.cs" />
     <Compile Include="Assets\_Project\Scripts\Session\PlayerAttackSettingsPanelUi.cs" />
@@ -302,6 +304,7 @@
     <Compile Include="Assets\_Project\Scripts\Gameplay\Match\PlayerMatchActionContext.cs" />
     <Compile Include="Assets\_Project\Scripts\Versus\Core\AttackFaceRoller.cs" />
     <Compile Include="Assets\_Project\Scripts\Gameplay\Character\CharacterRollbackState.cs" />
+    <Compile Include="Assets\_Project\Scripts\Session\AttackPresetPersistence.cs" />
     <Compile Include="Assets\_Project\Scripts\Core\Behavior\IDiceBehavior.cs" />
     <Compile Include="Assets\_Project\Scripts\Config\MatchSetup\PlayerNaturalSendSettingsData.cs" />
     <Compile Include="Assets\_Project\Scripts\Versus\Core\NaturalSendVolleyBuilder.cs" />
@@ -314,6 +317,7 @@
     <Compile Include="Assets\_Project\Scripts\Config\AttackQueueSettings.cs" />
     <Compile Include="Assets\_Project\Scripts\Gameplay\Character\CharacterMovePlanner.cs" />
     <Compile Include="Assets\_Project\Scripts\Placement\Occupancy\SurfaceState.cs" />
+    <Compile Include="Assets\_Project\Scripts\Session\AttackPresetPersistFile.cs" />
     <Compile Include="Assets\_Project\Scripts\Gameplay\AI\Application\AiDiscreteAction.cs" />
     <Compile Include="Assets\_Project\Scripts\Session\OnlineNetworkBootstrap.cs" />
     <Compile Include="Assets\_Project\Scripts\Core\Motion\DiceGridMovePlan.cs" />

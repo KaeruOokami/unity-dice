@@ -478,6 +478,11 @@ namespace DiceGame.Session
             return labels;
         }
 
+        public static TMP_InputField CreateLabeledTextInput(Transform parent, string label) {
+            CreateLayoutLabel(parent, label, 18, 24f);
+            return CreateLayoutInputField(parent, $"{label}Input", 40f, TMP_InputField.ContentType.Standard);
+        }
+
         public static TMP_InputField CreateLabeledIntInput(Transform parent, string label) {
             CreateLayoutLabel(parent, label, 18, 24f);
             return CreateLayoutInputField(parent, $"{label}Input", 40f, TMP_InputField.ContentType.IntegerNumber);

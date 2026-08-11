@@ -26,8 +26,10 @@ namespace DiceGame.Session
         DiceCatalogPanelUi.Bindings sharedCatalogUi;
         JumboDiceSettingsPanelUi.Bindings jumboUi;
         TMP_InputField versusSharedInitialDiceCount;
+        AttackPresetLibraryUi attackPresetLibraryUi;
         PlayerSlotUi player1Ui;
         PlayerSlotUi player2Ui;
+        int activePlayerSlotIndex;
 
         sealed class PlayerSlotUi
         {
@@ -81,6 +83,10 @@ namespace DiceGame.Session
                 jumboUi = JumboDiceSettingsPanelUi.Build(
                     categoryRoots[VersusCategoryShared].transform,
                     "Jumbo Dice Settings");
+                attackPresetLibraryUi = new AttackPresetLibraryUi(
+                    categoryRoots[VersusCategoryAttack].transform,
+                    GetActiveAttackBindings,
+                    RebuildContentLayout);
                 player1Ui = CreatePlayerPanels("1P", true, defaults.Player1);
                 player2Ui = CreatePlayerPanels("2P", true, defaults.Player2);
                 ShowPlayerSlot(0);
@@ -166,9 +172,15 @@ namespace DiceGame.Session
         }
 
         void ShowPlayerSlot(int index) {
+            activePlayerSlotIndex = index;
             SetPlayerPanelsActive(player1Ui, index == 0);
             SetPlayerPanelsActive(player2Ui, index == 1);
             RebuildContentLayout();
+        }
+
+        PlayerAttackSettingsPanelUi.Bindings GetActiveAttackBindings() {
+            var section = activePlayerSlotIndex == 0 ? player1Ui : player2Ui;
+            return section?.AttackUi;
         }
 
         static void SetPlayerPanelsActive(PlayerSlotUi section, bool active) {
