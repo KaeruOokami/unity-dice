@@ -86,6 +86,7 @@
     <Compile Include="Assets\_Project\Scripts\Session\ControlsPanelUi.cs" />
     <Compile Include="Assets\_Project\Scripts\Gameplay\AI\Application\AiExecutionContext.cs" />
     <Compile Include="Assets\_Project\Scripts\Session\Network\OnlineLockstepInputBuffer.cs" />
+    <Compile Include="Assets\_Project\Scripts\Gameplay\Match\MatchIntroUi.cs" />
     <Compile Include="Assets\_Project\Scripts\Placement\Movement\Grid\GridTraversability.cs" />
     <Compile Include="Assets\_Project\Scripts\Core\Model\Direction.cs" />
     <Compile Include="Assets\_Project\Scripts\Placement\Rules\GhostPlacementRules.cs" />
@@ -272,6 +273,7 @@
     <Compile Include="Assets\_Project\Scripts\Session\Network\OnlineDiceMotionEvent.cs" />
     <Compile Include="Assets\_Project\Scripts\Session\Network\OnlineClientEventBinder.cs" />
     <Compile Include="Assets\_Project\Scripts\Config\MatchSetup\MatchSetupPresetRegistry.cs" />
+    <Compile Include="Assets\_Project\Scripts\Config\MatchIntroSettings.cs" />
     <Compile Include="Assets\_Project\Scripts\Core\Model\JumboFootprint.cs" />
     <Compile Include="Assets\_Project\Scripts\Core\Model\DiceState.cs" />
     <Compile Include="Assets\_Project\Scripts\Placement\Rules\DiceEffectiveBehaviorFactory.cs" />
@@ -295,6 +297,7 @@
     <Compile Include="Assets\_Project\Scripts\Gameplay\Match\ITierFallMatchNotifier.cs" />
     <Compile Include="Assets\_Project\Scripts\Gameplay\AI\Application\AiCharacterBrain.cs" />
     <Compile Include="Assets\_Project\Scripts\Placement\Interaction\PushPassability.cs" />
+    <Compile Include="Assets\_Project\Scripts\Gameplay\Match\MatchIntroController.cs" />
     <Compile Include="Assets\_Project\Scripts\Placement\Movement\Walk\HeightTransferEvaluator.cs" />
     <Compile Include="Assets\_Project\Scripts\Gameplay\AI\Application\AiActionExecutor.cs" />
     <Compile Include="Assets\_Project\Scripts\Placement\Registry\DiceRegistry.cs" />

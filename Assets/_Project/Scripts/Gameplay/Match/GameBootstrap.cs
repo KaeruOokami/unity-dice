@@ -1,5 +1,4 @@
 using System;
-using System.Collections;
 using System.Collections.Generic;
 using DiceGame.Config;
 using DiceGame.Gameplay.AI.Application;
@@ -70,6 +69,7 @@ namespace DiceGame.Gameplay
         [SerializeField] DiceSpawnSettings diceSpawnSettings;
         [SerializeField] DiceCatalog diceCatalog;
         [SerializeField] AiPlayerSettings aiPlayerSettings;
+        [SerializeField] MatchIntroSettings matchIntroSettings;
         [SerializeField] CameraSetupSettings cameraSetup = new();
 
         DiceRegistry registry;
@@ -394,26 +394,44 @@ namespace DiceGame.Gameplay
                 characters[i].BindCrushOutcome(gameFlowController);
             }
 
+            sessionStarted = true;
+            var introController = ConfigureMatchIntro(gameFlowController);
+
             if (session != null && session.IsOnline) {
                 BindOnlineLockstep();
             }
 
-            sessionStarted = true;
-            if (attackController != null) {
-                StartCoroutine(StartSpawningAfterIconWarmup());
+            if (introController != null) {
+                introController.Begin();
             } else {
-                spawnSystem.StartSpawning();
+                spawnSystem.SetGameplayEnabled(true);
+                attackController?.SetGameplayEnabled(true);
             }
         }
 
-        IEnumerator StartSpawningAfterIconWarmup() {
-            while (attackController != null && !attackController.AreIconsReady) {
-                yield return null;
+        MatchIntroController ConfigureMatchIntro(GameFlowController gameFlowController) {
+            if (matchIntroSettings == null) {
+                Debug.LogError("GameBootstrap: MatchIntroSettings is not assigned.");
+                return null;
             }
 
-            if (spawnSystem != null) {
-                spawnSystem.StartSpawning();
+            var sessionController = FindFirstObjectByType<SessionController>();
+            var fontSettings = sessionController != null ? sessionController.UiFontSettings : null;
+            var flowInputReader = gameFlowController.GetComponent<GameFlowInputReader>();
+
+            var introController = GetComponent<MatchIntroController>();
+            if (introController == null) {
+                introController = gameObject.AddComponent<MatchIntroController>();
             }
+
+            introController.Configure(
+                matchIntroSettings,
+                fontSettings,
+                flowInputReader,
+                spawnSystem,
+                attackController,
+                characters);
+            return introController;
         }
 
         System.Random ResolveMatchRandom(out int usedSeed) {

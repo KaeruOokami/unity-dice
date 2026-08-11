@@ -24,6 +24,7 @@ namespace DiceGame.Session.Network
         VersusAttackController attackController;
         JumboDiceSequenceController jumboSequenceController;
         DiceMatchErasureSystem erasureSystem;
+        MatchIntroController matchIntro;
         OnlineEntityIdMap entityIds;
         readonly List<GameCharacterController> characters = new();
         CharacterInputReader localHardwareInput;
@@ -76,6 +77,7 @@ namespace DiceGame.Session.Network
             attackController = versusAttackController;
             erasureSystem = matchErasureSystem;
             jumboSequenceController = jumboSequence;
+            matchIntro = GetComponent<MatchIntroController>();
             localSlot = localPlayerSlot;
             remoteSlot = localPlayerSlot == PlayerSlot.Player1
                 ? PlayerSlot.Player2
@@ -250,6 +252,14 @@ namespace DiceGame.Session.Network
 
             if (!peerReady) {
                 TickLockstepReadyHandshake();
+                return;
+            }
+
+            // Keep lockstep idle until Ready/Start finishes so continuous spawn starts in sync.
+            if (matchIntro != null && !matchIntro.IsComplete) {
+                pendingLift = false;
+                pendingJump = false;
+                pendingHasDirection = false;
                 return;
             }
 
