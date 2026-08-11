@@ -189,7 +189,7 @@ namespace DiceGame.Versus
             queueView.Configure(
                 versusSettings.GetDiceCatalog(PlayerSlot.Player1),
                 versusSettings.GetDiceCatalog(PlayerSlot.Player2),
-                versusSettings.AttackQueueUiSettings);
+                versusSettings.AttackQueueSettings);
             RefreshQueueView();
         }
 
@@ -252,9 +252,8 @@ namespace DiceGame.Versus
                         random,
                         jumboRemaining,
                         out var volley)) {
-                    var attackSettings = versusSettings.GetAttackSettings(sender);
-                    var queueDelay = attackSettings != null
-                        ? attackSettings.QueueToBoardDelay
+                    var queueDelay = versusSettings.AttackQueueSettings != null
+                        ? versusSettings.AttackQueueSettings.QueueToBoardDelay
                         : 0f;
                     EnsureQueues();
                     incomingQueues[target].Enqueue(volley, queueDelay);
@@ -290,7 +289,10 @@ namespace DiceGame.Versus
             }
 
             EnsureQueues();
-            incomingQueues[e.Target].Enqueue(volley, attackSettings.QueueToBoardDelay);
+            var queueDelay = versusSettings.AttackQueueSettings != null
+                ? versusSettings.AttackQueueSettings.QueueToBoardDelay
+                : 0f;
+            incomingQueues[e.Target].Enqueue(volley, queueDelay);
         }
 
         int ResolveJumboSendableRemaining(PlayerSlot targetBoard) {

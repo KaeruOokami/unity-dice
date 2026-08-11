@@ -1,5 +1,6 @@
 using DiceGame.Grid;
 using UnityEngine;
+using UnityEngine.Serialization;
 
 namespace DiceGame.Config
 {
@@ -55,14 +56,15 @@ namespace DiceGame.Config
         [SerializeField] PlayerBoardDefinition player2 = new(4, 6, null, null, null, null);
         [SerializeField] VersusInitialDicePlacementMode initialDicePlacementMode =
             VersusInitialDicePlacementMode.Mirrored;
-        [SerializeField] AttackQueueUiSettings attackQueueUiSettings;
+        [FormerlySerializedAs("attackQueueUiSettings")]
+        [SerializeField] AttackQueueSettings attackQueueSettings;
         [SerializeField] JumboDiceSettings jumboDiceSettings;
 
         public int SharedInitialDiceCount => Mathf.Max(1, sharedInitialDiceCount);
         public PlayerBoardDefinition Player1 => player1;
         public PlayerBoardDefinition Player2 => player2;
         public VersusInitialDicePlacementMode InitialDicePlacementMode => initialDicePlacementMode;
-        public AttackQueueUiSettings AttackQueueUiSettings => attackQueueUiSettings;
+        public AttackQueueSettings AttackQueueSettings => attackQueueSettings;
         public JumboDiceSettings JumboDiceSettings => jumboDiceSettings;
 
         void OnValidate() {

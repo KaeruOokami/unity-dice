@@ -106,17 +106,12 @@ namespace DiceGame.Config
         [Min(0f)]
         [SerializeField] float face6Weight = 1f;
 
-        [Header("Queue")]
-        [Min(0f)]
-        [SerializeField] float queueToBoardDelay = 1.5f;
-
         public FaceAttackSendProfile[] FaceSendProfiles => faceSendProfiles ?? Array.Empty<FaceAttackSendProfile>();
         public float AttackMultiplier => Mathf.Max(0f, attackMultiplier);
         public float FaceGain => Mathf.Max(0f, faceGain);
         public float ChainGain => Mathf.Max(0f, chainGain);
         public float SizeGain => Mathf.Max(0f, sizeGain);
         public float SnatchMultiplier => Mathf.Max(0f, snatchMultiplier);
-        public float QueueToBoardDelay => Mathf.Max(0f, queueToBoardDelay);
 
         public float GetFaceWeight(int face) {
             return face switch {
@@ -224,7 +219,6 @@ namespace DiceGame.Config
             face4Weight = Mathf.Max(0f, data.Face4Weight);
             face5Weight = Mathf.Max(0f, data.Face5Weight);
             face6Weight = Mathf.Max(0f, data.Face6Weight);
-            queueToBoardDelay = Mathf.Max(0f, data.QueueToBoardDelay);
 
             var profiles = data.FaceSendProfiles ?? Array.Empty<FaceAttackSendProfileData>();
             faceSendProfiles = new FaceAttackSendProfile[profiles.Length];

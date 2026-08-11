@@ -82,7 +82,6 @@ namespace DiceGame.Session
         public float Face4Weight;
         public float Face5Weight;
         public float Face6Weight;
-        public float QueueToBoardDelay;
     }
 
     [Serializable]
@@ -266,8 +265,7 @@ namespace DiceGame.Session
                 Face3Weight = payload.Face3Weight,
                 Face4Weight = payload.Face4Weight,
                 Face5Weight = payload.Face5Weight,
-                Face6Weight = payload.Face6Weight,
-                QueueToBoardDelay = payload.QueueToBoardDelay
+                Face6Weight = payload.Face6Weight
             };
         }
 
@@ -307,8 +305,7 @@ namespace DiceGame.Session
                 Face3Weight = dto.Face3Weight,
                 Face4Weight = dto.Face4Weight,
                 Face5Weight = dto.Face5Weight,
-                Face6Weight = dto.Face6Weight,
-                QueueToBoardDelay = dto.QueueToBoardDelay
+                Face6Weight = dto.Face6Weight
             };
         }
 

@@ -27,7 +27,6 @@ namespace DiceGame.Session
             public TMP_InputField Face4Weight;
             public TMP_InputField Face5Weight;
             public TMP_InputField Face6Weight;
-            public TMP_InputField QueueToBoardDelay;
         }
 
         public sealed class ProfileRow
@@ -69,7 +68,6 @@ namespace DiceGame.Session
             bindings.Face4Weight = SessionUiFactory.CreateLabeledFloatInput(section, "Face 4 Weight");
             bindings.Face5Weight = SessionUiFactory.CreateLabeledFloatInput(section, "Face 5 Weight");
             bindings.Face6Weight = SessionUiFactory.CreateLabeledFloatInput(section, "Face 6 Weight");
-            bindings.QueueToBoardDelay = SessionUiFactory.CreateLabeledFloatInput(section, "Queue To Board Delay");
 
             RebuildProfiles(bindings, CloneProfiles(template.FaceSendProfiles));
             return bindings;
@@ -90,7 +88,6 @@ namespace DiceGame.Session
             SetInputText(bindings.Face4Weight, data.Face4Weight.ToString("0.###"));
             SetInputText(bindings.Face5Weight, data.Face5Weight.ToString("0.###"));
             SetInputText(bindings.Face6Weight, data.Face6Weight.ToString("0.###"));
-            SetInputText(bindings.QueueToBoardDelay, data.QueueToBoardDelay.ToString("0.###"));
             RebuildProfiles(bindings, CloneProfiles(data.FaceSendProfiles));
         }
 
@@ -110,8 +107,7 @@ namespace DiceGame.Session
                 || !TryParseFloat(bindings.Face3Weight, out var face3)
                 || !TryParseFloat(bindings.Face4Weight, out var face4)
                 || !TryParseFloat(bindings.Face5Weight, out var face5)
-                || !TryParseFloat(bindings.Face6Weight, out var face6)
-                || !TryParseFloat(bindings.QueueToBoardDelay, out var queueDelay)) {
+                || !TryParseFloat(bindings.Face6Weight, out var face6)) {
                 errorMessage = "Attack settings contain invalid numbers.";
                 return false;
             }
@@ -131,8 +127,7 @@ namespace DiceGame.Session
                 Face3Weight = face3,
                 Face4Weight = face4,
                 Face5Weight = face5,
-                Face6Weight = face6,
-                QueueToBoardDelay = queueDelay
+                Face6Weight = face6
             };
 
             if (!data.TryValidate(out errorMessage)) {

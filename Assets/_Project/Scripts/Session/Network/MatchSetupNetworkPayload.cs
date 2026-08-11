@@ -109,7 +109,6 @@ namespace DiceGame.Session.Network
         public float Face4Weight;
         public float Face5Weight;
         public float Face6Weight;
-        public float QueueToBoardDelay;
 
         public void NetworkSerialize<T>(BufferSerializer<T> serializer) where T : IReaderWriter {
             var count = FaceSendProfiles?.Length ?? 0;
@@ -134,7 +133,6 @@ namespace DiceGame.Session.Network
             serializer.SerializeValue(ref Face4Weight);
             serializer.SerializeValue(ref Face5Weight);
             serializer.SerializeValue(ref Face6Weight);
-            serializer.SerializeValue(ref QueueToBoardDelay);
         }
     }
 

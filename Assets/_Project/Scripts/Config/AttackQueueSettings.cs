@@ -21,9 +21,14 @@ namespace DiceGame.Config
         public Vector2 Pivot => pivot;
     }
 
-    [CreateAssetMenu(fileName = "AttackQueueUiSettings", menuName = "Dice/Attack Queue UI Settings")]
-    public sealed class AttackQueueUiSettings : ScriptableObject
+    [CreateAssetMenu(fileName = "AttackQueueSettings", menuName = "Dice/Attack Queue Settings")]
+    public sealed class AttackQueueSettings : ScriptableObject
     {
+        [Header("Queue")]
+        [Min(0f)]
+        [SerializeField] float queueToBoardDelay = 1.5f;
+
+        [Header("Icons")]
         [Min(16)]
         [SerializeField] int iconResolution = 128;
         [Min(1f)]
@@ -50,6 +55,7 @@ namespace DiceGame.Config
             new Vector2(0.98f, 0.98f),
             Vector2.one);
 
+        public float QueueToBoardDelay => Mathf.Max(0f, queueToBoardDelay);
         public int IconResolution => iconResolution;
         public float IconPixelsPerUnit => iconPixelsPerUnit;
         public float IconSize => iconSize;
@@ -62,8 +68,8 @@ namespace DiceGame.Config
         public AttackQueuePanelLayout Player1PanelLayout => player1PanelLayout;
         public AttackQueuePanelLayout Player2PanelLayout => player2PanelLayout;
 
-        public static AttackQueueUiSettings CreateRuntimeFallback() {
-            return CreateInstance<AttackQueueUiSettings>();
+        public static AttackQueueSettings CreateRuntimeFallback() {
+            return CreateInstance<AttackQueueSettings>();
         }
     }
 }

@@ -11,7 +11,7 @@ namespace DiceGame.View
     {
         DiceCatalog player1Catalog;
         DiceCatalog player2Catalog;
-        AttackQueueUiSettings uiSettings;
+        AttackQueueSettings settings;
         DiceIconGenerator iconGenerator;
         RectTransform player1Panel;
         RectTransform player2Panel;
@@ -23,16 +23,16 @@ namespace DiceGame.View
         public void Configure(
             DiceCatalog targetPlayer1Catalog,
             DiceCatalog targetPlayer2Catalog,
-            AttackQueueUiSettings targetUiSettings) {
+            AttackQueueSettings targetSettings) {
             player1Catalog = targetPlayer1Catalog;
             player2Catalog = targetPlayer2Catalog;
-            uiSettings = targetUiSettings != null
-                ? targetUiSettings
-                : AttackQueueUiSettings.CreateRuntimeFallback();
+            settings = targetSettings != null
+                ? targetSettings
+                : AttackQueueSettings.CreateRuntimeFallback();
 
             EnsureUi();
             iconGenerator?.Dispose();
-            iconGenerator = new DiceIconGenerator(transform, uiSettings);
+            iconGenerator = new DiceIconGenerator(transform, settings);
             AreIconsReady = false;
             prewarmGeneration++;
             if (prewarmRoutine != null) {
@@ -65,7 +65,7 @@ namespace DiceGame.View
 
         IEnumerator PrewarmIconsRoutine(int generation) {
             var meshes = CollectUniqueMeshPrefabs(player1Catalog, player2Catalog);
-            var perFrame = uiSettings.IconPrewarmPerFrame;
+            var perFrame = settings.IconPrewarmPerFrame;
             var warmedThisFrame = 0;
 
             for (var meshIndex = 0; meshIndex < meshes.Count; meshIndex++) {
@@ -147,11 +147,11 @@ namespace DiceGame.View
             player1Panel = EnsurePanel(
                 canvas.transform,
                 "Player1QueuePanel",
-                uiSettings.Player1PanelLayout);
+                settings.Player1PanelLayout);
             player2Panel = EnsurePanel(
                 canvas.transform,
                 "Player2QueuePanel",
-                uiSettings.Player2PanelLayout);
+                settings.Player2PanelLayout);
         }
 
         void RenderForSlot(
@@ -246,7 +246,7 @@ namespace DiceGame.View
                 return;
             }
 
-            layoutGroup.spacing = uiSettings.ColumnSpacing;
+            layoutGroup.spacing = settings.ColumnSpacing;
             layoutGroup.childAlignment = ResolveChildAlignment(layout.Pivot);
         }
 
@@ -265,7 +265,7 @@ namespace DiceGame.View
             var column = columnObject.GetComponent<RectTransform>();
             columnObject.AddComponent<LayoutElement>();
             var layoutGroup = columnObject.AddComponent<VerticalLayoutGroup>();
-            layoutGroup.spacing = uiSettings.RowSpacing;
+            layoutGroup.spacing = settings.RowSpacing;
             layoutGroup.childAlignment = TextAnchor.UpperCenter;
             layoutGroup.childControlWidth = false;
             layoutGroup.childControlHeight = false;
@@ -275,8 +275,8 @@ namespace DiceGame.View
         }
 
         void ApplyColumnLayoutElement(RectTransform column, int iconCount) {
-            var iconSize = uiSettings.IconSize;
-            var height = iconSize * iconCount + uiSettings.RowSpacing * Mathf.Max(0, iconCount - 1);
+            var iconSize = settings.IconSize;
+            var height = iconSize * iconCount + settings.RowSpacing * Mathf.Max(0, iconCount - 1);
             var layoutElement = column.GetComponent<LayoutElement>();
             if (layoutElement == null) {
                 layoutElement = column.gameObject.AddComponent<LayoutElement>();
@@ -305,7 +305,7 @@ namespace DiceGame.View
             image.sprite = sprite;
             image.preserveAspect = true;
 
-            var iconSize = uiSettings.IconSize;
+            var iconSize = settings.IconSize;
             var layoutElement = iconObject.AddComponent<LayoutElement>();
             layoutElement.preferredWidth = iconSize;
             layoutElement.preferredHeight = iconSize;

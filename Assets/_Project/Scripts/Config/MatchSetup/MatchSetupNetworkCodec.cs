@@ -186,8 +186,7 @@ namespace DiceGame.Config
                 Face3Weight = data.Face3Weight,
                 Face4Weight = data.Face4Weight,
                 Face5Weight = data.Face5Weight,
-                Face6Weight = data.Face6Weight,
-                QueueToBoardDelay = data.QueueToBoardDelay
+                Face6Weight = data.Face6Weight
             };
         }
 
@@ -226,8 +225,7 @@ namespace DiceGame.Config
                 Face3Weight = payload.Face3Weight,
                 Face4Weight = payload.Face4Weight,
                 Face5Weight = payload.Face5Weight,
-                Face6Weight = payload.Face6Weight,
-                QueueToBoardDelay = payload.QueueToBoardDelay
+                Face6Weight = payload.Face6Weight
             };
         }
 

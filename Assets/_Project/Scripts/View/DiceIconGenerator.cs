@@ -35,7 +35,7 @@ namespace DiceGame.View
             }
         }
 
-        readonly AttackQueueUiSettings settings;
+        readonly AttackQueueSettings settings;
         readonly Dictionary<CacheKey, Sprite> cache = new();
         readonly Transform previewRoot;
         readonly Camera previewCamera;
@@ -43,7 +43,7 @@ namespace DiceGame.View
         readonly int previewLayer;
         bool disposed;
 
-        public DiceIconGenerator(Transform parent, AttackQueueUiSettings targetSettings) {
+        public DiceIconGenerator(Transform parent, AttackQueueSettings targetSettings) {
             if (targetSettings == null) {
                 throw new ArgumentNullException(nameof(targetSettings));
             }

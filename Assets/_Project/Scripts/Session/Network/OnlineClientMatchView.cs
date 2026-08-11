@@ -75,7 +75,7 @@ namespace DiceGame.Session.Network
         readonly HashSet<uint> sequenceSeenIds = new();
         readonly HashSet<uint> retainUntilSnapshot = new();
         AttackQueueView attackQueueView;
-        AttackQueueUiSettings attackQueueUiSettings;
+        AttackQueueSettings attackQueueSettings;
         CharacterMovementSettings movementSettings;
         readonly Dictionary<uint, DiceState> logicalStates = new();
         CharacterInputReader localInputReader;
@@ -102,7 +102,7 @@ namespace DiceGame.Session.Network
             Board matchBoard,
             DiceCatalog catalog,
             DiceCatalog alternateCatalog = null,
-            AttackQueueUiSettings queueUiSettings = null,
+            AttackQueueSettings queueSettings = null,
             CharacterMovementSettings characterMovement = null) {
             messenger = netMessenger;
             dicePrefab = diceEntityPrefab;
@@ -114,7 +114,7 @@ namespace DiceGame.Session.Network
             board = matchBoard;
             primaryCatalog = catalog;
             secondaryCatalog = alternateCatalog;
-            attackQueueUiSettings = queueUiSettings;
+            attackQueueSettings = queueSettings;
             movementSettings = characterMovement;
 
             if (proxyRoot == null) {
@@ -434,7 +434,7 @@ namespace DiceGame.Session.Network
             attackQueueView.Configure(
                 primaryCatalog,
                 secondaryCatalog,
-                attackQueueUiSettings);
+                attackQueueSettings);
         }
 
         static List<AttackVolley> ToVolleys(OnlineAttackVolleyPayload[] payloads) {

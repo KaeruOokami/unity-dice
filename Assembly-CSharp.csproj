@@ -154,7 +154,6 @@
     <Compile Include="Assets\_Project\Scripts\Session\Network\OnlineSimSyncBinder.cs" />
     <Compile Include="Assets\_Project\Scripts\Gameplay\Match\BoardFillEvaluator.cs" />
     <Compile Include="Assets\_Project\Scripts\Placement\Movement\Walk\WalkTransferPolicy.cs" />
-    <Compile Include="Assets\_Project\Scripts\Config\AttackQueueUiSettings.cs" />
     <Compile Include="Assets\_Project\Scripts\Gameplay\AI\Domain\WorkDieOrientPlanner.cs" />
     <Compile Include="Assets\_Project\Scripts\Placement\Interaction\CharacterLiftTargetQuery.cs" />
     <Compile Include="Assets\_Project\Scripts\Placement\Movement\DiceCoupledMoveEngine.cs" />
@@ -312,6 +311,7 @@
     <Compile Include="Assets\_Project\Scripts\Gameplay\Character\PlayerMotionGate.cs" />
     <Compile Include="Assets\_Project\Scripts\Gameplay\AI\Domain\DiceBoardAnalyzer.cs" />
     <Compile Include="Assets\_Project\Scripts\Gameplay\Match\MatchActionSnapshot.cs" />
+    <Compile Include="Assets\_Project\Scripts\Config\AttackQueueSettings.cs" />
     <Compile Include="Assets\_Project\Scripts\Gameplay\Character\CharacterMovePlanner.cs" />
     <Compile Include="Assets\_Project\Scripts\Placement\Occupancy\SurfaceState.cs" />
     <Compile Include="Assets\_Project\Scripts\Gameplay\AI\Application\AiDiscreteAction.cs" />
