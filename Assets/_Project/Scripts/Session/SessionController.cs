@@ -31,6 +31,11 @@ namespace DiceGame.Session
 
         public OnlineNetMessenger Messenger => messenger;
         public MatchSetupPresetRegistry MatchSetupPresetRegistry => matchSetupPresetRegistry;
+        public PlayerInputSettings PlayerInputSettings => gameBootstrap != null
+            ? gameBootstrap.PlayerInputSettings
+            : matchSetupPresetRegistry != null
+                ? matchSetupPresetRegistry.DefaultPlayerInputSettings
+                : null;
         public UiFontSettings UiFontSettings => uiFontSettings;
         public bool IsOnlineSharedSetupReady => onlineSharedSetupReady;
 
@@ -51,6 +56,9 @@ namespace DiceGame.Session
             }
 
             titleMenuUi.Configure(this, matchSetupPresetRegistry, uiFontSettings);
+            PlayerBindingOverridesService.ApplyFromDisk(
+                matchSetupPresetRegistry != null ? matchSetupPresetRegistry.DefaultPlayerInputSettings : null,
+                gameBootstrap != null ? gameBootstrap.PlayerInputSettings : null);
 
             if (MatchFlowFlags.ConsumeSkipTitle(out var resumePlayMode)) {
                 ResumeMatchAfterReload(resumePlayMode);
@@ -108,6 +116,7 @@ namespace DiceGame.Session
             SessionState.Instance.SetPlayMode(SessionPlayMode.Local);
             SessionState.Instance.SetStatus("Starting local play.");
             SessionState.Instance.RequestMatchStart();
+            ApplyLocalBindingOverrides();
 
             if (gameBootstrap != null && gameBootstrap.IsSessionActive) {
                 ShowGameplayWorld();
@@ -361,6 +370,7 @@ namespace DiceGame.Session
             SessionState.Instance.SetStatus("Waiting for opponent ready...");
             titleMenuUi?.Hide();
             ShowGameplayWorld();
+            ApplyLocalBindingOverrides();
             SessionState.Instance.RequestMatchStart();
         }
 
@@ -438,7 +448,14 @@ namespace DiceGame.Session
                 }
             }
 
+            ApplyLocalBindingOverrides();
             SessionState.Instance.RequestMatchStart();
+        }
+
+        void ApplyLocalBindingOverrides() {
+            PlayerBindingOverridesService.ApplyFromDisk(
+                matchSetupPresetRegistry != null ? matchSetupPresetRegistry.DefaultPlayerInputSettings : null,
+                gameBootstrap != null ? gameBootstrap.PlayerInputSettings : null);
         }
 
         void ResetToTitleState() {
@@ -494,6 +511,7 @@ namespace DiceGame.Session
             SessionState.Instance.SetStatus("Match starting");
             titleMenuUi?.Hide();
             ShowGameplayWorld();
+            ApplyLocalBindingOverrides();
             SessionState.Instance.RequestMatchStart();
             messenger?.SendMatchStartAckToServer();
             Debug.Log("SessionController.OnMatchStartFromHost: presentation started, ack sent");

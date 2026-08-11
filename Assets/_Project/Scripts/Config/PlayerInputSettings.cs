@@ -42,6 +42,13 @@ namespace DiceGame.Config
         public const string GameFlowActionMap = "GameFlow";
         public const string PauseAction = "Pause";
         public const string ResetAction = "Reset";
+        public const string MoveAction = "Move";
+        public const string LiftAction = "Lift";
+        public const string JumpAction = "Jump";
+        public const string MovePartUp = "up";
+        public const string MovePartDown = "down";
+        public const string MovePartLeft = "left";
+        public const string MovePartRight = "right";
 
         [SerializeField] InputActionAsset inputActions;
 

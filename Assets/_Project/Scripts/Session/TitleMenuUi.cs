@@ -20,6 +20,7 @@ namespace DiceGame.Session
         GameObject localModePanel;
         GameObject onlineModePanel;
         GameObject matchSetupPanel;
+        GameObject controlsPanel;
         GameObject hostPanel;
         GameObject clientPanel;
         TMP_InputField joinCodeInput;
@@ -31,7 +32,9 @@ namespace DiceGame.Session
         Button setupPrimaryButton;
         Button setupBackButton;
         Transform setupContentRoot;
+        Transform controlsContentRoot;
         MatchSetupPanelUi setupPanelUi;
+        ControlsPanelUi controlsPanelUi;
         GameMode selectedMode;
         bool onlineSharedSetupActive;
         bool onlineSetupIsHost;
@@ -61,6 +64,8 @@ namespace DiceGame.Session
         }
 
         void OnDestroy() {
+            controlsPanelUi?.Dispose();
+            controlsPanelUi = null;
             if (SessionState.Instance != null) {
                 SessionState.Instance.StateChanged -= RefreshStatus;
             }
@@ -72,29 +77,76 @@ namespace DiceGame.Session
 
         public void ShowMainPanel() {
             onlineSharedSetupActive = false;
-            SetPanel(main: true, localMode: false, onlineMode: false, setup: false, host: false, client: false);
+            controlsPanelUi?.CancelRebind();
+            SetPanel(
+                main: true,
+                localMode: false,
+                onlineMode: false,
+                setup: false,
+                host: false,
+                client: false,
+                controls: false);
             RefreshStatus();
         }
 
         public void ShowLocalModePanel() {
             onlineSharedSetupActive = false;
-            SetPanel(main: false, localMode: true, onlineMode: false, setup: false, host: false, client: false);
+            controlsPanelUi?.CancelRebind();
+            SetPanel(
+                main: false,
+                localMode: true,
+                onlineMode: false,
+                setup: false,
+                host: false,
+                client: false,
+                controls: false);
             SessionState.Instance?.SetStatus("Select a mode.");
             RefreshStatus();
         }
 
         public void ShowOnlineModePanel() {
             onlineSharedSetupActive = false;
-            SetPanel(main: false, localMode: false, onlineMode: true, setup: false, host: false, client: false);
+            controlsPanelUi?.CancelRebind();
+            SetPanel(
+                main: false,
+                localMode: false,
+                onlineMode: true,
+                setup: false,
+                host: false,
+                client: false,
+                controls: false);
             SessionState.Instance?.SetStatus("Select online mode (Co-op or Versus).");
+            RefreshStatus();
+        }
+
+        public void ShowControlsPanel() {
+            onlineSharedSetupActive = false;
+            SetPanel(
+                main: false,
+                localMode: false,
+                onlineMode: false,
+                setup: false,
+                host: false,
+                client: false,
+                controls: true);
+            RebuildControlsPanel();
+            SessionState.Instance?.SetStatus("Configure 1P / 2P keyboard bindings (local to this machine).");
             RefreshStatus();
         }
 
         public void ShowMatchSetupPanel(GameMode mode) {
             onlineSharedSetupActive = false;
+            controlsPanelUi?.CancelRebind();
             selectedMode = mode;
             ConfigureSetupChrome(isOnline: false, isHost: false);
-            SetPanel(main: false, localMode: false, onlineMode: false, setup: true, host: false, client: false);
+            SetPanel(
+                main: false,
+                localMode: false,
+                onlineMode: false,
+                setup: true,
+                host: false,
+                client: false,
+                controls: false);
             RebuildMatchSetupPanel(mode, MatchSetupPersistence.LoadOrCreate(mode, GetRegistry()));
             SessionState.Instance?.SetStatus($"Configure {GameModeDisplayNames.GetDisplayName(mode)} settings.");
             RefreshStatus();
@@ -105,11 +157,19 @@ namespace DiceGame.Session
                 return;
             }
 
+            controlsPanelUi?.CancelRebind();
             onlineSetupIsHost = isHost;
             onlineSharedSetupActive = true;
             selectedMode = snapshot.GameMode;
             ConfigureSetupChrome(isOnline: true, isHost: isHost);
-            SetPanel(main: false, localMode: false, onlineMode: false, setup: true, host: false, client: false);
+            SetPanel(
+                main: false,
+                localMode: false,
+                onlineMode: false,
+                setup: true,
+                host: false,
+                client: false,
+                controls: false);
             RebuildMatchSetupPanel(snapshot.GameMode, snapshot);
             lastSyncedSetupJson = BuildSetupJson(snapshot);
             onlineSetupSyncTimer = SessionConstants.OnlineSetupSyncIntervalSeconds;
@@ -134,7 +194,15 @@ namespace DiceGame.Session
 
         public void ShowHostPanel(string lobbyCode) {
             onlineSharedSetupActive = false;
-            SetPanel(main: false, localMode: false, onlineMode: false, setup: false, host: true, client: false);
+            controlsPanelUi?.CancelRebind();
+            SetPanel(
+                main: false,
+                localMode: false,
+                onlineMode: false,
+                setup: false,
+                host: true,
+                client: false,
+                controls: false);
             if (hostCodeText != null) {
                 hostCodeText.text = $"Join Code\n{lobbyCode}\n\nWaiting for player...";
             }
@@ -144,7 +212,15 @@ namespace DiceGame.Session
 
         public void ShowClientWaitingPanel(string lobbyCode) {
             onlineSharedSetupActive = false;
-            SetPanel(main: false, localMode: false, onlineMode: false, setup: false, host: false, client: true);
+            controlsPanelUi?.CancelRebind();
+            SetPanel(
+                main: false,
+                localMode: false,
+                onlineMode: false,
+                setup: false,
+                host: false,
+                client: true,
+                controls: false);
             if (clientStatusText != null) {
                 clientStatusText.text = $"Joined: {lobbyCode}\nWaiting for shared settings...";
             }
@@ -154,7 +230,15 @@ namespace DiceGame.Session
 
         public void ShowClientWaitingForHostMode(string lobbyCode) {
             onlineSharedSetupActive = false;
-            SetPanel(main: false, localMode: false, onlineMode: false, setup: false, host: false, client: true);
+            controlsPanelUi?.CancelRebind();
+            SetPanel(
+                main: false,
+                localMode: false,
+                onlineMode: false,
+                setup: false,
+                host: false,
+                client: true,
+                controls: false);
             if (clientStatusText != null) {
                 clientStatusText.text = $"Joined: {lobbyCode}\nWaiting for host to select mode...";
             }
@@ -164,6 +248,7 @@ namespace DiceGame.Session
 
         public void Hide() {
             onlineSharedSetupActive = false;
+            controlsPanelUi?.CancelRebind();
             if (canvas != null) {
                 canvas.gameObject.SetActive(false);
             }
@@ -176,7 +261,14 @@ namespace DiceGame.Session
             }
         }
 
-        void SetPanel(bool main, bool localMode, bool onlineMode, bool setup, bool host, bool client) {
+        void SetPanel(
+            bool main,
+            bool localMode,
+            bool onlineMode,
+            bool setup,
+            bool host,
+            bool client,
+            bool controls) {
             if (canvas != null) {
                 canvas.gameObject.SetActive(true);
             }
@@ -195,6 +287,10 @@ namespace DiceGame.Session
 
             if (matchSetupPanel != null) {
                 matchSetupPanel.SetActive(setup);
+            }
+
+            if (controlsPanel != null) {
+                controlsPanel.SetActive(controls);
             }
 
             if (hostPanel != null) {
@@ -239,6 +335,48 @@ namespace DiceGame.Session
             if (setupErrorText != null) {
                 setupErrorText.text = string.Empty;
             }
+        }
+
+        void RebuildControlsPanel() {
+            TryResolveUiReferences();
+            if (controlsContentRoot == null) {
+                Debug.LogError("[TitleMenuUi] controlsContentRoot is null after UI resolution.");
+                SessionState.Instance?.SetStatus("Failed to initialize controls UI. Stop Play and try again.");
+                return;
+            }
+
+            var inputSettings = GetInputSettings();
+            if (inputSettings == null) {
+                Debug.LogError("[TitleMenuUi] PlayerInputSettings is not available.");
+                SessionState.Instance?.SetStatus("Input settings are not configured.");
+                return;
+            }
+
+            controlsPanelUi?.Dispose();
+            controlsPanelUi = null;
+            for (var i = controlsContentRoot.childCount - 1; i >= 0; i--) {
+                Destroy(controlsContentRoot.GetChild(i).gameObject);
+            }
+
+            try {
+                PlayerBindingOverridesService.ApplyFromDisk(inputSettings, GetBootstrapInputSettings());
+                controlsPanelUi = new ControlsPanelUi(
+                    inputSettings,
+                    controlsContentRoot,
+                    message => SessionState.Instance?.SetStatus(message));
+            } catch (Exception ex) {
+                controlsPanelUi = null;
+                Debug.LogError($"[TitleMenuUi] Failed to build controls panel: {ex}");
+                SessionState.Instance?.SetStatus("Failed to build controls UI. Check the Console.");
+            }
+        }
+
+        PlayerInputSettings GetInputSettings() {
+            return GetRegistry()?.DefaultPlayerInputSettings ?? GetBootstrapInputSettings();
+        }
+
+        PlayerInputSettings GetBootstrapInputSettings() {
+            return controller != null ? controller.PlayerInputSettings : null;
         }
 
         void ConfigureSetupChrome(bool isOnline, bool isHost) {
@@ -449,6 +587,7 @@ namespace DiceGame.Session
             BuildLocalModePanel(root.transform);
             BuildOnlineModePanel(root.transform);
             BuildMatchSetupPanel(root.transform);
+            BuildControlsPanel(root.transform);
             BuildHostPanel(root.transform);
             BuildClientPanel(root.transform);
         }
@@ -472,6 +611,7 @@ namespace DiceGame.Session
             localModePanel = null;
             onlineModePanel = null;
             matchSetupPanel = null;
+            controlsPanel = null;
             hostPanel = null;
             clientPanel = null;
             joinCodeInput = null;
@@ -483,7 +623,10 @@ namespace DiceGame.Session
             setupPrimaryButton = null;
             setupBackButton = null;
             setupContentRoot = null;
+            controlsContentRoot = null;
             setupPanelUi = null;
+            controlsPanelUi?.Dispose();
+            controlsPanelUi = null;
             onlineSharedSetupActive = false;
             lastSyncedSetupJson = string.Empty;
         }
@@ -513,18 +656,52 @@ namespace DiceGame.Session
                     setupContentRoot = contentTransform;
                 }
             }
+
+            if (controlsPanel == null) {
+                var panelTransform = canvas.transform.Find("Root/ControlsPanel");
+                if (panelTransform != null) {
+                    controlsPanel = panelTransform.gameObject;
+                }
+            }
+
+            if (controlsContentRoot == null && controlsPanel != null) {
+                var contentTransform = controlsPanel.transform.Find("ControlsScroll/Viewport/Content");
+                if (contentTransform != null) {
+                    controlsContentRoot = contentTransform;
+                }
+            }
         }
 
         void BuildMainPanel(Transform root) {
             mainPanel = SessionUiFactory.CreatePanel(root, "MainPanel", new Color(0.12f, 0.12f, 0.14f, 0.95f));
-            SessionUiFactory.CenterPanel(mainPanel.GetComponent<RectTransform>(), new Vector2(520f, 420f));
+            SessionUiFactory.CenterPanel(mainPanel.GetComponent<RectTransform>(), new Vector2(520f, 520f));
             SessionUiFactory.CreateText(mainPanel.transform, "Title", "Dice Game", 40, TextAnchor.UpperCenter);
-            SessionUiFactory.CreateButton(mainPanel.transform, "LocalButton", "Local Play", new Vector2(0f, 80f), OnLocalPlayClicked);
-            SessionUiFactory.CreateButton(mainPanel.transform, "HostButton", "Create Room (Host)", new Vector2(0f, 0f), OnCreateHostClicked);
+            SessionUiFactory.CreateButton(
+                mainPanel.transform,
+                "LocalButton",
+                "Local Play",
+                new Vector2(0f, 120f),
+                OnLocalPlayClicked);
+            SessionUiFactory.CreateButton(
+                mainPanel.transform,
+                "ControlsButton",
+                ControlsPanelLabels.Title,
+                new Vector2(0f, 50f),
+                ShowControlsPanel);
+            SessionUiFactory.CreateButton(
+                mainPanel.transform,
+                "HostButton",
+                "Create Room (Host)",
+                new Vector2(0f, -20f),
+                OnCreateHostClicked);
 
-            joinCodeInput = SessionUiFactory.CreateInputField(mainPanel.transform, "JoinCodeInput", "Join code", new Vector2(0f, -90f));
+            joinCodeInput = SessionUiFactory.CreateInputField(
+                mainPanel.transform,
+                "JoinCodeInput",
+                "Join code",
+                new Vector2(0f, -110f));
             BindJoinCodeUppercase(joinCodeInput);
-            SessionUiFactory.CreateButton(mainPanel.transform, "JoinButton", "Join by Code", new Vector2(0f, -170f), () => {
+            SessionUiFactory.CreateButton(mainPanel.transform, "JoinButton", "Join by Code", new Vector2(0f, -190f), () => {
                 controller?.JoinLobbyByCode(joinCodeInput != null ? joinCodeInput.text : string.Empty);
             });
         }
@@ -605,6 +782,46 @@ namespace DiceGame.Session
                 "Back",
                 new Vector2(0f, -390f),
                 OnMatchSetupBackClicked);
+        }
+
+        void BuildControlsPanel(Transform root) {
+            controlsPanel = SessionUiFactory.CreatePanel(root, "ControlsPanel", new Color(0.12f, 0.12f, 0.14f, 0.95f));
+            SessionUiFactory.CenterPanel(controlsPanel.GetComponent<RectTransform>(), new Vector2(760f, 860f));
+            SessionUiFactory.CreateText(
+                controlsPanel.transform,
+                "Title",
+                ControlsPanelLabels.Title,
+                36,
+                TextAnchor.UpperCenter);
+
+            var scrollGo = new GameObject("ControlsScroll");
+            scrollGo.transform.SetParent(controlsPanel.transform, false);
+            var scrollRect = scrollGo.AddComponent<RectTransform>();
+            scrollRect.anchorMin = new Vector2(0.08f, 0.18f);
+            scrollRect.anchorMax = new Vector2(0.92f, 0.82f);
+            scrollRect.offsetMin = Vector2.zero;
+            scrollRect.offsetMax = Vector2.zero;
+            var scroll = scrollGo.AddComponent<ScrollRect>();
+            scroll.horizontal = false;
+
+            var viewport = SessionUiFactory.CreatePanel(scrollGo.transform, "Viewport", new Color(0f, 0f, 0f, 0.15f));
+            SessionUiFactory.StretchFull(viewport.GetComponent<RectTransform>());
+            viewport.AddComponent<Mask>().showMaskGraphic = false;
+
+            var content = new GameObject("Content");
+            content.transform.SetParent(viewport.transform, false);
+            controlsContentRoot = content.transform;
+            var contentRect = content.AddComponent<RectTransform>();
+            SessionUiFactory.ConfigureVerticalScrollContent(contentRect);
+            scroll.viewport = viewport.GetComponent<RectTransform>();
+            scroll.content = contentRect;
+
+            SessionUiFactory.CreateButton(
+                controlsPanel.transform,
+                "ControlsBackButton",
+                "Back",
+                new Vector2(0f, -360f),
+                ShowMainPanel);
         }
 
         void BuildHostPanel(Transform root) {

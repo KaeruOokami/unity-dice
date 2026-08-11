@@ -143,5 +143,7 @@ namespace DiceGame.Session
         public const float MatchStartAckTimeoutSeconds = 15f;
         public const string MatchSetupPersistDirectory = "MatchSetup";
         public const string MatchSetupOnlinePersistDirectory = "Online";
+        public const string InputBindingsPersistDirectory = "InputBindings";
+        public const string InputBindingsPersistFileName = "binding_overrides.json";
     }
 }
