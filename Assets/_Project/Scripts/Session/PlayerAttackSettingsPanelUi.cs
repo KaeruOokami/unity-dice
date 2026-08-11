@@ -46,30 +46,30 @@ namespace DiceGame.Session
         }
 
         public static Bindings Build(Transform parent, string sectionLabel, PlayerAttackSettingsData template) {
-            var section = LobbyUiFactory.CreateVerticalSection(parent, sectionLabel);
-            LobbyUiFactory.CreateLayoutLabel(section, sectionLabel, 20, 28f);
+            var section = SessionUiFactory.CreateVerticalSection(parent, sectionLabel);
+            SessionUiFactory.CreateLayoutLabel(section, sectionLabel, 20, 28f);
 
             var bindings = new Bindings {
                 SectionRoot = section,
-                ProfilesRoot = LobbyUiFactory.CreateVerticalSection(section, "FaceProfiles")
+                ProfilesRoot = SessionUiFactory.CreateVerticalSection(section, "FaceProfiles")
             };
 
-            LobbyUiFactory.CreateLayoutButton(section, "AddProfileButton", "Add Face Profile", 36f, () => {
+            SessionUiFactory.CreateLayoutButton(section, "AddProfileButton", "Add Face Profile", 36f, () => {
                 AddProfile(bindings);
             });
 
-            LobbyUiFactory.CreateLayoutLabel(section, "Power", 20, 28f);
-            bindings.AttackMultiplier = LobbyUiFactory.CreateLabeledFloatInput(section, "Attack Multiplier");
-            bindings.FaceGain = LobbyUiFactory.CreateLabeledFloatInput(section, "Face Gain");
-            bindings.ChainGain = LobbyUiFactory.CreateLabeledFloatInput(section, "Chain Gain");
-            bindings.SizeGain = LobbyUiFactory.CreateLabeledFloatInput(section, "Size Gain");
-            bindings.SnatchMultiplier = LobbyUiFactory.CreateLabeledFloatInput(section, "Snatch Multiplier");
-            bindings.Face2Weight = LobbyUiFactory.CreateLabeledFloatInput(section, "Face 2 Weight");
-            bindings.Face3Weight = LobbyUiFactory.CreateLabeledFloatInput(section, "Face 3 Weight");
-            bindings.Face4Weight = LobbyUiFactory.CreateLabeledFloatInput(section, "Face 4 Weight");
-            bindings.Face5Weight = LobbyUiFactory.CreateLabeledFloatInput(section, "Face 5 Weight");
-            bindings.Face6Weight = LobbyUiFactory.CreateLabeledFloatInput(section, "Face 6 Weight");
-            bindings.QueueToBoardDelay = LobbyUiFactory.CreateLabeledFloatInput(section, "Queue To Board Delay");
+            SessionUiFactory.CreateLayoutLabel(section, "Power", 20, 28f);
+            bindings.AttackMultiplier = SessionUiFactory.CreateLabeledFloatInput(section, "Attack Multiplier");
+            bindings.FaceGain = SessionUiFactory.CreateLabeledFloatInput(section, "Face Gain");
+            bindings.ChainGain = SessionUiFactory.CreateLabeledFloatInput(section, "Chain Gain");
+            bindings.SizeGain = SessionUiFactory.CreateLabeledFloatInput(section, "Size Gain");
+            bindings.SnatchMultiplier = SessionUiFactory.CreateLabeledFloatInput(section, "Snatch Multiplier");
+            bindings.Face2Weight = SessionUiFactory.CreateLabeledFloatInput(section, "Face 2 Weight");
+            bindings.Face3Weight = SessionUiFactory.CreateLabeledFloatInput(section, "Face 3 Weight");
+            bindings.Face4Weight = SessionUiFactory.CreateLabeledFloatInput(section, "Face 4 Weight");
+            bindings.Face5Weight = SessionUiFactory.CreateLabeledFloatInput(section, "Face 5 Weight");
+            bindings.Face6Weight = SessionUiFactory.CreateLabeledFloatInput(section, "Face 6 Weight");
+            bindings.QueueToBoardDelay = SessionUiFactory.CreateLabeledFloatInput(section, "Queue To Board Delay");
 
             RebuildProfiles(bindings, CloneProfiles(template.FaceSendProfiles));
             return bindings;
@@ -205,28 +205,28 @@ namespace DiceGame.Session
         }
 
         static void RebuildProfiles(Bindings bindings, List<FaceAttackSendProfileData> profiles) {
-            LobbyUiFactory.ClearChildren(bindings.ProfilesRoot);
+            SessionUiFactory.ClearChildren(bindings.ProfilesRoot);
             bindings.ProfileRows.Clear();
 
-            var kindLabels = LobbyUiFactory.GetDiceKindOptionLabels();
+            var kindLabels = SessionUiFactory.GetDiceKindOptionLabels();
             for (var i = 0; i < profiles.Count; i++) {
                 var profileIndex = i;
                 var profile = profiles[i];
-                var profileSection = LobbyUiFactory.CreateVerticalSection(bindings.ProfilesRoot, $"Profile_{i}");
-                LobbyUiFactory.CreateLayoutLabel(profileSection, $"Face Profile {i + 1}", 18, 24f);
+                var profileSection = SessionUiFactory.CreateVerticalSection(bindings.ProfilesRoot, $"Profile_{i}");
+                SessionUiFactory.CreateLayoutLabel(profileSection, $"Face Profile {i + 1}", 18, 24f);
 
-                LobbyUiFactory.CreateLayoutLabel(profileSection, "Trigger Faces", 18, 24f);
+                SessionUiFactory.CreateLayoutLabel(profileSection, "Trigger Faces", 18, 24f);
                 var faceToggles = CreateFaceToggles(profileSection, profile.TriggerFaces);
 
-                var kindsRoot = LobbyUiFactory.CreateVerticalSection(profileSection, "Kinds");
+                var kindsRoot = SessionUiFactory.CreateVerticalSection(profileSection, "Kinds");
                 var kindRows = new List<KindRow>();
                 var kinds = profile.SendableKinds ?? System.Array.Empty<SendableKindLimitData>();
                 for (var j = 0; j < kinds.Length; j++) {
                     var kindIndex = j;
-                    var kindSection = LobbyUiFactory.CreateVerticalSection(kindsRoot, $"Kind_{j}");
-                    LobbyUiFactory.CreateLayoutLabel(kindSection, $"Kind {j + 1}", 18, 24f);
-                    LobbyUiFactory.CreateLayoutLabel(kindSection, "Kind", 18, 24f);
-                    var kindDropdown = LobbyUiFactory.CreateLayoutDropdown(
+                    var kindSection = SessionUiFactory.CreateVerticalSection(kindsRoot, $"Kind_{j}");
+                    SessionUiFactory.CreateLayoutLabel(kindSection, $"Kind {j + 1}", 18, 24f);
+                    SessionUiFactory.CreateLayoutLabel(kindSection, "Kind", 18, 24f);
+                    var kindDropdown = SessionUiFactory.CreateLayoutDropdown(
                         kindSection,
                         "KindDropdown",
                         kindLabels,
@@ -234,14 +234,14 @@ namespace DiceGame.Session
                     kindDropdown.value = (int)kinds[j].Kind;
                     kindDropdown.RefreshShownValue();
 
-                    var maxField = LobbyUiFactory.CreateLabeledIntInput(kindSection, "Max / Volley");
+                    var maxField = SessionUiFactory.CreateLabeledIntInput(kindSection, "Max / Volley");
                     SetInputText(maxField, kinds[j].MaxCountPerVolley.ToString());
-                    var minPowerField = LobbyUiFactory.CreateLabeledFloatInput(kindSection, "Min Power");
+                    var minPowerField = SessionUiFactory.CreateLabeledFloatInput(kindSection, "Min Power");
                     SetInputText(minPowerField, kinds[j].MinimumPower.ToString("0.###"));
-                    var weightField = LobbyUiFactory.CreateLabeledFloatInput(kindSection, "Weight");
+                    var weightField = SessionUiFactory.CreateLabeledFloatInput(kindSection, "Weight");
                     SetInputText(weightField, kinds[j].SelectionWeight.ToString("0.###"));
 
-                    LobbyUiFactory.CreateLayoutButton(kindSection, "RemoveKindButton", "Remove Kind", 36f, () => {
+                    SessionUiFactory.CreateLayoutButton(kindSection, "RemoveKindButton", "Remove Kind", 36f, () => {
                         RemoveKind(bindings, profileIndex, kindIndex);
                     });
 
@@ -253,10 +253,10 @@ namespace DiceGame.Session
                     });
                 }
 
-                LobbyUiFactory.CreateLayoutButton(profileSection, "AddKindButton", "Add Kind", 36f, () => {
+                SessionUiFactory.CreateLayoutButton(profileSection, "AddKindButton", "Add Kind", 36f, () => {
                     AddKind(bindings, profileIndex);
                 });
-                LobbyUiFactory.CreateLayoutButton(profileSection, "RemoveProfileButton", "Remove Profile", 36f, () => {
+                SessionUiFactory.CreateLayoutButton(profileSection, "RemoveProfileButton", "Remove Profile", 36f, () => {
                     RemoveProfile(bindings, profileIndex);
                 });
 
@@ -267,9 +267,9 @@ namespace DiceGame.Session
                 });
             }
 
-            LobbyUiFactory.ForceRebuildLayout(bindings.SectionRoot);
+            SessionUiFactory.ForceRebuildLayout(bindings.SectionRoot);
             if (bindings.SectionRoot.parent is RectTransform parentRect) {
-                LobbyUiFactory.ForceRebuildLayout(parentRect);
+                SessionUiFactory.ForceRebuildLayout(parentRect);
             }
         }
 
@@ -287,7 +287,7 @@ namespace DiceGame.Session
             }
 
             for (var face = MinTriggerFace; face <= MaxTriggerFace; face++) {
-                var toggle = LobbyUiFactory.CreateLabeledToggle(parent, $"Face {face}");
+                var toggle = SessionUiFactory.CreateLabeledToggle(parent, $"Face {face}");
                 toggle.isOn = selected[face - MinTriggerFace];
                 toggles[face - MinTriggerFace] = toggle;
             }

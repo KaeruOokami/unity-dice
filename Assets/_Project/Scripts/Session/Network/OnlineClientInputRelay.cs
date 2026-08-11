@@ -9,7 +9,7 @@ using GameCharacterController = DiceGame.Gameplay.CharacterController;
 namespace DiceGame.Session.Network
 {
     /// <summary>
-    /// Legacy: client→host input only. Prefer <see cref="OnlineDualSimInputBinder"/>.
+    /// Legacy: client→host input only. Prefer <see cref="OnlineLockstepController"/>.
     /// </summary>
     public sealed class OnlineClientInputRelay : MonoBehaviour
     {
@@ -64,7 +64,7 @@ namespace DiceGame.Session.Network
                 pendingDirection = direction;
             }
 
-            if (inputTimer < OnlineSessionConstants.InputSendIntervalSeconds
+            if (inputTimer < SessionConstants.InputSendIntervalSeconds
                 && !lift
                 && !jump
                 && !hasDirection

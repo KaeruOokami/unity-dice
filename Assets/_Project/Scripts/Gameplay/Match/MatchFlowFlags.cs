@@ -9,17 +9,17 @@ namespace DiceGame.Gameplay
     public static class MatchFlowFlags
     {
         public static bool SkipTitleOnNextLoad;
-        public static OnlinePlayMode ResumePlayMode = OnlinePlayMode.Local;
+        public static SessionPlayMode ResumePlayMode = SessionPlayMode.Local;
         public static MatchSetupSnapshot PendingSetup;
         public static int PendingMatchSeed;
 
         public static void ArmMatchRestart(
-            OnlinePlayMode playMode,
+            SessionPlayMode playMode,
             MatchSetupSnapshot setup = null,
             int matchSeed = 0) {
             SkipTitleOnNextLoad = true;
-            ResumePlayMode = playMode == OnlinePlayMode.Unspecified
-                ? OnlinePlayMode.Local
+            ResumePlayMode = playMode == SessionPlayMode.Unspecified
+                ? SessionPlayMode.Local
                 : playMode;
             PendingSetup = setup?.Clone();
             PendingMatchSeed = matchSeed;
@@ -27,20 +27,20 @@ namespace DiceGame.Gameplay
 
         public static void ArmTitleReturn() {
             SkipTitleOnNextLoad = false;
-            ResumePlayMode = OnlinePlayMode.Unspecified;
+            ResumePlayMode = SessionPlayMode.Unspecified;
             PendingSetup = null;
             PendingMatchSeed = 0;
         }
 
-        public static bool ConsumeSkipTitle(out OnlinePlayMode playMode) {
+        public static bool ConsumeSkipTitle(out SessionPlayMode playMode) {
             if (!SkipTitleOnNextLoad) {
-                playMode = OnlinePlayMode.Unspecified;
+                playMode = SessionPlayMode.Unspecified;
                 return false;
             }
 
             SkipTitleOnNextLoad = false;
             playMode = ResumePlayMode;
-            ResumePlayMode = OnlinePlayMode.Unspecified;
+            ResumePlayMode = SessionPlayMode.Unspecified;
             return true;
         }
 

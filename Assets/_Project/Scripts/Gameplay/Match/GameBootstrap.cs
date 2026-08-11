@@ -91,17 +91,17 @@ namespace DiceGame.Gameplay
         public bool IsSessionActive => sessionStarted;
 
         void OnDisable() {
-            if (OnlineSessionState.Instance != null) {
-                OnlineSessionState.Instance.MatchStartRequested -= OnOnlineMatchStartRequested;
+            if (SessionState.Instance != null) {
+                SessionState.Instance.MatchStartRequested -= OnOnlineMatchStartRequested;
             }
         }
 
         void Start() {
-            var onlineController = FindObjectOfType<OnlineSessionController>();
-            var session = OnlineSessionState.Instance;
+            var onlineController = FindFirstObjectByType<SessionController>();
+            var session = SessionState.Instance;
             if (onlineController != null) {
                 if (session == null) {
-                    Debug.LogError("GameBootstrap: OnlineSessionController is present but OnlineSessionState is missing.");
+                    Debug.LogError("GameBootstrap: SessionController is present but SessionState is missing.");
                     return;
                 }
 
@@ -111,7 +111,7 @@ namespace DiceGame.Gameplay
                 // Online host/client and title lobby: wait for MatchStartRequested only.
                 // Beginning from Start() races MatchStart seed apply and can double-init.
                 // Exception: match restart reload already set IsMatchRunning before we subscribed.
-                if (session.IsOnline || session.PlayMode == OnlinePlayMode.Unspecified) {
+                if (session.IsOnline || session.PlayMode == SessionPlayMode.Unspecified) {
                     if (session.IsOnline && session.IsMatchRunning) {
                         BeginSession();
                     }
@@ -142,7 +142,7 @@ namespace DiceGame.Gameplay
                 return;
             }
 
-            GameWorldVisibility.SetBoardVisible(board, true);
+            BoardVisibility.SetBoardVisible(board, true);
 
             if (boardView == null) {
                 boardView = board.GetComponent<BoardView>();
@@ -172,7 +172,7 @@ namespace DiceGame.Gameplay
                 return;
             }
 
-            var session = OnlineSessionState.Instance;
+            var session = SessionState.Instance;
             resolvedSetup = ResolvedSessionSetup.Resolve(
                 gameSessionSettings,
                 diceSpawnSettings,
@@ -395,7 +395,7 @@ namespace DiceGame.Gameplay
             }
 
             if (session != null && session.IsOnline) {
-                BindOnlineDualSim();
+                BindOnlineLockstep();
             }
 
             sessionStarted = true;
@@ -417,7 +417,7 @@ namespace DiceGame.Gameplay
         }
 
         System.Random ResolveMatchRandom(out int usedSeed) {
-            var session = OnlineSessionState.Instance;
+            var session = SessionState.Instance;
             if (session != null && session.IsOnline) {
                 if (session.MatchSeed == 0) {
                     Debug.LogError(
@@ -438,11 +438,11 @@ namespace DiceGame.Gameplay
         }
 
         static void AbortPendingSessionStart() {
-            OnlineSessionState.Instance?.ResetMatchFlag();
+            SessionState.Instance?.ResetMatchFlag();
         }
 
-        void BindOnlineDualSim() {
-            var onlineController = FindObjectOfType<OnlineSessionController>();
+        void BindOnlineLockstep() {
+            var onlineController = FindFirstObjectByType<SessionController>();
             if (onlineController?.Messenger == null) {
                 Debug.LogError("GameBootstrap: Online dual-sim requires messenger.");
                 return;
@@ -450,7 +450,7 @@ namespace DiceGame.Gameplay
 
             DestroyLegacyOnlineSyncComponents();
 
-            var session = OnlineSessionState.Instance;
+            var session = SessionState.Instance;
             var isHost = session != null && session.IsHost;
             var localSlot = session != null ? session.LocalPlayerSlot : PlayerSlot.Player1;
 
@@ -476,9 +476,9 @@ namespace DiceGame.Gameplay
                 DestroyOnlineComponent<OnlineClientFlowAdapter>();
             }
 
-            var dualSim = GetComponent<OnlineDualSimInputBinder>();
+            var dualSim = GetComponent<OnlineLockstepController>();
             if (dualSim == null) {
-                dualSim = gameObject.AddComponent<OnlineDualSimInputBinder>();
+                dualSim = gameObject.AddComponent<OnlineLockstepController>();
             }
 
             dualSim.enabled = true;
@@ -515,7 +515,7 @@ namespace DiceGame.Gameplay
         }
 
         MatchSetupPresetRegistry FindPresetRegistry() {
-            var onlineController = FindObjectOfType<OnlineSessionController>();
+            var onlineController = FindFirstObjectByType<SessionController>();
             return onlineController != null ? onlineController.MatchSetupPresetRegistry : null;
         }
 
@@ -608,7 +608,7 @@ namespace DiceGame.Gameplay
                 }
 
                 var inputSettingsForSlot = playerInputSettings;
-                var sessionForSpawn = OnlineSessionState.Instance;
+                var sessionForSpawn = SessionState.Instance;
                 PlayerSlot? inputBindingSlot = null;
                 if (sessionForSpawn != null && sessionForSpawn.IsOnline) {
                     // Only the local seat gets device input; the remote seat is driven by network.
@@ -653,7 +653,7 @@ namespace DiceGame.Gameplay
             GameObject characterObject,
             CharacterController characterController,
             PlayerSlot slot) {
-            var session = OnlineSessionState.Instance;
+            var session = SessionState.Instance;
             if (session != null && session.IsOnline) {
                 return;
             }

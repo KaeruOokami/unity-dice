@@ -72,7 +72,7 @@ namespace DiceGame.Config
             DiceCatalog sceneDiceCatalog,
             MatchSetupPresetRegistry presetRegistry,
             PlayerInputSettings playerInputSettings) {
-            var session = OnlineSessionState.Instance;
+            var session = SessionState.Instance;
             var isOnline = session != null && session.IsOnline;
             var player1Control = ResolveControlDefaults(presetRegistry, playerInputSettings, PlayerSlot.Player1);
             var player2Control = ResolveControlDefaults(presetRegistry, playerInputSettings, PlayerSlot.Player2);

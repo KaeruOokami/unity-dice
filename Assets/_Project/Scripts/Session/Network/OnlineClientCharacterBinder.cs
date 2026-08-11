@@ -124,7 +124,7 @@ namespace DiceGame.Session.Network
                 pendingDirection = direction;
             }
 
-            if (inputTimer < OnlineSessionConstants.InputSendIntervalSeconds
+            if (inputTimer < SessionConstants.InputSendIntervalSeconds
                 && !lift
                 && !jump
                 && !hasDirection
@@ -181,7 +181,7 @@ namespace DiceGame.Session.Network
 
             var current = localCharacter.transform.position;
             var error = entity.Position - current;
-            var snapDistance = OnlineSessionConstants.SnapshotInterpSnapDistance;
+            var snapDistance = SessionConstants.SnapshotInterpSnapDistance;
             if (error.sqrMagnitude >= snapDistance * snapDistance) {
                 localCharacter.ApplyRollbackState(new CharacterRollbackState {
                     Sequence = 0,
@@ -197,7 +197,7 @@ namespace DiceGame.Session.Network
             var moveMagnitude = localInputReader != null
                 ? localInputReader.ReadMove().magnitude
                 : 0f;
-            if (localSpeed > OnlineSessionConstants.LocalCharacterReconcileIdleSpeed
+            if (localSpeed > SessionConstants.LocalCharacterReconcileIdleSpeed
                 || moveMagnitude > 0.1f) {
                 // Actively predicting — do not tug.
                 return;
@@ -206,7 +206,7 @@ namespace DiceGame.Session.Network
             var blended = Vector3.Lerp(
                 current,
                 entity.Position,
-                OnlineSessionConstants.LocalCharacterReconcileBlend);
+                SessionConstants.LocalCharacterReconcileBlend);
             localCharacter.ApplyRollbackState(new CharacterRollbackState {
                 Sequence = 0,
                 Position = blended,
@@ -223,7 +223,7 @@ namespace DiceGame.Session.Network
 
             var current = remoteCharacter.transform.position;
             var error = entity.Position - current;
-            var snapDistance = OnlineSessionConstants.SnapshotInterpSnapDistance;
+            var snapDistance = SessionConstants.SnapshotInterpSnapDistance;
             if (error.sqrMagnitude >= snapDistance * snapDistance) {
                 remoteCharacter.ApplyRollbackState(new CharacterRollbackState {
                     Sequence = 0,
@@ -239,7 +239,7 @@ namespace DiceGame.Session.Network
             var blended = Vector3.Lerp(
                 current,
                 entity.Position,
-                OnlineSessionConstants.LocalCharacterReconcileBlend);
+                SessionConstants.LocalCharacterReconcileBlend);
             if ((blended - current).sqrMagnitude < 0.0001f) {
                 return;
             }

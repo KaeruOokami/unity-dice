@@ -32,9 +32,10 @@ namespace DiceGame.Session.Network
                 pauseMenuUi = gameObject.AddComponent<PauseMenuUi>();
             }
 
-            pauseMenuUi.Configure();
+            var sessionController = FindFirstObjectByType<SessionController>();
+            pauseMenuUi.Configure(sessionController != null ? sessionController.UiFontSettings : null);
             pauseMenuUi.ResumeClicked += () => {
-                messenger?.SendFlowRequestToServer(OnlineSessionConstants.FlowResume);
+                messenger?.SendFlowRequestToServer(SessionConstants.FlowResume);
             };
 
             if (messenger != null) {
@@ -63,32 +64,32 @@ namespace DiceGame.Session.Network
             }
 
             messenger.SendFlowRequestToServer(
-                paused ? OnlineSessionConstants.FlowResume : OnlineSessionConstants.FlowPause);
+                paused ? SessionConstants.FlowResume : SessionConstants.FlowPause);
         }
 
         void OnFlowCommandReceived(byte command, int data) {
             switch (command) {
-                case OnlineSessionConstants.FlowPause:
+                case SessionConstants.FlowPause:
                     ApplyPaused();
                     break;
-                case OnlineSessionConstants.FlowResume:
+                case SessionConstants.FlowResume:
                     ApplyResumed();
                     break;
-                case OnlineSessionConstants.FlowResetMatch:
+                case SessionConstants.FlowResetMatch:
                     if (data != 0) {
-                        OnlineSessionState.Instance?.SetMatchSeed(data);
+                        SessionState.Instance?.SetMatchSeed(data);
                     }
                     MatchFlowFlags.ArmMatchRestart(
-                        OnlinePlayMode.OnlineClient,
-                        OnlineSessionState.Instance?.CurrentSetup,
-                        data != 0 ? data : OnlineSessionState.Instance?.MatchSeed ?? 0);
+                        SessionPlayMode.Client,
+                        SessionState.Instance?.CurrentSetup,
+                        data != 0 ? data : SessionState.Instance?.MatchSeed ?? 0);
                     Time.timeScale = playingTimeScale;
                     UnityEngine.SceneManagement.SceneManager.LoadScene(
                         UnityEngine.SceneManagement.SceneManager.GetActiveScene().buildIndex);
                     break;
-                case OnlineSessionConstants.FlowReturnToTitle:
+                case SessionConstants.FlowReturnToTitle:
                     MatchFlowFlags.ArmTitleReturn();
-                    var session = FindObjectOfType<OnlineSessionController>();
+                    var session = FindFirstObjectByType<SessionController>();
                     session?.PrepareReturnToTitle();
                     Time.timeScale = playingTimeScale;
                     UnityEngine.SceneManagement.SceneManager.LoadScene(
@@ -100,7 +101,7 @@ namespace DiceGame.Session.Network
         void ApplyPaused() {
             paused = true;
             Time.timeScale = 0f;
-            pauseMenuUi?.Show(PauseMenuRole.Client, canOperate: false);
+            pauseMenuUi?.Show(PauseMenuRole.RemoteClient, canOperate: false);
         }
 
         void ApplyResumed() {

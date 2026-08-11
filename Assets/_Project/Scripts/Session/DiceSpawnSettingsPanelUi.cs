@@ -22,20 +22,20 @@ namespace DiceGame.Session
             Transform parent,
             string sectionLabel,
             bool includeInitialDiceCount = true) {
-            var section = LobbyUiFactory.CreateVerticalSection(parent, sectionLabel);
-            LobbyUiFactory.CreateLayoutLabel(section, sectionLabel, 20, 28f);
+            var section = SessionUiFactory.CreateVerticalSection(parent, sectionLabel);
+            SessionUiFactory.CreateLayoutLabel(section, sectionLabel, 20, 28f);
             var bindings = new Bindings {
                 InitialDiceCount = includeInitialDiceCount
-                    ? LobbyUiFactory.CreateLabeledIntInput(section, "Initial Dice Count")
+                    ? SessionUiFactory.CreateLabeledIntInput(section, "Initial Dice Count")
                     : null,
-                AnimateInitialDiceSpawn = LobbyUiFactory.CreateLabeledToggle(section, "Animate Initial Spawn"),
-                ContinuousSpawnEnabled = LobbyUiFactory.CreateLabeledToggle(section, "Continuous Spawn Enabled"),
-                SpawnInterval = LobbyUiFactory.CreateLabeledFloatInput(section, "Spawn Interval"),
-                SpawnIntervalJitter = LobbyUiFactory.CreateLabeledFloatInput(section, "Spawn Interval Jitter")
+                AnimateInitialDiceSpawn = SessionUiFactory.CreateLabeledToggle(section, "Animate Initial Spawn"),
+                ContinuousSpawnEnabled = SessionUiFactory.CreateLabeledToggle(section, "Continuous Spawn Enabled"),
+                SpawnInterval = SessionUiFactory.CreateLabeledFloatInput(section, "Spawn Interval"),
+                SpawnIntervalJitter = SessionUiFactory.CreateLabeledFloatInput(section, "Spawn Interval Jitter")
             };
 
-            LobbyUiFactory.CreateLayoutLabel(section, "Bottom Spawn Weight", 18, 24f);
-            bindings.BottomSpawnWeight = LobbyUiFactory.CreateLayoutSlider(
+            SessionUiFactory.CreateLayoutLabel(section, "Bottom Spawn Weight", 18, 24f);
+            bindings.BottomSpawnWeight = SessionUiFactory.CreateLayoutSlider(
                 section,
                 "BottomSpawnWeightSlider",
                 36f,

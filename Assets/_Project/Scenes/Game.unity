@@ -706,5 +706,5 @@ MonoBehaviour:
   gameBootstrap: {fileID: 1900000013}
   matchSetupPresetRegistry: {fileID: 11400000, guid: f1e2d3c4b5a6478990abcdef10000002,
     type: 2}
-  lobbyUiFont: {fileID: 11400000, guid: 8f586378b4e144a9851e7b34d9b748ee, type: 2}
+  uiFontSettings: {fileID: 11400000, guid: d4e5f6a7b8c9491234567890abcdef03, type: 2}
   showLobbyOnStart: 1

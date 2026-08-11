@@ -40,7 +40,7 @@ namespace DiceGame.Session
         }
 
         void Build() {
-            LobbyUiFactory.CreateLayoutLabel(
+            SessionUiFactory.CreateLayoutLabel(
                 contentRoot,
                 $"Mode: {GameModeDisplayNames.GetDisplayName(mode)}",
                 22,
@@ -48,7 +48,7 @@ namespace DiceGame.Session
             var defaults = registry.CreateDefaultSnapshot(mode);
 
             if (mode == GameMode.Versus) {
-                versusSharedInitialDiceCount = LobbyUiFactory.CreateLabeledIntInput(
+                versusSharedInitialDiceCount = SessionUiFactory.CreateLabeledIntInput(
                     contentRoot,
                     "Initial Dice Count (1P/2P Shared)");
                 jumboUi = JumboDiceSettingsPanelUi.Build(contentRoot, "Jumbo Dice Settings");
@@ -73,13 +73,13 @@ namespace DiceGame.Session
             }
 
             if (contentRoot is RectTransform contentRect) {
-                LobbyUiFactory.ForceRebuildLayout(contentRect);
+                SessionUiFactory.ForceRebuildLayout(contentRect);
             }
         }
 
         void CreatePlayerSlotSwitcher() {
-            LobbyUiFactory.CreateLayoutLabel(contentRoot, "Player", 18, 24f);
-            var dropdown = LobbyUiFactory.CreateLayoutDropdown(
+            SessionUiFactory.CreateLayoutLabel(contentRoot, "Player", 18, 24f);
+            var dropdown = SessionUiFactory.CreateLayoutDropdown(
                 contentRoot,
                 "PlayerSlotDropdown",
                 new[] { "1P", "2P" },
@@ -97,13 +97,13 @@ namespace DiceGame.Session
             }
 
             if (contentRoot is RectTransform contentRect) {
-                LobbyUiFactory.ForceRebuildLayout(contentRect);
+                SessionUiFactory.ForceRebuildLayout(contentRect);
             }
         }
 
         PlayerSlotUi CreatePlayerSection(string slotLabel, bool versus, PlayerSlotSetup defaults) {
-            var root = LobbyUiFactory.CreateVerticalSection(contentRoot, $"{slotLabel}Root");
-            LobbyUiFactory.CreateLayoutLabel(root, $"{slotLabel} Settings", 22, 30f);
+            var root = SessionUiFactory.CreateVerticalSection(contentRoot, $"{slotLabel}Root");
+            SessionUiFactory.CreateLayoutLabel(root, $"{slotLabel} Settings", 22, 30f);
             var section = new PlayerSlotUi {
                 Root = root.gameObject,
                 AiDropdown = CreateEnumRow(root, $"{slotLabel} Control", new[] { "Controller", "AI" }),
@@ -141,7 +141,7 @@ namespace DiceGame.Session
             section.DeviceDropdown.gameObject.SetActive(!isAi);
             section.GamepadIndexDropdown.gameObject.SetActive(!isAi && section.DeviceDropdown.value == 1);
             if (contentRoot is RectTransform contentRect) {
-                LobbyUiFactory.ForceRebuildLayout(contentRect);
+                SessionUiFactory.ForceRebuildLayout(contentRect);
             }
         }
 
@@ -325,8 +325,8 @@ namespace DiceGame.Session
         }
 
         static TMP_Dropdown CreateEnumRow(Transform parent, string label, string[] options) {
-            LobbyUiFactory.CreateLayoutLabel(parent, label, 18, 24f);
-            return LobbyUiFactory.CreateLayoutDropdown(parent, $"{label}Dropdown", options, 40f);
+            SessionUiFactory.CreateLayoutLabel(parent, label, 18, 24f);
+            return SessionUiFactory.CreateLayoutDropdown(parent, $"{label}Dropdown", options, 40f);
         }
     }
 }

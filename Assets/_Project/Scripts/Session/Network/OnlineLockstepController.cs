@@ -15,7 +15,7 @@ namespace DiceGame.Session.Network
     /// Hash compare detects DESYNC; auto board snap is off by default.
     /// </summary>
     [DefaultExecutionOrder(-100)]
-    public sealed class OnlineDualSimInputBinder : MonoBehaviour
+    public sealed class OnlineLockstepController : MonoBehaviour
     {
         OnlineNetMessenger messenger;
         DiceRegistry registry;
@@ -34,7 +34,7 @@ namespace DiceGame.Session.Network
         GameCharacterController player1Character;
         GameCharacterController player2Character;
         readonly OnlineLockstepInputBuffer inputBuffer =
-            new(OnlineSessionConstants.LockstepInputBufferTicks);
+            new(SessionConstants.LockstepInputBufferTicks);
         readonly List<OnlineInputPayload> inputBatchScratch = new();
         readonly Dictionary<uint, uint> localHashes = new();
         readonly Dictionary<uint, uint> remoteHashes = new();
@@ -113,7 +113,7 @@ namespace DiceGame.Session.Network
             BindCharacters(characters);
 
             if (messenger == null) {
-                Debug.LogError("OnlineDualSimInputBinder.Configure: messenger is null.");
+                Debug.LogError("OnlineLockstepController.Configure: messenger is null.");
                 return;
             }
 
@@ -131,9 +131,9 @@ namespace DiceGame.Session.Network
 
             SendLockstepReady();
             nextReadySendTime = Time.realtimeSinceStartup
-                + OnlineSessionConstants.LockstepReadyRetryIntervalSeconds;
+                + SessionConstants.LockstepReadyRetryIntervalSeconds;
             Debug.Log(
-                $"OnlineDualSimInputBinder: listening slot={localSlot} host={isHost}; " +
+                $"OnlineLockstepController: listening slot={localSlot} host={isHost}; " +
                 "waiting for LockstepReady before Prefill.");
         }
 
@@ -169,7 +169,7 @@ namespace DiceGame.Session.Network
             player2Character = null;
 
             if (spawnedCharacters == null) {
-                Debug.LogError("OnlineDualSimInputBinder: spawnedCharacters is null.");
+                Debug.LogError("OnlineLockstepController: spawnedCharacters is null.");
                 return;
             }
 
@@ -219,21 +219,21 @@ namespace DiceGame.Session.Network
 
             if (localCharacter == null || localTickInput == null || localHardwareInput == null) {
                 Debug.LogError(
-                    $"OnlineDualSimInputBinder: local lockstep wiring failed for slot={localSlot}.");
+                    $"OnlineLockstepController: local lockstep wiring failed for slot={localSlot}.");
             }
 
             if (remoteCharacter == null || remoteTickInput == null) {
                 Debug.LogError(
-                    $"OnlineDualSimInputBinder: remote lockstep wiring failed for slot={remoteSlot}.");
+                    $"OnlineLockstepController: remote lockstep wiring failed for slot={remoteSlot}.");
             }
 
             if (player1Character == null || player2Character == null) {
-                Debug.LogError("OnlineDualSimInputBinder: need both Player1 and Player2 characters.");
+                Debug.LogError("OnlineLockstepController: need both Player1 and Player2 characters.");
             }
         }
 
         void PrefillLocalDelayWindowFrom(uint startTick) {
-            var end = startTick + (uint)OnlineSessionConstants.InputDelayTicks;
+            var end = startTick + (uint)SessionConstants.InputDelayTicks;
             for (var tick = startTick; tick < end; tick++) {
                 CommitLocalInputForTick(tick);
             }
@@ -257,7 +257,7 @@ namespace DiceGame.Session.Network
                 PrefillLocalDelayWindowFrom(0);
                 prefillDone = true;
                 nextResendTime = 0f;
-                Debug.Log("OnlineDualSimInputBinder: peer ready; Prefill sent, lockstep running.");
+                Debug.Log("OnlineLockstepController: peer ready; Prefill sent, lockstep running.");
             }
 
             GameplaySimClock.BeginUnityFrame();
@@ -271,7 +271,7 @@ namespace DiceGame.Session.Network
                 return;
             }
 
-            nextReadySendTime = now + OnlineSessionConstants.LockstepReadyRetryIntervalSeconds;
+            nextReadySendTime = now + SessionConstants.LockstepReadyRetryIntervalSeconds;
             SendLockstepReady();
         }
 
@@ -285,7 +285,7 @@ namespace DiceGame.Session.Network
             repliedToPeerReady = true;
             SendLockstepReady();
             if (becameReady) {
-                Debug.Log($"OnlineDualSimInputBinder: LockstepReady from peer (slot={localSlot}).");
+                Debug.Log($"OnlineLockstepController: LockstepReady from peer (slot={localSlot}).");
             }
         }
 
@@ -334,15 +334,15 @@ namespace DiceGame.Session.Network
                 return;
             }
 
-            nextResendTime = now + OnlineSessionConstants.LockstepInputResendIntervalSeconds;
+            nextResendTime = now + SessionConstants.LockstepInputResendIntervalSeconds;
             SendLocalInputWindow(expandLookback: stalledWaitingForRemote);
         }
 
         void SendLocalInputWindow(bool expandLookback = false) {
-            var delay = (uint)OnlineSessionConstants.InputDelayTicks;
+            var delay = (uint)SessionConstants.InputDelayTicks;
             var lookback = expandLookback
-                ? (uint)OnlineSessionConstants.LockstepInputRetainTicks
-                : (uint)OnlineSessionConstants.LockstepInputRedundancyTicks;
+                ? (uint)SessionConstants.LockstepInputRetainTicks
+                : (uint)SessionConstants.LockstepInputRedundancyTicks;
             var endTick = currentTick + delay;
             var startTick = currentTick > lookback ? currentTick - lookback : 0u;
             SendLocalInputRange(startTick, endTick);
@@ -372,17 +372,17 @@ namespace DiceGame.Session.Network
                 return;
             }
 
-            var simDt = OnlineSessionConstants.SimTickSeconds;
+            var simDt = SessionConstants.SimTickSeconds;
             simulatorAccumulator += Time.deltaTime;
-            var maxCredit = simDt * OnlineSessionConstants.LockstepMaxStepsPerFrame;
+            var maxCredit = simDt * SessionConstants.LockstepMaxStepsPerFrame;
             if (simulatorAccumulator > maxCredit) {
                 simulatorAccumulator = maxCredit;
             }
 
             var steps = 0;
             while (simulatorAccumulator >= simDt
-                && steps < OnlineSessionConstants.LockstepMaxStepsPerFrame) {
-                var scheduleTick = currentTick + (uint)OnlineSessionConstants.InputDelayTicks;
+                && steps < SessionConstants.LockstepMaxStepsPerFrame) {
+                var scheduleTick = currentTick + (uint)SessionConstants.InputDelayTicks;
                 if (!inputBuffer.Has(localSlot, scheduleTick)) {
                     CommitLocalInputForTick(scheduleTick);
                     SendLocalInputWindow();
@@ -404,7 +404,7 @@ namespace DiceGame.Session.Network
         void StepSimulationTick(float simDt) {
             if (!inputBuffer.TryGet(PlayerSlot.Player1, currentTick, out var p1)
                 || !inputBuffer.TryGet(PlayerSlot.Player2, currentTick, out var p2)) {
-                Debug.LogError($"OnlineDualSimInputBinder: missing inputs for tick={currentTick}.");
+                Debug.LogError($"OnlineLockstepController: missing inputs for tick={currentTick}.");
                 return;
             }
 
@@ -425,8 +425,8 @@ namespace DiceGame.Session.Network
 
                 currentTick++;
                 inputBuffer.DiscardBefore(
-                    currentTick > (uint)OnlineSessionConstants.LockstepInputRetainTicks
-                        ? currentTick - (uint)OnlineSessionConstants.LockstepInputRetainTicks
+                    currentTick > (uint)SessionConstants.LockstepInputRetainTicks
+                        ? currentTick - (uint)SessionConstants.LockstepInputRetainTicks
                         : 0u);
 
                 MaybeEmitSimHash();
@@ -437,7 +437,7 @@ namespace DiceGame.Session.Network
 
         void MaybeEmitSimHash() {
             if (currentTick == 0
-                || currentTick % (uint)OnlineSessionConstants.LockstepHashIntervalTicks != 0) {
+                || currentTick % (uint)SessionConstants.LockstepHashIntervalTicks != 0) {
                 return;
             }
 
@@ -483,8 +483,8 @@ namespace DiceGame.Session.Network
             }
 
             Debug.LogError(
-                $"OnlineDualSimInputBinder: DESYNC tick={tick} hostHash={local:X8} clientHash={remote:X8}");
-            if (OnlineSessionConstants.LockstepAutoResyncEnabled) {
+                $"OnlineLockstepController: DESYNC tick={tick} hostHash={local:X8} clientHash={remote:X8}");
+            if (SessionConstants.LockstepAutoResyncEnabled) {
                 SendHostResync();
             }
         }
@@ -499,7 +499,7 @@ namespace DiceGame.Session.Network
                 return;
             }
 
-            nextResyncAllowedTime = now + OnlineSessionConstants.LockstepResyncCooldownSeconds;
+            nextResyncAllowedTime = now + SessionConstants.LockstepResyncCooldownSeconds;
             var payload = new OnlineSimResyncPayload {
                 Tick = currentTick,
                 Entities = OnlineSimBoardSnapshotBuilder.Build(
@@ -511,7 +511,7 @@ namespace DiceGame.Session.Network
             messenger.SendSimResyncToClients(payload);
             nextResendTime = 0f;
             Debug.Log(
-                $"OnlineDualSimInputBinder: sent resync tick={currentTick} " +
+                $"OnlineLockstepController: sent resync tick={currentTick} " +
                 $"entities={payload.Entities?.Length ?? 0}");
         }
 
@@ -531,7 +531,7 @@ namespace DiceGame.Session.Network
                     entityIds);
                 AlignAfterResync(payload.Tick);
                 Debug.Log(
-                    $"OnlineDualSimInputBinder: applied resync tick={payload.Tick} " +
+                    $"OnlineLockstepController: applied resync tick={payload.Tick} " +
                     $"entities={payload.Entities?.Length ?? 0}");
             } finally {
                 applyingResync = false;
@@ -593,9 +593,9 @@ namespace DiceGame.Session.Network
                 return;
             }
 
-            var maxPerBatch = OnlineSessionConstants.LockstepInputMaxPayloadsPerBatch;
+            var maxPerBatch = SessionConstants.LockstepInputMaxPayloadsPerBatch;
             if (maxPerBatch <= 0) {
-                Debug.LogError("OnlineDualSimInputBinder: LockstepInputMaxPayloadsPerBatch must be > 0.");
+                Debug.LogError("OnlineLockstepController: LockstepInputMaxPayloadsPerBatch must be > 0.");
                 return;
             }
 
@@ -668,8 +668,8 @@ namespace DiceGame.Session.Network
             var hasLocal = inputBuffer.Has(localSlot, currentTick);
             var hasRemote = inputBuffer.Has(remoteSlot, currentTick);
             Debug.LogWarning(
-                $"OnlineDualSimInputBinder: lockstep stall tick={currentTick} " +
-                $"local={hasLocal} remote={hasRemote} delay={OnlineSessionConstants.InputDelayTicks}");
+                $"OnlineLockstepController: lockstep stall tick={currentTick} " +
+                $"local={hasLocal} remote={hasRemote} delay={SessionConstants.InputDelayTicks}");
         }
     }
 }

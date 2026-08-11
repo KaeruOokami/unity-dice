@@ -16,13 +16,13 @@ namespace DiceGame.Session
         }
 
         public static Bindings Build(Transform parent, string sectionLabel) {
-            var section = LobbyUiFactory.CreateVerticalSection(parent, sectionLabel);
-            LobbyUiFactory.CreateLayoutLabel(section, sectionLabel, 20, 28f);
+            var section = SessionUiFactory.CreateVerticalSection(parent, sectionLabel);
+            SessionUiFactory.CreateLayoutLabel(section, sectionLabel, 20, 28f);
             return new Bindings {
-                Enabled = LobbyUiFactory.CreateLabeledToggle(section, "Jumbo Enabled"),
-                SequenceStartFace = LobbyUiFactory.CreateLabeledIntInput(section, "Sequence Start Face"),
-                SequenceEndFace = LobbyUiFactory.CreateLabeledIntInput(section, "Sequence End Face"),
-                MaxPerBoard = LobbyUiFactory.CreateLabeledIntInput(section, "Max Jumbo / Board")
+                Enabled = SessionUiFactory.CreateLabeledToggle(section, "Jumbo Enabled"),
+                SequenceStartFace = SessionUiFactory.CreateLabeledIntInput(section, "Sequence Start Face"),
+                SequenceEndFace = SessionUiFactory.CreateLabeledIntInput(section, "Sequence End Face"),
+                MaxPerBoard = SessionUiFactory.CreateLabeledIntInput(section, "Max Jumbo / Board")
             };
         }
 

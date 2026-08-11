@@ -5,7 +5,7 @@ using UnityEngine.UI;
 
 namespace DiceGame.Session
 {
-    public static class LobbyUiFactory
+    public static class SessionUiFactory
     {
         static TMP_FontAsset uiFont;
 
@@ -53,7 +53,7 @@ namespace DiceGame.Session
             text.fontSize = fontSize;
             text.alignment = ToTextAlignment(anchor);
             text.color = Color.white;
-            text.enableWordWrapping = true;
+            text.textWrappingMode = TextWrappingModes.Normal;
             text.overflowMode = TextOverflowModes.Overflow;
             text.raycastTarget = false;
             return text;
@@ -172,7 +172,7 @@ namespace DiceGame.Session
             text.fontSize = fontSize;
             text.alignment = alignment;
             text.color = Color.white;
-            text.enableWordWrapping = true;
+            text.textWrappingMode = TextWrappingModes.Normal;
             text.overflowMode = TextOverflowModes.Overflow;
             text.raycastTarget = false;
             return text;
@@ -503,7 +503,7 @@ namespace DiceGame.Session
 
         static void ApplyFont(TextMeshProUGUI text) {
             if (uiFont == null) {
-                Debug.LogError("[LobbyUiFactory] TMP font is not configured.");
+                Debug.LogError("[SessionUiFactory] TMP font is not configured.");
                 return;
             }
 

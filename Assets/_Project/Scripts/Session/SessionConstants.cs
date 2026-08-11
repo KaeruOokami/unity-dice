@@ -1,6 +1,6 @@
 namespace DiceGame.Session
 {
-    public static class OnlineSessionConstants
+    public static class SessionConstants
     {
         public const int MaxPlayers = 2;
         public const string LobbyDataRelayJoinCode = "RelayJoinCode";

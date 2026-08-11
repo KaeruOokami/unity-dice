@@ -3,7 +3,7 @@ using UnityEngine;
 
 namespace DiceGame.Gameplay
 {
-    public static class GameWorldVisibility
+    public static class BoardVisibility
     {
         public static void SetBoardVisible(Board board, bool visible) {
             if (board == null) {

@@ -143,14 +143,14 @@ namespace DiceGame.Session
         }
 
         static string GetLocalDirectoryPath() {
-            return Path.Combine(Application.persistentDataPath, OnlineSessionConstants.MatchSetupPersistDirectory);
+            return Path.Combine(Application.persistentDataPath, SessionConstants.MatchSetupPersistDirectory);
         }
 
         static string GetOnlineDirectoryPath() {
             return Path.Combine(
                 Application.persistentDataPath,
-                OnlineSessionConstants.MatchSetupPersistDirectory,
-                OnlineSessionConstants.MatchSetupOnlinePersistDirectory);
+                SessionConstants.MatchSetupPersistDirectory,
+                SessionConstants.MatchSetupOnlinePersistDirectory);
         }
 
         static string SanitizeFileToken(string value) {

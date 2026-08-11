@@ -1,4 +1,6 @@
 using System;
+using DiceGame.Config;
+using TMPro;
 using UnityEngine;
 using UnityEngine.EventSystems;
 using UnityEngine.UI;
@@ -7,26 +9,32 @@ namespace DiceGame.Gameplay
 {
     public enum PauseMenuRole
     {
-        /// <summary>Resume + return to title (host / local).</summary>
-        Host,
-        /// <summary>Resume only (online client).</summary>
-        Client
+        /// <summary>Resume + return to title (local / online host).</summary>
+        Owner,
+        /// <summary>Resume only (online remote client).</summary>
+        RemoteClient
     }
 
     public sealed class PauseMenuUi : MonoBehaviour
     {
+        TMP_FontAsset uiFont;
         Canvas canvas;
         GameObject panel;
         Button resumeButton;
         Button titleButton;
-        Text subtitleText;
-        PauseMenuRole currentRole = PauseMenuRole.Host;
+        TextMeshProUGUI subtitleText;
+        PauseMenuRole currentRole = PauseMenuRole.Owner;
         bool canOperatePause = true;
 
         public event Action ResumeClicked;
         public event Action ReturnToTitleClicked;
 
-        public void Configure() {
+        public void Configure(UiFontSettings fontSettings) {
+            if (fontSettings == null || !fontSettings.TryGetPrimaryFont(out uiFont)) {
+                Debug.LogError("[PauseMenuUi] UiFontSettings primary font is not assigned.");
+                return;
+            }
+
             EnsureEventSystem();
             BuildUi();
             Hide();
@@ -48,10 +56,8 @@ namespace DiceGame.Gameplay
             }
 
             if (titleButton != null) {
-                // Host/Client UI difference (Title only on Host) stays as-is;
-                // operability is gated by who initiated the pause.
-                titleButton.gameObject.SetActive(role == PauseMenuRole.Host);
-                titleButton.interactable = role == PauseMenuRole.Host && canOperate;
+                titleButton.gameObject.SetActive(role == PauseMenuRole.Owner);
+                titleButton.interactable = role == PauseMenuRole.Owner && canOperate;
             }
 
             if (subtitleText != null) {
@@ -90,8 +96,8 @@ namespace DiceGame.Gameplay
             panel = CreatePanel(dim.transform, "Panel", new Color(0.12f, 0.12f, 0.14f, 0.95f));
             CenterPanel(panel.GetComponent<RectTransform>(), new Vector2(480f, 340f));
 
-            CreateText(panel.transform, "Title", "Pause", 40, TextAnchor.UpperCenter);
-            subtitleText = CreateText(panel.transform, "Subtitle", string.Empty, 22, TextAnchor.UpperCenter);
+            CreateText(panel.transform, "Title", "Pause", 40, TextAlignmentOptions.Top);
+            subtitleText = CreateText(panel.transform, "Subtitle", string.Empty, 22, TextAlignmentOptions.Top);
             var subtitleRect = subtitleText.GetComponent<RectTransform>();
             subtitleRect.anchorMin = new Vector2(0.1f, 0.55f);
             subtitleRect.anchorMax = new Vector2(0.9f, 0.7f);
@@ -104,14 +110,14 @@ namespace DiceGame.Gameplay
                 }
             });
             titleButton = CreateButton(panel.transform, "TitleButton", "Return to Title", new Vector2(0f, -80f), () => {
-                if (currentRole == PauseMenuRole.Host && canOperatePause) {
+                if (currentRole == PauseMenuRole.Owner && canOperatePause) {
                     ReturnToTitleClicked?.Invoke();
                 }
             });
         }
 
         static void EnsureEventSystem() {
-            if (FindObjectOfType<EventSystem>() != null) {
+            if (FindFirstObjectByType<EventSystem>() != null) {
                 return;
             }
 
@@ -125,32 +131,31 @@ namespace DiceGame.Gameplay
             panelObject.transform.SetParent(parent, false);
             var image = panelObject.AddComponent<Image>();
             image.color = color;
-            // Image already adds RectTransform; do not AddComponent again.
             return panelObject;
         }
 
-        static Text CreateText(
+        TextMeshProUGUI CreateText(
             Transform parent,
             string name,
             string content,
             int fontSize,
-            TextAnchor anchor) {
+            TextAlignmentOptions alignment) {
             var go = new GameObject(name);
             go.transform.SetParent(parent, false);
             var rect = go.AddComponent<RectTransform>();
             StretchFull(rect);
-            var text = go.AddComponent<Text>();
+            var text = go.AddComponent<TextMeshProUGUI>();
             text.text = content;
-            text.font = Resources.GetBuiltinResource<Font>("Arial.ttf");
+            text.font = uiFont;
             text.fontSize = fontSize;
-            text.alignment = anchor;
+            text.alignment = alignment;
             text.color = Color.white;
-            text.horizontalOverflow = HorizontalWrapMode.Wrap;
-            text.verticalOverflow = VerticalWrapMode.Overflow;
+            text.enableWordWrapping = true;
+            text.overflowMode = TextOverflowModes.Overflow;
             return text;
         }
 
-        static Button CreateButton(
+        Button CreateButton(
             Transform parent,
             string name,
             string label,
@@ -168,7 +173,7 @@ namespace DiceGame.Gameplay
             button.targetGraphic = image;
             button.onClick.AddListener(() => onClick?.Invoke());
 
-            CreateText(go.transform, "Label", label, 26, TextAnchor.MiddleCenter);
+            CreateText(go.transform, "Label", label, 26, TextAlignmentOptions.Center);
             return button;
         }
 

@@ -4,30 +4,30 @@ using UnityEngine;
 
 namespace DiceGame.Session
 {
-    public sealed class OnlineSessionState : MonoBehaviour
+    public sealed class SessionState : MonoBehaviour
     {
-        public static OnlineSessionState Instance { get; private set; }
+        public static SessionState Instance { get; private set; }
 
-        public OnlinePlayMode PlayMode { get; private set; } = OnlinePlayMode.Unspecified;
+        public SessionPlayMode PlayMode { get; private set; } = SessionPlayMode.Unspecified;
         public string LobbyCode { get; private set; } = string.Empty;
         public string StatusMessage { get; private set; } = string.Empty;
         public bool IsMatchRunning { get; private set; }
         public int ConnectedPlayerCount { get; private set; }
         public MatchSetupSnapshot CurrentSetup { get; private set; }
-        public GameMode OnlineGameMode { get; private set; } = GameMode.Versus;
+        public GameMode LobbyGameMode { get; private set; } = GameMode.Versus;
         public string RemotePeerPlayerId { get; private set; } = string.Empty;
         public int MatchSeed { get; private set; }
 
         public PlayerSlot LocalPlayerSlot =>
-            PlayMode == OnlinePlayMode.OnlineClient ? PlayerSlot.Player2 : PlayerSlot.Player1;
+            PlayMode == SessionPlayMode.Client ? PlayerSlot.Player2 : PlayerSlot.Player1;
 
         public PlayerSlot RemotePlayerSlot =>
             LocalPlayerSlot == PlayerSlot.Player1 ? PlayerSlot.Player2 : PlayerSlot.Player1;
 
         public bool IsOnline =>
-            PlayMode == OnlinePlayMode.OnlineHost || PlayMode == OnlinePlayMode.OnlineClient;
+            PlayMode == SessionPlayMode.Host || PlayMode == SessionPlayMode.Client;
 
-        public bool IsHost => PlayMode == OnlinePlayMode.OnlineHost;
+        public bool IsHost => PlayMode == SessionPlayMode.Host;
 
         public event Action MatchStartRequested;
         public event Action StateChanged;
@@ -47,7 +47,7 @@ namespace DiceGame.Session
             }
         }
 
-        public void SetPlayMode(OnlinePlayMode mode) {
+        public void SetPlayMode(SessionPlayMode mode) {
             PlayMode = mode;
             RaiseStateChanged();
         }
@@ -77,8 +77,8 @@ namespace DiceGame.Session
             RaiseStateChanged();
         }
 
-        public void SetOnlineGameMode(GameMode mode) {
-            OnlineGameMode = mode;
+        public void SetLobbyGameMode(GameMode mode) {
+            LobbyGameMode = mode;
             RaiseStateChanged();
         }
 

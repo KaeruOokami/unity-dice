@@ -1,4 +1,5 @@
 {
+    "version": 1,
     "name": "PlayerInputActions",
     "maps": [
         {
@@ -18,7 +19,7 @@
                     "name": "Lift",
                     "type": "Button",
                     "id": "c3d4e5f6-a7b8-4901-c234-56789abcdef0",
-                    "expectedControlType": "Button",
+                    "expectedControlType": "",
                     "processors": "",
                     "interactions": "",
                     "initialStateCheck": false
@@ -27,7 +28,7 @@
                     "name": "Jump",
                     "type": "Button",
                     "id": "d4e5f6a7-b8c9-4012-d345-6789abcdef01",
-                    "expectedControlType": "Button",
+                    "expectedControlType": "",
                     "processors": "",
                     "interactions": "",
                     "initialStateCheck": false

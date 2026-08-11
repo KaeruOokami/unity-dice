@@ -4,7 +4,7 @@ using UnityEngine;
 
 namespace DiceGame.Session
 {
-    public static class OnlineNetworkHost
+    public static class OnlineNetworkBootstrap
     {
         public static NetworkManager EnsureNetworkManager() {
             if (NetworkManager.Singleton != null) {
@@ -28,7 +28,7 @@ namespace DiceGame.Session
             networkManager.NetworkConfig.PlayerPrefab = null;
             ApplyDiagnosticNetworkSettings(networkManager);
             Debug.Log(
-                $"OnlineNetworkHost: created NetworkManager (LogLevel={networkManager.LogLevel}).");
+                $"OnlineNetworkBootstrap: created NetworkManager (LogLevel={networkManager.LogLevel}).");
             return networkManager;
         }
 

@@ -3,22 +3,22 @@ using UnityEngine;
 
 namespace DiceGame.Session.Editor
 {
-    public static class OnlineSessionSetupMenu
+    public static class SessionSetupMenu
     {
         const string ServicesUrl = "https://dashboard.unity3d.com/";
 
-        [MenuItem("Dice/Online/Open Unity Gaming Services Dashboard")]
+        [MenuItem("Dice/Session/Open Unity Gaming Services Dashboard")]
         static void OpenDashboard() {
             Application.OpenURL(ServicesUrl);
         }
 
-        [MenuItem("Dice/Online/Select OnlineSessionController In Scene")]
+        [MenuItem("Dice/Session/Select SessionController In Scene")]
         static void SelectController() {
-            var controller = Object.FindObjectOfType<OnlineSessionController>();
+            var controller = Object.FindFirstObjectByType<SessionController>();
             if (controller == null) {
                 EditorUtility.DisplayDialog(
-                    "Online Session",
-                    "OnlineSessionController がシーンにありません。Game シーンの GameBootstrap に付いている想定です。",
+                    "Session",
+                    "SessionController がシーンにありません。Game シーンの GameBootstrap に付いている想定です。",
                     "OK");
                 return;
             }

@@ -14,13 +14,13 @@ namespace DiceGame.Session
         }
 
         public static Bindings Build(Transform parent, string sectionLabel, DiceCatalogData template) {
-            var section = LobbyUiFactory.CreateVerticalSection(parent, sectionLabel);
-            LobbyUiFactory.CreateLayoutLabel(section, sectionLabel, 20, 28f);
+            var section = SessionUiFactory.CreateVerticalSection(parent, sectionLabel);
+            SessionUiFactory.CreateLayoutLabel(section, sectionLabel, 20, 28f);
 
             var entries = template.Entries ?? System.Array.Empty<DiceCatalogEntryData>();
             var weightFields = new TMP_InputField[entries.Length];
             for (var i = 0; i < entries.Length; i++) {
-                weightFields[i] = LobbyUiFactory.CreateLabeledFloatInput(section, $"{entries[i].Kind} Spawn Weight");
+                weightFields[i] = SessionUiFactory.CreateLabeledFloatInput(section, $"{entries[i].Kind} Spawn Weight");
             }
 
             return new Bindings {

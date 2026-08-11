@@ -1,10 +1,10 @@
 namespace DiceGame.Session
 {
-    public enum OnlinePlayMode
+    public enum SessionPlayMode
     {
         Unspecified,
         Local,
-        OnlineHost,
-        OnlineClient
+        Host,
+        Client
     }
 }
