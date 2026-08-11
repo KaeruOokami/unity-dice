@@ -794,9 +794,13 @@ namespace DiceGame.Gameplay
             return true;
         }
 
-        public bool TryExecuteCancelReverseGroundMovePlan(
-            DiceGridMovePlan plan,
+        /// <summary>
+        /// Cancel an interrupted ground roll by undoing logical placement to
+        /// <paramref name="undoToState"/> and playing the cancel visual from the snapshot.
+        /// </summary>
+        public bool TryExecuteCancelUndoGroundRoll(
             DiceRollVisualSnapshot snapshot,
+            DiceState undoToState,
             float cancelProgress) {
             if (IsErasing || isVanishing || isCarried || isRolling || board == null || diceView == null || registry == null) {
                 return false;
@@ -806,7 +810,10 @@ namespace DiceGame.Gameplay
                 return false;
             }
 
-            ApplyLogicalMove(plan.From, plan.To);
+            if (!RollbackLogicalStateOnly(undoToState)) {
+                return false;
+            }
+
             var duration = diceView != null
                 ? diceView.GetCancelRollLogicalDuration(cancelProgress)
                 : LogicalMotionFallbackSeconds;
@@ -817,7 +824,7 @@ namespace DiceGame.Gameplay
             });
             diceView.PlayCancelGroundRollVisual(
                 snapshot,
-                plan.To,
+                undoToState,
                 cancelProgress,
                 board,
                 registry,

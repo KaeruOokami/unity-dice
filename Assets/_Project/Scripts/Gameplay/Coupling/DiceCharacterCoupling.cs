@@ -195,8 +195,6 @@ namespace DiceGame.Gameplay.Coupling
             return cancelKind switch {
                 RollCancelKind.Reverse => TryExecuteReverseRollCancel(
                     rollProgress,
-                    movementTransition,
-                    passabilityReachY,
                     nextXZ,
                     halfExtent),
                 RollCancelKind.SwitchToJump => TryExecuteJumpSwitchRollCancel(
@@ -263,10 +261,12 @@ namespace DiceGame.Gameplay.Coupling
             actionContext?.RegisterActionDice(standing.CurrentDice, playerSlot);
         }
 
+        /// <summary>
+        /// Undo the active ground roll back to <see cref="RollCancelSession.OriginalPlan"/>.From.
+        /// This is not a new move: do not re-evaluate passability (Parallel and Demote share this path).
+        /// </summary>
         bool TryExecuteReverseRollCancel(
             float cancelProgress,
-            MovementTransitionEvaluator movementTransition,
-            float passabilityReachY,
             Vector2 nextXZ,
             float halfExtent) {
             var dice = standing.CurrentDice;
@@ -274,35 +274,27 @@ namespace DiceGame.Gameplay.Coupling
                 return false;
             }
 
-            var originalPlan = rollCancelSession.OriginalPlan;
+            var undoToState = rollCancelSession.OriginalPlan.From;
             if (!dice.TryInterruptActiveRoll(out var snapshot)) {
                 return false;
             }
 
-            var reverseDirection = originalPlan.Direction.Opposite();
-            if (!movementTransition.TryBuildGridMovePlan(
-                dice.CurrentState,
-                reverseDirection,
-                originalPlan.Distance,
-                PassabilityContext.ForGround(passabilityReachY),
-                out var reversePlan,
-                out _)) {
-                dice.View.SnapTo(dice.CurrentState, board, registry);
+            if (!dice.RollbackLogicalStateOnly(undoToState)) {
                 return false;
             }
 
+            standing.SetOnDice(undoToState.GridPos, undoToState.Tier, dice);
             ClearRollCancelSession();
-
             RegisterStandingDiceForAction();
-            if (!dice.TryExecuteCancelReverseGroundMovePlan(reversePlan, snapshot, cancelProgress)) {
+            if (!dice.TryExecuteCancelUndoGroundRoll(snapshot, undoToState, cancelProgress)) {
                 Debug.LogError(
-                    $"DiceCharacterCoupling: reverse roll cancel execution failed " +
-                    $"from={reversePlan.From.GridPos} to={reversePlan.To.GridPos}");
-                dice.View.SnapTo(dice.CurrentState, board, registry);
+                    $"DiceCharacterCoupling: reverse roll cancel undo failed " +
+                    $"to=({undoToState.GridPos.x},{undoToState.GridPos.y}) tier={undoToState.Tier}");
+                dice.View.SnapTo(undoToState, board, registry);
                 return false;
             }
 
-            FinalizeCancelMoveFollow(dice, reversePlan.To, jumpArc: false, nextXZ, halfExtent);
+            FinalizeCancelMoveFollow(dice, undoToState, jumpArc: false, nextXZ, halfExtent);
             return true;
         }
 
