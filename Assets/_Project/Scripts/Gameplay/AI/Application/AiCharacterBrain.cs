@@ -1,6 +1,7 @@
 using DiceGame.Config;
 using DiceGame.Gameplay.AI.Application.Actions;
 using DiceGame.Gameplay.AI.Domain;
+using DiceGame.Grid;
 using DiceGame.Placement;
 using UnityEngine;
 
@@ -17,10 +18,15 @@ namespace DiceGame.Gameplay.AI.Application
         AiExecutionContext executionContext;
         MatchGoal activeGoal;
         readonly MatchGoalFailureMemory failureMemory = new MatchGoalFailureMemory();
+        readonly AiDebugOverlaySnapshot debugOverlay = new AiDebugOverlaySnapshot();
         AiFloorRecoverySession floorRecoverySession;
         int? pendingFloorRecoveryTrappedFace;
         float replanCooldown;
         int stuckActionCount;
+
+        public AiDebugOverlaySnapshot DebugOverlay => debugOverlay;
+        public Board DebugBoard => registry != null ? registry.Board : null;
+        public bool DebugGizmoEnabled => settings != null && settings.DebugGizmo;
 
         public void Configure(
             CharacterController targetCharacter,
@@ -37,6 +43,11 @@ namespace DiceGame.Gameplay.AI.Application
             executor.Configure(executionContext);
             failureMemory.Clear();
             stuckActionCount = 0;
+            EnsureDebugOverlayGizmo();
+        }
+
+        void LateUpdate() {
+            RefreshDebugOverlay();
         }
 
         void Update() {
@@ -454,6 +465,148 @@ namespace DiceGame.Gameplay.AI.Application
                 $"StartImmediateMatch jump die={die.name} cell={die.CurrentState.GridPos} " +
                 $"face={goal.Face}");
             return true;
+        }
+
+        void EnsureDebugOverlayGizmo() {
+            var gizmo = GetComponent<AiDebugOverlayGizmo>();
+            if (gizmo == null) {
+                gizmo = gameObject.AddComponent<AiDebugOverlayGizmo>();
+            }
+
+            gizmo.Bind(this);
+        }
+
+        void RefreshDebugOverlay() {
+            if (!DebugGizmoEnabled || character == null || registry == null || settings == null) {
+                debugOverlay.Clear();
+                return;
+            }
+
+            var snapshot = GameStateSnapshot.Capture(character, registry);
+            var playerCell = snapshot.PlayerCell;
+            var escapeKind = AiSinkingClusterEscapePlanner.ResolveEscape(
+                snapshot,
+                settings,
+                out var escapeFace,
+                out _,
+                out var mountTarget);
+
+            if (escapeKind == AiSinkingClusterEscapeKind.MountAdjacent && mountTarget != null) {
+                debugOverlay.BeginFrame(
+                    AiDebugOverlayMode.SinkingMount,
+                    escapeFace,
+                    playerCell,
+                    "SinkingMount",
+                    executor?.CurrentAction != null ? executor.CurrentAction.GetType().Name : "-");
+                debugOverlay.SetHighlightCell(mountTarget.CurrentState.GridPos);
+                debugOverlay.SetWorkDieCell(mountTarget.CurrentState.GridPos);
+                ApplyActionGeometry(debugOverlay);
+                return;
+            }
+
+            if (escapeKind == AiSinkingClusterEscapeKind.DescendToFloor) {
+                debugOverlay.BeginFrame(
+                    AiDebugOverlayMode.SinkingDescend,
+                    escapeFace,
+                    playerCell,
+                    "SinkingDescend",
+                    executor?.CurrentAction != null ? executor.CurrentAction.GetType().Name : "-");
+                ApplyActionGeometry(debugOverlay);
+                if (debugOverlay.StepCell.HasValue) {
+                    debugOverlay.SetHighlightCell(debugOverlay.StepCell.Value);
+                }
+
+                return;
+            }
+
+            if (floorRecoverySession != null && AiFloorRecoveryPlanner.NeedsRecovery(snapshot)) {
+                var phaseLabel = floorRecoverySession.Phase.ToString();
+                debugOverlay.BeginFrame(
+                    AiDebugOverlayMode.FloorRecovery,
+                    floorRecoverySession.SourceTrappedFace ?? 0,
+                    playerCell,
+                    phaseLabel,
+                    executor?.CurrentAction != null ? executor.CurrentAction.GetType().Name : "-");
+                if (floorRecoverySession.AlternateWorkDie != null) {
+                    var cell = floorRecoverySession.AlternateWorkDie.CurrentState.GridPos;
+                    debugOverlay.SetHighlightCell(cell);
+                    debugOverlay.SetWorkDieCell(cell);
+                } else if (floorRecoverySession.SpawnDie != null) {
+                    var cell = floorRecoverySession.SpawnDie.CurrentState.GridPos;
+                    debugOverlay.SetHighlightCell(cell);
+                    debugOverlay.SetWorkDieCell(cell);
+                }
+
+                ApplyActionGeometry(debugOverlay);
+                return;
+            }
+
+            if (activeGoal == null) {
+                debugOverlay.BeginFrame(
+                    AiDebugOverlayMode.Idle,
+                    0,
+                    playerCell,
+                    "-",
+                    executor?.CurrentAction != null ? executor.CurrentAction.GetType().Name : "-");
+                ApplyActionGeometry(debugOverlay);
+                return;
+            }
+
+            var subGoal = activeGoal.GetNextIncompleteSubGoal();
+            debugOverlay.BeginFrame(
+                AiDebugOverlayMode.Goal,
+                activeGoal.Face,
+                playerCell,
+                subGoal != null ? subGoal.Kind.ToString() : "complete",
+                executor?.CurrentAction != null ? executor.CurrentAction.GetType().Name : "-");
+
+            if (activeGoal.ClusterDice != null) {
+                for (var i = 0; i < activeGoal.ClusterDice.Count; i++) {
+                    debugOverlay.AddClusterCell(activeGoal.ClusterDice[i].GridPos);
+                }
+            }
+
+            if (subGoal != null) {
+                debugOverlay.SetSubGoalTarget(subGoal.TargetCell);
+                if (subGoal.TargetDie != null) {
+                    debugOverlay.SetWorkDieCell(subGoal.TargetDie.CurrentState.GridPos);
+                }
+
+                AppendSlidePlanPath(debugOverlay, subGoal);
+            }
+
+            ApplyActionGeometry(debugOverlay);
+        }
+
+        static void AppendSlidePlanPath(AiDebugOverlaySnapshot overlay, AiSubGoal subGoal) {
+            WorkDieSlidePlan? plan = null;
+            var stepIndex = 0;
+            if (subGoal.HasJoinSlidePlan) {
+                plan = subGoal.JoinSlidePlan;
+                stepIndex = subGoal.JoinSlideStepIndex;
+            } else if (subGoal.HasOrientRollPlan) {
+                plan = subGoal.OrientRollPlan;
+                stepIndex = subGoal.OrientRollStepIndex;
+            }
+
+            if (!plan.HasValue || plan.Value.Directions == null) {
+                return;
+            }
+
+            var slide = plan.Value;
+            for (var i = stepIndex; i <= slide.Directions.Count; i++) {
+                if (!WorkDieSlidePlanner.TrySimulateAfterSteps(slide, i, out var cell, out _)) {
+                    break;
+                }
+
+                overlay.AddPlanPathCell(cell);
+            }
+        }
+
+        void ApplyActionGeometry(AiDebugOverlaySnapshot overlay) {
+            if (executor?.CurrentAction is IAiDebugStepGeometry geometry) {
+                overlay.SetStep(geometry.DebugStepCell, geometry.DebugGoalCell);
+            }
         }
     }
 }

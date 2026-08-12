@@ -4,12 +4,15 @@ using UnityEngine;
 
 namespace DiceGame.Gameplay.AI.Application.Actions
 {
-    public sealed class DissolveDescentAction : AiDiscreteAction
+    public sealed class DissolveDescentAction : AiDiscreteAction, IAiDebugStepGeometry
     {
         readonly Direction direction;
         readonly Vector2Int stepCell;
         readonly int maxFrames;
         int frameCount;
+
+        public Vector2Int DebugStepCell => stepCell;
+        public Vector2Int DebugGoalCell => stepCell;
 
         public DissolveDescentAction(Direction direction, Vector2Int stepCell, int maxFrames) {
             this.direction = direction;

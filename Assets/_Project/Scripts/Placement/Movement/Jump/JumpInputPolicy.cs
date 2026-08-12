@@ -107,8 +107,11 @@ namespace DiceGame.Placement
                 return capability;
             }
 
-            var canJumpCoupleWithPlayer = standingDice == null
-                || (standingDice.CanJumpCoupleWithPlayer && !standingDice.IsSinkErasing);
+            // Floor / sink / non-couple: PlayerOnly jump (cross-cell for full arc).
+            // Matches UsesPlayerOnlyJumpStep — floor must not be treated as coupleable.
+            var canJumpCoupleWithPlayer = standingDice != null
+                && standingDice.CanJumpCoupleWithPlayer
+                && !standingDice.IsSinkErasing;
             capability = ApplyPlayerOnlyJumpOverride(capability, canJumpCoupleWithPlayer);
 
             if (standingDice != null

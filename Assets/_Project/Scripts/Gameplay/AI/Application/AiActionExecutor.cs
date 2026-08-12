@@ -19,6 +19,7 @@ namespace DiceGame.Gameplay.AI.Application
 
         public bool IsIdle => phase == ExecutorPhase.Idle;
         public bool IsWaitingForIdle => phase == ExecutorPhase.WaitingForIdle;
+        public AiDiscreteAction CurrentAction => currentAction;
 
         public void Configure(AiExecutionContext executionContext) {
             context = executionContext;

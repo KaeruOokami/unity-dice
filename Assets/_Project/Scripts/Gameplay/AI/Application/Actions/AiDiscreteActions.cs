@@ -286,7 +286,7 @@ namespace DiceGame.Gameplay.AI.Application.Actions
         }
     }
 
-    public sealed class JumpThenMoveAction : AiDiscreteAction
+    public sealed class JumpThenMoveAction : AiDiscreteAction, IAiDebugStepGeometry
     {
         readonly Direction jumpDirection;
         readonly Vector2Int targetCell;
@@ -297,6 +297,9 @@ namespace DiceGame.Gameplay.AI.Application.Actions
         int phase;
         int moveFrames;
         bool sawMotion;
+
+        public Vector2Int DebugStepCell => targetCell;
+        public Vector2Int DebugGoalCell => targetCell;
 
         public JumpThenMoveAction(
             Direction jumpDirection,

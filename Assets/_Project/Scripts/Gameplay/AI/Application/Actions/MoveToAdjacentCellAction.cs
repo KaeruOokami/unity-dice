@@ -11,7 +11,7 @@ namespace DiceGame.Gameplay.AI.Application.Actions
     /// Executes one orthogonal cell step: hold direction until nextCell center is reached.
     /// Planning uses cell pathfinding; FaceSlide and other in-cell motion are handled by gameplay.
     /// </summary>
-    public sealed class MoveToAdjacentCellAction : AiDiscreteAction
+    public sealed class MoveToAdjacentCellAction : AiDiscreteAction, IAiDebugStepGeometry
     {
         readonly Vector2Int nextCell;
         readonly Vector2Int goalCell;
@@ -23,6 +23,9 @@ namespace DiceGame.Gameplay.AI.Application.Actions
         Vector2Int startCell;
         Direction direction;
         bool sawBusy;
+
+        public Vector2Int DebugStepCell => nextCell;
+        public Vector2Int DebugGoalCell => goalCell;
 
         public MoveToAdjacentCellAction(
             Vector2Int nextCell,

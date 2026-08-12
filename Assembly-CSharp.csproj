@@ -56,6 +56,7 @@
     <Compile Include="Assets\_Project\Scripts\Session\Network\MatchSetupNetworkPayload.cs" />
     <Compile Include="Assets\_Project\Scripts\Gameplay\Match\DiceOneVanishSystem.cs" />
     <Compile Include="Assets\_Project\Scripts\Gameplay\Input\ICharacterInputSource.cs" />
+    <Compile Include="Assets\_Project\Scripts\Gameplay\AI\Application\AiDebugOverlayGizmo.cs" />
     <Compile Include="Assets\_Project\Scripts\Session\Network\OnlineSimHashPayload.cs" />
     <Compile Include="Assets\_Project\Scripts\Placement\Rules\IronAdjacencyBlock.cs" />
     <Compile Include="Assets\_Project\Scripts\Gameplay\AI\Domain\MatchGoalSelector.cs" />
@@ -67,6 +68,7 @@
     <Compile Include="Assets\_Project\Scripts\Placement\Movement\Walk\HeightTransferFacts.cs" />
     <Compile Include="Assets\_Project\Scripts\Session\DiceSpawnSettingsPanelUi.cs" />
     <Compile Include="Assets\_Project\Scripts\Gameplay\Coupling\RollCancelPolicy.cs" />
+    <Compile Include="Assets\_Project\Scripts\Gameplay\AI\Application\AiDebugOverlaySnapshot.cs" />
     <Compile Include="Assets\_Project\Scripts\Versus\Core\AttackPowerCalculator.cs" />
     <Compile Include="Assets\_Project\Scripts\Core\Behavior\DiceBehaviorBase.cs" />
     <Compile Include="Assets\_Project\Scripts\Session\PlayerBindingOverridesPersistence.cs" />
@@ -82,6 +84,7 @@
     <Compile Include="Assets\_Project\Scripts\Gameplay\AI\Application\Actions\AiDiscreteActions.cs" />
     <Compile Include="Assets\_Project\Scripts\Placement\Movement\MovementTransition.cs" />
     <Compile Include="Assets\_Project\Scripts\Placement\Movement\MoveFacts.cs" />
+    <Compile Include="Assets\_Project\Scripts\Gameplay\AI\Application\IAiDebugStepGeometry.cs" />
     <Compile Include="Assets\_Project\Scripts\Session\ControlsPanelLabels.cs" />
     <Compile Include="Assets\_Project\Scripts\Core\Behavior\DiceBehaviorResolver.cs" />
     <Compile Include="Assets\_Project\Scripts\Session\ControlsPanelUi.cs" />

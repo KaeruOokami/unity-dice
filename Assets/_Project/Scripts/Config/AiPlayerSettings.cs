@@ -43,6 +43,7 @@ namespace DiceGame.Config
 
         [Header("Debug")]
         [SerializeField] bool debugLog;
+        [SerializeField] bool debugGizmo;
 
         public float MinReplanInterval => minReplanInterval;
         public float IdleReplanInterval => idleReplanInterval;
@@ -69,5 +70,6 @@ namespace DiceGame.Config
         public int StuckAttemptsBeforeGoalReset => stuckAttemptsBeforeGoalReset;
         public float GoalFailureBlacklistSeconds => goalFailureBlacklistSeconds;
         public bool DebugLog => debugLog;
+        public bool DebugGizmo => debugGizmo;
     }
 }
