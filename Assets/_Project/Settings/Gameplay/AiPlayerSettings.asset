@@ -21,6 +21,7 @@ MonoBehaviour:
   allowJump: 1
   faceValueWeight: 10
   clusterProgressWeight: 8
+  sameFaceProximityWeight: 20
   immediateMatchBonus: 25
   playerDistancePenalty: 1.5
   immovableClusterPenalty: 20

@@ -29,6 +29,7 @@ namespace DiceGame.Gameplay.AI.Domain
         public int JoinSlideStepIndex { get; private set; }
         public WorkDieSlidePlan? OrientRollPlan { get; private set; }
         public int OrientRollStepIndex { get; private set; }
+        readonly HashSet<long> failedJoinSlotKeys = new HashSet<long>();
 
         AiSubGoal(
             AiSubGoalKind kind,
@@ -41,6 +42,12 @@ namespace DiceGame.Gameplay.AI.Domain
             TargetFace = targetFace;
             TargetCell = targetCell;
             TargetTier = targetTier;
+        }
+
+        public ISet<long> FailedJoinSlotKeys => failedJoinSlotKeys;
+
+        public void RememberFailedJoinTarget(Vector2Int targetCell, DiceStackTier targetTier) {
+            failedJoinSlotKeys.Add(WorkDieSlidePlanner.JoinSlotKey(targetCell, targetTier));
         }
 
         public static AiSubGoal ReachParticipant(DiceController die) {
@@ -109,6 +116,10 @@ namespace DiceGame.Gameplay.AI.Domain
             ClearJoinSlidePlan();
         }
 
+        public void ClearFailedJoinTargets() {
+            failedJoinSlotKeys.Clear();
+        }
+
         public bool TryAdvanceJoinSlideStep(DiceState state) {
             if (!JoinSlidePlan.HasValue) {
                 return false;
@@ -142,10 +153,12 @@ namespace DiceGame.Gameplay.AI.Domain
 
     public sealed class MatchGoal
     {
+        readonly List<AiSubGoal> subGoals;
+
         public int Face { get; }
         public IReadOnlyList<DiceSnapshot> ClusterDice { get; }
         public DiceController ParticipantTarget { get; }
-        public IReadOnlyList<AiSubGoal> SubGoals { get; }
+        public IReadOnlyList<AiSubGoal> SubGoals => subGoals;
         public float PriorityScore { get; }
         public bool IsImmediateMatch { get; }
         public bool IsMarkedUnplannable { get; private set; }
@@ -160,7 +173,9 @@ namespace DiceGame.Gameplay.AI.Domain
             Face = face;
             ClusterDice = clusterDice;
             ParticipantTarget = participantTarget;
-            SubGoals = subGoals;
+            this.subGoals = subGoals != null
+                ? new List<AiSubGoal>(subGoals)
+                : new List<AiSubGoal>();
             PriorityScore = priorityScore;
             IsImmediateMatch = isImmediateMatch;
         }
@@ -169,10 +184,39 @@ namespace DiceGame.Gameplay.AI.Domain
             IsMarkedUnplannable = true;
         }
 
+        /// <summary>
+        /// Drop incomplete Reach/Orient/Join and finish via Lift → Place (same work die).
+        /// Used only after roll-join destinations are exhausted, not mid-Join.
+        /// </summary>
+        public bool TryConvertIncompleteToLiftJoin(LiftJoinPlan plan) {
+            if (plan.WorkDie == null || plan.WorkDie != ParticipantTarget) {
+                return false;
+            }
+
+            if (IsOnLiftJoinPath()) {
+                return false;
+            }
+
+            for (var i = subGoals.Count - 1; i >= 0; i--) {
+                if (!subGoals[i].IsComplete) {
+                    subGoals.RemoveAt(i);
+                }
+            }
+
+            subGoals.Add(AiSubGoal.LiftDie(plan.WorkDie));
+            subGoals.Add(AiSubGoal.PlaceCarriedDie(plan.PlaceCell));
+            return true;
+        }
+
+        public bool IsOnLiftJoinPath() {
+            return HasIncompleteSubGoalOfKind(AiSubGoalKind.LiftDie)
+                || HasIncompleteSubGoalOfKind(AiSubGoalKind.PlaceCarriedDie);
+        }
+
         public AiSubGoal GetNextIncompleteSubGoal() {
-            for (var i = 0; i < SubGoals.Count; i++) {
-                if (!SubGoals[i].IsComplete) {
-                    return SubGoals[i];
+            for (var i = 0; i < subGoals.Count; i++) {
+                if (!subGoals[i].IsComplete) {
+                    return subGoals[i];
                 }
             }
 
@@ -203,9 +247,15 @@ namespace DiceGame.Gameplay.AI.Domain
                 return true;
             }
 
-            // Lift-Join / clearance place in progress: don't discard while carrying the planned die.
+            // Keep carrying goals only while the planned place cell is orthogonally adjacent.
             if (snapshot.PlayerIsCarrying && HasIncompleteSubGoalOfKind(AiSubGoalKind.PlaceCarriedDie)) {
-                return false;
+                var placeSubGoal = FindIncompleteSubGoalOfKind(AiSubGoalKind.PlaceCarriedDie);
+                if (placeSubGoal != null
+                    && DiceBoardAnalyzer.ManhattanDistance(snapshot.PlayerCell, placeSubGoal.TargetCell) == 1) {
+                    return false;
+                }
+
+                return true;
             }
 
             if (registry != null && Face >= 2 && ClusterDice != null && ClusterDice.Count > 0) {
@@ -266,14 +316,51 @@ namespace DiceGame.Gameplay.AI.Domain
             return candidate.PriorityScore > PriorityScore + switchMargin;
         }
 
-        bool HasIncompleteSubGoalOfKind(AiSubGoalKind kind) {
-            for (var i = 0; i < SubGoals.Count; i++) {
-                if (SubGoals[i].Kind == kind && !SubGoals[i].IsComplete) {
-                    return true;
+        /// <summary>
+        /// Different work-die switches are allowed only when this work die can no longer extend the cluster.
+        /// Same work die (or non-join goals) may switch on score alone.
+        /// </summary>
+        public bool AllowsWorkDieSwitch(
+            MatchGoal candidate,
+            GameStateSnapshot snapshot,
+            DiceRegistry registry) {
+            if (candidate == null || snapshot == null) {
+                return false;
+            }
+
+            if (ParticipantTarget == null || candidate.ParticipantTarget == null) {
+                return true;
+            }
+
+            if (ParticipantTarget == candidate.ParticipantTarget) {
+                return true;
+            }
+
+            if (Face < 2 || ClusterDice == null || ClusterDice.Count == 0) {
+                return true;
+            }
+
+            return !WorkDieSlidePlanner.CanWorkDieExtendCluster(
+                ClusterDice,
+                new DiceSnapshot(ParticipantTarget),
+                snapshot.PlanningDice,
+                registry,
+                snapshot.VersusLayout,
+                snapshot.PlayerSlot);
+        }
+
+        public AiSubGoal FindIncompleteSubGoalOfKind(AiSubGoalKind kind) {
+            for (var i = 0; i < subGoals.Count; i++) {
+                if (subGoals[i].Kind == kind && !subGoals[i].IsComplete) {
+                    return subGoals[i];
                 }
             }
 
-            return false;
+            return null;
+        }
+
+        bool HasIncompleteSubGoalOfKind(AiSubGoalKind kind) {
+            return FindIncompleteSubGoalOfKind(kind) != null;
         }
     }
 }

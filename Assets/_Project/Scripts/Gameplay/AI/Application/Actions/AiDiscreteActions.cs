@@ -160,16 +160,22 @@ namespace DiceGame.Gameplay.AI.Application.Actions
     {
         readonly Direction placeDirection;
         bool pulsed;
+        int frameCount;
+        int maxFrames;
 
         public PlaceCarriedDiceAction(Direction placeDirection) {
             this.placeDirection = placeDirection;
         }
 
         public override void Begin(AiExecutionContext context) {
+            ClearFailure();
             pulsed = false;
+            frameCount = 0;
+            maxFrames = context.Settings != null ? Mathf.Max(12, context.Settings.MoveActionMaxFrames) : 30;
         }
 
         public override void Tick(AiExecutionContext context) {
+            frameCount++;
             context.InputSource.SetMove(Vector2.zero);
             if (!pulsed) {
                 context.InputSource.PulseDirection(placeDirection);
@@ -178,7 +184,19 @@ namespace DiceGame.Gameplay.AI.Application.Actions
         }
 
         public override bool IsComplete(AiExecutionContext context) {
-            return pulsed && !context.Character.IsCarrying && context.IsWorldIdle();
+            if (pulsed && !context.Character.IsCarrying && context.IsWorldIdle()) {
+                return true;
+            }
+
+            if (frameCount >= maxFrames) {
+                MarkFailed();
+                AiDebugLog.Log(
+                    $"PlaceCarriedTimeout dir={placeDirection} frames={frameCount} " +
+                    $"stillCarrying={context.Character.IsCarrying}");
+                return true;
+            }
+
+            return false;
         }
     }
 
@@ -447,6 +465,7 @@ namespace DiceGame.Gameplay.AI.Application.Actions
         }
 
         public override void Begin(AiExecutionContext context) {
+            ClearFailure();
             phase = LiftSequencePhase.Face;
             frameCount = 0;
             placePulsed = false;
@@ -467,11 +486,14 @@ namespace DiceGame.Gameplay.AI.Application.Actions
                     context.InputSource.SetMove(Vector2.zero);
                     context.InputSource.PulseLift();
                     phase = LiftSequencePhase.WaitCarrying;
+                    frameCount = 0;
                     break;
                 case LiftSequencePhase.WaitCarrying:
                     context.InputSource.SetMove(Vector2.zero);
+                    frameCount++;
                     if (context.Character.IsLiftCarrying) {
                         phase = LiftSequencePhase.Place;
+                        frameCount = 0;
                     }
                     break;
                 case LiftSequencePhase.Place:
@@ -479,7 +501,8 @@ namespace DiceGame.Gameplay.AI.Application.Actions
                     if (!placePulsed) {
                         var delta = placeCell - context.Character.StandingGridCell;
                         Direction? placeDirection = ResolvePlaceDirection(delta);
-                        if (placeDirection.HasValue) {
+                        if (placeDirection.HasValue
+                            && context.Character.CanPlaceCarriedAt(placeDirection.Value)) {
                             context.InputSource.PulseDirection(placeDirection.Value);
                         }
 
@@ -496,7 +519,22 @@ namespace DiceGame.Gameplay.AI.Application.Actions
                 return true;
             }
 
-            return phase == LiftSequencePhase.Place && frameCount > 30;
+            if (phase == LiftSequencePhase.WaitCarrying && frameCount > 30) {
+                MarkFailed();
+                AiDebugLog.Log($"LiftSequence FAILED reason=wait-carrying-timeout place={placeCell}");
+                return true;
+            }
+
+            if (phase == LiftSequencePhase.Place && frameCount > 30) {
+                if (context.Character.IsCarrying) {
+                    MarkFailed();
+                    AiDebugLog.Log($"LiftSequence FAILED reason=place-timeout place={placeCell}");
+                }
+
+                return true;
+            }
+
+            return false;
         }
 
         static Direction? ResolvePlaceDirection(Vector2Int delta) {

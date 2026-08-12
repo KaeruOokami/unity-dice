@@ -39,7 +39,9 @@ namespace DiceGame.Gameplay.AI.Domain
                         }
                         break;
                     case AiSubGoalKind.PlaceCarriedDie:
-                        if (!snapshot.PlayerIsCarrying) {
+                        // "Not carrying" alone is ambiguous: before Lift and after Place look the same.
+                        // Place is done only after any prior LiftDie is complete and we no longer carry.
+                        if (!snapshot.PlayerIsCarrying && !HasIncompleteLiftBefore(goal, i)) {
                             subGoal.MarkComplete();
                         }
                         break;
@@ -50,6 +52,21 @@ namespace DiceGame.Gameplay.AI.Domain
                         break;
                 }
             }
+        }
+
+        /// <summary>
+        /// True when an earlier LiftDie in the goal is still incomplete (lift not done yet).
+        /// Place-only goals have no prior Lift and return false.
+        /// </summary>
+        static bool HasIncompleteLiftBefore(MatchGoal goal, int placeIndex) {
+            for (var i = 0; i < placeIndex; i++) {
+                var prior = goal.SubGoals[i];
+                if (prior.Kind == AiSubGoalKind.LiftDie && !prior.IsComplete) {
+                    return true;
+                }
+            }
+
+            return false;
         }
     }
 }

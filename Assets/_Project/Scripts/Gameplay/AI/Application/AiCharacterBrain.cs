@@ -78,6 +78,8 @@ namespace DiceGame.Gameplay.AI.Application
 
             var subGoal = goal.GetNextIncompleteSubGoal();
             if (subGoal == null) {
+                // Join (or other path) finished: drop goal so ResolveGoal can pick
+                // the next expansion via roll-join or Lift-Join.
                 if (TryBuildImmediateMatchAction(goal, snapshot, out var immediateAction)) {
                     executor.StartAction(immediateAction);
                     stuckActionCount = 0;
@@ -139,16 +141,73 @@ namespace DiceGame.Gameplay.AI.Application
         void RegisterPlanningFailure(AiSubGoal subGoal) {
             stuckActionCount++;
 
-            // Orient/Join with no plan means this goal hand is currently unusable.
-            if (subGoal != null
-                && (subGoal.Kind == AiSubGoalKind.OrientDie || subGoal.Kind == AiSubGoalKind.JoinCluster)
-                && activeGoal != null) {
-                activeGoal.MarkUnplannable();
+            if (subGoal != null && activeGoal != null) {
+                if (subGoal.Kind == AiSubGoalKind.JoinCluster) {
+                    // Roll-join destinations exhausted: only then fall back to Lift → Place.
+                    if (!CanActiveWorkDieExtendCluster(subGoal)) {
+                        if (TryFallbackJoinToLift()) {
+                            return;
+                        }
+
+                        activeGoal.MarkUnplannable();
+                        AbandonActiveGoal("join-exhausted");
+                        return;
+                    }
+                } else if (subGoal.Kind == AiSubGoalKind.OrientDie) {
+                    activeGoal.MarkUnplannable();
+                }
             }
 
             if (stuckActionCount >= GetStuckThreshold() || (activeGoal != null && activeGoal.IsMarkedUnplannable)) {
                 AbandonActiveGoal("build-failed");
             }
+        }
+
+        /// <summary>
+        /// After roll-join can no longer extend, convert the same work die to Lift → Place when feasible.
+        /// Must not run while Join is still progressable.
+        /// </summary>
+        bool TryFallbackJoinToLift() {
+            if (activeGoal == null || character == null || registry == null) {
+                return false;
+            }
+
+            var snapshot = GameStateSnapshot.Capture(character, registry);
+            if (!MatchGoalLiftPreference.TryConvertToLiftJoin(activeGoal, snapshot, registry)) {
+                return false;
+            }
+
+            AiDebugLog.Log(
+                $"LiftPrefer after join-exhausted face={activeGoal.Face} " +
+                $"work={(activeGoal.ParticipantTarget != null ? activeGoal.ParticipantTarget.name : "none")}");
+            MatchGoalProgressSync.Sync(activeGoal, snapshot);
+            stuckActionCount = 0;
+            replanCooldown = settings != null ? settings.MinReplanInterval : 0f;
+            return true;
+        }
+
+        bool CanActiveWorkDieExtendCluster(AiSubGoal joinSubGoal = null) {
+            if (activeGoal == null
+                || activeGoal.ParticipantTarget == null
+                || activeGoal.ClusterDice == null
+                || activeGoal.ClusterDice.Count == 0
+                || activeGoal.Face < 2
+                || character == null
+                || registry == null) {
+                return false;
+            }
+
+            var snapshot = GameStateSnapshot.Capture(character, registry);
+            return WorkDieSlidePlanner.TrySelectJoinTargetCell(
+                activeGoal.ClusterDice,
+                new DiceSnapshot(activeGoal.ParticipantTarget),
+                snapshot.PlanningDice,
+                registry,
+                snapshot.VersusLayout,
+                snapshot.PlayerSlot,
+                out _,
+                out _,
+                joinSubGoal != null ? joinSubGoal.FailedJoinSlotKeys : null);
         }
 
         void AbandonActiveGoal(string reason) {
@@ -173,21 +232,46 @@ namespace DiceGame.Gameplay.AI.Application
         }
 
         bool TryHandleSinkingClusterEscape(GameStateSnapshot snapshot) {
-            var trapped = AiSinkingClusterEscapePlanner.IsTrappedOnSinkingCluster(
+            var escapeKind = AiSinkingClusterEscapePlanner.ResolveEscape(
                 snapshot,
                 settings,
-                out var trappedFace,
-                out _);
+                out var clusterFace,
+                out _,
+                out var mountTarget);
 
-            if (!trapped) {
+            if (escapeKind == AiSinkingClusterEscapeKind.None) {
                 return false;
             }
 
             activeGoal = null;
 
-            if (AiSinkingClusterEscapePlanner.NeedsDescent(snapshot)) {
-                pendingFloorRecoveryTrappedFace = trappedFace;
+            if (escapeKind == AiSinkingClusterEscapeKind.MountAdjacent) {
+                if (AiSinkingClusterEscapeCoordinator.TryBuildMountAdjacentAction(
+                    mountTarget,
+                    snapshot,
+                    character,
+                    registry,
+                    settings,
+                    out var mountAction)) {
+                    stuckActionCount = 0;
+                    AiDebugLog.Log(
+                        $"StartSinkingMount face={clusterFace} " +
+                        $"die={(mountTarget != null ? mountTarget.name : "none")} " +
+                        $"action={mountAction.GetType().Name} playerCell={snapshot.PlayerCell}");
+                    executor.StartAction(mountAction);
+                    replanCooldown = settings.MinReplanInterval;
+                    return true;
+                }
 
+                // Adjacent target exists but cannot step onto it this frame — fall through to descend.
+                AiDebugLog.Log(
+                    $"SinkingMount FAILED face={clusterFace} " +
+                    $"die={(mountTarget != null ? mountTarget.name : "none")} fallback=descend");
+            }
+
+            pendingFloorRecoveryTrappedFace = clusterFace;
+
+            if (AiSinkingClusterEscapePlanner.NeedsDescent(snapshot)) {
                 if (!AiSinkingClusterEscapeCoordinator.TryBuildDescendAction(
                     snapshot,
                     character,
@@ -199,14 +283,14 @@ namespace DiceGame.Gameplay.AI.Application
 
                 stuckActionCount = 0;
                 AiDebugLog.Log(
-                    $"StartSinkingDescent face={trappedFace} action={action.GetType().Name} " +
+                    $"StartSinkingDescent face={clusterFace} action={action.GetType().Name} " +
                     $"playerCell={snapshot.PlayerCell}");
                 executor.StartAction(action);
                 replanCooldown = settings.MinReplanInterval;
                 return true;
             }
 
-            BeginFloorRecovery(snapshot, trappedFace);
+            BeginFloorRecovery(snapshot, clusterFace);
             return false;
         }
 
@@ -296,7 +380,9 @@ namespace DiceGame.Gameplay.AI.Application
                         registry,
                         settings,
                         failureMemory);
-                    if (candidate != null && activeGoal.ShouldSwitchTo(candidate, settings.GoalSwitchMargin)) {
+                    if (candidate != null
+                        && activeGoal.ShouldSwitchTo(candidate, settings.GoalSwitchMargin)
+                        && activeGoal.AllowsWorkDieSwitch(candidate, snapshot, registry)) {
                         activeGoal = candidate;
                         stuckActionCount = 0;
                     }

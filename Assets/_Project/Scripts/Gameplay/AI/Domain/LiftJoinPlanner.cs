@@ -31,6 +31,81 @@ namespace DiceGame.Gameplay.AI.Domain
     /// </summary>
     public static class LiftJoinPlanner
     {
+        /// <summary>
+        /// Prefer an external die that already shows <paramref name="face"/> and has a valid Lift-Join plan.
+        /// </summary>
+        public static bool TrySelectSameFaceLiftJoin(
+            GameStateSnapshot snapshot,
+            DiceRegistry registry,
+            IReadOnlyList<DiceSnapshot> cluster,
+            int face,
+            IReadOnlyList<DiceSnapshot> allDice,
+            bool forChain,
+            out DiceSnapshot workDie,
+            out LiftJoinPlan plan) {
+            workDie = default;
+            plan = default;
+            if (snapshot == null || registry == null || cluster == null || cluster.Count == 0 || allDice == null) {
+                return false;
+            }
+
+            var clusterCells = ClusterSelectionEvaluator.GetClusterCells(cluster);
+            var bestDistance = int.MaxValue;
+            var found = false;
+
+            for (var i = 0; i < allDice.Count; i++) {
+                var candidate = allDice[i];
+                if (candidate.IsErasing || candidate.IsBusy || candidate.Controller == null) {
+                    continue;
+                }
+
+                if (candidate.TopFace != face) {
+                    continue;
+                }
+
+                if (ClusterSelectionEvaluator.ClusterContains(cluster, candidate)) {
+                    continue;
+                }
+
+                if (clusterCells.Contains(candidate.GridPos)) {
+                    continue;
+                }
+
+                if (!DiceBoardAnalyzer.IsMovable(candidate)) {
+                    continue;
+                }
+
+                if (!ClusterSelectionEvaluator.IsStandableWorkDie(candidate, allDice, registry)) {
+                    continue;
+                }
+
+                LiftJoinPlan candidatePlan;
+                var planned = forChain
+                    ? TryPlanForChain(snapshot, registry, face, candidate, out candidatePlan)
+                    : TryPlanForCluster(
+                        snapshot,
+                        registry,
+                        cluster,
+                        candidate,
+                        face,
+                        allDice,
+                        out candidatePlan);
+                if (!planned) {
+                    continue;
+                }
+
+                var distance = DiceBoardAnalyzer.ManhattanDistance(snapshot.PlayerCell, candidate.GridPos);
+                if (distance < bestDistance) {
+                    bestDistance = distance;
+                    workDie = candidate;
+                    plan = candidatePlan;
+                    found = true;
+                }
+            }
+
+            return found;
+        }
+
         public static bool TryPlanForCluster(
             GameStateSnapshot snapshot,
             DiceRegistry registry,

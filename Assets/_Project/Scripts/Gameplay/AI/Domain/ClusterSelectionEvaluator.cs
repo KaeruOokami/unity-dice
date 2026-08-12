@@ -14,20 +14,15 @@ namespace DiceGame.Gameplay.AI.Domain
             Vector2Int playerCell,
             int distanceToWorkDie,
             AiPlayerSettings settings) {
-            if (cluster == null || cluster.Count == 0 || settings == null) {
-                return float.MinValue;
-            }
-
-            var compactness = ComputeCompactnessRatio(cluster);
-            var score = cluster.Count * settings.ClusterSizeWeight
-                + compactness * settings.ClusterCompactnessWeight
-                - distanceToWorkDie * settings.PlayerDistancePenalty;
-
-            if (HasImmovableDice(cluster)) {
-                score -= settings.ImmovableClusterPenalty;
-            }
-
-            return score;
+            return ScoreCluster(
+                cluster,
+                face: 0,
+                allDice: null,
+                playerCell,
+                distanceToWorkDie,
+                settings,
+                isImmediateMatch: false,
+                isChainGoal: false);
         }
 
         public static float ScoreCluster(
@@ -37,12 +32,107 @@ namespace DiceGame.Gameplay.AI.Domain
             Vector2Int playerCell,
             int distanceToWorkDie,
             AiPlayerSettings settings) {
-            var score = ScoreCluster(cluster, playerCell, distanceToWorkDie, settings);
-            if (SinkingChainEvaluator.IsChainPossible(face, allDice)) {
+            return ScoreCluster(
+                cluster,
+                face,
+                allDice,
+                playerCell,
+                distanceToWorkDie,
+                settings,
+                isImmediateMatch: false,
+                isChainGoal: false);
+        }
+
+        public static float ScoreCluster(
+            List<DiceSnapshot> cluster,
+            int face,
+            IReadOnlyList<DiceSnapshot> allDice,
+            Vector2Int playerCell,
+            int distanceToWorkDie,
+            AiPlayerSettings settings,
+            bool isImmediateMatch,
+            bool isChainGoal) {
+            if (cluster == null || cluster.Count == 0 || settings == null) {
+                return float.MinValue;
+            }
+
+            var compactness = ComputeCompactnessRatio(cluster);
+            var progress = face > 0 ? (float)cluster.Count / face : 0f;
+            var proximity = ComputeSameFaceProximityScore(face, allDice);
+
+            var score = cluster.Count * settings.ClusterSizeWeight
+                + compactness * settings.ClusterCompactnessWeight
+                + face * settings.FaceValueWeight
+                + progress * settings.ClusterProgressWeight
+                + proximity * settings.SameFaceProximityWeight
+                - distanceToWorkDie * settings.PlayerDistancePenalty;
+
+            if (HasImmovableDice(cluster)) {
+                score -= settings.ImmovableClusterPenalty;
+            }
+
+            if (face >= 2
+                && allDice != null
+                && SinkingChainEvaluator.IsChainPossible(face, allDice)) {
                 score += settings.SinkingChainBonus;
+                if (isChainGoal) {
+                    score += settings.SinkingChainImmediateBonus;
+                }
+            }
+
+            if (isImmediateMatch) {
+                score += settings.ImmediateMatchBonus;
             }
 
             return score;
+        }
+
+        /// <summary>
+        /// Continuous gather score for a face: mean pairwise Manhattan closeness of same-face dice.
+        /// Higher when same faces are spatially close (no distance threshold).
+        /// </summary>
+        public static float ComputeSameFaceProximityScore(
+            int face,
+            IReadOnlyList<DiceSnapshot> allDice) {
+            if (face < 2 || allDice == null || allDice.Count == 0) {
+                return 0f;
+            }
+
+            var positions = new List<Vector2Int>();
+            for (var i = 0; i < allDice.Count; i++) {
+                var snapshot = allDice[i];
+                if (snapshot.Controller == null || snapshot.TopFace != face) {
+                    continue;
+                }
+
+                // Include sink-erasing dice (still relevant for gather / chain).
+                // Exclude normal match-erase / vanish only.
+                if (snapshot.Controller.IsErasing && !snapshot.Controller.IsSinkErasing) {
+                    continue;
+                }
+
+                if (snapshot.Controller.IsVanishing) {
+                    continue;
+                }
+
+                positions.Add(snapshot.GridPos);
+            }
+
+            if (positions.Count < 2) {
+                return 0f;
+            }
+
+            var sumCloseness = 0f;
+            var pairCount = 0;
+            for (var i = 0; i < positions.Count; i++) {
+                for (var j = i + 1; j < positions.Count; j++) {
+                    var distance = DiceBoardAnalyzer.ManhattanDistance(positions[i], positions[j]);
+                    sumCloseness += 1f / (1f + distance);
+                    pairCount++;
+                }
+            }
+
+            return pairCount > 0 ? sumCloseness / pairCount : 0f;
         }
 
         public static float ComputeCompactnessRatio(List<DiceSnapshot> cluster) {
@@ -104,7 +194,8 @@ namespace DiceGame.Gameplay.AI.Domain
             AiPlayerSettings settings,
             bool preferChain,
             out DiceSnapshot workDie,
-            IDicePlacement placement = null) {
+            IDicePlacement placement = null,
+            bool requireMatchingTopFace = false) {
             workDie = default;
             var bestScore = float.MinValue;
             var found = false;
@@ -116,7 +207,11 @@ namespace DiceGame.Gameplay.AI.Domain
                     continue;
                 }
 
-                if (candidate.TopFace == clusterFace) {
+                if (requireMatchingTopFace) {
+                    if (candidate.TopFace != clusterFace) {
+                        continue;
+                    }
+                } else if (candidate.TopFace == clusterFace) {
                     continue;
                 }
 
@@ -318,7 +413,18 @@ namespace DiceGame.Gameplay.AI.Domain
                         settings,
                         preferChain: false,
                         out _,
-                        placement)) {
+                        placement,
+                        requireMatchingTopFace: true)
+                        || TrySelectNearestExternalDie(
+                            cluster,
+                            face,
+                            snapshot.PlanningDice,
+                            snapshot.PlayerCell,
+                            settings,
+                            preferChain: false,
+                            out _,
+                            placement,
+                            requireMatchingTopFace: false)) {
                         return true;
                     }
                 }

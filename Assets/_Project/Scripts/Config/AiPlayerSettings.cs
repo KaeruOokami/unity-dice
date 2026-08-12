@@ -5,29 +5,43 @@ namespace DiceGame.Config
     [CreateAssetMenu(fileName = "AiPlayerSettings", menuName = "Dice/AI Player Settings")]
     public sealed class AiPlayerSettings : ScriptableObject
     {
+        [Header("Replan Timing")]
         [SerializeField] float minReplanInterval = 0.3f;
         [SerializeField] float idleReplanInterval = 0.8f;
         [SerializeField] float failedReplanInterval = 1.2f;
+
+        [Header("Action Limits")]
         [SerializeField] int moveActionMaxFrames = 36;
         [SerializeField] int jumpMoveMaxFrames = 48;
         [SerializeField] int faceBeforeLiftFrames = 4;
+        [SerializeField] int rollStepMaxFrames = 120;
         [SerializeField] bool allowJump = true;
+
+        [Header("Navigation")]
+        [SerializeField] int pathSearchMaxSteps = 64;
+        [SerializeField] float cellCenterTolerance = 0.08f;
+
+        [Header("Goal Scoring")]
         [SerializeField] float faceValueWeight = 10f;
         [SerializeField] float clusterProgressWeight = 8f;
-        [SerializeField] float immediateMatchBonus = 25f;
-        [SerializeField] float playerDistancePenalty = 1.5f;
-        [SerializeField] float immovableClusterPenalty = 20f;
+        [SerializeField] float sameFaceProximityWeight = 20f;
         [SerializeField] float clusterSizeWeight = 100f;
         [SerializeField] float clusterCompactnessWeight = 50f;
+        [SerializeField] float playerDistancePenalty = 1.5f;
+        [SerializeField] float immovableClusterPenalty = 20f;
+        [SerializeField] float immediateMatchBonus = 25f;
+
+        [Header("Sinking Chain Scoring")]
         [SerializeField] float sinkingChainBonus = 200f;
         [SerializeField] float sinkingChainImmediateBonus = 50f;
         [SerializeField] float sinkingChainWorkDieWeight = 8f;
+
+        [Header("Goal Persistence")]
         [SerializeField] float goalSwitchMargin = 8f;
-        [SerializeField] int pathSearchMaxSteps = 64;
-        [SerializeField] float cellCenterTolerance = 0.08f;
-        [SerializeField] int rollStepMaxFrames = 120;
         [SerializeField] int stuckAttemptsBeforeGoalReset = 3;
         [SerializeField] float goalFailureBlacklistSeconds = 12f;
+
+        [Header("Debug")]
         [SerializeField] bool debugLog;
 
         public float MinReplanInterval => minReplanInterval;
@@ -39,6 +53,7 @@ namespace DiceGame.Config
         public bool AllowJump => allowJump;
         public float FaceValueWeight => faceValueWeight;
         public float ClusterProgressWeight => clusterProgressWeight;
+        public float SameFaceProximityWeight => sameFaceProximityWeight;
         public float ImmediateMatchBonus => immediateMatchBonus;
         public float PlayerDistancePenalty => playerDistancePenalty;
         public float ImmovableClusterPenalty => immovableClusterPenalty;

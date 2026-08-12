@@ -23,14 +23,20 @@ namespace DiceGame.Gameplay.AI.Domain
                 return BuildCarryPlacementGoal(snapshot, registry, settings);
             }
 
-            var hasSinking = SinkingChainEvaluator.HasSinkingDiceOnBoard(snapshot.PlanningDice);
-            var chainPriority = hasSinking && SinkingChainEvaluator.HasAnyChainPossibleFace(snapshot.PlanningDice);
-            if (chainPriority
-                && TrySelectBestChainGoal(snapshot, registry, settings, failureMemory, out var chainGoal)) {
-                return chainGoal;
+            MatchGoal bestGoal = null;
+            var bestScore = float.MinValue;
+
+            if (TrySelectBestChainGoal(snapshot, registry, settings, failureMemory, out var chainGoal)
+                && chainGoal.PriorityScore > bestScore) {
+                bestScore = chainGoal.PriorityScore;
+                bestGoal = chainGoal;
             }
 
-            TrySelectBestGoal(snapshot, registry, settings, chainPriority, failureMemory, out var bestGoal);
+            if (TrySelectBestGoal(snapshot, registry, settings, failureMemory, out var clusterGoal)
+                && clusterGoal.PriorityScore > bestScore) {
+                bestGoal = clusterGoal;
+            }
+
             return bestGoal;
         }
 
@@ -67,14 +73,12 @@ namespace DiceGame.Gameplay.AI.Domain
             GameStateSnapshot snapshot,
             DiceRegistry registry,
             AiPlayerSettings settings,
-            bool suppressChainFaces,
             MatchGoalFailureMemory failureMemory,
             out MatchGoal bestGoal) {
             if (TrySelectBestGoalPass(
                 snapshot,
                 registry,
                 settings,
-                suppressChainFaces,
                 abandonStrandedIslands: true,
                 failureMemory,
                 out bestGoal)) {
@@ -85,7 +89,6 @@ namespace DiceGame.Gameplay.AI.Domain
                 snapshot,
                 registry,
                 settings,
-                suppressChainFaces,
                 abandonStrandedIslands: false,
                 failureMemory,
                 out bestGoal);
@@ -95,7 +98,6 @@ namespace DiceGame.Gameplay.AI.Domain
             GameStateSnapshot snapshot,
             DiceRegistry registry,
             AiPlayerSettings settings,
-            bool suppressChainFaces,
             bool abandonStrandedIslands,
             MatchGoalFailureMemory failureMemory,
             out MatchGoal bestGoal) {
@@ -104,11 +106,6 @@ namespace DiceGame.Gameplay.AI.Domain
             var now = Time.time;
 
             for (var face = 2; face <= 6; face++) {
-                if (suppressChainFaces
-                    && SinkingChainEvaluator.IsChainPossible(face, snapshot.PlanningDice)) {
-                    continue;
-                }
-
                 var clusters = DiceBoardAnalyzer.FindFaceClusters(snapshot.PlanningDice, face);
                 for (var i = 0; i < clusters.Count; i++) {
                     var cluster = clusters[i];
@@ -151,38 +148,39 @@ namespace DiceGame.Gameplay.AI.Domain
                 return null;
             }
 
-            if (!ClusterSelectionEvaluator.TrySelectNearestExternalDie(
+            // Prefer Lift-Join when a same-face work die can be carried onto a join slot.
+            if (LiftJoinPlanner.TrySelectSameFaceLiftJoin(
+                snapshot,
+                registry,
                 sinkingDice,
                 face,
                 snapshot.PlanningDice,
-                snapshot.PlayerCell,
-                settings,
-                preferChain: true,
-                out var workDie,
-                registry)
-                || workDie.Controller == null) {
-                return null;
-            }
-
-            if (LiftJoinPlanner.TryPlanForChain(
-                snapshot,
-                registry,
-                face,
-                workDie,
-                out var liftPlan)) {
+                forChain: true,
+                out var sameFaceWorkDie,
+                out var sameFaceLiftPlan)) {
                 return BuildLiftJoinGoal(
                     face,
                     sinkingDice,
-                    workDie.Controller,
-                    liftPlan,
+                    sameFaceWorkDie.Controller,
+                    sameFaceLiftPlan,
                     ScoreChainGoal(
-                        sinkingDice.Count,
-                        DiceBoardAnalyzer.ManhattanDistance(snapshot.PlayerCell, workDie.GridPos),
+                        sinkingDice,
+                        face,
+                        snapshot.PlanningDice,
+                        DiceBoardAnalyzer.ManhattanDistance(snapshot.PlayerCell, sameFaceWorkDie.GridPos),
                         settings));
             }
 
-            if (registry == null
-                || !SinkingChainEvaluator.TrySelectChainJoinTargetCell(
+            if (TrySelectExternalWorkDie(
+                sinkingDice,
+                face,
+                snapshot,
+                settings,
+                preferChain: true,
+                registry,
+                out var workDie)
+                && registry != null
+                && SinkingChainEvaluator.TrySelectChainJoinTargetCell(
                     face,
                     snapshot.PlanningDice,
                     workDie,
@@ -191,39 +189,52 @@ namespace DiceGame.Gameplay.AI.Domain
                     snapshot.PlayerSlot,
                     out var joinCell,
                     out var joinTier)) {
-                return null;
+                var subGoals = new List<AiSubGoal>();
+                if (!IsStandingOnDice(snapshot, workDie.Controller)) {
+                    subGoals.Add(AiSubGoal.ReachWorkDie(workDie.Controller));
+                }
+
+                if (workDie.TopFace != face) {
+                    subGoals.Add(AiSubGoal.OrientDie(workDie.Controller, face));
+                }
+
+                subGoals.Add(AiSubGoal.JoinCluster(workDie.Controller, face, joinCell, joinTier));
+
+                var distanceToWorkDie = DiceBoardAnalyzer.ManhattanDistance(snapshot.PlayerCell, workDie.GridPos);
+                var score = ScoreChainGoal(
+                    sinkingDice,
+                    face,
+                    snapshot.PlanningDice,
+                    distanceToWorkDie,
+                    settings);
+
+                return new MatchGoal(
+                    face,
+                    sinkingDice,
+                    workDie.Controller,
+                    subGoals,
+                    score,
+                    false);
             }
 
-            var subGoals = new List<AiSubGoal>();
-            if (!IsStandingOnDice(snapshot, workDie.Controller)) {
-                subGoals.Add(AiSubGoal.ReachWorkDie(workDie.Controller));
-            }
-
-            if (workDie.TopFace != face) {
-                subGoals.Add(AiSubGoal.OrientDie(workDie.Controller, face));
-            }
-
-            subGoals.Add(AiSubGoal.JoinCluster(workDie.Controller, face, joinCell, joinTier));
-
-            var distanceToWorkDie = DiceBoardAnalyzer.ManhattanDistance(snapshot.PlayerCell, workDie.GridPos);
-            var score = ScoreChainGoal(sinkingDice.Count, distanceToWorkDie, settings);
-
-            return new MatchGoal(
-                face,
-                sinkingDice,
-                workDie.Controller,
-                subGoals,
-                score,
-                false);
+            return null;
         }
 
         static float ScoreChainGoal(
-            int sinkingCount,
+            List<DiceSnapshot> sinkingDice,
+            int face,
+            IReadOnlyList<DiceSnapshot> allDice,
             int distanceToWorkDie,
             AiPlayerSettings settings) {
-            return sinkingCount * settings.ClusterSizeWeight
-                + settings.SinkingChainBonus
-                - distanceToWorkDie * settings.PlayerDistancePenalty;
+            return ClusterSelectionEvaluator.ScoreCluster(
+                sinkingDice,
+                face,
+                allDice,
+                playerCell: default,
+                distanceToWorkDie,
+                settings,
+                isImmediateMatch: false,
+                isChainGoal: true);
         }
 
         static MatchGoal BuildCarryPlacementGoal(
@@ -234,47 +245,52 @@ namespace DiceGame.Gameplay.AI.Domain
             var bestScore = float.MinValue;
             var found = false;
 
-            for (var face = 2; face <= 6; face++) {
-                var clusters = DiceBoardAnalyzer.FindFaceClusters(snapshot.PlanningDice, face);
-                for (var i = 0; i < clusters.Count; i++) {
-                    var cluster = clusters[i];
-                    if (cluster.Count >= face) {
-                        continue;
-                    }
+            foreach (var direction in new[] { Direction.East, Direction.West, Direction.North, Direction.South }) {
+                var cell = snapshot.PlayerCell + direction.ToGridDelta();
+                if (!snapshot.IsInPlayerRegion(cell)) {
+                    continue;
+                }
 
-                    foreach (var adjacent in GetClusterAdjacentCells(cluster)) {
-                        if (!snapshot.IsInPlayerRegion(adjacent)) {
+                if (!CarryPlacementPassability.TryResolveTarget(cell, registry, out var placeTier, out _)) {
+                    continue;
+                }
+
+                float score = -DiceBoardAnalyzer.ManhattanDistance(snapshot.PlayerCell, cell);
+                for (var face = 2; face <= 6; face++) {
+                    var clusters = DiceBoardAnalyzer.FindFaceClusters(snapshot.PlanningDice, face);
+                    for (var i = 0; i < clusters.Count; i++) {
+                        var cluster = clusters[i];
+                        if (cluster.Count >= face) {
+                            continue;
+                        }
+
+                        if (!IsClusterAdjacentCell(cluster, cell)) {
                             continue;
                         }
 
                         var clusterTier = cluster[0].Tier;
-                        if (!CarryPlacementPassability.CanPlaceAt(adjacent, clusterTier, registry, out _)) {
+                        if (placeTier != clusterTier
+                            && !CarryPlacementPassability.CanPlaceAt(cell, clusterTier, registry, out _)) {
                             continue;
                         }
 
-                        var score = cluster.Count * settings.ClusterSizeWeight
-                            - DiceBoardAnalyzer.ManhattanDistance(snapshot.PlayerCell, adjacent);
-                        if (score > bestScore) {
-                            bestScore = score;
-                            bestCell = adjacent;
-                            found = true;
+                        var clusterScore = ClusterSelectionEvaluator.ScoreCluster(
+                            cluster,
+                            face,
+                            snapshot.PlanningDice,
+                            snapshot.PlayerCell,
+                            0,
+                            settings);
+                        if (clusterScore > score) {
+                            score = clusterScore;
                         }
                     }
                 }
-            }
 
-            if (!found) {
-                foreach (var direction in new[] { Direction.East, Direction.West, Direction.North, Direction.South }) {
-                    var cell = snapshot.PlayerCell + direction.ToGridDelta();
-                    if (!snapshot.IsInPlayerRegion(cell)) {
-                        continue;
-                    }
-
-                    if (CarryPlacementPassability.TryResolveTarget(cell, registry, out _, out _)) {
-                        bestCell = cell;
-                        found = true;
-                        break;
-                    }
+                if (score > bestScore) {
+                    bestScore = score;
+                    bestCell = cell;
+                    found = true;
                 }
             }
 
@@ -286,6 +302,16 @@ namespace DiceGame.Gameplay.AI.Domain
                 AiSubGoal.PlaceCarriedDie(bestCell)
             };
             return new MatchGoal(0, new List<DiceSnapshot>(), null, subGoals, bestScore, false);
+        }
+
+        static bool IsClusterAdjacentCell(IReadOnlyList<DiceSnapshot> cluster, Vector2Int cell) {
+            for (var i = 0; i < cluster.Count; i++) {
+                if (DiceBoardAnalyzer.ManhattanDistance(cluster[i].GridPos, cell) == 1) {
+                    return true;
+                }
+            }
+
+            return false;
         }
 
         static MatchGoal BuildGoalForCluster(
@@ -319,28 +345,19 @@ namespace DiceGame.Gameplay.AI.Domain
                 return null;
             }
 
-            if (!ClusterSelectionEvaluator.TrySelectNearestExternalDie(
-                cluster,
-                face,
-                snapshot.PlanningDice,
-                snapshot.PlayerCell,
-                settings,
-                preferChain: false,
-                out var workDie,
-                registry)
-                || workDie.Controller == null) {
-                return null;
-            }
-
-            if (LiftJoinPlanner.TryPlanForCluster(
+            // Prefer Lift-Join when a same-face work die can be carried onto a join slot.
+            if (LiftJoinPlanner.TrySelectSameFaceLiftJoin(
                 snapshot,
                 registry,
                 cluster,
-                workDie,
                 face,
                 snapshot.PlanningDice,
-                out var liftPlan)) {
-                var liftDistance = DiceBoardAnalyzer.ManhattanDistance(snapshot.PlayerCell, workDie.GridPos);
+                forChain: false,
+                out var sameFaceWorkDie,
+                out var sameFaceLiftPlan)) {
+                var liftDistance = DiceBoardAnalyzer.ManhattanDistance(
+                    snapshot.PlayerCell,
+                    sameFaceWorkDie.GridPos);
                 var liftScore = ClusterSelectionEvaluator.ScoreCluster(
                     cluster,
                     face,
@@ -348,11 +365,24 @@ namespace DiceGame.Gameplay.AI.Domain
                     snapshot.PlayerCell,
                     liftDistance,
                     settings);
-                return BuildLiftJoinGoal(face, cluster, workDie.Controller, liftPlan, liftScore);
+                return BuildLiftJoinGoal(
+                    face,
+                    cluster,
+                    sameFaceWorkDie.Controller,
+                    sameFaceLiftPlan,
+                    liftScore);
             }
 
-            if (registry == null
-                || !WorkDieSlidePlanner.TrySelectJoinTargetCell(
+            if (TrySelectExternalWorkDie(
+                cluster,
+                face,
+                snapshot,
+                settings,
+                preferChain: false,
+                registry,
+                out var workDie)
+                && registry != null
+                && WorkDieSlidePlanner.TrySelectJoinTargetCell(
                     cluster,
                     workDie,
                     snapshot.PlanningDice,
@@ -361,36 +391,72 @@ namespace DiceGame.Gameplay.AI.Domain
                     snapshot.PlayerSlot,
                     out var joinCell,
                     out var joinTier)) {
-                return null;
+                var subGoals = new List<AiSubGoal>();
+                if (!IsStandingOnDice(snapshot, workDie.Controller)) {
+                    subGoals.Add(AiSubGoal.ReachWorkDie(workDie.Controller));
+                }
+
+                if (workDie.TopFace != face) {
+                    subGoals.Add(AiSubGoal.OrientDie(workDie.Controller, face));
+                }
+
+                subGoals.Add(AiSubGoal.JoinCluster(workDie.Controller, face, joinCell, joinTier));
+
+                var distanceToWorkDie = DiceBoardAnalyzer.ManhattanDistance(snapshot.PlayerCell, workDie.GridPos);
+                var score = ClusterSelectionEvaluator.ScoreCluster(
+                    cluster,
+                    face,
+                    snapshot.PlanningDice,
+                    snapshot.PlayerCell,
+                    distanceToWorkDie,
+                    settings);
+
+                return new MatchGoal(
+                    face,
+                    cluster,
+                    workDie.Controller,
+                    subGoals,
+                    score,
+                    false);
             }
 
-            var subGoals = new List<AiSubGoal>();
-            if (!IsStandingOnDice(snapshot, workDie.Controller)) {
-                subGoals.Add(AiSubGoal.ReachWorkDie(workDie.Controller));
-            }
+            return null;
+        }
 
-            if (workDie.TopFace != face) {
-                subGoals.Add(AiSubGoal.OrientDie(workDie.Controller, face));
-            }
-
-            subGoals.Add(AiSubGoal.JoinCluster(workDie.Controller, face, joinCell, joinTier));
-
-            var distanceToWorkDie = DiceBoardAnalyzer.ManhattanDistance(snapshot.PlayerCell, workDie.GridPos);
-            var score = ClusterSelectionEvaluator.ScoreCluster(
+        static bool TrySelectExternalWorkDie(
+            List<DiceSnapshot> cluster,
+            int face,
+            GameStateSnapshot snapshot,
+            AiPlayerSettings settings,
+            bool preferChain,
+            DiceRegistry registry,
+            out DiceSnapshot workDie) {
+            // Same-face first (Lift already failed): slide-join without Orient.
+            if (ClusterSelectionEvaluator.TrySelectNearestExternalDie(
                 cluster,
                 face,
                 snapshot.PlanningDice,
                 snapshot.PlayerCell,
-                distanceToWorkDie,
-                settings);
+                settings,
+                preferChain,
+                out workDie,
+                registry,
+                requireMatchingTopFace: true)
+                && workDie.Controller != null) {
+                return true;
+            }
 
-            return new MatchGoal(
-                face,
+            return ClusterSelectionEvaluator.TrySelectNearestExternalDie(
                 cluster,
-                workDie.Controller,
-                subGoals,
-                score,
-                false);
+                face,
+                snapshot.PlanningDice,
+                snapshot.PlayerCell,
+                settings,
+                preferChain,
+                out workDie,
+                registry,
+                requireMatchingTopFace: false)
+                && workDie.Controller != null;
         }
 
         static MatchGoal BuildLiftJoinGoal(
@@ -435,7 +501,9 @@ namespace DiceGame.Gameplay.AI.Domain
                 snapshot.PlanningDice,
                 snapshot.PlayerCell,
                 distance,
-                settings) + settings.ImmediateMatchBonus;
+                settings,
+                isImmediateMatch: true,
+                isChainGoal: false);
 
             return new MatchGoal(
                 face,

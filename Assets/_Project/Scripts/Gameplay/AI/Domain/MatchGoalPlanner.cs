@@ -213,7 +213,8 @@ namespace DiceGame.Gameplay.AI.Domain
             CharacterController character,
             AiPlayerSettings settings,
             Vector2Int blockedCell,
-            out Application.AiDiscreteAction action) {
+            out Application.AiDiscreteAction action,
+            Vector2Int? preferredLeaveCell = null) {
             action = null;
             if (!character.TryGetAiNavigationQuery(out var passability, out var footingWorldY)) {
                 return false;
@@ -248,8 +249,15 @@ namespace DiceGame.Gameplay.AI.Domain
                     continue;
                 }
 
-                if (step.Score > bestScore) {
-                    bestScore = step.Score;
+                var score = step.Score;
+                if (preferredLeaveCell.HasValue && step.Cell == preferredLeaveCell.Value) {
+                    score += 100f;
+                } else if (preferredLeaveCell.HasValue) {
+                    score -= DiceBoardAnalyzer.ManhattanDistance(step.Cell, preferredLeaveCell.Value);
+                }
+
+                if (score > bestScore) {
+                    bestScore = score;
                     bestStep = step;
                 }
             }
@@ -261,7 +269,8 @@ namespace DiceGame.Gameplay.AI.Domain
             var picked = bestStep.Value;
             var maxFrames = settings != null ? settings.MoveActionMaxFrames : 30;
             Application.AiDebugLog.Log(
-                $"LeaveOccupiedStackCell from={blockedCell} step={picked.Cell} edge={picked.EdgeKind}");
+                $"LeaveOccupiedStackCell from={blockedCell} step={picked.Cell} edge={picked.EdgeKind}" +
+                (preferredLeaveCell.HasValue ? $" prefer={preferredLeaveCell.Value}" : string.Empty));
             action = new Application.Actions.MoveToAdjacentCellAction(
                 picked.Cell,
                 picked.Cell,
@@ -460,75 +469,83 @@ namespace DiceGame.Gameplay.AI.Domain
                 return null;
             }
 
-            subGoal.TryAdvanceJoinSlideStep(state);
+            const int maxJoinRetargets = 12;
+            for (var retargetAttempt = 0; retargetAttempt < maxJoinRetargets; retargetAttempt++) {
+                state = die.CurrentState;
+                subGoal.TryAdvanceJoinSlideStep(state);
 
-            if (!subGoal.HasJoinSlidePlan && state.Orientation.Top != subGoal.TargetFace) {
-                return BuildOrientAction(subGoal, snapshot, character, registry, settings);
-            }
+                if (!subGoal.HasJoinSlidePlan && state.Orientation.Top != subGoal.TargetFace) {
+                    return BuildOrientAction(subGoal, snapshot, character, registry, settings);
+                }
 
-            if (!TryEnsureJoinSlidePlan(subGoal, state, passability, character, footingWorldY, settings)) {
-                // Landing blocked or pathless — retarget once then rebuild.
-                if (TryRetargetJoin(goal, subGoal, snapshot, registry)
-                    && TryEnsureJoinSlidePlan(subGoal, die.CurrentState, passability, character, footingWorldY, settings)) {
+                if (!TryEnsureJoinSlidePlan(subGoal, state, passability, character, footingWorldY, settings)) {
+                    if (!TryRetargetJoin(goal, subGoal, snapshot, registry)) {
+                        Application.AiDebugLog.Log(
+                            $"JoinPlan FAILED die={die.name} cell={state.GridPos} " +
+                            $"target={subGoal.TargetCell}/{subGoal.TargetTier} top={state.Orientation.Top} " +
+                            $"reason=no-extend-slot");
+                        return null;
+                    }
+
                     Application.AiDebugLog.Log(
                         $"JoinRetargetOk die={die.name} target={subGoal.TargetCell}/{subGoal.TargetTier}");
-                } else {
-                    Application.AiDebugLog.Log(
-                        $"JoinPlan FAILED die={die.name} cell={state.GridPos} " +
-                        $"target={subGoal.TargetCell}/{subGoal.TargetTier} top={state.Orientation.Top}");
+                    continue;
+                }
+
+                var plan = subGoal.JoinSlidePlan.Value;
+                var stepIndex = subGoal.JoinSlideStepIndex;
+                if (stepIndex >= plan.Directions.Count) {
+                    state = die.CurrentState;
+                    if (WorkDieSlidePlanner.IsJoinComplete(
+                        state,
+                        subGoal.TargetCell,
+                        subGoal.TargetTier,
+                        subGoal.TargetFace)) {
+                        subGoal.MarkComplete();
+                    }
+
                     return null;
                 }
-            }
 
-            var plan = subGoal.JoinSlidePlan.Value;
-            var stepIndex = subGoal.JoinSlideStepIndex;
-            if (stepIndex >= plan.Directions.Count) {
-                state = die.CurrentState;
-                if (WorkDieSlidePlanner.IsJoinComplete(
-                    state,
-                    subGoal.TargetCell,
-                    subGoal.TargetTier,
-                    subGoal.TargetFace)) {
-                    subGoal.MarkComplete();
-                }
+                var fromLevel = character.StandingPlacement.Level;
+                var allowJump = settings != null && settings.AllowJump;
+                if (!WorkDieSlidePlanner.TrySelectNextStep(
+                    passability,
+                    die,
+                    fromLevel,
+                    footingWorldY,
+                    character.PlayerSlot,
+                    plan,
+                    stepIndex,
+                    allowJump,
+                    out var slideStep)) {
+                    subGoal.ClearJoinSlidePlan();
+                    if (!TryRetargetJoin(goal, subGoal, snapshot, registry)) {
+                        Application.AiDebugLog.Log(
+                            $"JoinPlan FAILED die={die.name} cell={state.GridPos} " +
+                            $"target={subGoal.TargetCell}/{subGoal.TargetTier} top={state.Orientation.Top} " +
+                            $"step={stepIndex}/{plan.Directions.Count} reason=no-extend-slot");
+                        return null;
+                    }
 
-                return null;
-            }
-
-            var fromLevel = character.StandingPlacement.Level;
-            var allowJump = settings != null && settings.AllowJump;
-            if (!WorkDieSlidePlanner.TrySelectNextStep(
-                passability,
-                die,
-                fromLevel,
-                footingWorldY,
-                character.PlayerSlot,
-                plan,
-                stepIndex,
-                allowJump,
-                out var slideStep)) {
-                subGoal.ClearJoinSlidePlan();
-                if (TryRetargetJoin(goal, subGoal, snapshot, registry)) {
                     Application.AiDebugLog.Log(
                         $"JoinStepRetarget die={die.name} target={subGoal.TargetCell}/{subGoal.TargetTier}");
-                    return null;
+                    continue;
                 }
 
                 Application.AiDebugLog.Log(
-                    $"JoinPlan FAILED die={die.name} cell={state.GridPos} " +
-                    $"target={subGoal.TargetCell}/{subGoal.TargetTier} top={state.Orientation.Top} " +
-                    $"step={stepIndex}/{plan.Directions.Count}");
-                return null;
+                    $"JoinPlan die={die.name} top={state.Orientation.Top} " +
+                    $"target={subGoal.TargetCell}/{subGoal.TargetTier} " +
+                    $"stepIndex={stepIndex}/{plan.Directions.Count} planned={plan.Directions[stepIndex]} " +
+                    $"exec={slideStep.Direction} mode={slideStep.Mode} landing={slideStep.LandingCell} " +
+                    $"landingTier={slideStep.LandingTier}");
+
+                return BuildWorkDieRollAction(slideStep, die, settings, allowJump);
             }
 
             Application.AiDebugLog.Log(
-                $"JoinPlan die={die.name} top={state.Orientation.Top} " +
-                $"target={subGoal.TargetCell}/{subGoal.TargetTier} " +
-                $"stepIndex={stepIndex}/{plan.Directions.Count} planned={plan.Directions[stepIndex]} " +
-                $"exec={slideStep.Direction} mode={slideStep.Mode} landing={slideStep.LandingCell} " +
-                $"landingTier={slideStep.LandingTier}");
-
-            return BuildWorkDieRollAction(slideStep, die, settings, allowJump);
+                $"JoinPlan FAILED die={die.name} reason=retarget-budget-exhausted");
+            return null;
         }
 
         static bool EnsureJoinTargetAvailable(
@@ -556,6 +573,8 @@ namespace DiceGame.Gameplay.AI.Domain
                 return false;
             }
 
+            subGoal.RememberFailedJoinTarget(subGoal.TargetCell, subGoal.TargetTier);
+
             var workDieSnapshot = new DiceSnapshot(subGoal.TargetDie);
             if (!WorkDieSlidePlanner.TrySelectJoinTargetCell(
                 goal.ClusterDice,
@@ -566,20 +585,8 @@ namespace DiceGame.Gameplay.AI.Domain
                 snapshot.PlayerSlot,
                 out var cell,
                 out var tier,
-                excludeCell: subGoal.TargetCell,
-                excludeTier: subGoal.TargetTier)) {
-                // No exclude: maybe only one valid slot appeared after the blocked one cleared.
-                if (!WorkDieSlidePlanner.TrySelectJoinTargetCell(
-                    goal.ClusterDice,
-                    workDieSnapshot,
-                    snapshot.PlanningDice,
-                    registry,
-                    snapshot.VersusLayout,
-                    snapshot.PlayerSlot,
-                    out cell,
-                    out tier)) {
-                    return false;
-                }
+                subGoal.FailedJoinSlotKeys)) {
+                return false;
             }
 
             if (cell == subGoal.TargetCell && tier == subGoal.TargetTier) {
@@ -688,56 +695,49 @@ namespace DiceGame.Gameplay.AI.Domain
                 return null;
             }
 
+            if (!TryGetFollowingPlaceCell(goal, subGoal, out var placeCell)) {
+                Application.AiDebugLog.Log(
+                    $"Lift FAILED die={(die != null ? die.name : "none")} reason=no-place-cell");
+                return null;
+            }
+
+            if (!LiftJoinPlanner.TrySelectStanceCell(
+                snapshot,
+                registry,
+                die,
+                die.CurrentState.GridPos,
+                placeCell,
+                out var stanceCell)) {
+                Application.AiDebugLog.Log(
+                    $"Lift FAILED die={die.name} place={placeCell} reason=no-stance");
+                return null;
+            }
+
+            // Must leave the work die onto (or toward) the planned stance before lifting.
             if (snapshot.StandingDice == die) {
                 if (TryBuildLeaveCellAction(
                     snapshot,
                     character,
                     settings,
                     snapshot.PlayerCell,
-                    out var leaveAction)) {
+                    out var leaveAction,
+                    preferredLeaveCell: stanceCell)) {
                     Application.AiDebugLog.Log(
-                        $"LiftLeaveStandingDie die={die.name} from={snapshot.PlayerCell}");
+                        $"LiftLeaveStandingDie die={die.name} from={snapshot.PlayerCell} stance={stanceCell} place={placeCell}");
                     return leaveAction;
                 }
 
                 Application.AiDebugLog.Log(
-                    $"LiftLeaveStandingDie FAILED die={die.name} from={snapshot.PlayerCell}");
+                    $"LiftLeaveStandingDie FAILED die={die.name} from={snapshot.PlayerCell} stance={stanceCell}");
                 return null;
             }
 
-            Vector2Int? placeCell = null;
-            if (TryGetFollowingPlaceCell(goal, subGoal, out var plannedPlace)) {
-                placeCell = plannedPlace;
-            }
-
-            if (placeCell.HasValue
-                && LiftJoinPlanner.TrySelectStanceCell(
-                    snapshot,
-                    registry,
-                    die,
-                    die.CurrentState.GridPos,
-                    placeCell.Value,
-                    out var stanceCell)) {
-                var needsReposition = snapshot.PlayerCell != stanceCell
-                    || (IsAdjacentToDice(snapshot, die)
-                        && DiceBoardAnalyzer.ManhattanDistance(snapshot.PlayerCell, placeCell.Value) != 1);
-
-                if (needsReposition) {
-                    Application.AiDebugLog.Log(
-                        $"LiftApproachStance die={die.name} stance={stanceCell} place={placeCell.Value}");
-                    return SelectMovementAction(
-                        stanceCell,
-                        snapshot,
-                        character,
-                        registry,
-                        settings,
-                        preferJump: false,
-                        standOnDie: null,
-                        AiNavigationConstraints.None);
-                }
-            } else if (!IsAdjacentToDice(snapshot, die)) {
+            if (snapshot.PlayerCell != stanceCell
+                || DiceBoardAnalyzer.ManhattanDistance(snapshot.PlayerCell, placeCell) != 1) {
+                Application.AiDebugLog.Log(
+                    $"LiftApproachStance die={die.name} stance={stanceCell} place={placeCell} player={snapshot.PlayerCell}");
                 return SelectMovementAction(
-                    die.CurrentState.GridPos,
+                    stanceCell,
                     snapshot,
                     character,
                     registry,
@@ -748,13 +748,8 @@ namespace DiceGame.Gameplay.AI.Domain
             }
 
             if (!IsAdjacentToDice(snapshot, die)) {
-                return null;
-            }
-
-            if (placeCell.HasValue
-                && DiceBoardAnalyzer.ManhattanDistance(snapshot.PlayerCell, placeCell.Value) != 1) {
                 Application.AiDebugLog.Log(
-                    $"LiftStanceMismatch die={die.name} player={snapshot.PlayerCell} place={placeCell.Value}");
+                    $"LiftStanceMismatch die={die.name} player={snapshot.PlayerCell} stance={stanceCell}");
                 return null;
             }
 
@@ -817,6 +812,21 @@ namespace DiceGame.Gameplay.AI.Domain
                 settings,
                 preferJump,
                 standOnDie,
+                AiNavigationConstraints.None);
+        }
+
+        public static Application.AiDiscreteAction BuildStandOnDie(
+            DiceController targetDie,
+            GameStateSnapshot snapshot,
+            CharacterController character,
+            DiceRegistry registry,
+            AiPlayerSettings settings) {
+            return BuildStandOnDieMovement(
+                targetDie,
+                snapshot,
+                character,
+                registry,
+                settings,
                 AiNavigationConstraints.None);
         }
 

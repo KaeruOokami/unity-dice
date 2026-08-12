@@ -53,6 +53,24 @@ namespace DiceGame.Gameplay.AI.Domain
             return CarryPlacementPassability.CanPlaceAt(targetCell, targetTier, registry, out _);
         }
 
+        public static bool CanWorkDieExtendCluster(
+            IReadOnlyList<DiceSnapshot> cluster,
+            DiceSnapshot workDie,
+            IReadOnlyList<DiceSnapshot> allDice,
+            DiceRegistry registry,
+            VersusArenaLayout versusLayout,
+            PlayerSlot playerSlot) {
+            return TrySelectJoinTargetCell(
+                cluster,
+                workDie,
+                allDice,
+                registry,
+                versusLayout,
+                playerSlot,
+                out _,
+                out _);
+        }
+
         public static bool TrySelectJoinTargetCell(
             IReadOnlyList<DiceSnapshot> cluster,
             DiceSnapshot workDie,
@@ -64,6 +82,35 @@ namespace DiceGame.Gameplay.AI.Domain
             out DiceStackTier targetTier,
             Vector2Int? excludeCell = null,
             DiceStackTier? excludeTier = null) {
+            HashSet<long> excludeKeys = null;
+            if (excludeCell.HasValue && excludeTier.HasValue) {
+                excludeKeys = new HashSet<long> {
+                    JoinSlotKey(excludeCell.Value, excludeTier.Value)
+                };
+            }
+
+            return TrySelectJoinTargetCell(
+                cluster,
+                workDie,
+                allDice,
+                registry,
+                versusLayout,
+                playerSlot,
+                out targetCell,
+                out targetTier,
+                excludeKeys);
+        }
+
+        public static bool TrySelectJoinTargetCell(
+            IReadOnlyList<DiceSnapshot> cluster,
+            DiceSnapshot workDie,
+            IReadOnlyList<DiceSnapshot> allDice,
+            DiceRegistry registry,
+            VersusArenaLayout versusLayout,
+            PlayerSlot playerSlot,
+            out Vector2Int targetCell,
+            out DiceStackTier targetTier,
+            ISet<long> excludeSlotKeys) {
             targetCell = default;
             targetTier = default;
             if (cluster == null || cluster.Count == 0 || registry == null || workDie.Controller == null) {
@@ -90,10 +137,8 @@ namespace DiceGame.Gameplay.AI.Domain
                     continue;
                 }
 
-                if (excludeCell.HasValue
-                    && excludeTier.HasValue
-                    && excludeCell.Value == cell
-                    && excludeTier.Value == clusterTier) {
+                if (excludeSlotKeys != null
+                    && excludeSlotKeys.Contains(JoinSlotKey(cell, clusterTier))) {
                     continue;
                 }
 
@@ -127,6 +172,10 @@ namespace DiceGame.Gameplay.AI.Domain
             }
 
             return found;
+        }
+
+        public static long JoinSlotKey(Vector2Int cell, DiceStackTier tier) {
+            return ((long)cell.x << 32) ^ ((long)(cell.y & 0xFFFF) << 16) ^ (long)tier;
         }
 
         public static bool TryBuildSlidePlan(

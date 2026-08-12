@@ -250,6 +250,7 @@
     <Compile Include="Assets\_Project\Scripts\Session\OnlineLobbyFacade.cs" />
     <Compile Include="Assets\_Project\Scripts\Gameplay\Character\CharacterMovePlan.cs" />
     <Compile Include="Assets\_Project\Scripts\Config\AttackDefaultPresetCatalog.cs" />
+    <Compile Include="Assets\_Project\Scripts\Gameplay\AI\Domain\MatchGoalLiftPreference.cs" />
     <Compile Include="Assets\_Project\Scripts\Placement\Registry\CharacterPlacement.cs" />
     <Compile Include="Assets\_Project\Scripts\Session\PlayerNaturalSendSettingsPanelUi.cs" />
     <Compile Include="Assets\_Project\Scripts\Gameplay\AI\Domain\LiftClearancePlanner.cs" />

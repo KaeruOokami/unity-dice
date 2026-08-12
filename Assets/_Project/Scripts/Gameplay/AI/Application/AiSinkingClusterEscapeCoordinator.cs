@@ -9,6 +9,31 @@ namespace DiceGame.Gameplay.AI.Application
 {
     public static class AiSinkingClusterEscapeCoordinator
     {
+        public static bool TryBuildMountAdjacentAction(
+            DiceController mountTarget,
+            GameStateSnapshot snapshot,
+            CharacterController character,
+            DiceRegistry registry,
+            AiPlayerSettings settings,
+            out AiDiscreteAction action) {
+            action = null;
+            if (mountTarget == null || snapshot == null || character == null || settings == null) {
+                return false;
+            }
+
+            if (snapshot.StandingDice == mountTarget) {
+                return false;
+            }
+
+            action = MatchGoalPlanner.BuildStandOnDie(
+                mountTarget,
+                snapshot,
+                character,
+                registry,
+                settings);
+            return action != null;
+        }
+
         public static bool TryBuildDescendAction(
             GameStateSnapshot snapshot,
             CharacterController character,

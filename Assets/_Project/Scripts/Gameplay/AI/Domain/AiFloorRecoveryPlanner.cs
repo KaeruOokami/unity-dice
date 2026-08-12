@@ -309,6 +309,25 @@ namespace DiceGame.Gameplay.AI.Domain
             IReadOnlyList<DiceSnapshot> clusterGroup,
             int clusterFace,
             IReadOnlyList<DiceSnapshot> allDice) {
+            return TrySelectNearestAdjacentExternalDie(
+                clusterGroup,
+                clusterFace,
+                allDice,
+                Vector2Int.zero,
+                out _);
+        }
+
+        /// <summary>
+        /// Selects a standable external die that shares an edge with the cluster,
+        /// preferring the candidate closest to <paramref name="playerCell"/>.
+        /// </summary>
+        public static bool TrySelectNearestAdjacentExternalDie(
+            IReadOnlyList<DiceSnapshot> clusterGroup,
+            int clusterFace,
+            IReadOnlyList<DiceSnapshot> allDice,
+            Vector2Int playerCell,
+            out DiceSnapshot workDie) {
+            workDie = default;
             if (clusterGroup == null || clusterGroup.Count == 0 || allDice == null) {
                 return false;
             }
@@ -320,21 +339,37 @@ namespace DiceGame.Gameplay.AI.Domain
                 }
             }
 
+            var bestDistance = int.MaxValue;
+            var found = false;
+
             for (var i = 0; i < clusterGroup.Count; i++) {
                 var clusterMember = clusterGroup[i];
                 foreach (var adjacentCell in DiceBoardAnalyzer.GetAdjacentCells(clusterMember.GridPos)) {
-                    if (TryFindMovableExternalDieAt(
+                    if (!TryFindMovableExternalDieAt(
                         adjacentCell,
                         clusterFace,
                         clusterControllers,
                         allDice,
-                        out _)) {
-                        return true;
+                        out var candidate)) {
+                        continue;
                     }
+
+                    if (!ClusterSelectionEvaluator.IsStandableWorkDie(candidate, allDice)) {
+                        continue;
+                    }
+
+                    var distance = DiceBoardAnalyzer.ManhattanDistance(playerCell, candidate.GridPos);
+                    if (distance >= bestDistance) {
+                        continue;
+                    }
+
+                    bestDistance = distance;
+                    workDie = candidate;
+                    found = true;
                 }
             }
 
-            return false;
+            return found;
         }
 
         static bool IsExternalAdjacentToSinkingCluster(
