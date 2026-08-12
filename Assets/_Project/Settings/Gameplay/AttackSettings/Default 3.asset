@@ -25,10 +25,6 @@ MonoBehaviour:
       maxCountPerVolley: 3
       minimumPower: 0
       selectionWeight: 1
-    - kind: 2
-      maxCountPerVolley: 2
-      minimumPower: 0.6
-      selectionWeight: 1
   attackMultiplier: 0.1
   faceGain: 0.4
   chainGain: 0.1

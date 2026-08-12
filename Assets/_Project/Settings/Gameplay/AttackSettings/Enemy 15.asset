@@ -1,0 +1,71 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: b2c3d4e5f6a7488990aabbccddeeff31, type: 3}
+  m_Name: Enemy 15
+  m_EditorClassIdentifier: 
+  faceSendProfiles:
+  - triggerFaces: 010000000200000003000000
+    sendableKinds:
+    - kind: 0
+      maxCountPerVolley: 3
+      minimumPower: 0
+      selectionWeight: 1
+    - kind: 1
+      maxCountPerVolley: 3
+      minimumPower: 0
+      selectionWeight: 1
+    - kind: 5
+      maxCountPerVolley: 3
+      minimumPower: 0
+      selectionWeight: 1
+  - triggerFaces: 0300000004000000
+    sendableKinds:
+    - kind: 4
+      maxCountPerVolley: 3
+      minimumPower: 0
+      selectionWeight: 1
+    - kind: 6
+      maxCountPerVolley: 3
+      minimumPower: 0
+      selectionWeight: 1
+    - kind: 2
+      maxCountPerVolley: 2
+      minimumPower: 0
+      selectionWeight: 0.4
+    - kind: 7
+      maxCountPerVolley: 1
+      minimumPower: 0
+      selectionWeight: 0.2
+  - triggerFaces: 0500000006000000
+    sendableKinds:
+    - kind: 3
+      maxCountPerVolley: 3
+      minimumPower: 0
+      selectionWeight: 1
+    - kind: 2
+      maxCountPerVolley: 3
+      minimumPower: 0
+      selectionWeight: 1
+    - kind: 7
+      maxCountPerVolley: 1
+      minimumPower: 0
+      selectionWeight: 0.2
+  attackMultiplier: 0.4
+  faceGain: 0.4
+  chainGain: 0.1
+  sizeGain: 0.3
+  snatchMultiplier: 1.5
+  face2Weight: 1
+  face3Weight: 1
+  face4Weight: 1
+  face5Weight: 1
+  face6Weight: 1

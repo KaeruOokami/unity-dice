@@ -317,8 +317,39 @@ namespace DiceGame.Gameplay.AI.Domain
         }
 
         /// <summary>
+        /// Priority/score goal switches (including Face changes) are locked while Join is still
+        /// in progress, while Lift→Place join is underway, or while the work die can still
+        /// roll-join the cluster. Face may switch only after cluster join is no longer possible.
+        /// </summary>
+        public bool AllowsPriorityGoalSwitch(GameStateSnapshot snapshot, DiceRegistry registry) {
+            if (snapshot == null) {
+                return false;
+            }
+
+            if (HasIncompleteSubGoalOfKind(AiSubGoalKind.JoinCluster)) {
+                return false;
+            }
+
+            if (IsOnLiftJoinPath()) {
+                return false;
+            }
+
+            if (Face < 2 || ParticipantTarget == null || ClusterDice == null || ClusterDice.Count == 0) {
+                return true;
+            }
+
+            return !WorkDieSlidePlanner.CanWorkDieExtendCluster(
+                ClusterDice,
+                new DiceSnapshot(ParticipantTarget),
+                snapshot.PlanningDice,
+                registry,
+                snapshot.VersusLayout,
+                snapshot.PlayerSlot);
+        }
+
+        /// <summary>
         /// Different work-die switches are allowed only when this work die can no longer extend the cluster.
-        /// Same work die (or non-join goals) may switch on score alone.
+        /// Same work die (or non-join goals) may switch on score alone when <see cref="AllowsPriorityGoalSwitch"/> permits.
         /// </summary>
         public bool AllowsWorkDieSwitch(
             MatchGoal candidate,

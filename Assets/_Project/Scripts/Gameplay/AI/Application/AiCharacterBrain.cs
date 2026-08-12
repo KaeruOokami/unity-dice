@@ -385,17 +385,28 @@ namespace DiceGame.Gameplay.AI.Application
                 MatchGoalProgressSync.Sync(activeGoal, snapshot);
 
                 if (!activeGoal.IsStale(snapshot, settings, registry) && !activeGoal.AreAllSubGoalsComplete()) {
-                    var candidate = MatchGoalSelector.SelectBest(
-                        snapshot,
-                        character,
-                        registry,
-                        settings,
-                        failureMemory);
-                    if (candidate != null
-                        && activeGoal.ShouldSwitchTo(candidate, settings.GoalSwitchMargin)
-                        && activeGoal.AllowsWorkDieSwitch(candidate, snapshot, registry)) {
-                        activeGoal = candidate;
-                        stuckActionCount = 0;
+                    // Join in progress (or still extendable): keep Face. Switch only when
+                    // cluster join is no longer possible (blocked destinations, etc.).
+                    if (activeGoal.AllowsPriorityGoalSwitch(snapshot, registry)) {
+                        var candidate = MatchGoalSelector.SelectBest(
+                            snapshot,
+                            character,
+                            registry,
+                            settings,
+                            failureMemory);
+                        if (candidate != null
+                            && activeGoal.ShouldSwitchTo(candidate, settings.GoalSwitchMargin)
+                            && activeGoal.AllowsWorkDieSwitch(candidate, snapshot, registry)) {
+                            if (candidate.Face != activeGoal.Face) {
+                                AiDebugLog.Log(
+                                    $"SwitchGoal face={activeGoal.Face}->{candidate.Face} " +
+                                    $"reason=join-impossible " +
+                                    $"score={activeGoal.PriorityScore:F1}->{candidate.PriorityScore:F1}");
+                            }
+
+                            activeGoal = candidate;
+                            stuckActionCount = 0;
+                        }
                     }
 
                     return activeGoal;

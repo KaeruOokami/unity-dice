@@ -15,25 +15,26 @@ MonoBehaviour:
   minReplanInterval: 0
   idleReplanInterval: 0
   failedReplanInterval: 0
-  moveActionMaxFrames: 36
+  moveActionMaxFrames: 32
   jumpMoveMaxFrames: 48
   faceBeforeLiftFrames: 4
+  rollStepMaxFrames: 120
   allowJump: 1
-  faceValueWeight: 10
+  pathSearchMaxSteps: 64
+  cellCenterTolerance: 0.08
+  faceValueWeight: 20
   clusterProgressWeight: 8
   sameFaceProximityWeight: 20
-  immediateMatchBonus: 25
-  playerDistancePenalty: 1.5
-  immovableClusterPenalty: 20
   clusterSizeWeight: 100
   clusterCompactnessWeight: 50
+  playerDistancePenalty: 1.5
+  immovableClusterPenalty: 20
+  immediateMatchBonus: 25
   sinkingChainBonus: 200
   sinkingChainImmediateBonus: 50
   sinkingChainWorkDieWeight: 8
   goalSwitchMargin: 8
-  pathSearchMaxSteps: 64
-  cellCenterTolerance: 0.08
-  rollStepMaxFrames: 120
   stuckAttemptsBeforeGoalReset: 3
   goalFailureBlacklistSeconds: 12
   debugLog: 1
+  debugGizmo: 1

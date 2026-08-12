@@ -12,7 +12,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: f1a2b3c4d5e6478899aabbccddeeff03, type: 3}
   m_Name: DiceAnimationSettings
   m_EditorClassIdentifier: 
-  rollAnimationDuration: 0.25
+  rollAnimationDuration: 0.2
   jumpParallelRollDurationPerCell: 0.2
   slideDuration: 0.2
   fallHorizontalDuration: 0.2
