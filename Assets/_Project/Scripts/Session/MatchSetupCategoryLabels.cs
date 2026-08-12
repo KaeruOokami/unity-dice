@@ -26,6 +26,9 @@ namespace DiceGame.Session
                     Attack,
                     NaturalSend
                 },
+                GameMode.Challenge => new[] {
+                    Attack
+                },
                 GameMode.Single => new[] {
                     Shared,
                     Control

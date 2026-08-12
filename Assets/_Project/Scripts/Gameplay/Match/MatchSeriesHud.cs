@@ -34,15 +34,30 @@ namespace DiceGame.Gameplay
             ApplyLayout();
             MatchSeriesState.Changed -= Refresh;
             MatchSeriesState.Changed += Refresh;
+            ChallengeRunState.Changed -= Refresh;
+            ChallengeRunState.Changed += Refresh;
             Refresh();
         }
 
         void OnDestroy() {
             MatchSeriesState.Changed -= Refresh;
+            ChallengeRunState.Changed -= Refresh;
         }
 
         public void Refresh() {
             if (player1Text == null || player2Text == null) {
+                return;
+            }
+
+            if (ChallengeRunState.IsActive) {
+                if (canvas != null) {
+                    canvas.gameObject.SetActive(true);
+                }
+
+                ApplyLayout();
+                player1Text.text =
+                    $"Match  {ChallengeRunState.DisplayMatchNumber}/{ChallengeRunState.MatchCount}";
+                player2Text.text = string.Empty;
                 return;
             }
 
@@ -125,7 +140,7 @@ namespace DiceGame.Gameplay
             var text = go.AddComponent<TextMeshProUGUI>();
             text.font = uiFont;
             text.alignment = alignment;
-            text.enableWordWrapping = false;
+            text.textWrappingMode = TextWrappingModes.NoWrap;
             text.overflowMode = TextOverflowModes.Overflow;
             text.raycastTarget = false;
             return text;

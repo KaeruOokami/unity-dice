@@ -87,7 +87,7 @@ namespace DiceGame.Gameplay
             centerText = textObject.AddComponent<TextMeshProUGUI>();
             centerText.font = uiFont;
             centerText.alignment = TextAlignmentOptions.Center;
-            centerText.enableWordWrapping = false;
+            centerText.textWrappingMode = TextWrappingModes.NoWrap;
             centerText.overflowMode = TextOverflowModes.Overflow;
             centerText.raycastTarget = false;
         }

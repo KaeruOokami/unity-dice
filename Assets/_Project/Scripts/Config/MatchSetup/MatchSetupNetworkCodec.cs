@@ -52,7 +52,7 @@ namespace DiceGame.Config
             var defaults = registry.CreateDefaultSnapshot(mode);
             snapshot = new MatchSetupSnapshot {
                 GameMode = mode,
-                WinsToWin = mode == GameMode.Versus
+                WinsToWin = GameModeRules.IsVersusLike(mode)
                     ? System.Math.Max(1, payload.WinsToWin > 0 ? payload.WinsToWin : defaults.WinsToWin)
                     : 1,
                 SharedSpawn = FromSpawnPayload(payload.SharedSpawn),

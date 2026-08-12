@@ -1,4 +1,5 @@
 ﻿using System.Collections;
+using System.Collections.Generic;
 using DiceGame.Config;
 using DiceGame.Gameplay.Input;
 using DiceGame.Grid;
@@ -83,10 +84,8 @@ namespace DiceGame.Gameplay
             activeGameMode = resolvedSetup?.GameMode ?? targetSessionSettings.GameMode;
             activeRequiredPlayerCount = resolvedSetup?.RequiredPlayerCount ?? targetSessionSettings.RequiredPlayerCount;
             playingTimeScale = Time.timeScale;
-            roundEndDelaySeconds = targetSessionSettings.VersusBoardSettings != null
-                ? targetSessionSettings.VersusBoardSettings.RoundEndDelaySeconds
-                : 0f;
             sessionController = FindFirstObjectByType<SessionController>();
+            roundEndDelaySeconds = ResolveRoundEndDelaySeconds(targetSessionSettings);
 
             inputReader = GetComponent<GameFlowInputReader>();
             if (inputReader == null)
@@ -110,7 +109,7 @@ namespace DiceGame.Gameplay
             pauseMenuUi.ReturnToTitleClicked += OnPauseMenuReturnToTitleClicked;
 
             EnsureSeriesState();
-            if (activeGameMode == GameMode.Versus)
+            if (GameModeRules.IsVersusLike(activeGameMode))
             {
                 if (seriesHudSettings == null)
                 {
@@ -137,6 +136,18 @@ namespace DiceGame.Gameplay
 
         void EnsureSeriesState()
         {
+            if (activeGameMode == GameMode.Challenge)
+            {
+                MatchSeriesState.Clear();
+                if (!ChallengeRunState.IsActive && !TryBeginChallengeRunFromCurrentSetup())
+                {
+                    Debug.LogError("GameFlowController: Failed to begin ChallengeRunState.");
+                }
+
+                return;
+            }
+
+            ChallengeRunState.Clear();
             if (activeGameMode != GameMode.Versus)
             {
                 MatchSeriesState.Clear();
@@ -149,6 +160,57 @@ namespace DiceGame.Gameplay
             }
 
             MatchSeriesState.Begin(ResolveWinsToWin());
+        }
+
+        bool TryBeginChallengeRunFromCurrentSetup()
+        {
+            var setup = SessionState.Instance?.CurrentSetup;
+            if (setup == null || setup.GameMode != GameMode.Challenge)
+            {
+                return false;
+            }
+
+            var challengeSettings = sessionController != null
+                ? sessionController.MatchSetupPresetRegistry?.ChallengeModeSettings
+                : null;
+            if (challengeSettings == null)
+            {
+                Debug.LogError("GameFlowController: ChallengeModeSettings is not assigned.");
+                return false;
+            }
+
+            if (!challengeSettings.TryValidate(out var error))
+            {
+                Debug.LogError($"GameFlowController: {error}");
+                return false;
+            }
+
+            var opponents = BuildChallengeOpponentAttacks(challengeSettings);
+            if (opponents.Length < 1)
+            {
+                Debug.LogError("GameFlowController: Challenge has no opponent attacks.");
+                return false;
+            }
+
+            ChallengeRunState.Begin(setup.Player1.Attack, opponents);
+            return true;
+        }
+
+        static PlayerAttackSettingsData[] BuildChallengeOpponentAttacks(ChallengeModeSettings challengeSettings)
+        {
+            var source = challengeSettings.OpponentAttacksByMatch;
+            var list = new List<PlayerAttackSettingsData>();
+            for (var i = 0; i < source.Length; i++)
+            {
+                if (source[i] == null)
+                {
+                    continue;
+                }
+
+                list.Add(PlayerAttackSettingsData.FromTemplate(source[i]));
+            }
+
+            return list.ToArray();
         }
 
         int ResolveWinsToWin()
@@ -165,6 +227,24 @@ namespace DiceGame.Gameplay
             }
 
             return 1;
+        }
+
+        float ResolveRoundEndDelaySeconds(GameSessionSettings targetSessionSettings)
+        {
+            if (activeGameMode == GameMode.Challenge)
+            {
+                var challengeSettings = sessionController != null
+                    ? sessionController.MatchSetupPresetRegistry?.ChallengeModeSettings
+                    : null;
+                if (challengeSettings != null && challengeSettings.BoardSettings != null)
+                {
+                    return challengeSettings.BoardSettings.RoundEndDelaySeconds;
+                }
+            }
+
+            return targetSessionSettings != null && targetSessionSettings.VersusBoardSettings != null
+                ? targetSessionSettings.VersusBoardSettings.RoundEndDelaySeconds
+                : 0f;
         }
 
         void OnDestroy()
@@ -231,7 +311,7 @@ namespace DiceGame.Gameplay
 
         void EvaluateGameOver()
         {
-            if (activeGameMode != GameMode.Versus)
+            if (!GameModeRules.IsVersusLike(activeGameMode))
             {
                 if (BoardFillEvaluator.IsStandardBottomFull(board, registry))
                 {
@@ -271,7 +351,7 @@ namespace DiceGame.Gameplay
                 return;
             }
 
-            if (activeGameMode != GameMode.Versus)
+            if (!GameModeRules.IsVersusLike(activeGameMode))
             {
                 EnterStandardGameOver(StandardGameOverLog);
                 return;
@@ -419,9 +499,16 @@ namespace DiceGame.Gameplay
 
         void ApplySeriesScoreOnReset()
         {
+            if (activeGameMode == GameMode.Challenge)
+            {
+                MatchSeriesState.Clear();
+                return;
+            }
+
             if (activeGameMode != GameMode.Versus)
             {
                 MatchSeriesState.Clear();
+                ChallengeRunState.Clear();
                 return;
             }
 
@@ -444,6 +531,7 @@ namespace DiceGame.Gameplay
             }
 
             MatchSeriesState.Clear();
+            ChallengeRunState.Clear();
             MatchFlowFlags.ArmTitleReturn();
             if (sessionController != null)
             {
@@ -478,6 +566,12 @@ namespace DiceGame.Gameplay
             pauseMenuUi?.Hide();
             Debug.Log(resultLog);
 
+            if (activeGameMode == GameMode.Challenge)
+            {
+                EnterChallengeRoundEnd(roundWinner);
+                return;
+            }
+
             EnsureSeriesState();
             var matchComplete = MatchSeriesState.RegisterRoundResult(roundWinner, out var matchWinner);
             seriesHud?.Refresh();
@@ -500,6 +594,58 @@ namespace DiceGame.Gameplay
             }
 
             nextRoundRoutine = StartCoroutine(ContinueSeriesAfterDelay());
+        }
+
+        void EnterChallengeRoundEnd(PlayerSlot? roundWinner)
+        {
+            seriesHud?.Refresh();
+
+            if (roundWinner == PlayerSlot.Player1)
+            {
+                if (ChallengeRunState.TryAdvanceToNextMatch(out var nextOpponentAttack))
+                {
+                    if (!TryApplyChallengeOpponentAttack(nextOpponentAttack))
+                    {
+                        Debug.LogError("GameFlowController: Failed to apply next Challenge opponent attack.");
+                        return;
+                    }
+
+                    seriesHud?.Refresh();
+                    if (IsOnlineClient())
+                    {
+                        return;
+                    }
+
+                    if (nextRoundRoutine != null)
+                    {
+                        StopCoroutine(nextRoundRoutine);
+                    }
+
+                    nextRoundRoutine = StartCoroutine(ContinueSeriesAfterDelay());
+                    return;
+                }
+
+                Debug.Log("Challenge Clear");
+                return;
+            }
+
+            Debug.Log(roundWinner == null ? "Challenge Draw" : "Challenge Failed");
+        }
+
+        static bool TryApplyChallengeOpponentAttack(PlayerAttackSettingsData opponentAttack)
+        {
+            var session = SessionState.Instance;
+            var setup = session?.CurrentSetup;
+            if (session == null || setup == null || setup.GameMode != GameMode.Challenge)
+            {
+                return false;
+            }
+
+            var player2 = setup.Player2;
+            player2.Attack = opponentAttack;
+            setup.Player2 = player2;
+            session.SetCurrentSetup(setup);
+            return true;
         }
 
         IEnumerator ContinueSeriesAfterDelay()

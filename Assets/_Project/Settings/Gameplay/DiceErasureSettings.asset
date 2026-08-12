@@ -18,6 +18,8 @@ MonoBehaviour:
   radianceDuration: 4
   radianceRampUpDuration: 0.1
   neutralEmissionColor: {r: 1, g: 1, b: 1, a: 1}
+  player1EmissionColor: {r: 0, g: 0.62595415, b: 1, a: 1}
+  player2EmissionColor: {r: 1, g: 0.35, b: 0.2, a: 1}
   face2EmissionColor: {r: 1, g: 0.92, b: 0.15, a: 1}
   face3EmissionColor: {r: 0.45, g: 0.25, b: 1, a: 1}
   face4EmissionColor: {r: 0.25, g: 0.85, b: 1, a: 1}

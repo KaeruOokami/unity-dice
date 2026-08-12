@@ -182,13 +182,7 @@ namespace DiceGame.Gameplay
                 playerInputSettings,
                 session?.CurrentSetup);
 
-            if (resolvedSetup.GameMode == GameMode.Versus) {
-                if (gameSessionSettings.VersusBoardSettings == null) {
-                    Debug.LogError("GameBootstrap: VersusBoardSettings template is not assigned.");
-                    AbortPendingSessionStart();
-                    return;
-                }
-
+            if (GameModeRules.IsVersusLike(resolvedSetup.GameMode)) {
                 if (resolvedSetup.VersusBoardSettings == null) {
                     Debug.LogError("GameBootstrap: Versus board settings are invalid.");
                     AbortPendingSessionStart();
@@ -345,7 +339,7 @@ namespace DiceGame.Gameplay
             erasureSystem.ConfigureSinkingChain();
 
             attackController = null;
-            if (resolvedSetup.GameMode == GameMode.Versus) {
+            if (GameModeRules.IsVersusLike(resolvedSetup.GameMode)) {
                 var versusSettings = resolvedSetup.VersusBoardSettings;
                 erasureSystem.ConfigureVersusAttack(versusSettings);
                 oneVanishSystem.ConfigureVersusAttack(versusSettings);
@@ -543,7 +537,7 @@ namespace DiceGame.Gameplay
         bool TryConfigureBoardForSession(out string errorMessage) {
             errorMessage = null;
 
-            if (resolvedSetup.GameMode == GameMode.Versus) {
+            if (GameModeRules.IsVersusLike(resolvedSetup.GameMode)) {
                 var versusSettings = resolvedSetup.VersusBoardSettings;
                 if (!versusSettings.TryValidate(out errorMessage)) {
                     return false;
@@ -561,7 +555,7 @@ namespace DiceGame.Gameplay
         bool TryConfigureSpawnSystem(out string errorMessage) {
             errorMessage = null;
 
-            if (resolvedSetup.GameMode == GameMode.Versus) {
+            if (GameModeRules.IsVersusLike(resolvedSetup.GameMode)) {
                 var versusSettings = resolvedSetup.VersusBoardSettings;
                 spawnSystem.Configure(
                     board,

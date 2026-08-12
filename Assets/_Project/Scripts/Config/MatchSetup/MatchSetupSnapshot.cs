@@ -18,7 +18,7 @@ namespace DiceGame.Config
                 return false;
             }
 
-            if (GameMode == GameMode.Versus) {
+            if (GameModeRules.IsVersusLike(GameMode)) {
                 return TryValidateVersus(out errorMessage);
             }
 
@@ -75,7 +75,7 @@ namespace DiceGame.Config
         }
 
         public void NormalizeVersusSharedInitialDiceCount() {
-            if (GameMode != GameMode.Versus) {
+            if (!GameModeRules.IsVersusLike(GameMode)) {
                 return;
             }
 

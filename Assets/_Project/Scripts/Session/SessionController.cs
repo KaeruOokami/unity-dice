@@ -112,6 +112,10 @@ namespace DiceGame.Session
                 return;
             }
 
+            if (snapshot.GameMode == GameMode.Challenge) {
+                ChallengeRunState.Clear();
+            }
+
             SessionState.Instance.SetCurrentSetup(snapshot);
             SessionState.Instance.SetPlayMode(SessionPlayMode.Local);
             SessionState.Instance.SetStatus("Starting local play.");
@@ -383,6 +387,7 @@ namespace DiceGame.Session
             onlineSharedSetupReady = false;
             onlineGameModeConfirmed = false;
             MatchSeriesState.Clear();
+            ChallengeRunState.Clear();
             SessionState.Instance?.ResetMatchFlag();
             SessionState.Instance?.ClearCurrentSetup();
             SessionState.Instance?.ClearRemotePeerPlayerId();
@@ -463,6 +468,8 @@ namespace DiceGame.Session
             ClearMatchStartHandshake();
             onlineSharedSetupReady = false;
             onlineGameModeConfirmed = false;
+            MatchSeriesState.Clear();
+            ChallengeRunState.Clear();
             if (SessionState.Instance != null) {
                 SessionState.Instance.SetPlayMode(SessionPlayMode.Unspecified);
                 SessionState.Instance.ResetMatchFlag();

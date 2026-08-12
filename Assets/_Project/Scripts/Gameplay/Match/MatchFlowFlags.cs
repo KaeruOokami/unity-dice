@@ -31,6 +31,7 @@ namespace DiceGame.Gameplay
             PendingSetup = null;
             PendingMatchSeed = 0;
             MatchSeriesState.Clear();
+            ChallengeRunState.Clear();
         }
 
         public static bool ConsumeSkipTitle(out SessionPlayMode playMode) {

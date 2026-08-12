@@ -73,6 +73,7 @@
     <Compile Include="Assets\_Project\Scripts\Placement\Spawn\DiceSpawnCellPicker.cs" />
     <Compile Include="Assets\_Project\Scripts\Config\PhysicsSettings.cs" />
     <Compile Include="Assets\_Project\Scripts\Versus\Core\AttackVolumeResolver.cs" />
+    <Compile Include="Assets\_Project\Scripts\Gameplay\Match\ChallengeRunState.cs" />
     <Compile Include="Assets\_Project\Scripts\Gameplay\Match\DiceMatchOwnershipContext.cs" />
     <Compile Include="Assets\_Project\Scripts\Gameplay\Match\GameBootstrap.cs" />
     <Compile Include="Assets\_Project\Scripts\Core\Motion\DiceSlidePlan.cs" />
@@ -226,6 +227,7 @@
     <Compile Include="Assets\_Project\Scripts\Session\SceneNames.cs" />
     <Compile Include="Assets\_Project\Scripts\Core\Behavior\DiceStandingMoveMode.cs" />
     <Compile Include="Assets\_Project\Scripts\Gameplay\Character\CharacterTransformDriver.cs" />
+    <Compile Include="Assets\_Project\Scripts\Session\ChallengeSetupPanelUi.cs" />
     <Compile Include="Assets\_Project\Scripts\Placement\Occupancy\NormalizedHeight.cs" />
     <Compile Include="Assets\_Project\Scripts\Placement\Movement\MoveFactResolver.cs" />
     <Compile Include="Assets\_Project\Scripts\Config\MatchSetup\MatchSetupSnapshot.cs" />
@@ -317,6 +319,7 @@
     <Compile Include="Assets\_Project\Scripts\Config\MatchSetup\PlayerNaturalSendSettingsData.cs" />
     <Compile Include="Assets\_Project\Scripts\Versus\Core\NaturalSendVolleyBuilder.cs" />
     <Compile Include="Assets\_Project\Scripts\Gameplay\Match\GameFlowController.cs" />
+    <Compile Include="Assets\_Project\Scripts\Config\ChallengeModeSettings.cs" />
     <Compile Include="Assets\_Project\Scripts\Gameplay\AI\Domain\AiCellMoveEvaluator.cs" />
     <Compile Include="Assets\_Project\Scripts\Placement\Support\PlayerSupportQuery.cs" />
     <Compile Include="Assets\_Project\Scripts\Gameplay\Character\PlayerMotionGate.cs" />

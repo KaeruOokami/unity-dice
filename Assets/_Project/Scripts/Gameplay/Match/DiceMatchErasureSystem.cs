@@ -456,7 +456,7 @@ namespace DiceGame.Gameplay
             }
 
             if (versusSettings == null) {
-                emissionColor = erasureSettings.NeutralEmissionColor;
+                emissionColor = erasureSettings.GetDefaultPlayerEmissionColor(attacker);
                 return true;
             }
 

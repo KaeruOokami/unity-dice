@@ -30,7 +30,7 @@ namespace DiceGame.Config
             PlayerInputSettings playerInputSettings,
             MatchSetupSnapshot runtimeSetup) {
             if (runtimeSetup != null) {
-                return FromSnapshot(gameSessionSettings, runtimeSetup);
+                return FromSnapshot(gameSessionSettings, runtimeSetup, presetRegistry);
             }
 
             return FromAssets(
@@ -43,14 +43,21 @@ namespace DiceGame.Config
 
         static ResolvedSessionSetup FromSnapshot(
             GameSessionSettings gameSessionSettings,
-            MatchSetupSnapshot snapshot) {
+            MatchSetupSnapshot snapshot,
+            MatchSetupPresetRegistry presetRegistry) {
             IVersusBoardSettings versusSettings = null;
-            if (snapshot.GameMode == GameMode.Versus) {
-                versusSettings = new RuntimeVersusBoardSettings(
-                    gameSessionSettings.VersusBoardSettings,
-                    snapshot.Player1,
-                    snapshot.Player2,
-                    snapshot.Jumbo);
+            if (GameModeRules.IsVersusLike(snapshot.GameMode)) {
+                var template = ResolveVersusBoardTemplate(
+                    snapshot.GameMode,
+                    gameSessionSettings,
+                    presetRegistry);
+                if (template != null) {
+                    versusSettings = new RuntimeVersusBoardSettings(
+                        template,
+                        snapshot.Player1,
+                        snapshot.Player2,
+                        snapshot.Jumbo);
+                }
             }
 
             return new ResolvedSessionSetup {
@@ -64,6 +71,20 @@ namespace DiceGame.Config
                 Player1Input = snapshot.Player1.InputConfig,
                 Player2Input = snapshot.Player2.InputConfig
             };
+        }
+
+        static VersusBoardSettings ResolveVersusBoardTemplate(
+            GameMode mode,
+            GameSessionSettings gameSessionSettings,
+            MatchSetupPresetRegistry presetRegistry) {
+            if (mode == GameMode.Challenge
+                && presetRegistry != null
+                && presetRegistry.ChallengeModeSettings != null
+                && presetRegistry.ChallengeModeSettings.BoardSettings != null) {
+                return presetRegistry.ChallengeModeSettings.BoardSettings;
+            }
+
+            return gameSessionSettings != null ? gameSessionSettings.VersusBoardSettings : null;
         }
 
         static ResolvedSessionSetup FromAssets(

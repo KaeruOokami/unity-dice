@@ -9,6 +9,7 @@ namespace DiceGame.Config
                 GameMode.Single => "Single",
                 GameMode.Coop => "Coop",
                 GameMode.Versus => "Versus",
+                GameMode.Challenge => "Challenge",
                 _ => throw new ArgumentOutOfRangeException(nameof(mode), mode, null)
             };
         }

@@ -6,7 +6,15 @@ namespace DiceGame.Config
     {
         Single,
         Coop,
-        Versus
+        Versus,
+        Challenge
+    }
+
+    public static class GameModeRules
+    {
+        public static bool IsVersusLike(GameMode mode) {
+            return mode == GameMode.Versus || mode == GameMode.Challenge;
+        }
     }
 
     [CreateAssetMenu(fileName = "GameSessionSettings", menuName = "Dice/Game Session Settings")]
@@ -23,9 +31,9 @@ namespace DiceGame.Config
 
         public bool TryValidate(out string errorMessage)
         {
-            if (gameMode == GameMode.Versus && versusBoardSettings == null)
+            if (GameModeRules.IsVersusLike(gameMode) && versusBoardSettings == null)
             {
-                errorMessage = "GameSessionSettings: Versus mode requires VersusBoardSettings.";
+                errorMessage = "GameSessionSettings: Versus-like modes require VersusBoardSettings.";
                 return false;
             }
 

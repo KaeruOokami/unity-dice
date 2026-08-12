@@ -8,6 +8,7 @@ namespace DiceGame.Config
         [SerializeField] DiceSpawnSettings[] spawnPresets = System.Array.Empty<DiceSpawnSettings>();
         [SerializeField] DiceCatalog[] catalogPresets = System.Array.Empty<DiceCatalog>();
         [SerializeField] AttackDefaultPresetCatalog attackDefaultPresetCatalog;
+        [SerializeField] ChallengeModeSettings challengeModeSettings;
         [SerializeField] PlayerNaturalSendSettings[] naturalSendPresets =
             System.Array.Empty<PlayerNaturalSendSettings>();
 
@@ -30,6 +31,7 @@ namespace DiceGame.Config
         public DiceSpawnSettings[] SpawnPresets => spawnPresets;
         public DiceCatalog[] CatalogPresets => catalogPresets;
         public AttackDefaultPresetCatalog AttackDefaultPresetCatalog => attackDefaultPresetCatalog;
+        public ChallengeModeSettings ChallengeModeSettings => challengeModeSettings;
         public PlayerAttackSettings[] AttackPresets =>
             attackDefaultPresetCatalog != null
                 ? attackDefaultPresetCatalog.Presets
@@ -38,13 +40,17 @@ namespace DiceGame.Config
         public PlayerInputSettings DefaultPlayerInputSettings => defaultPlayerInputSettings;
 
         public MatchSetupSnapshot CreateDefaultSnapshot(GameMode mode) {
+            if (mode == GameMode.Challenge) {
+                return CreateDefaultChallengeSnapshot();
+            }
+
             if (defaultPlayerInputSettings == null) {
                 Debug.LogError("[MatchSetupPresetRegistry] defaultPlayerInputSettings is not assigned.");
             }
 
             var snapshot = new MatchSetupSnapshot {
                 GameMode = mode,
-                WinsToWin = mode == GameMode.Versus ? UnityEngine.Mathf.Max(1, defaultWinsToWin) : 1,
+                WinsToWin = GameModeRules.IsVersusLike(mode) ? UnityEngine.Mathf.Max(1, defaultWinsToWin) : 1,
                 SharedSpawn = DiceSpawnSettingsData.FromTemplate(defaultSharedSpawn),
                 SharedCatalog = DiceCatalogData.FromTemplate(defaultSharedCatalog),
                 Jumbo = JumboDiceSettingsData.FromTemplate(defaultJumboDiceSettings),
@@ -64,6 +70,51 @@ namespace DiceGame.Config
             snapshot.NormalizeVersusSharedInitialDiceCount();
             snapshot.NormalizeWinsToWin();
             return snapshot;
+        }
+
+        MatchSetupSnapshot CreateDefaultChallengeSnapshot() {
+            if (challengeModeSettings == null) {
+                Debug.LogError("[MatchSetupPresetRegistry] challengeModeSettings is not assigned.");
+                return new MatchSetupSnapshot {
+                    GameMode = GameMode.Challenge,
+                    WinsToWin = 1,
+                    Player1 = PlayerSlotSetup.CreateDefault(false, default),
+                    Player2 = PlayerSlotSetup.CreateDefault(true, default)
+                };
+            }
+
+            var catalog = challengeModeSettings.ResolvePlayerAttackCatalog(this);
+            PlayerAttackSettings playerAttack = null;
+            if (catalog != null) {
+                var presets = catalog.Presets;
+                for (var i = 0; i < presets.Length; i++) {
+                    if (presets[i] != null) {
+                        playerAttack = presets[i];
+                        break;
+                    }
+                }
+            }
+
+            if (playerAttack == null) {
+                playerAttack = defaultPlayer1Attack;
+            }
+
+            if (challengeModeSettings.TryCreateSnapshot(
+                    this,
+                    playerAttack,
+                    matchIndex: 0,
+                    out var snapshot,
+                    out var error)) {
+                return snapshot;
+            }
+
+            Debug.LogError($"[MatchSetupPresetRegistry] Failed to create Challenge snapshot: {error}");
+            return new MatchSetupSnapshot {
+                GameMode = GameMode.Challenge,
+                WinsToWin = 1,
+                Player1 = PlayerSlotSetup.CreateDefault(false, default),
+                Player2 = PlayerSlotSetup.CreateDefault(true, default)
+            };
         }
 
         public PlayerSlotControlDefaults GetControlDefaults(PlayerSlot slot) {

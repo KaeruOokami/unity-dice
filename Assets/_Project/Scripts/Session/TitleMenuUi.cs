@@ -34,6 +34,7 @@ namespace DiceGame.Session
         Transform setupContentRoot;
         Transform controlsContentRoot;
         MatchSetupPanelUi setupPanelUi;
+        ChallengeSetupPanelUi challengeSetupPanelUi;
         ControlsPanelUi controlsPanelUi;
         GameMode selectedMode;
         bool onlineSharedSetupActive;
@@ -147,7 +148,12 @@ namespace DiceGame.Session
                 host: false,
                 client: false,
                 controls: false);
-            RebuildMatchSetupPanel(mode, MatchSetupPersistence.LoadOrCreate(mode, GetRegistry()));
+            if (mode == GameMode.Challenge) {
+                RebuildChallengeSetupPanel();
+            } else {
+                RebuildMatchSetupPanel(mode, MatchSetupPersistence.LoadOrCreate(mode, GetRegistry()));
+            }
+
             SessionState.Instance?.SetStatus($"Configure {GameModeDisplayNames.GetDisplayName(mode)} settings.");
             RefreshStatus();
         }
@@ -304,6 +310,7 @@ namespace DiceGame.Session
 
         void RebuildMatchSetupPanel(GameMode mode, MatchSetupSnapshot defaults) {
             TryResolveUiReferences();
+            challengeSetupPanelUi = null;
 
             var registry = GetRegistry();
             if (setupContentRoot == null) {
@@ -329,6 +336,41 @@ namespace DiceGame.Session
                 setupPanelUi = null;
                 Debug.LogError($"[TitleMenuUi] Failed to build match setup panel: {ex}");
                 SessionState.Instance?.SetStatus("Failed to build settings UI. Check the Console.");
+                return;
+            }
+
+            if (setupErrorText != null) {
+                setupErrorText.text = string.Empty;
+            }
+        }
+
+        void RebuildChallengeSetupPanel() {
+            TryResolveUiReferences();
+            setupPanelUi = null;
+
+            var registry = GetRegistry();
+            if (setupContentRoot == null) {
+                Debug.LogError("[TitleMenuUi] setupContentRoot is null after UI resolution.");
+                SessionState.Instance?.SetStatus("Failed to initialize settings UI. Stop Play and try again.");
+                return;
+            }
+
+            if (registry == null) {
+                Debug.LogError("[TitleMenuUi] presetRegistry is null.");
+                SessionState.Instance?.SetStatus("Setup presets are not configured.");
+                return;
+            }
+
+            for (var i = setupContentRoot.childCount - 1; i >= 0; i--) {
+                Destroy(setupContentRoot.GetChild(i).gameObject);
+            }
+
+            try {
+                challengeSetupPanelUi = new ChallengeSetupPanelUi(registry, setupContentRoot);
+            } catch (Exception ex) {
+                challengeSetupPanelUi = null;
+                Debug.LogError($"[TitleMenuUi] Failed to build Challenge setup panel: {ex}");
+                SessionState.Instance?.SetStatus("Failed to build Challenge settings UI. Check the Console.");
                 return;
             }
 
@@ -510,12 +552,17 @@ namespace DiceGame.Session
         }
 
         void OnLocalMatchSetupPlayClicked() {
-            if (setupPanelUi == null) {
-                SessionState.Instance?.SetStatus("Failed to initialize settings UI. Check MatchSetupPresetRegistry.");
+            if (controller == null) {
                 return;
             }
 
-            if (controller == null) {
+            if (selectedMode == GameMode.Challenge) {
+                OnLocalChallengePlayClicked();
+                return;
+            }
+
+            if (setupPanelUi == null) {
+                SessionState.Instance?.SetStatus("Failed to initialize settings UI. Check MatchSetupPresetRegistry.");
                 return;
             }
 
@@ -535,6 +582,34 @@ namespace DiceGame.Session
             var registry = GetRegistry();
             if (!MatchSetupPersistence.TrySave(snapshot, registry, out var saveError)) {
                 Debug.LogError($"[TitleMenuUi] Failed to save match setup: {saveError}");
+            }
+
+            controller.StartLocalPlay(snapshot);
+        }
+
+        void OnLocalChallengePlayClicked() {
+            if (challengeSetupPanelUi == null) {
+                SessionState.Instance?.SetStatus(
+                    "Failed to initialize Challenge settings UI. Check ChallengeModeSettings.");
+                return;
+            }
+
+            if (!challengeSetupPanelUi.TryBuildSnapshot(out var snapshot, out var error)) {
+                if (setupErrorText != null) {
+                    setupErrorText.text = error ?? "Invalid settings.";
+                }
+
+                SessionState.Instance?.SetStatus(error ?? "Invalid settings.");
+                return;
+            }
+
+            if (setupErrorText != null) {
+                setupErrorText.text = string.Empty;
+            }
+
+            var registry = GetRegistry();
+            if (!MatchSetupPersistence.TrySave(snapshot, registry, out var saveError)) {
+                Debug.LogError($"[TitleMenuUi] Failed to save Challenge setup: {saveError}");
             }
 
             controller.StartLocalPlay(snapshot);
@@ -708,18 +783,21 @@ namespace DiceGame.Session
 
         void BuildLocalModePanel(Transform root) {
             localModePanel = SessionUiFactory.CreatePanel(root, "LocalModePanel", new Color(0.12f, 0.12f, 0.14f, 0.95f));
-            SessionUiFactory.CenterPanel(localModePanel.GetComponent<RectTransform>(), new Vector2(520f, 420f));
+            SessionUiFactory.CenterPanel(localModePanel.GetComponent<RectTransform>(), new Vector2(520f, 500f));
             SessionUiFactory.CreateText(localModePanel.transform, "Title", "Mode Select", 36, TextAnchor.UpperCenter);
-            SessionUiFactory.CreateButton(localModePanel.transform, "SingleButton", "Single", new Vector2(0f, 70f), () => {
+            SessionUiFactory.CreateButton(localModePanel.transform, "SingleButton", "Single", new Vector2(0f, 100f), () => {
                 OnLocalModeSelected(GameMode.Single);
             });
-            SessionUiFactory.CreateButton(localModePanel.transform, "CoopButton", "Co-op", new Vector2(0f, 0f), () => {
+            SessionUiFactory.CreateButton(localModePanel.transform, "CoopButton", "Co-op", new Vector2(0f, 30f), () => {
                 OnLocalModeSelected(GameMode.Coop);
             });
-            SessionUiFactory.CreateButton(localModePanel.transform, "VersusButton", "Versus", new Vector2(0f, -70f), () => {
+            SessionUiFactory.CreateButton(localModePanel.transform, "VersusButton", "Versus", new Vector2(0f, -40f), () => {
                 OnLocalModeSelected(GameMode.Versus);
             });
-            SessionUiFactory.CreateButton(localModePanel.transform, "LocalModeBackButton", "Back", new Vector2(0f, -170f), ShowMainPanel);
+            SessionUiFactory.CreateButton(localModePanel.transform, "ChallengeButton", "Challenge", new Vector2(0f, -110f), () => {
+                OnLocalModeSelected(GameMode.Challenge);
+            });
+            SessionUiFactory.CreateButton(localModePanel.transform, "LocalModeBackButton", "Back", new Vector2(0f, -200f), ShowMainPanel);
         }
 
         void BuildOnlineModePanel(Transform root) {
