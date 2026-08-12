@@ -1,3 +1,4 @@
+﻿using System.Collections;
 using DiceGame.Config;
 using DiceGame.Gameplay.Input;
 using DiceGame.Grid;
@@ -35,12 +36,15 @@ namespace DiceGame.Gameplay
         int activeRequiredPlayerCount;
         GameFlowInputReader inputReader;
         PauseMenuUi pauseMenuUi;
+        MatchSeriesHud seriesHud;
         SessionController sessionController;
         float playingTimeScale;
+        float roundEndDelaySeconds;
         bool isConfigured;
         bool ownsTimeScale;
         bool applyingRemoteFlow;
         bool pauseOwnerIsHost;
+        Coroutine nextRoundRoutine;
 
         public GameFlowState State { get; private set; } = GameFlowState.Playing;
         public bool IsSimulationFrozen => State != GameFlowState.Playing;
@@ -52,7 +56,8 @@ namespace DiceGame.Gameplay
             VersusAttackController targetVersusAttackController,
             GameSessionSettings targetSessionSettings,
             PlayerInputSettings playerInputSettings,
-            ResolvedSessionSetup resolvedSetup = null)
+            ResolvedSessionSetup resolvedSetup = null,
+            MatchSeriesHudSettings seriesHudSettings = null)
         {
             if (targetBoard == null
                 || targetRegistry == null
@@ -78,6 +83,9 @@ namespace DiceGame.Gameplay
             activeGameMode = resolvedSetup?.GameMode ?? targetSessionSettings.GameMode;
             activeRequiredPlayerCount = resolvedSetup?.RequiredPlayerCount ?? targetSessionSettings.RequiredPlayerCount;
             playingTimeScale = Time.timeScale;
+            roundEndDelaySeconds = targetSessionSettings.VersusBoardSettings != null
+                ? targetSessionSettings.VersusBoardSettings.RoundEndDelaySeconds
+                : 0f;
             sessionController = FindFirstObjectByType<SessionController>();
 
             inputReader = GetComponent<GameFlowInputReader>();
@@ -94,11 +102,31 @@ namespace DiceGame.Gameplay
                 pauseMenuUi = gameObject.AddComponent<PauseMenuUi>();
             }
 
-            pauseMenuUi.Configure(sessionController != null ? sessionController.UiFontSettings : null);
+            var fontSettings = sessionController != null ? sessionController.UiFontSettings : null;
+            pauseMenuUi.Configure(fontSettings);
             pauseMenuUi.ResumeClicked -= OnPauseMenuResumeClicked;
             pauseMenuUi.ReturnToTitleClicked -= OnPauseMenuReturnToTitleClicked;
             pauseMenuUi.ResumeClicked += OnPauseMenuResumeClicked;
             pauseMenuUi.ReturnToTitleClicked += OnPauseMenuReturnToTitleClicked;
+
+            EnsureSeriesState();
+            if (activeGameMode == GameMode.Versus)
+            {
+                if (seriesHudSettings == null)
+                {
+                    Debug.LogError("GameFlowController: MatchSeriesHudSettings is not assigned.");
+                }
+                else
+                {
+                    seriesHud = GetComponent<MatchSeriesHud>();
+                    if (seriesHud == null)
+                    {
+                        seriesHud = gameObject.AddComponent<MatchSeriesHud>();
+                    }
+
+                    seriesHud.Configure(fontSettings, seriesHudSettings);
+                }
+            }
 
             BindOnlineFlowEvents(true);
 
@@ -107,8 +135,46 @@ namespace DiceGame.Gameplay
             BoardVisibility.SetBoardVisible(board, true);
         }
 
+        void EnsureSeriesState()
+        {
+            if (activeGameMode != GameMode.Versus)
+            {
+                MatchSeriesState.Clear();
+                return;
+            }
+
+            if (MatchSeriesState.IsActive)
+            {
+                return;
+            }
+
+            MatchSeriesState.Begin(ResolveWinsToWin());
+        }
+
+        int ResolveWinsToWin()
+        {
+            var setup = SessionState.Instance?.CurrentSetup;
+            if (setup != null && setup.GameMode == GameMode.Versus)
+            {
+                return Mathf.Max(1, setup.WinsToWin);
+            }
+
+            if (sessionSettings?.VersusBoardSettings != null)
+            {
+                return sessionSettings.VersusBoardSettings.WinsToWin;
+            }
+
+            return 1;
+        }
+
         void OnDestroy()
         {
+            if (nextRoundRoutine != null)
+            {
+                StopCoroutine(nextRoundRoutine);
+                nextRoundRoutine = null;
+            }
+
             if (pauseMenuUi != null)
             {
                 pauseMenuUi.ResumeClicked -= OnPauseMenuResumeClicked;
@@ -132,7 +198,6 @@ namespace DiceGame.Gameplay
 
             if (inputReader.WasResetPressedThisFrame())
             {
-                // Online: match reset is host-only (Backspace ignored on client).
                 if (!IsOnlineClient())
                 {
                     RequestOrApplyResetMatch();
@@ -149,7 +214,6 @@ namespace DiceGame.Gameplay
                 }
                 else if (State == GameFlowState.Paused)
                 {
-                    // Only the peer that initiated the pause may resume it.
                     if (LocalIsPauseOwner())
                     {
                         RequestOrApplyResume();
@@ -171,7 +235,7 @@ namespace DiceGame.Gameplay
             {
                 if (BoardFillEvaluator.IsStandardBottomFull(board, registry))
                 {
-                    EnterGameOver(StandardGameOverLog);
+                    EnterStandardGameOver(StandardGameOverLog);
                 }
 
                 return;
@@ -188,21 +252,18 @@ namespace DiceGame.Gameplay
 
             if (player1Full && player2Full)
             {
-                EnterGameOver(DrawLog);
+                EnterVersusRoundEnd(null, DrawLog);
             }
             else if (player1Full)
             {
-                EnterGameOver(Player2WinLog);
+                EnterVersusRoundEnd(PlayerSlot.Player2, Player2WinLog);
             }
             else if (player2Full)
             {
-                EnterGameOver(Player1WinLog);
+                EnterVersusRoundEnd(PlayerSlot.Player1, Player1WinLog);
             }
         }
 
-        /// <summary>
-        /// Iron / Stone covering crush: crushed player loses (Versus) or Game Over (Standard).
-        /// </summary>
         public void NotifyPlayerCrushed(PlayerSlot crushed)
         {
             if (State != GameFlowState.Playing)
@@ -212,12 +273,14 @@ namespace DiceGame.Gameplay
 
             if (activeGameMode != GameMode.Versus)
             {
-                EnterGameOver(StandardGameOverLog);
+                EnterStandardGameOver(StandardGameOverLog);
                 return;
             }
 
             var winner = SinkingChainResolver.GetOpponent(crushed);
-            EnterGameOver(winner == PlayerSlot.Player1 ? Player1WinLog : Player2WinLog);
+            EnterVersusRoundEnd(
+                winner,
+                winner == PlayerSlot.Player1 ? Player1WinLog : Player2WinLog);
         }
 
         void OnPauseMenuResumeClicked()
@@ -275,7 +338,6 @@ namespace DiceGame.Gameplay
 
         public void ApplyPause(bool broadcast)
         {
-            // Local / host-initiated pause: owner is the host side (local single = host).
             ApplyPause(broadcast, pausedByHost: true);
         }
 
@@ -317,7 +379,6 @@ namespace DiceGame.Gameplay
             ownsTimeScale = false;
             spawnSystem.SetGameplayEnabled(true);
             versusAttackController?.SetGameplayEnabled(true);
-            // Dual-sim: both peers run attack detection locally (no client follower mode).
             versusAttackController?.SetNetworkFollowerMode(false);
             inputReader.SetGameplayInputEnabled(true);
             State = GameFlowState.Playing;
@@ -330,8 +391,6 @@ namespace DiceGame.Gameplay
 
         public void ApplyResetMatch(bool broadcast, int explicitSeed)
         {
-            // Initiator (host / local) rolls a fresh seed each reset so the next
-            // match differs; a client applying the host's broadcast reuses its seed.
             var matchSeed = applyingRemoteFlow
                 ? explicitSeed
                 : UnityEngine.Random.Range(1, int.MaxValue);
@@ -348,12 +407,33 @@ namespace DiceGame.Gameplay
                 SessionState.Instance?.SetMatchSeed(matchSeed);
             }
 
+            ApplySeriesScoreOnReset();
+
             var playMode = SessionState.Instance != null
                 ? SessionState.Instance.PlayMode
                 : SessionPlayMode.Local;
             var setup = SessionState.Instance?.CurrentSetup;
             MatchFlowFlags.ArmMatchRestart(playMode, setup, matchSeed);
             ReloadActiveScene();
+        }
+
+        void ApplySeriesScoreOnReset()
+        {
+            if (activeGameMode != GameMode.Versus)
+            {
+                MatchSeriesState.Clear();
+                return;
+            }
+
+            var preserveSeriesScores = MatchSeriesState.IsActive
+                && State == GameFlowState.GameOver
+                && MatchSeriesState.Player1Wins < MatchSeriesState.WinsToWin
+                && MatchSeriesState.Player2Wins < MatchSeriesState.WinsToWin;
+
+            if (!preserveSeriesScores)
+            {
+                MatchSeriesState.Begin(ResolveWinsToWin());
+            }
         }
 
         public void ApplyReturnToTitle(bool broadcast)
@@ -363,6 +443,7 @@ namespace DiceGame.Gameplay
                 sessionController?.Messenger?.BroadcastFlowCommand(SessionConstants.FlowReturnToTitle);
             }
 
+            MatchSeriesState.Clear();
             MatchFlowFlags.ArmTitleReturn();
             if (sessionController != null)
             {
@@ -372,12 +453,66 @@ namespace DiceGame.Gameplay
             ReloadActiveScene();
         }
 
-        void EnterGameOver(string resultLog)
+        void EnterStandardGameOver(string resultLog)
         {
+            if (State == GameFlowState.GameOver)
+            {
+                return;
+            }
+
             State = GameFlowState.GameOver;
             FreezeSimulation();
             pauseMenuUi?.Hide();
             Debug.Log(resultLog);
+        }
+
+        void EnterVersusRoundEnd(PlayerSlot? roundWinner, string resultLog)
+        {
+            if (State == GameFlowState.GameOver)
+            {
+                return;
+            }
+
+            State = GameFlowState.GameOver;
+            FreezeSimulation();
+            pauseMenuUi?.Hide();
+            Debug.Log(resultLog);
+
+            EnsureSeriesState();
+            var matchComplete = MatchSeriesState.RegisterRoundResult(roundWinner, out var matchWinner);
+            seriesHud?.Refresh();
+
+            if (matchComplete)
+            {
+                var matchLog = matchWinner == PlayerSlot.Player1 ? Player1WinLog : Player2WinLog;
+                Debug.Log($"Match Over: {matchLog}");
+                return;
+            }
+
+            if (IsOnlineClient())
+            {
+                return;
+            }
+
+            if (nextRoundRoutine != null)
+            {
+                StopCoroutine(nextRoundRoutine);
+            }
+
+            nextRoundRoutine = StartCoroutine(ContinueSeriesAfterDelay());
+        }
+
+        IEnumerator ContinueSeriesAfterDelay()
+        {
+            var remaining = Mathf.Max(0f, roundEndDelaySeconds);
+            while (remaining > 0f)
+            {
+                remaining -= Time.unscaledDeltaTime;
+                yield return null;
+            }
+
+            nextRoundRoutine = null;
+            ApplyResetMatch(broadcast: IsOnlineHost());
         }
 
         void FreezeSimulation()
@@ -431,21 +566,17 @@ namespace DiceGame.Gameplay
             switch (command)
             {
                 case SessionConstants.FlowPause:
-                    // Client requested the pause: client owns it.
                     ApplyPause(broadcast: true, pausedByHost: false);
                     break;
                 case SessionConstants.FlowResume:
-                    // Only the pause owner may resume; ignore stray client requests.
                     if (!pauseOwnerIsHost)
                     {
                         ApplyResume(broadcast: true);
                     }
                     break;
                 case SessionConstants.FlowResetMatch:
-                    // Match reset is host-local only; ignore client requests.
                     break;
                 case SessionConstants.FlowReturnToTitle:
-                    // Return to title is host-only.
                     break;
             }
         }
@@ -454,7 +585,6 @@ namespace DiceGame.Gameplay
         {
             if (IsOnlineHost())
             {
-                // Host already applied locally before broadcast.
                 return;
             }
 

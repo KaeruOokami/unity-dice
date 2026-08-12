@@ -30,6 +30,7 @@ namespace DiceGame.Gameplay
             ResumePlayMode = SessionPlayMode.Unspecified;
             PendingSetup = null;
             PendingMatchSeed = 0;
+            MatchSeriesState.Clear();
         }
 
         public static bool ConsumeSkipTitle(out SessionPlayMode playMode) {

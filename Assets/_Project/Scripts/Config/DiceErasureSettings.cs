@@ -22,12 +22,12 @@ namespace DiceGame.Config
         [Header("Neutral Emission")]
         [SerializeField] Color neutralEmissionColor = new(1f, 1f, 1f, 1f);
 
-        [Header("Player 1 Emission")]
-        [FormerlySerializedAs("erasureEmissionColor")]
-        [SerializeField] Color player1EmissionColor = new(0.2f, 0.6f, 1f, 1f);
-
-        [Header("Player 2 Emission")]
-        [SerializeField] Color player2EmissionColor = new(1f, 0.35f, 0.2f, 1f);
+        [Header("Face Emission Palette (Attack FaceWeight)")]
+        [SerializeField] Color face2EmissionColor = new(1f, 0.92f, 0.15f, 1f);
+        [SerializeField] Color face3EmissionColor = new(0.45f, 0.25f, 1f, 1f);
+        [SerializeField] Color face4EmissionColor = new(0.25f, 0.85f, 1f, 1f);
+        [SerializeField] Color face5EmissionColor = new(0.2f, 1f, 0.35f, 1f);
+        [SerializeField] Color face6EmissionColor = new(1f, 0.2f, 0.75f, 1f);
 
         [Header("Shared Emission")]
         [FormerlySerializedAs("dissolveEmissionIntensity")]
@@ -53,9 +53,30 @@ namespace DiceGame.Config
         public float ErasureEmissionPulseMax => erasureEmissionPulseMax;
 
         public Color NeutralEmissionColor => neutralEmissionColor;
+        public Color Face2EmissionColor => face2EmissionColor;
+        public Color Face3EmissionColor => face3EmissionColor;
+        public Color Face4EmissionColor => face4EmissionColor;
+        public Color Face5EmissionColor => face5EmissionColor;
+        public Color Face6EmissionColor => face6EmissionColor;
 
-        public Color GetPlayerEmissionColor(PlayerSlot slot) {
-            return slot == PlayerSlot.Player1 ? player1EmissionColor : player2EmissionColor;
+        public Color ResolvePlayerEmissionColor(PlayerAttackSettings attack) {
+            if (attack == null) {
+                Debug.LogError("DiceErasureSettings: PlayerAttackSettings is required to resolve emission color.");
+                return NeutralEmissionColor;
+            }
+
+            return AttackFaceEmissionColorResolver.Resolve(
+                neutralEmissionColor,
+                face2EmissionColor,
+                face3EmissionColor,
+                face4EmissionColor,
+                face5EmissionColor,
+                face6EmissionColor,
+                attack.GetFaceWeight(2),
+                attack.GetFaceWeight(3),
+                attack.GetFaceWeight(4),
+                attack.GetFaceWeight(5),
+                attack.GetFaceWeight(6));
         }
 
         void OnValidate() {

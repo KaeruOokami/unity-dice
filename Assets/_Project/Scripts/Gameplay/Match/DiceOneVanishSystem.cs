@@ -15,6 +15,7 @@ namespace DiceGame.Gameplay
         [SerializeField] DiceRegistry registry;
         [SerializeField] DiceOneVanishSettings oneVanishSettings;
         DiceErasureSettings erasureSettings;
+        IVersusBoardSettings versusSettings;
 
         readonly HashSet<DiceController> subscribedDice = new();
         readonly List<CharacterController> characters = new();
@@ -37,6 +38,10 @@ namespace DiceGame.Gameplay
             }
 
             SubscribeAllDice();
+        }
+
+        public void ConfigureVersusAttack(IVersusBoardSettings settings) {
+            versusSettings = settings;
         }
 
         void OnDisable() {
@@ -151,7 +156,10 @@ namespace DiceGame.Gameplay
                 targets.Add(dice);
             }
 
-            var emissionColor = erasureSettings.GetPlayerEmissionColor(initiator);
+            if (!TryGetPlayerEmissionColor(initiator, out var emissionColor)) {
+                return;
+            }
+
             var notified = false;
             foreach (var dice in targets) {
                 var slot = initiator;
@@ -164,6 +172,28 @@ namespace DiceGame.Gameplay
                     FaceOneVanished?.Invoke(slot);
                 });
             }
+        }
+
+        bool TryGetPlayerEmissionColor(PlayerSlot initiator, out Color emissionColor) {
+            emissionColor = default;
+            if (erasureSettings == null) {
+                Debug.LogError("DiceOneVanishSystem: Erasure settings are not configured.");
+                return false;
+            }
+
+            if (versusSettings == null) {
+                emissionColor = erasureSettings.NeutralEmissionColor;
+                return true;
+            }
+
+            var attackSettings = versusSettings.GetAttackSettings(initiator);
+            if (attackSettings == null) {
+                Debug.LogError($"DiceOneVanishSystem: Attack settings are missing for {initiator}.");
+                return false;
+            }
+
+            emissionColor = erasureSettings.ResolvePlayerEmissionColor(attackSettings);
+            return true;
         }
 
         HashSet<DiceController> GetExcludedStandingDiceForAllPlayers() {

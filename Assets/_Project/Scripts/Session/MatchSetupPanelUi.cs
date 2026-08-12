@@ -26,6 +26,7 @@ namespace DiceGame.Session
         DiceCatalogPanelUi.Bindings sharedCatalogUi;
         JumboDiceSettingsPanelUi.Bindings jumboUi;
         TMP_InputField versusSharedInitialDiceCount;
+        TMP_InputField versusWinsToWin;
         AttackPresetLibraryUi attackPresetLibraryUi;
         PlayerSlotUi player1Ui;
         PlayerSlotUi player2Ui;
@@ -80,11 +81,15 @@ namespace DiceGame.Session
                 versusSharedInitialDiceCount = SessionUiFactory.CreateLabeledIntInput(
                     categoryRoots[VersusCategoryShared].transform,
                     "Initial Dice Count (1P/2P Shared)");
+                versusWinsToWin = SessionUiFactory.CreateLabeledIntInput(
+                    categoryRoots[VersusCategoryShared].transform,
+                    "Wins To Win");
                 jumboUi = JumboDiceSettingsPanelUi.Build(
                     categoryRoots[VersusCategoryShared].transform,
                     "Jumbo Dice Settings");
                 attackPresetLibraryUi = new AttackPresetLibraryUi(
                     categoryRoots[VersusCategoryAttack].transform,
+                    registry.AttackDefaultPresetCatalog,
                     GetActiveAttackBindings,
                     RebuildContentLayout);
                 player1Ui = CreatePlayerPanels("1P", true, defaults.Player1);
@@ -277,9 +282,14 @@ namespace DiceGame.Session
 
             if (mode == GameMode.Versus) {
                 snapshot.NormalizeVersusSharedInitialDiceCount();
+                snapshot.NormalizeWinsToWin();
                 if (versusSharedInitialDiceCount != null) {
                     versusSharedInitialDiceCount.SetTextWithoutNotify(
                         snapshot.GetVersusSharedInitialDiceCount().ToString());
+                }
+
+                if (versusWinsToWin != null) {
+                    versusWinsToWin.SetTextWithoutNotify(snapshot.WinsToWin.ToString());
                 }
 
                 JumboDiceSettingsPanelUi.Apply(jumboUi, snapshot.Jumbo);
@@ -326,6 +336,14 @@ namespace DiceGame.Session
                     return false;
                 }
 
+                if (versusWinsToWin == null
+                    || !int.TryParse(versusWinsToWin.text, out var winsToWin)
+                    || winsToWin < 1) {
+                    snapshot = null;
+                    errorMessage = "Wins To Win must be an integer >= 1.";
+                    return false;
+                }
+
                 if (!JumboDiceSettingsPanelUi.TryRead(jumboUi, out var jumbo, out errorMessage)) {
                     snapshot = null;
                     return false;
@@ -351,10 +369,12 @@ namespace DiceGame.Session
                     return false;
                 }
 
+                snapshot.WinsToWin = winsToWin;
                 snapshot.Jumbo = jumbo;
                 snapshot.Player1 = player1;
                 snapshot.Player2 = player2;
                 snapshot.NormalizeVersusSharedInitialDiceCount();
+                snapshot.NormalizeWinsToWin();
             } else {
                 if (!DiceSpawnSettingsPanelUi.TryRead(sharedSpawnUi, out var sharedSpawn, out errorMessage)) {
                     snapshot = null;

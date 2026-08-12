@@ -455,7 +455,18 @@ namespace DiceGame.Gameplay
                 return false;
             }
 
-            emissionColor = erasureSettings.GetPlayerEmissionColor(attacker);
+            if (versusSettings == null) {
+                emissionColor = erasureSettings.NeutralEmissionColor;
+                return true;
+            }
+
+            var attackSettings = versusSettings.GetAttackSettings(attacker);
+            if (attackSettings == null) {
+                Debug.LogError($"DiceMatchErasureSystem: Attack settings are missing for {attacker}.");
+                return false;
+            }
+
+            emissionColor = erasureSettings.ResolvePlayerEmissionColor(attackSettings);
             return true;
         }
 

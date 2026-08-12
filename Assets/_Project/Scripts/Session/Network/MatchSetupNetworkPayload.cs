@@ -192,6 +192,7 @@ namespace DiceGame.Session.Network
         public const byte InvalidPresetIndex = byte.MaxValue;
 
         public byte GameMode;
+        public int WinsToWin;
         public DiceSpawnSettingsNetworkPayload SharedSpawn;
         public DiceCatalogNetworkPayload SharedCatalog;
         public JumboDiceSettingsNetworkPayload Jumbo;
@@ -217,6 +218,7 @@ namespace DiceGame.Session.Network
 
         public void NetworkSerialize<T>(BufferSerializer<T> serializer) where T : IReaderWriter {
             serializer.SerializeValue(ref GameMode);
+            serializer.SerializeValue(ref WinsToWin);
             SharedSpawn.NetworkSerialize(serializer);
             SharedCatalog.NetworkSerialize(serializer);
             Jumbo.NetworkSerialize(serializer);

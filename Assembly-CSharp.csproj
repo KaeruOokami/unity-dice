@@ -121,6 +121,7 @@
     <Compile Include="Assets\_Project\Scripts\Board\Board.cs" />
     <Compile Include="Assets\_Project\Scripts\Gameplay\AI\Domain\MatchGoalFailureMemory.cs" />
     <Compile Include="Assets\_Project\Scripts\Gameplay\Match\DiceMatchFinder.cs" />
+    <Compile Include="Assets\_Project\Scripts\Config\MatchSeriesHudSettings.cs" />
     <Compile Include="Assets\_Project\Scripts\Placement\Interaction\PushContactEvaluator.cs" />
     <Compile Include="Assets\_Project\Scripts\Session\Network\OnlineClientInputRelay.cs" />
     <Compile Include="Assets\_Project\Scripts\Placement\Occupancy\SurfaceQuery.cs" />
@@ -136,6 +137,7 @@
     <Compile Include="Assets\_Project\Scripts\Placement\Movement\Jump\JumpDiceTransferPolicy.cs" />
     <Compile Include="Assets\_Project\Scripts\Placement\Movement\Walk\HeightReachPolicy.cs" />
     <Compile Include="Assets\_Project\Scripts\Board\PartitionBoundaryPolicy.cs" />
+    <Compile Include="Assets\_Project\Scripts\Gameplay\Match\MatchSeriesState.cs" />
     <Compile Include="Assets\_Project\Scripts\Session\Network\OnlineCharacterStatePayload.cs" />
     <Compile Include="Assets\_Project\Scripts\Session\MatchSetupCategoryLabels.cs" />
     <Compile Include="Assets\_Project\Scripts\Session\PlayerBindingOverridesPersistFile.cs" />
@@ -174,6 +176,7 @@
     <Compile Include="Assets\_Project\Scripts\View\DiceVisualMotion.cs" />
     <Compile Include="Assets\_Project\Scripts\Session\Network\OnlineClientCharacterBinder.cs" />
     <Compile Include="Assets\_Project\Scripts\Gameplay\Input\GameFlowInputReader.cs" />
+    <Compile Include="Assets\_Project\Scripts\Gameplay\Match\MatchSeriesHud.cs" />
     <Compile Include="Assets\_Project\Scripts\Core\Motion\DiceTransition.cs" />
     <Compile Include="Assets\_Project\Scripts\Versus\Core\AttackVolley.cs" />
     <Compile Include="Assets\_Project\Scripts\Gameplay\AI\Domain\ClusterSelectionEvaluator.cs" />
@@ -244,6 +247,7 @@
     <Compile Include="Assets\_Project\Scripts\Session\Network\OnlineAttackQueueSnapshot.cs" />
     <Compile Include="Assets\_Project\Scripts\Session\OnlineLobbyFacade.cs" />
     <Compile Include="Assets\_Project\Scripts\Gameplay\Character\CharacterMovePlan.cs" />
+    <Compile Include="Assets\_Project\Scripts\Config\AttackDefaultPresetCatalog.cs" />
     <Compile Include="Assets\_Project\Scripts\Placement\Registry\CharacterPlacement.cs" />
     <Compile Include="Assets\_Project\Scripts\Session\PlayerNaturalSendSettingsPanelUi.cs" />
     <Compile Include="Assets\_Project\Scripts\Gameplay\AI\Domain\LiftClearancePlanner.cs" />
@@ -304,6 +308,7 @@
     <Compile Include="Assets\_Project\Scripts\Gameplay\Dice\DicePushBody.cs" />
     <Compile Include="Assets\_Project\Scripts\View\DiceView.cs" />
     <Compile Include="Assets\_Project\Scripts\Session\PlayerBindingOverridesService.cs" />
+    <Compile Include="Assets\_Project\Scripts\Config\AttackFaceEmissionColorResolver.cs" />
     <Compile Include="Assets\_Project\Scripts\Gameplay\Match\PlayerMatchActionContext.cs" />
     <Compile Include="Assets\_Project\Scripts\Versus\Core\AttackFaceRoller.cs" />
     <Compile Include="Assets\_Project\Scripts\Gameplay\Character\CharacterRollbackState.cs" />
@@ -316,6 +321,7 @@
     <Compile Include="Assets\_Project\Scripts\Placement\Support\PlayerSupportQuery.cs" />
     <Compile Include="Assets\_Project\Scripts\Gameplay\Character\PlayerMotionGate.cs" />
     <Compile Include="Assets\_Project\Scripts\Gameplay\AI\Domain\DiceBoardAnalyzer.cs" />
+    <Compile Include="Assets\_Project\Scripts\Session\AttackPresetListEntry.cs" />
     <Compile Include="Assets\_Project\Scripts\Gameplay\Match\MatchActionSnapshot.cs" />
     <Compile Include="Assets\_Project\Scripts\Config\AttackQueueSettings.cs" />
     <Compile Include="Assets\_Project\Scripts\Gameplay\Character\CharacterMovePlanner.cs" />

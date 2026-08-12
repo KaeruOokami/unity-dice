@@ -3,6 +3,7 @@ namespace DiceGame.Config
     public sealed class MatchSetupSnapshot
     {
         public GameMode GameMode { get; set; }
+        public int WinsToWin { get; set; } = 1;
         public DiceSpawnSettingsData SharedSpawn { get; set; }
         public DiceCatalogData SharedCatalog { get; set; }
         public JumboDiceSettingsData Jumbo { get; set; }
@@ -44,6 +45,12 @@ namespace DiceGame.Config
 
         bool TryValidateVersus(out string errorMessage) {
             NormalizeVersusSharedInitialDiceCount();
+            NormalizeWinsToWin();
+
+            if (WinsToWin < 1) {
+                errorMessage = "MatchSetupSnapshot: WinsToWin must be at least 1.";
+                return false;
+            }
 
             if (!Jumbo.TryValidate(out errorMessage)) {
                 return false;
@@ -75,6 +82,10 @@ namespace DiceGame.Config
             var count = UnityEngine.Mathf.Max(1, Player1.Spawn.InitialDiceCount);
             Player1 = WithSpawnInitialDiceCount(Player1, count);
             Player2 = WithSpawnInitialDiceCount(Player2, count);
+        }
+
+        public void NormalizeWinsToWin() {
+            WinsToWin = UnityEngine.Mathf.Max(1, WinsToWin);
         }
 
         public int GetVersusSharedInitialDiceCount() {
@@ -129,6 +140,7 @@ namespace DiceGame.Config
         public MatchSetupSnapshot Clone() {
             return new MatchSetupSnapshot {
                 GameMode = GameMode,
+                WinsToWin = WinsToWin,
                 SharedSpawn = SharedSpawn,
                 SharedCatalog = SharedCatalog,
                 Jumbo = Jumbo,

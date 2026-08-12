@@ -20,9 +20,7 @@ MonoBehaviour:
   - {fileID: 11400000, guid: f8a9b0c1d2e3f4a5b6c7d8e9f0a1b2c3, type: 2}
   - {fileID: 11400000, guid: a7b8c9d0e1f24990aabbccddeeff4401, type: 2}
   - {fileID: 11400000, guid: b8c9d0e1f2a34990aabbccddeeff4402, type: 2}
-  attackPresets:
-  - {fileID: 11400000, guid: c3d4e5f6a7b84990aabbccddeeff3201, type: 2}
-  - {fileID: 11400000, guid: d4e5f6a7b8c94990aabbccddeeff3202, type: 2}
+  attackDefaultPresetCatalog: {fileID: 11400000, guid: b2c3d4e5f6a7488990abcdef20000012, type: 2}
   naturalSendPresets:
   - {fileID: 11400000, guid: f6a7b8c9d0e14990aabbccddeeff4502, type: 2}
   - {fileID: 11400000, guid: a7b8c9d0e1f24990aabbccddeeff4503, type: 2}
@@ -38,3 +36,4 @@ MonoBehaviour:
   defaultPlayer2Attack: {fileID: 11400000, guid: d4e5f6a7b8c94990aabbccddeeff3202, type: 2}
   defaultPlayer2NaturalSend: {fileID: 11400000, guid: a7b8c9d0e1f24990aabbccddeeff4503, type: 2}
   defaultJumboDiceSettings: {fileID: 11400000, guid: a9c1e2f3b4d5467788aabbccddeeff01, type: 2}
+  defaultWinsToWin: 2

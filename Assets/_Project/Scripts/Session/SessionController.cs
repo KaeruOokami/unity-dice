@@ -382,6 +382,7 @@ namespace DiceGame.Session
             ClearMatchStartHandshake();
             onlineSharedSetupReady = false;
             onlineGameModeConfirmed = false;
+            MatchSeriesState.Clear();
             SessionState.Instance?.ResetMatchFlag();
             SessionState.Instance?.ClearCurrentSetup();
             SessionState.Instance?.ClearRemotePeerPlayerId();

@@ -13,6 +13,8 @@ MonoBehaviour:
   m_Name: VersusBoardSettings
   m_EditorClassIdentifier: 
   sharedInitialDiceCount: 15
+  winsToWin: 2
+  roundEndDelaySeconds: 2
   player1:
     width: 4
     height: 6

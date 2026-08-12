@@ -52,6 +52,12 @@ namespace DiceGame.Config
         [Min(1)]
         [SerializeField] int sharedInitialDiceCount = 15;
 
+        [Header("Match Series")]
+        [Min(1)]
+        [SerializeField] int winsToWin = 2;
+        [Min(0f)]
+        [SerializeField] float roundEndDelaySeconds = 2f;
+
         [SerializeField] PlayerBoardDefinition player1 = new(4, 6, null, null, null, null);
         [SerializeField] PlayerBoardDefinition player2 = new(4, 6, null, null, null, null);
         [SerializeField] VersusInitialDicePlacementMode initialDicePlacementMode =
@@ -61,6 +67,8 @@ namespace DiceGame.Config
         [SerializeField] JumboDiceSettings jumboDiceSettings;
 
         public int SharedInitialDiceCount => Mathf.Max(1, sharedInitialDiceCount);
+        public int WinsToWin => Mathf.Max(1, winsToWin);
+        public float RoundEndDelaySeconds => Mathf.Max(0f, roundEndDelaySeconds);
         public PlayerBoardDefinition Player1 => player1;
         public PlayerBoardDefinition Player2 => player2;
         public VersusInitialDicePlacementMode InitialDicePlacementMode => initialDicePlacementMode;
@@ -68,6 +76,8 @@ namespace DiceGame.Config
         public JumboDiceSettings JumboDiceSettings => jumboDiceSettings;
 
         void OnValidate() {
+            winsToWin = Mathf.Max(1, winsToWin);
+            roundEndDelaySeconds = Mathf.Max(0f, roundEndDelaySeconds);
             SyncSharedInitialDiceCountToPlayerSpawns();
 #if UNITY_EDITOR
             if (player1.SpawnSettings != null) {

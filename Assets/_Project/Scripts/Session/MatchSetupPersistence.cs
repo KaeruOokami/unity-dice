@@ -8,7 +8,7 @@ namespace DiceGame.Session
 {
     public static class MatchSetupPersistence
     {
-        public const int CurrentVersion = 2;
+        public const int CurrentVersion = 3;
 
         public static MatchSetupSnapshot LoadOrCreate(GameMode mode, MatchSetupPresetRegistry registry) {
             if (registry == null) {
@@ -20,6 +20,7 @@ namespace DiceGame.Session
             if (File.Exists(path)) {
                 if (TryLoad(path, registry, out var loaded, out var loadError)) {
                     loaded.NormalizeVersusSharedInitialDiceCount();
+                    loaded.NormalizeWinsToWin();
                     return loaded;
                 }
 
@@ -53,6 +54,7 @@ namespace DiceGame.Session
             if (File.Exists(path)) {
                 if (TryLoad(path, registry, out var loaded, out var loadError)) {
                     loaded.NormalizeVersusSharedInitialDiceCount();
+                    loaded.NormalizeWinsToWin();
                     return loaded;
                 }
 
@@ -182,13 +184,15 @@ namespace DiceGame.Session
                 }
 
                 // Backward compatibility:
-                // Version 1 did not have JumboDiceSettings persisted.
-                // For v1 files, we migrate by filling missing Jumbo with defaults.
+                // v1: no Jumbo. v2: no WinsToWin.
                 if (file.Version != CurrentVersion) {
-                    if (file.Version == 1) {
-                        // Ensure the new field exists (JsonUtility may leave it null when missing).
+                    if (file.Version == 1 || file.Version == 2) {
                         if (file.Jumbo == null) {
                             file.Jumbo = new JumboDiceSettingsPersistDto();
+                        }
+
+                        if (file.WinsToWin < 1) {
+                            file.WinsToWin = registry.CreateDefaultSnapshot((GameMode)file.GameMode).WinsToWin;
                         }
 
                         file.Version = CurrentVersion;
@@ -196,6 +200,10 @@ namespace DiceGame.Session
                         errorMessage = $"Unsupported persist version {file.Version}.";
                         return false;
                     }
+                }
+
+                if (file.WinsToWin < 1) {
+                    file.WinsToWin = 1;
                 }
 
                 var payload = MatchSetupPersistMapper.ToNetworkPayload(file);

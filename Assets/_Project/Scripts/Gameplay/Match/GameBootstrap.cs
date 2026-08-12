@@ -70,6 +70,7 @@ namespace DiceGame.Gameplay
         [SerializeField] DiceCatalog diceCatalog;
         [SerializeField] AiPlayerSettings aiPlayerSettings;
         [SerializeField] MatchIntroSettings matchIntroSettings;
+        [SerializeField] MatchSeriesHudSettings matchSeriesHudSettings;
         [SerializeField] CameraSetupSettings cameraSetup = new();
 
         DiceRegistry registry;
@@ -347,6 +348,7 @@ namespace DiceGame.Gameplay
             if (resolvedSetup.GameMode == GameMode.Versus) {
                 var versusSettings = resolvedSetup.VersusBoardSettings;
                 erasureSystem.ConfigureVersusAttack(versusSettings);
+                oneVanishSystem.ConfigureVersusAttack(versusSettings);
 
                 attackController = GetComponent<VersusAttackController>();
                 if (attackController == null) {
@@ -388,7 +390,8 @@ namespace DiceGame.Gameplay
                 attackController,
                 gameSessionSettings,
                 playerInputSettings,
-                resolvedSetup);
+                resolvedSetup,
+                matchSeriesHudSettings);
 
             for (var i = 0; i < characters.Count; i++) {
                 characters[i].BindCrushOutcome(gameFlowController);

@@ -7,8 +7,9 @@ namespace DiceGame.Session
     [Serializable]
     public sealed class MatchSetupPersistFile
     {
-        public int Version = 2;
+        public int Version = 3;
         public byte GameMode;
+        public int WinsToWin = 1;
         public DiceSpawnSettingsPersistDto SharedSpawn = new();
         public DiceCatalogPersistDto SharedCatalog = new();
         public JumboDiceSettingsPersistDto Jumbo = new();
@@ -115,6 +116,7 @@ namespace DiceGame.Session
             return new MatchSetupPersistFile {
                 Version = MatchSetupPersistence.CurrentVersion,
                 GameMode = payload.GameMode,
+                WinsToWin = payload.WinsToWin,
                 SharedSpawn = FromSpawn(payload.SharedSpawn),
                 SharedCatalog = FromCatalog(payload.SharedCatalog),
                 Jumbo = FromJumbo(payload.Jumbo),
@@ -142,6 +144,7 @@ namespace DiceGame.Session
             var player2 = file.Player2 ?? new PlayerSlotPersistDto();
             return new MatchSetupNetworkPayload {
                 GameMode = file.GameMode,
+                WinsToWin = file.WinsToWin > 0 ? file.WinsToWin : 1,
                 SharedSpawn = ToSpawn(file.SharedSpawn),
                 SharedCatalog = ToCatalog(file.SharedCatalog),
                 Jumbo = ToJumbo(file.Jumbo),

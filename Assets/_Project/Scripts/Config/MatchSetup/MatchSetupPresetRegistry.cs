@@ -7,7 +7,7 @@ namespace DiceGame.Config
     {
         [SerializeField] DiceSpawnSettings[] spawnPresets = System.Array.Empty<DiceSpawnSettings>();
         [SerializeField] DiceCatalog[] catalogPresets = System.Array.Empty<DiceCatalog>();
-        [SerializeField] PlayerAttackSettings[] attackPresets = System.Array.Empty<PlayerAttackSettings>();
+        [SerializeField] AttackDefaultPresetCatalog attackDefaultPresetCatalog;
         [SerializeField] PlayerNaturalSendSettings[] naturalSendPresets =
             System.Array.Empty<PlayerNaturalSendSettings>();
 
@@ -24,10 +24,16 @@ namespace DiceGame.Config
         [SerializeField] PlayerAttackSettings defaultPlayer2Attack;
         [SerializeField] PlayerNaturalSendSettings defaultPlayer2NaturalSend;
         [SerializeField] JumboDiceSettings defaultJumboDiceSettings;
+        [Min(1)]
+        [SerializeField] int defaultWinsToWin = 2;
 
         public DiceSpawnSettings[] SpawnPresets => spawnPresets;
         public DiceCatalog[] CatalogPresets => catalogPresets;
-        public PlayerAttackSettings[] AttackPresets => attackPresets;
+        public AttackDefaultPresetCatalog AttackDefaultPresetCatalog => attackDefaultPresetCatalog;
+        public PlayerAttackSettings[] AttackPresets =>
+            attackDefaultPresetCatalog != null
+                ? attackDefaultPresetCatalog.Presets
+                : System.Array.Empty<PlayerAttackSettings>();
         public PlayerNaturalSendSettings[] NaturalSendPresets => naturalSendPresets;
         public PlayerInputSettings DefaultPlayerInputSettings => defaultPlayerInputSettings;
 
@@ -38,6 +44,7 @@ namespace DiceGame.Config
 
             var snapshot = new MatchSetupSnapshot {
                 GameMode = mode,
+                WinsToWin = mode == GameMode.Versus ? UnityEngine.Mathf.Max(1, defaultWinsToWin) : 1,
                 SharedSpawn = DiceSpawnSettingsData.FromTemplate(defaultSharedSpawn),
                 SharedCatalog = DiceCatalogData.FromTemplate(defaultSharedCatalog),
                 Jumbo = JumboDiceSettingsData.FromTemplate(defaultJumboDiceSettings),
@@ -55,6 +62,7 @@ namespace DiceGame.Config
                     defaultPlayer2NaturalSend)
             };
             snapshot.NormalizeVersusSharedInitialDiceCount();
+            snapshot.NormalizeWinsToWin();
             return snapshot;
         }
 
@@ -100,7 +108,7 @@ namespace DiceGame.Config
         }
 
         public bool TryGetAttackPresetIndex(PlayerAttackSettings settings, out int index) {
-            return TryGetPresetIndex(attackPresets, settings, out index);
+            return TryGetPresetIndex(AttackPresets, settings, out index);
         }
 
         public bool TryGetNaturalSendPresetIndex(PlayerNaturalSendSettings settings, out int index) {
@@ -116,7 +124,7 @@ namespace DiceGame.Config
         }
 
         public PlayerAttackSettings GetAttackPreset(int index) {
-            return GetPreset(attackPresets, index);
+            return GetPreset(AttackPresets, index);
         }
 
         public PlayerNaturalSendSettings GetNaturalSendPreset(int index) {

@@ -11,6 +11,7 @@ namespace DiceGame.Config
             _ = registry;
             return new MatchSetupNetworkPayload {
                 GameMode = (byte)snapshot.GameMode,
+                WinsToWin = snapshot.WinsToWin,
                 SharedSpawn = ToSpawnPayload(snapshot.SharedSpawn),
                 SharedCatalog = ToCatalogPayload(snapshot.SharedCatalog),
                 Jumbo = ToJumboPayload(snapshot.Jumbo),
@@ -51,6 +52,9 @@ namespace DiceGame.Config
             var defaults = registry.CreateDefaultSnapshot(mode);
             snapshot = new MatchSetupSnapshot {
                 GameMode = mode,
+                WinsToWin = mode == GameMode.Versus
+                    ? System.Math.Max(1, payload.WinsToWin > 0 ? payload.WinsToWin : defaults.WinsToWin)
+                    : 1,
                 SharedSpawn = FromSpawnPayload(payload.SharedSpawn),
                 SharedCatalog = FromCatalogPayload(payload.SharedCatalog, defaults.SharedCatalog),
                 Jumbo = ResolveJumbo(payload.Jumbo, defaults.Jumbo),

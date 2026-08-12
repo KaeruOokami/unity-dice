@@ -79,6 +79,17 @@ namespace DiceGame.Session.Network
                     if (data != 0) {
                         SessionState.Instance?.SetMatchSeed(data);
                     }
+
+                    // Legacy adapter: treat reset as a fresh series start.
+                    {
+                        var setup = SessionState.Instance?.CurrentSetup;
+                        if (setup != null && setup.GameMode == GameMode.Versus) {
+                            MatchSeriesState.Begin(Mathf.Max(1, setup.WinsToWin));
+                        } else {
+                            MatchSeriesState.Clear();
+                        }
+                    }
+
                     MatchFlowFlags.ArmMatchRestart(
                         SessionPlayMode.Client,
                         SessionState.Instance?.CurrentSetup,
