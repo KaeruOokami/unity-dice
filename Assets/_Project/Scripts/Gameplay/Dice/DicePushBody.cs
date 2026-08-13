@@ -42,5 +42,22 @@ namespace DiceGame.Gameplay
                 boxCollider.enabled = enabled;
             }
         }
+
+        /// <summary>
+        /// Local-space bounds on <see cref="PositionRoot"/> — matches visible dice volume.
+        /// </summary>
+        public void ApplyLocalBounds(Vector3 localCenter, Vector3 localSize) {
+            if (boxCollider == null) {
+                boxCollider = GetComponent<BoxCollider>();
+            }
+
+            if (boxCollider == null) {
+                return;
+            }
+
+            boxCollider.isTrigger = true;
+            boxCollider.center = localCenter;
+            boxCollider.size = localSize;
+        }
     }
 }

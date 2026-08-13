@@ -10,7 +10,7 @@ using UnityEngine;
 
 namespace DiceGame.Gameplay
 {
-    public class DiceMatchErasureSystem : MonoBehaviour, ITierFallMatchNotifier
+    public class DiceMatchErasureSystem : MonoBehaviour, ITierFallMatchNotifier, ICarryTopMountMatchNotifier
     {
         [SerializeField] Board board;
         [SerializeField] DiceRegistry registry;
@@ -21,6 +21,7 @@ namespace DiceGame.Gameplay
         readonly HashSet<DiceController> subscribedDice = new();
         readonly List<CharacterController> characters = new();
         readonly List<DiceController> pendingTierFallMatches = new();
+        readonly List<DiceController> pendingCarryTopMountMatches = new();
 
         IVersusBoardSettings versusSettings;
         DiceErasureSettings erasureSettings;
@@ -86,6 +87,7 @@ namespace DiceGame.Gameplay
         /// </summary>
         public void SimulateLockstepTick() {
             TryFlushPendingTierFallMatches();
+            TryFlushPendingCarryTopMountMatches();
         }
 
         void OnDisable() {
@@ -95,6 +97,7 @@ namespace DiceGame.Gameplay
 
             UnsubscribeAllDice();
             pendingTierFallMatches.Clear();
+            pendingCarryTopMountMatches.Clear();
         }
 
         public void NotifyTierFallCompleted(DiceController fallenDice) {
@@ -104,6 +107,15 @@ namespace DiceGame.Gameplay
 
             pendingTierFallMatches.Add(fallenDice);
             TryFlushPendingTierFallMatches();
+        }
+
+        public void NotifyCarryTopMountCompleted(DiceController mountedDice) {
+            if (mountedDice == null || ownershipContext == null) {
+                return;
+            }
+
+            pendingCarryTopMountMatches.Add(mountedDice);
+            TryFlushPendingCarryTopMountMatches();
         }
 
         void TryFlushPendingTierFallMatches() {
@@ -166,6 +178,46 @@ namespace DiceGame.Gameplay
             ownershipContext.ClearTierFallSupportOwner(fallenDice);
         }
 
+        void TryFlushPendingCarryTopMountMatches() {
+            if (pendingCarryTopMountMatches.Count == 0 || registry == null) {
+                return;
+            }
+
+            for (var i = pendingCarryTopMountMatches.Count - 1; i >= 0; i--) {
+                var mountedDice = pendingCarryTopMountMatches[i];
+                if (mountedDice == null) {
+                    pendingCarryTopMountMatches.RemoveAt(i);
+                    continue;
+                }
+
+                if (MotionConflictEvaluator.BlocksTierFallEvaluation(mountedDice, registry, actionContext)) {
+                    continue;
+                }
+
+                pendingCarryTopMountMatches.RemoveAt(i);
+                EvaluateCarryTopMountMatch(mountedDice);
+            }
+        }
+
+        void EvaluateCarryTopMountMatch(DiceController mountedDice) {
+            if (mountedDice == null || board == null || registry == null || ownershipContext == null) {
+                return;
+            }
+
+            if (!ownershipContext.TryGetOwner(mountedDice, out var owner)) {
+                owner = PlayerSlot.Player1;
+            }
+
+            var participants = new List<DiceController> { mountedDice };
+            var action = new MatchActionSnapshot(
+                participants,
+                new Dictionary<PlayerSlot, List<DiceController>> {
+                    [owner] = participants
+                });
+            EvaluateMatchesForAction(action);
+            oneVanishSystem?.EvaluateForPlayerAction(action);
+        }
+
         void SubscribeAllDice() {
             if (registry == null) {
                 return;
@@ -177,15 +229,18 @@ namespace DiceGame.Gameplay
         }
 
         void SubscribeDice(DiceController dice) {
-            if (dice == null || subscribedDice.Contains(dice)) {
+            if (dice == null) {
                 return;
             }
 
-            subscribedDice.Add(dice);
-            dice.Erased += OnDiceErased;
-            dice.BecameErasureGhost += OnDiceBecameErasureGhost;
+            if (!subscribedDice.Contains(dice)) {
+                subscribedDice.Add(dice);
+                dice.Erased += OnDiceErased;
+            }
+
             dice.ConfigureOwnershipContext(ownershipContext);
             dice.ConfigureTierFallMatchNotifier(this);
+            dice.ConfigureCarryTopMountMatchNotifier(this);
         }
 
         void UnsubscribeDice(DiceController dice) {
@@ -194,7 +249,6 @@ namespace DiceGame.Gameplay
             }
 
             dice.Erased -= OnDiceErased;
-            dice.BecameErasureGhost -= OnDiceBecameErasureGhost;
         }
 
         void UnsubscribeAllDice() {
@@ -232,19 +286,9 @@ namespace DiceGame.Gameplay
             NotifyCharactersStandingDiceErased(dice);
         }
 
-        void OnDiceBecameErasureGhost(DiceController dice) {
-            NotifyCharactersStandingDiceBecameGhost(dice);
-        }
-
         void NotifyCharactersStandingDiceErased(DiceController dice) {
             for (var i = 0; i < characters.Count; i++) {
                 characters[i]?.OnStandingDiceErased(dice);
-            }
-        }
-
-        void NotifyCharactersStandingDiceBecameGhost(DiceController dice) {
-            for (var i = 0; i < characters.Count; i++) {
-                characters[i]?.OnStandingDiceBecameErasureGhost(dice);
             }
         }
 
@@ -343,7 +387,7 @@ namespace DiceGame.Gameplay
 
                 if (dice.IsErasing) {
                     erasingMembers.Add(dice);
-                } else if (!dice.IsSpawning) {
+                } else if (!dice.IsSpawning || dice.AllowsUnconditionalMount) {
                     newMembers.Add(dice);
                 }
             }

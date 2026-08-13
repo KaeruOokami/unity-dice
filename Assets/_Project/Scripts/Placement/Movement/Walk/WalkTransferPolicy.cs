@@ -214,7 +214,10 @@ namespace DiceGame.Placement
 
             if (standingTier == DiceStackTier.Bottom
                 && SurfaceHeightLevel.ToDiceStackTier(targetSurface.Level) == DiceStackTier.Bottom
-                && GhostPlacementRules.HasSolidTopAt(registry, targetSurface.GridCell)) {
+                && !HorizontalEntryPolicy.IsClearForHorizontalEntry(
+                    SurfaceHeightLevel.Bottom,
+                    registry,
+                    targetSurface.GridCell)) {
                 rejectReason = "neighbor-bottom-occluded-by-top";
                 return false;
             }

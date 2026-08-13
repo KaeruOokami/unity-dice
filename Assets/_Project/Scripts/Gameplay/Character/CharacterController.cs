@@ -371,7 +371,7 @@ namespace DiceGame.Gameplay
             if (!IsOnFloor
                 && standingController.TryGetStandingDice(out var startStanding)
                 && startStanding != null) {
-                var center = startStanding.GetLogicalCenterWorld();
+                var center = startStanding.GetPresentationCenterWorld();
                 transformDriver.ApplyWorldPosition(new Vector3(center.x, 0f, center.z));
             } else {
                 transformDriver.SnapYToSurface();
@@ -428,14 +428,6 @@ namespace DiceGame.Gameplay
             MoveToFloorAtCurrentWorldPosition();
         }
 
-        public void OnStandingDiceBecameErasureGhost(DiceController ghostDice) {
-            if (!isInitialized || !standingController.TryGetStandingDice(out var standingDice) || standingDice != ghostDice) {
-                return;
-            }
-
-            MoveToFloorAtCurrentWorldPosition();
-        }
-
         void OnDisable() {
             coupling?.EndRollTracking();
             EndCarryState();
@@ -478,7 +470,10 @@ namespace DiceGame.Gameplay
 
             if (liftPhase == LiftPhase.Carrying) {
                 currentSpeed = 0f;
-                if (ActiveInputSource.TryGetDirectionPressedThisFrame(out var placeDirection)) {
+                // Accept a fresh direction pulse (AI / discrete press) or a held move stick/key.
+                // Held input is ignored only while Lifting; once at the apex (Carrying), place.
+                if (ActiveInputSource.TryGetDirectionPressedThisFrame(out var placeDirection)
+                    || TryInputToDirection(input, out placeDirection)) {
                     TryPlaceCarriedDice(placeDirection);
                 }
 
@@ -667,7 +662,11 @@ namespace DiceGame.Gameplay
             }
 
             if (liftPhase == LiftPhase.Carrying && carriedDice != null) {
-                carriedDice.View.SetCarryWorldPosition(GetCarryWorldPosition());
+                if (carriedDice.IsErasing || !carriedDice.IsCarried) {
+                    EndCarryState();
+                } else {
+                    carriedDice.View.SetCarryWorldPosition(GetCarryWorldPosition());
+                }
             }
 
             if (standingController.CurrentDice != null && coupling.IsTrackingRoll) {
@@ -1533,7 +1532,7 @@ namespace DiceGame.Gameplay
                 return new Vector3(p.x, pushFollowDiceStartWorld.y, p.z);
             }
 
-            return pushFollowDice.GetLogicalCenterWorld();
+            return pushFollowDice.GetPresentationCenterWorld();
         }
 
         Vector3 ClampPushFollowCenterToOneCell(Vector3 center) {
@@ -1740,7 +1739,7 @@ namespace DiceGame.Gameplay
             }
 
             // Capture before execute: ice/normal both commit logical To immediately.
-            var startWorld = dice.GetLogicalCenterWorld();
+            var startWorld = dice.GetPresentationCenterWorld();
             var startedOnFloor = IsOnFloor;
 
             if (!CharacterPushExecutor.TryExecute(
@@ -1894,7 +1893,12 @@ namespace DiceGame.Gameplay
             }
 
             var position = characterTransform.position;
-            return new Vector3(position.x, position.y + movementSettings.CarryVerticalOffset, position.z);
+            // Carry anchor matches a die two tiers above the standing surface
+            // (floor→Top, Bottom→Top+1, Top→Top+2).
+            var carryY = board != null
+                ? GetLogicalSurfaceWorldY() + board.CellSize * 1.5f
+                : position.y;
+            return new Vector3(position.x, carryY, position.z);
         }
 
         bool TryBeginLift() {
@@ -1940,9 +1944,22 @@ namespace DiceGame.Gameplay
         }
 
         void OnLiftComplete() {
-            if (liftPhase == LiftPhase.Lifting) {
-                liftPhase = LiftPhase.Carrying;
+            if (liftPhase != LiftPhase.Lifting) {
+                return;
             }
+
+            liftPhase = LiftPhase.Carrying;
+            if (carriedDice == null) {
+                return;
+            }
+
+            // Floor lift apex == Top height: occupy the player cell as real Top for match.
+            if (!IsOnFloor) {
+                return;
+            }
+
+            matchActionContext?.AssignOwner(carriedDice, PlayerSlot);
+            carriedDice.TryMountCarryAsTop(standingController.GridCell);
         }
 
         bool TryPlaceCarriedDice(Direction direction) {

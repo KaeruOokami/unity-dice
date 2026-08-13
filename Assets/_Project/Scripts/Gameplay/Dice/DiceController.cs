@@ -21,6 +21,7 @@ namespace DiceGame.Gameplay
         PlayerMatchActionContext matchActionContext;
         DiceMatchOwnershipContext ownershipContext;
         ITierFallMatchNotifier tierFallMatchNotifier;
+        ICarryTopMountMatchNotifier carryTopMountMatchNotifier;
         DiceState currentState;
         bool isRolling;
         bool isSpawning;
@@ -58,6 +59,7 @@ namespace DiceGame.Gameplay
         public bool IsRadianceErasing => erasureKind == ErasureKind.Radiance;
         public ErasureKind ErasureKind => erasureKind;
         public bool IsVanishing => isVanishing;
+        public Board Board => board;
         public bool IsErasureGhost =>
             IsSinkErasing && diceView != null && diceView.IsErasureGhost;
         /// <summary>
@@ -120,22 +122,46 @@ namespace DiceGame.Gameplay
             return new Vector3(gridWorld.x, GetLogicalTopSurfaceWorldY(), gridWorld.z);
         }
 
+        /// <summary>
+        /// World center of the visible dice volume (PositionRoot + mesh extents).
+        /// Use for push contact, coupling follow, and other presentation-aligned interaction.
+        /// </summary>
+        public Vector3 GetPresentationCenterWorld() {
+            if (diceView != null && board != null) {
+                return diceView.GetPresentationCenterWorld(board);
+            }
+
+            return GetLogicalCenterWorld();
+        }
+
         public Vector2 GetLogicalCenterXZ() {
             var center = GetLogicalCenterWorld();
             return new Vector2(center.x, center.z);
         }
 
+        public Vector2 GetPresentationCenterXZ() {
+            var center = GetPresentationCenterWorld();
+            return new Vector2(center.x, center.z);
+        }
+
         public Bounds GetLogicalPushBounds() {
+            return GetPresentationPushBounds();
+        }
+
+        public Bounds GetPresentationPushBounds() {
+            if (diceView != null && board != null) {
+                return diceView.GetPresentationPushBounds(board);
+            }
+
             if (board == null) {
                 return new Bounds(transform.position, Vector3.one);
             }
 
             var center = GetLogicalCenterWorld();
             var size = board.CellSize;
-            var height = size;
             return new Bounds(
-                new Vector3(center.x, center.y - height * 0.25f, center.z),
-                new Vector3(size, height, size));
+                new Vector3(center.x, center.y - size * 0.25f, center.z),
+                new Vector3(size, size, size));
         }
 
         /// <summary>
@@ -283,7 +309,6 @@ namespace DiceGame.Gameplay
         public event Action<DiceState> StateChanged;
         public event Action<DiceController> Erased;
         public event Action<DiceController> ErasureStarted;
-        public event Action<DiceController> BecameErasureGhost;
 
         void Awake() {
             if (diceView == null) {
@@ -325,6 +350,10 @@ namespace DiceGame.Gameplay
 
         public void ConfigureTierFallMatchNotifier(ITierFallMatchNotifier notifier) {
             tierFallMatchNotifier = notifier;
+        }
+
+        public void ConfigureCarryTopMountMatchNotifier(ICarryTopMountMatchNotifier notifier) {
+            carryTopMountMatchNotifier = notifier;
         }
 
         public void Initialize(
@@ -555,6 +584,7 @@ namespace DiceGame.Gameplay
         void ConfigurePushBody() {
             var pushBody = GetComponentInChildren<DicePushBody>();
             pushBody?.Configure(board);
+            diceView?.SyncPushBodyToPresentation(board);
             // Pass-through Ghost disables push; sink-erasing Ghost is solid again.
             pushBody?.SetCollisionEnabled(!GhostPlacementRules.IsPlayerPassThrough(this));
         }
@@ -1199,9 +1229,13 @@ namespace DiceGame.Gameplay
         }
 
         public void BeginErasure(ErasureKind kind, Color? emissionColor, Action onComplete) {
-            if (IsErasing || isVanishing || isCarried || board == null || diceView == null || kind == ErasureKind.None) {
+            if (IsErasing || isVanishing || board == null || diceView == null || kind == ErasureKind.None) {
                 return;
             }
+
+            // Lift-mounted Top may still be flagged carried; clear so match erasure can proceed.
+            isCarried = false;
+            var sinkStartProgress = CommitSpawnIfNeededForErasure();
 
             erasureKind = kind;
             ErasureStarted?.Invoke(this);
@@ -1210,13 +1244,45 @@ namespace DiceGame.Gameplay
                 ConfigurePushBody();
             }
 
-            diceView.PlayErasure(kind, currentState, board, registry, emissionColor, () => {
-                registry?.Unregister(this);
-                erasureKind = ErasureKind.None;
-                Erased?.Invoke(this);
-                onComplete?.Invoke();
-                Destroy(gameObject);
-            });
+            diceView.PlayErasure(
+                kind,
+                currentState,
+                board,
+                registry,
+                emissionColor,
+                () => {
+                    registry?.Unregister(this);
+                    erasureKind = ErasureKind.None;
+                    Erased?.Invoke(this);
+                    onComplete?.Invoke();
+                    Destroy(gameObject);
+                },
+                kind == ErasureKind.Sink ? sinkStartProgress : 0f);
+        }
+
+        /// <summary>
+        /// Mid-emergence match: stop appear motion, commit pending occupancy, then allow erasure.
+        /// Returns emergence squash progress (same scale as sink) to continue from that height.
+        /// </summary>
+        float CommitSpawnIfNeededForErasure() {
+            if (!isSpawning) {
+                return 0f;
+            }
+
+            // Capture before interrupt — BottomEmergence uses the same progress scale as sink.
+            var sinkStartProgress = AllowsUnconditionalMount && diceView != null
+                ? Mathf.Clamp01(diceView.ErasureProgress)
+                : 0f;
+
+            pendingSpawnComplete = null;
+            logicalSpawnRemaining = 0f;
+            diceView?.InterruptRollAnimation();
+            registry?.CommitPendingSpawn(this, currentState.GridPos, currentState.Tier);
+            isSpawning = false;
+            spawnAppearMode = DiceSpawnAppearMode.None;
+            ConfigurePushBody();
+            StateChanged?.Invoke(currentState);
+            return sinkStartProgress;
         }
 
         public void BeginErasureForCurrentTier(Color? emissionColor, Action onComplete) {
@@ -1254,9 +1320,11 @@ namespace DiceGame.Gameplay
         }
 
         public void BeginOneVanish(DiceOneVanishSettings settings, Color emissionColor, Action onComplete) {
-            if (isVanishing || IsErasing || isCarried || board == null || diceView == null || settings == null) {
+            if (isVanishing || IsErasing || board == null || diceView == null || settings == null) {
                 return;
             }
+
+            isCarried = false;
 
             isVanishing = true;
             diceView.SetErasureEmissionColor(emissionColor);
@@ -1266,15 +1334,6 @@ namespace DiceGame.Gameplay
                 onComplete?.Invoke();
                 Destroy(gameObject);
             });
-        }
-
-        public void OnBecameErasureGhost() {
-            if (!IsErasureGhost) {
-                return;
-            }
-
-            registry?.RemoveFromGrid(this);
-            BecameErasureGhost?.Invoke(this);
         }
 
         public void OnBottomSupportLost(DiceController removedBottom) {
@@ -1369,14 +1428,6 @@ namespace DiceGame.Gameplay
             }
         }
 
-        public void OnCeasedErasureGhost() {
-            if (IsErasureGhost || !IsSinkErasing) {
-                return;
-            }
-
-            registry?.RestoreToGrid(this);
-        }
-
         public void CompleteErasureFromOverride() {
             if (!IsErasing) {
                 return;
@@ -1433,6 +1484,27 @@ namespace DiceGame.Gameplay
             return true;
         }
 
+        /// <summary>
+        /// Floor-lift apex: occupy the player cell as real Top (match adjacency uses that slot).
+        /// Visual stay is still driven by carry follow; do not snap.
+        /// </summary>
+        public bool TryMountCarryAsTop(Vector2Int cell) {
+            if (!isCarried || registry == null || board == null || Capabilities.HasExpandedFootprint) {
+                return false;
+            }
+
+            registry.RemoveFromGrid(this);
+            currentState = new DiceState(
+                cell,
+                currentState.Orientation,
+                DiceStackTier.Top,
+                currentState.Kind);
+            registry.Place(this, cell, DiceStackTier.Top);
+            StateChanged?.Invoke(currentState);
+            carryTopMountMatchNotifier?.NotifyCarryTopMountCompleted(this);
+            return true;
+        }
+
         public bool TryPlaceAt(Vector2Int targetGrid, DiceStackTier targetTier, Vector3 fromWorld, Action onComplete) {
             if (!isCarried || isRolling || board == null || diceView == null || registry == null) {
                 return false;
@@ -1445,6 +1517,8 @@ namespace DiceGame.Gameplay
             StartLogicalBusy(
                 diceView.GetTransitionLogicalDuration(transition, board, registry),
                 () => {
+                    // Clear prior lift-mount occupancy before placing at the drop cell.
+                    registry.RemoveFromGrid(this);
                     currentState = toState;
                     isCarried = false;
                     registry.Place(this, targetGrid, targetTier);

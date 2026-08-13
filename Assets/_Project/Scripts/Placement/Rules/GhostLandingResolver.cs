@@ -62,9 +62,16 @@ namespace DiceGame.Placement
                 landingTier,
                 moverFrom.Kind);
 
-            if (!registry.TryGetDiceAt(targetCell, landingTier, out var landingGhost) || landingGhost == null) {
+            // Sink erasure ghost: still on grid for the player, but crushable by dice.
+            // Treat as empty here; Place/MoveDice → EvictErasingDiceAt removes it.
+            if (!registry.TryGetDiceAt(targetCell, landingTier, out var landingOccupant)
+                || landingOccupant == null
+                || GhostPlacementRules.IsCrushableByDicePlacement(landingOccupant)) {
                 return true;
             }
+
+            // Kind Ghost (幽霊ダイス) swap / promote paths below.
+            var landingGhost = landingOccupant;
 
             // Vertical: Top demoting onto ghost Bottom → same-cell promote.
             if (fromTier == DiceStackTier.Top

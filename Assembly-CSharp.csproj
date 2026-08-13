@@ -128,6 +128,7 @@
     <Compile Include="Assets\_Project\Scripts\Gameplay\AI\Domain\AiNavigationState.cs" />
     <Compile Include="Assets\_Project\Scripts\Placement\Movement\Grid\DiceSlidePassability.cs" />
     <Compile Include="Assets\_Project\Scripts\Board\Board.cs" />
+    <Compile Include="Assets\_Project\Scripts\Gameplay\Match\ICarryTopMountMatchNotifier.cs" />
     <Compile Include="Assets\_Project\Scripts\Gameplay\AI\Domain\MatchGoalFailureMemory.cs" />
     <Compile Include="Assets\_Project\Scripts\Gameplay\Match\DiceMatchFinder.cs" />
     <Compile Include="Assets\_Project\Scripts\Config\MatchSeriesHudSettings.cs" />
@@ -280,6 +281,7 @@
     <Compile Include="Assets\_Project\Scripts\Core\Motion\DiceGridRollLimits.cs" />
     <Compile Include="Assets\_Project\Scripts\Versus\JumboDiceSequenceController.cs" />
     <Compile Include="Assets\_Project\Scripts\Session\MatchSetupPersistDto.cs" />
+    <Compile Include="Assets\_Project\Scripts\Placement\Rules\HorizontalEntryPolicy.cs" />
     <Compile Include="Assets\_Project\Scripts\Config\DiceErasureSettings.cs" />
     <Compile Include="Assets\_Project\Scripts\Gameplay\Match\DiceMatchErasureSystem.cs" />
     <Compile Include="Assets\_Project\Scripts\Core\Model\DiceStackTier.cs" />

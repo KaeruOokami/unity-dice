@@ -11,6 +11,14 @@ namespace DiceGame.Placement
             return dice != null && dice.EffectiveBehavior.IsPlayerPassThrough;
         }
 
+        /// <summary>
+        /// Sink erasure ghost stays player-solid but may be overwritten by dice Place/Move
+        /// (<see cref="DiceRegistry.EvictErasingDiceAt"/>).
+        /// </summary>
+        public static bool IsCrushableByDicePlacement(DiceController dice) {
+            return dice != null && dice.IsErasureGhost;
+        }
+
         public static bool AllowsDiceSwapThrough(DiceController dice) {
             return dice != null && dice.Capabilities.AllowsDiceSwapThrough;
         }
@@ -38,7 +46,9 @@ namespace DiceGame.Placement
         }
 
         /// <summary>
-        /// Bottom slot is free for solid occupancy (ghosts do not occupy for collision).
+        /// Bottom slot is free for solid dice landing.
+        /// Kind-ghost pass-through and sink erasure ghosts (crushable) do not block.
+        /// Player occupancy still uses <see cref="HasSolidBottomAt"/> (sink ghost remains solid).
         /// </summary>
         public static bool CanPlaceSolidBottomAt(DiceRegistry registry, Vector2Int cell) {
             if (registry == null || registry.Board == null
@@ -47,7 +57,10 @@ namespace DiceGame.Placement
                 return false;
             }
 
-            if (HasSolidBottomAt(registry, cell)) {
+            if (registry.TryGetBottomAt(cell, out var bottom)
+                && bottom != null
+                && !IsPlayerPassThrough(bottom)
+                && !IsCrushableByDicePlacement(bottom)) {
                 return false;
             }
 
@@ -64,6 +77,7 @@ namespace DiceGame.Placement
         /// Top slot is free for solid dice landing: solid Bottom present, no solid Top,
         /// and no pending Top spawn (falling spawn reserves the slot for dice moves).
         /// Jumbo only accepts Top dice in Bottom-only sink stage (≤ half height).
+        /// Sink erasure ghost Bottom is crushable Bottom-land only — not a stack base.
         /// </summary>
         public static bool CanPlaceSolidTopAt(DiceRegistry registry, Vector2Int cell) {
             if (registry == null
@@ -74,10 +88,15 @@ namespace DiceGame.Placement
             }
 
             if (registry.TryGetBottomAt(cell, out var bottom)
-                && bottom != null
-                && bottom.Capabilities.HasExpandedFootprint
-                && bottom.WantsJumboTopOccupancy) {
-                return false;
+                && bottom != null) {
+                if (IsCrushableByDicePlacement(bottom)) {
+                    return false;
+                }
+
+                if (bottom.Capabilities.HasExpandedFootprint
+                    && bottom.WantsJumboTopOccupancy) {
+                    return false;
+                }
             }
 
             return true;
@@ -95,17 +114,11 @@ namespace DiceGame.Placement
         }
 
         /// <summary>
-        /// Player may walk this cell as floor when no solid dice occupy it (ghosts are not obstacles).
+        /// Player on floor may walk this cell when Bottom is clear.
+        /// Top-only occupancy (e.g. lift-mounted radiance) does not block floor entry.
         /// </summary>
         public static bool IsPlayerFloorPassable(DiceRegistry registry, Vector2Int cell) {
-            if (registry == null) {
-                return false;
-            }
-
-            return !HasSolidTopAt(registry, cell) && !HasSolidBottomAt(registry, cell)
-                && !(registry.TryGetPendingBottomAt(cell, out var pending)
-                    && pending != null
-                    && !IsPlayerPassThrough(pending));
+            return HorizontalEntryPolicy.IsBottomSlotClearForFloorEntry(registry, cell);
         }
 
         /// <summary>

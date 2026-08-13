@@ -37,6 +37,7 @@ namespace DiceGame.Placement
 
         /// <summary>
         /// Occupancy for roll path ranks: pass-through dice do not count as solid.
+        /// Sink erasure ghosts are player-solid but crushable — treat as Floor for dice landing.
         /// Pending Top spawn reserves Top for dice landing (same as occupied Top).
         /// </summary>
         public bool TryGetOccupancyTier(Vector2Int cell, out CellOccupancyTier tier) {
@@ -51,7 +52,11 @@ namespace DiceGame.Placement
                 return true;
             }
 
-            if (GhostPlacementRules.HasSolidBottomAt(registry, cell)) {
+            if (registry != null
+                && registry.TryGetBottomAt(cell, out var bottom)
+                && bottom != null
+                && !GhostPlacementRules.IsPlayerPassThrough(bottom)
+                && !GhostPlacementRules.IsCrushableByDicePlacement(bottom)) {
                 tier = CellOccupancyTier.Bottom;
                 return true;
             }

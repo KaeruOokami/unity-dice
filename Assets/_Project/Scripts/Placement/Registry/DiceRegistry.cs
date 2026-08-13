@@ -59,7 +59,16 @@ namespace DiceGame.Placement
                 return false;
             }
 
-            return !HasBottomAt(gridPos) && !HasPendingBottomAt(gridPos);
+            if (HasPendingBottomAt(gridPos)) {
+                return false;
+            }
+
+            if (!TryGetBottomAt(gridPos, out var bottom) || bottom == null) {
+                return true;
+            }
+
+            // Sink erasure ghost: player-solid, crushable by dice Place/Move (EvictErasingDiceAt).
+            return GhostPlacementRules.IsCrushableByDicePlacement(bottom);
         }
 
         public bool CanPlaceTopDiceAt(Vector2Int gridPos) {
@@ -108,18 +117,6 @@ namespace DiceGame.Placement
             }
 
             Remove(dice, dice.CurrentState.GridPos, dice.CurrentState.Tier);
-        }
-
-        public void RestoreToGrid(DiceController dice) {
-            if (dice == null || dice.IsErasureGhost) {
-                return;
-            }
-
-            if (!allDice.Contains(dice)) {
-                allDice.Add(dice);
-            }
-
-            SetDiceAt(dice.CurrentState.GridPos, dice, dice.CurrentState.Tier);
         }
 
         public void EvictErasingDiceAt(Vector2Int gridPos) {
@@ -848,8 +845,7 @@ namespace DiceGame.Placement
 
             if (tier == DiceStackTier.Bottom
                 && stack.Bottom != null
-                && stack.Bottom != dice
-                && !stack.Bottom.IsErasureGhost) {
+                && stack.Bottom != dice) {
                 Debug.LogError(
                     $"DiceRegistry: overwriting bottom at ({gridPos.x},{gridPos.y}) " +
                     $"existing={stack.Bottom.name} incoming={dice?.name}");

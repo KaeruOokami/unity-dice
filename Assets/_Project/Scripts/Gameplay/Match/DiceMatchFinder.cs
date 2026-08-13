@@ -336,7 +336,16 @@ namespace DiceGame.Gameplay
         }
 
         static bool IsMatchEligible(DiceController dice) {
-            return !dice.IsSpawning && !dice.IsRolling;
+            if (dice == null || dice.IsRolling) {
+                return false;
+            }
+
+            // Bottom emergence may match mid-appear; fall-from-above stays ineligible.
+            if (dice.IsSpawning && !dice.AllowsUnconditionalMount) {
+                return false;
+            }
+
+            return true;
         }
 
         static DiceMatchCluster FloodFillBridged(

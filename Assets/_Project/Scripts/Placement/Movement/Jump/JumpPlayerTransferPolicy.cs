@@ -66,8 +66,15 @@ namespace DiceGame.Placement
                 && RequiresJumpForLowerLevelTransfer(standingDice);
         }
 
+        /// <summary>
+        /// Jump may descend from sink-erasing / immovable player-only dice (Iron, etc.).
+        /// Spawning dice stay locked for both walk and jump until appear completes.
+        /// </summary>
         public static bool CanUsePlayerOnlyLowerLevelJump(bool isJumping, DiceController standingDice) {
-            return isJumping && RequiresJumpForLowerLevelTransfer(standingDice);
+            return isJumping
+                && standingDice != null
+                && !standingDice.IsSpawning
+                && RequiresJumpForLowerLevelTransfer(standingDice);
         }
 
         /// <summary>

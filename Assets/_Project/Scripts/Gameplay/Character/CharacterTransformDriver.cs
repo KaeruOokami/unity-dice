@@ -147,7 +147,7 @@ namespace DiceGame.Gameplay.Character
                 return;
             }
 
-            AlignToDiceFaceAtCenter(dice.GetLogicalCenterWorld(), nextXZ, halfExtent);
+            AlignToDiceFaceAtCenter(dice.GetPresentationCenterWorld(), nextXZ, halfExtent);
         }
 
         /// <summary>

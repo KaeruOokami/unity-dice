@@ -18,7 +18,6 @@ namespace DiceGame.Config
         [Range(0f, 1f)]
         [SerializeField] float rollCancelWindowProgress = 0.1f;
         [SerializeField] float pushInputAlignment = 0.7f;
-        [SerializeField] float carryVerticalOffset = 1.05f;
         [Range(0f, 1f)]
         [SerializeField] float jumpLandingSinkAdvance = 0.1f;
         [SerializeField] bool debugMovementBlock;
@@ -41,7 +40,6 @@ namespace DiceGame.Config
         public float DissolveDescentHoldDuration => dissolveDescentHoldDuration;
         public float RollCancelWindowProgress => rollCancelWindowProgress;
         public float PushInputAlignment => pushInputAlignment;
-        public float CarryVerticalOffset => carryVerticalOffset;
         public float JumpLandingSinkAdvance => jumpLandingSinkAdvance;
         public bool DebugMovementBlock => debugMovementBlock;
         public bool DebugPush => debugPush;

@@ -48,7 +48,6 @@ namespace DiceGame.View
         /// </summary>
         DiceKind visualKind = DiceKind.Normal;
         bool hasVisualKind;
-        bool wasErasureGhost;
         readonly List<Material> dissolveMaterials = new();
         readonly List<Color> dissolveMaterialBaseColors = new();
         readonly List<Color> dissolveMaterialBaseEmissionColors = new();
@@ -391,8 +390,47 @@ namespace DiceGame.View
                 return 0f;
             }
 
-            ComputeVerticalExtents(board, currentTopFace, 1f - erasureProgress, out _, out var maxY);
+            ComputeVerticalExtents(board, currentTopFace, ResolvePresentationSquash(), out _, out var maxY);
             return positionRoot.position.y + maxY;
+        }
+
+        public Vector3 GetPresentationCenterWorld(Board board) {
+            return GetPresentationPushBounds(board).center;
+        }
+
+        public Bounds GetPresentationPushBounds(Board board) {
+            if (positionRoot == null || board == null) {
+                return new Bounds(Vector3.zero, Vector3.one);
+            }
+
+            ResolvePresentationExtents(board, out var minY, out var maxY);
+            var footprint = ResolveVisualCapabilities().HasExpandedFootprint
+                ? JumboFootprint.Size
+                : 1;
+            var horizontalSize = board.CellSize * footprint;
+            var worldMinY = positionRoot.position.y + minY;
+            var worldMaxY = positionRoot.position.y + maxY;
+            var center = new Vector3(
+                positionRoot.position.x,
+                (worldMinY + worldMaxY) * 0.5f,
+                positionRoot.position.z);
+            return new Bounds(center, new Vector3(horizontalSize, worldMaxY - worldMinY, horizontalSize));
+        }
+
+        public void SyncPushBodyToPresentation(Board board) {
+            EnsurePushBody();
+            if (pushBody == null || board == null || positionRoot == null) {
+                return;
+            }
+
+            ResolvePresentationExtents(board, out var minY, out var maxY);
+            var footprint = ResolveVisualCapabilities().HasExpandedFootprint
+                ? JumboFootprint.Size
+                : 1;
+            var horizontalSize = board.CellSize * footprint;
+            pushBody.ApplyLocalBounds(
+                new Vector3(0f, (minY + maxY) * 0.5f, 0f),
+                new Vector3(horizontalSize, maxY - minY, horizontalSize));
         }
 
         public float GetLogicalTopSurfaceWorldY(Board board) {
@@ -429,7 +467,6 @@ namespace DiceGame.View
             isAnimating = false;
             erasureProgress = 0f;
             erasureBoard = null;
-            wasErasureGhost = false;
             activeErasureKind = ErasureKind.None;
             visualYOffset = 0f;
             currentTopFace = state.Orientation.Top;
@@ -776,6 +813,8 @@ namespace DiceGame.View
 
             positionRoot.SetParent(transform, true);
             positionRoot.position = worldPosition;
+            EnsureDiceController();
+            SyncPushBodyToPresentation(diceController != null ? diceController.Board : null);
         }
 
         public void ApplyVisualYOffset(Board board, float offset) {
@@ -802,7 +841,8 @@ namespace DiceGame.View
             Board board,
             DiceRegistry registry,
             Color? emissionColorOverride,
-            Action onComplete) {
+            Action onComplete,
+            float startProgress = 0f) {
             if (kind == ErasureKind.None) {
                 Debug.LogError("DiceView: PlayErasure requires Sink or Radiance.");
                 onComplete?.Invoke();
@@ -831,6 +871,12 @@ namespace DiceGame.View
             erasureEmissionColorOverride = emissionColorOverride;
             currentTopFace = state.Orientation.Top;
             erasureBoard = board;
+            // Mid-emergence match: continue sink from the appear squash height (same progress scale).
+            erasureProgress = kind == ErasureKind.Sink ? Mathf.Clamp01(startProgress) : 0f;
+            if (erasureProgress > 0f) {
+                ApplyErasureVisual(board, erasureProgress);
+            }
+
             erasureCoroutine = StartCoroutine(ErasureCoroutine(board, kind, onComplete));
         }
 
@@ -1235,18 +1281,21 @@ namespace DiceGame.View
                     : networkFromSurfaceY;
             }
 
-            var baseY = board.FloorSurfaceWorldY;
-            if (state.Tier == DiceStackTier.Top
-                && registry != null
+            if (state.Tier != DiceStackTier.Top) {
+                return board.FloorSurfaceWorldY;
+            }
+
+            // Top on a Bottom follows that support (jumbo sink stage included).
+            if (registry != null
                 && registry.TryGetBottomAt(state.GridPos, out var bottom)
                 && bottom != null) {
-                // Follow support standing height (jumbo sink stage included).
-                baseY = bottom.Capabilities.HasExpandedFootprint
+                return bottom.Capabilities.HasExpandedFootprint
                     ? bottom.GetLogicalStandingSurfaceWorldY(SurfaceHeightLevel.Bottom)
                     : bottom.GetLogicalTopSurfaceWorldY();
             }
 
-            return baseY;
+            // Top without Bottom (e.g. floor-lift mount): one cell above the floor.
+            return board.FloorSurfaceWorldY + board.CellSize;
         }
 
         void RaiseVisualMotion(DiceVisualMotionRequest request) {
@@ -1781,7 +1830,6 @@ namespace DiceGame.View
 
             erasureProgress = 0f;
             erasureBoard = null;
-            wasErasureGhost = false;
             activeErasureKind = ErasureKind.None;
             visualYOffset = 0f;
             currentTopFace = state.Orientation.Top;
@@ -1867,7 +1915,6 @@ namespace DiceGame.View
                 yield break;
             }
 
-            wasErasureGhost = false;
             visualYOffset = 0f;
             currentTopFace = state.Orientation.Top;
             positionRoot.SetParent(transform);
@@ -2032,6 +2079,7 @@ namespace DiceGame.View
                 ApplyErasureEmission(GetRadianceEmissionFactor(progress));
                 EnsurePushBody();
                 pushBody?.SetCollisionEnabled(true);
+                SyncPushBodyToPresentation(board);
                 return;
             }
 
@@ -2040,6 +2088,7 @@ namespace DiceGame.View
             SyncStackedTopDuringErasure();
             EnsureDiceController();
             diceController?.NotifyErasureProgressChanged();
+            SyncPushBodyToPresentation(board);
         }
 
         /// <summary>
@@ -2108,25 +2157,12 @@ namespace DiceGame.View
         }
 
         void ApplySinkGhostVisual(float progress) {
+            // Ghost threshold is visual only (alpha / emission). Collision and grid occupancy stay.
             var suppressGhost = ResolveVisualCapabilities().SuppressesErasureGhost;
             ApplyErasureAlpha(progress, allowGhostAlpha: !suppressGhost);
             ApplyErasureEmission(progress);
             EnsurePushBody();
-            // Jumbo keeps collision until fully erased.
-            pushBody?.SetCollisionEnabled(suppressGhost || !IsErasureGhost);
-
-            if (suppressGhost) {
-                return;
-            }
-
-            EnsureDiceController();
-            if (IsErasureGhost && !wasErasureGhost) {
-                wasErasureGhost = true;
-                diceController?.OnBecameErasureGhost();
-            } else if (!IsErasureGhost && wasErasureGhost) {
-                wasErasureGhost = false;
-                diceController?.OnCeasedErasureGhost();
-            }
+            pushBody?.SetCollisionEnabled(true);
         }
 
         void ResetErasureVisuals() {
@@ -2135,7 +2171,6 @@ namespace DiceGame.View
             erasureEmissionColorOverride = null;
             EnsurePushBody();
             pushBody?.SetCollisionEnabled(true);
-            wasErasureGhost = false;
             activeErasureKind = ErasureKind.None;
         }
 
@@ -2348,6 +2383,16 @@ namespace DiceGame.View
                 Mathf.Abs(axis.x) > 0.5f ? squash : 1f,
                 Mathf.Abs(axis.y) > 0.5f ? squash : 1f,
                 Mathf.Abs(axis.z) > 0.5f ? squash : 1f);
+        }
+
+        float ResolvePresentationSquash() {
+            return activeErasureKind == ErasureKind.Sink && erasureProgress > 0f
+                ? 1f - erasureProgress
+                : 1f;
+        }
+
+        void ResolvePresentationExtents(Board board, out float minY, out float maxY) {
+            ComputeVerticalExtents(board, currentTopFace, ResolvePresentationSquash(), out minY, out maxY);
         }
 
         void ComputeVerticalExtents(Board board, int topFace, float squash, out float minY, out float maxY) {

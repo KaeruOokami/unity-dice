@@ -107,7 +107,7 @@ namespace DiceGame.Gameplay.Coupling
             }
 
             var dice = standing.CurrentDice;
-            var toCenter = dice.GetLogicalCenterWorld();
+            var toCenter = dice.GetPresentationCenterWorld();
             var fromCenter = session.DiceCenterAnchor;
             var progress = dice.IsMotionFollowActive ? dice.LogicalMotionProgress : 1f;
             var diceCenter = Vector3.Lerp(fromCenter, toCenter, progress);
@@ -156,7 +156,7 @@ namespace DiceGame.Gameplay.Coupling
 
             ClearRollCancelSession();
             session.JumpDiceGridMoved = false;
-            var diceCenter = standing.CurrentDice.GetLogicalCenterWorld();
+            var diceCenter = standing.CurrentDice.GetPresentationCenterWorld();
             var charPos = transformDriver.GetWorldXZ();
             BeginFollow(
                 new Vector3(charPos.x, 0f, charPos.y),
@@ -376,7 +376,7 @@ namespace DiceGame.Gameplay.Coupling
             standing.SetOnDice(toState.GridPos, toState.Tier, dice);
 
             transformDriver.AlignToDiceFace(dice, nextXZ, halfExtent);
-            var diceCenter = dice.GetLogicalCenterWorld();
+            var diceCenter = dice.GetPresentationCenterWorld();
             var charPos = transformDriver.GetWorldXZ();
             BeginFollow(
                 new Vector3(charPos.x, 0f, charPos.y),
@@ -618,7 +618,7 @@ namespace DiceGame.Gameplay.Coupling
                 return;
             }
 
-            var diceCenter = standing.CurrentDice.GetLogicalCenterWorld();
+            var diceCenter = standing.CurrentDice.GetPresentationCenterWorld();
             var charPos = transformDriver.GetWorldXZ();
             BeginFollow(
                 new Vector3(charPos.x, 0f, charPos.y),

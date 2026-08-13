@@ -33,6 +33,14 @@ namespace DiceGame.Gameplay
             ownershipContext?.SetOwner(dice, owner);
         }
 
+        public void AssignOwner(DiceController dice, PlayerSlot owner) {
+            if (dice == null || dice.IsSpawning) {
+                return;
+            }
+
+            ownershipContext?.SetOwner(dice, owner);
+        }
+
         public void RegisterActionDice(IReadOnlyList<DiceController> diceList, PlayerSlot owner) {
             if (diceList == null) {
                 return;
