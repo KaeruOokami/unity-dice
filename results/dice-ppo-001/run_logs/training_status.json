@@ -2,22 +2,31 @@
     "DiceBehavior": {
         "checkpoints": [
             {
-                "steps": 8096,
-                "file_path": "results\\dice-ppo-001\\DiceBehavior\\DiceBehavior-8096.onnx",
-                "reward": -0.25,
-                "creation_time": 1786599720.0880117,
+                "steps": 499961,
+                "file_path": "results\\dice-ppo-001\\DiceBehavior\\DiceBehavior-499961.onnx",
+                "reward": null,
+                "creation_time": 1786627572.6942277,
                 "auxillary_file_paths": [
-                    "results\\dice-ppo-001\\DiceBehavior\\DiceBehavior-8096.pt"
+                    "results\\dice-ppo-001\\DiceBehavior\\DiceBehavior-499961.pt"
+                ]
+            },
+            {
+                "steps": 500025,
+                "file_path": "results\\dice-ppo-001\\DiceBehavior\\DiceBehavior-500025.onnx",
+                "reward": null,
+                "creation_time": 1786627572.7560425,
+                "auxillary_file_paths": [
+                    "results\\dice-ppo-001\\DiceBehavior\\DiceBehavior-500025.pt"
                 ]
             }
         ],
         "final_checkpoint": {
-            "steps": 8096,
+            "steps": 500025,
             "file_path": "results\\dice-ppo-001\\DiceBehavior.onnx",
-            "reward": -0.25,
-            "creation_time": 1786599720.0880117,
+            "reward": null,
+            "creation_time": 1786627572.7560425,
             "auxillary_file_paths": [
-                "results\\dice-ppo-001\\DiceBehavior\\DiceBehavior-8096.pt"
+                "results\\dice-ppo-001\\DiceBehavior\\DiceBehavior-500025.pt"
             ]
         }
     },

@@ -23,7 +23,7 @@ namespace DiceGame.Gameplay
         readonly List<DiceController> pendingTierFallMatches = new();
         readonly List<DiceController> pendingCarryTopMountMatches = new();
 
-        IVersusBoardSettings versusSettings;
+        IBoardSettings versusSettings;
         DiceErasureSettings erasureSettings;
         SinkingGroupTracker sinkingGroups;
         DiceMatchOwnershipContext ownershipContext;
@@ -62,7 +62,7 @@ namespace DiceGame.Gameplay
             sinkingGroups = board != null ? new SinkingGroupTracker() : null;
         }
 
-        public void ConfigureVersusAttack(IVersusBoardSettings settings) {
+        public void ConfigureVersusAttack(IBoardSettings settings) {
             versusSettings = settings;
             versusAttackEnabled = settings != null && board != null && board.IsVersusArena;
             if (versusAttackEnabled && sinkingGroups == null) {
@@ -478,10 +478,6 @@ namespace DiceGame.Gameplay
             int face,
             SinkingChainResult chainResult,
             int clusterSize) {
-            if (!versusAttackEnabled || versusSettings == null) {
-                return;
-            }
-
             var target = SinkingChainResolver.GetOpponent(attacker);
             ErasureResolved?.Invoke(new ErasureResolvedEvent(
                 attacker,

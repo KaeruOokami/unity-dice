@@ -6,12 +6,12 @@ namespace DiceGame.Grid
 {
     public class Board : MonoBehaviour, IBoard
     {
-        [SerializeField] int width = 5;
-        [SerializeField] int height = 5;
         [SerializeField] float cellSize = 1.4f;
 
         [SerializeField] float floorSurfaceWorldY;
 
+        int width = 1;
+        int height = 1;
         CellType[,] cells;
         VersusArenaLayout versusLayout;
 
@@ -29,12 +29,12 @@ namespace DiceGame.Grid
         }
 
         void OnValidate() {
-            width = Mathf.Max(1, width);
-            height = Mathf.Max(1, height);
             cellSize = Mathf.Max(0.01f, cellSize);
         }
 
-        public void ConfigureStandardArena() {
+        public void ConfigureStandardArena(int arenaWidth, int arenaHeight) {
+            width = Mathf.Max(1, arenaWidth);
+            height = Mathf.Max(1, arenaHeight);
             versusLayout = null;
             InitializeCells();
         }

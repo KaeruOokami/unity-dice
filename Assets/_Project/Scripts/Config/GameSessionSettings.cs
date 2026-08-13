@@ -1,4 +1,5 @@
 using UnityEngine;
+using UnityEngine.Serialization;
 
 namespace DiceGame.Config
 {
@@ -21,19 +22,20 @@ namespace DiceGame.Config
     public sealed class GameSessionSettings : ScriptableObject
     {
         [SerializeField] GameMode gameMode = GameMode.Single;
-        [SerializeField] VersusBoardSettings versusBoardSettings;
+        [FormerlySerializedAs("versusBoardSettings")]
+        [SerializeField] BoardSettings boardSettings;
 
         public GameMode GameMode => gameMode;
-        public VersusBoardSettings VersusBoardSettings => versusBoardSettings;
+        public BoardSettings BoardSettings => boardSettings;
 
         public int RequiredPlayerCount =>
             gameMode == GameMode.Single ? 1 : 2;
 
         public bool TryValidate(out string errorMessage)
         {
-            if (GameModeRules.IsVersusLike(gameMode) && versusBoardSettings == null)
+            if (boardSettings == null)
             {
-                errorMessage = "GameSessionSettings: Versus-like modes require VersusBoardSettings.";
+                errorMessage = "GameSessionSettings: BoardSettings is required.";
                 return false;
             }
 

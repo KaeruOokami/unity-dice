@@ -53,6 +53,7 @@
   <ItemGroup>
     <Compile Include="Assets\_Project\Scripts\Editor\SelectScene.cs" />
     <Compile Include="Assets\TutorialInfo\Scripts\Editor\ReadmeEditor.cs" />
+    <Compile Include="Assets\_Project\Scripts\Editor\MlAgentsProtobufPluginFix.cs" />
     <Compile Include="Assets\_Project\Scripts\Editor\DiceEntityPrefabCreator.cs" />
     <Compile Include="Assets\_Project\Tests\Editor\MoveActionSelectorTests.cs" />
     <Compile Include="Assets\_Project\Scripts\Editor\SessionSetupMenu.cs" />

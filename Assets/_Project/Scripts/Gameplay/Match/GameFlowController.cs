@@ -225,9 +225,9 @@ namespace DiceGame.Gameplay
                 return Mathf.Max(1, setup.WinsToWin);
             }
 
-            if (sessionSettings?.VersusBoardSettings != null)
+            if (sessionSettings?.BoardSettings != null)
             {
-                return sessionSettings.VersusBoardSettings.WinsToWin;
+                return sessionSettings.BoardSettings.WinsToWin;
             }
 
             return 1;
@@ -246,8 +246,8 @@ namespace DiceGame.Gameplay
                 }
             }
 
-            return targetSessionSettings != null && targetSessionSettings.VersusBoardSettings != null
-                ? targetSessionSettings.VersusBoardSettings.RoundEndDelaySeconds
+            return targetSessionSettings != null && targetSessionSettings.BoardSettings != null
+                ? targetSessionSettings.BoardSettings.RoundEndDelaySeconds
                 : 0f;
         }
 

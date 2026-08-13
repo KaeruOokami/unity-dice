@@ -186,14 +186,14 @@ namespace DiceGame.Gameplay
                 playerInputSettings,
                 session?.CurrentSetup);
 
-            if (GameModeRules.IsVersusLike(resolvedSetup.GameMode)) {
-                if (resolvedSetup.VersusBoardSettings == null) {
-                    Debug.LogError("GameBootstrap: Versus board settings are invalid.");
-                    AbortPendingSessionStart();
-                    return;
-                }
+            if (resolvedSetup.BoardSettings == null) {
+                Debug.LogError("GameBootstrap: BoardSettings is not assigned.");
+                AbortPendingSessionStart();
+                return;
+            }
 
-                if (!resolvedSetup.VersusBoardSettings.TryValidate(out var versusError)) {
+            if (GameModeRules.IsVersusLike(resolvedSetup.GameMode)) {
+                if (!resolvedSetup.BoardSettings.TryValidate(out var versusError)) {
                     Debug.LogError($"GameBootstrap: {versusError}");
                     AbortPendingSessionStart();
                     return;
@@ -344,7 +344,7 @@ namespace DiceGame.Gameplay
 
             attackController = null;
             if (GameModeRules.IsVersusLike(resolvedSetup.GameMode)) {
-                var versusSettings = resolvedSetup.VersusBoardSettings;
+                var versusSettings = resolvedSetup.BoardSettings;
                 erasureSystem.ConfigureVersusAttack(versusSettings);
                 oneVanishSystem.ConfigureVersusAttack(versusSettings);
 
@@ -542,14 +542,16 @@ namespace DiceGame.Gameplay
             errorMessage = null;
 
             if (GameModeRules.IsVersusLike(resolvedSetup.GameMode)) {
-                var versusSettings = resolvedSetup.VersusBoardSettings;
+                var versusSettings = resolvedSetup.BoardSettings;
                 if (!versusSettings.TryValidate(out errorMessage)) {
                     return false;
                 }
 
                 board.ConfigureVersusArena(versusSettings.CreateLayout());
             } else {
-                board.ConfigureStandardArena();
+                board.ConfigureStandardArena(
+                    resolvedSetup.BoardSettings.SingleWidth,
+                    resolvedSetup.BoardSettings.SingleHeight);
             }
 
             boardView?.RebuildFloor();
@@ -560,7 +562,7 @@ namespace DiceGame.Gameplay
             errorMessage = null;
 
             if (GameModeRules.IsVersusLike(resolvedSetup.GameMode)) {
-                var versusSettings = resolvedSetup.VersusBoardSettings;
+                var versusSettings = resolvedSetup.BoardSettings;
                 spawnSystem.Configure(
                     board,
                     registry,
@@ -698,7 +700,7 @@ namespace DiceGame.Gameplay
 
             characterController.SetInputSource(aiInput);
 
-            switch (aiPlayerSettings.ControlMode) {
+            switch (ResolveAiControlMode()) {
                 case AiControlMode.MlAgent:
                     ConfigureMlAgentControl(characterObject, characterController, aiInput);
                     break;
@@ -707,6 +709,10 @@ namespace DiceGame.Gameplay
                     ConfigureRuleAiControl(characterObject, characterController, aiInput);
                     break;
             }
+        }
+
+        AiControlMode ResolveAiControlMode() {
+            return LaunchArgs.ForceMlAgent ? AiControlMode.MlAgent : aiPlayerSettings.ControlMode;
         }
 
         void ConfigureRuleAiControl(
@@ -740,6 +746,11 @@ namespace DiceGame.Gameplay
                 brain.enabled = false;
             }
 
+            if (board == null) {
+                Debug.LogError("GameBootstrap: Board is not assigned; cannot size ML observations.");
+                return;
+            }
+
             var behaviorParameters = characterObject.GetComponent<BehaviorParameters>();
             if (behaviorParameters == null) {
                 behaviorParameters = characterObject.AddComponent<BehaviorParameters>();
@@ -747,7 +758,7 @@ namespace DiceGame.Gameplay
 
             behaviorParameters.BehaviorName = mlSettings.BehaviorName;
             behaviorParameters.BrainParameters.VectorObservationSize =
-                MlObservationEncoder.GetObservationSize(mlSettings.MaxObservedDice);
+                MlObservationEncoder.GetObservationSize(board);
             behaviorParameters.BrainParameters.ActionSpec =
                 ActionSpec.MakeDiscrete(MlDiscreteActions.Count);
 

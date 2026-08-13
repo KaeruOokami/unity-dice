@@ -65,6 +65,11 @@ namespace DiceGame.Session
                 return;
             }
 
+            if (LaunchArgs.IsTrainingLaunch) {
+                StartTrainingLocalPlay();
+                return;
+            }
+
             ResetToTitleState();
 
             if (!showLobbyOnStart) {
@@ -417,6 +422,44 @@ namespace DiceGame.Session
             } finally {
                 busy = false;
             }
+        }
+
+        void StartTrainingLocalPlay() {
+            if (matchSetupPresetRegistry == null) {
+                Debug.LogError("SessionController: Training launch requires MatchSetupPresetRegistry.");
+                ResetToTitleState();
+                titleMenuUi?.ShowMainPanel();
+                return;
+            }
+
+            var snapshot = matchSetupPresetRegistry.CreateDefaultSnapshot(LaunchArgs.TrainingGameMode);
+            if (snapshot == null) {
+                Debug.LogError("SessionController: Training launch setup is invalid. Snapshot is null.");
+                ResetToTitleState();
+                titleMenuUi?.ShowMainPanel();
+                return;
+            }
+
+            LaunchArgs.ApplyTrainingPlayerSetup(snapshot);
+
+            if (!snapshot.TryValidate(matchSetupPresetRegistry, out var error)) {
+                Debug.LogError($"SessionController: Training launch setup is invalid. {error}");
+                ResetToTitleState();
+                titleMenuUi?.ShowMainPanel();
+                return;
+            }
+
+            if (snapshot.GameMode == GameMode.Challenge) {
+                ChallengeRunState.Clear();
+            }
+
+            SessionState.Instance.SetCurrentSetup(snapshot);
+            SessionState.Instance.SetPlayMode(SessionPlayMode.Local);
+            SessionState.Instance.SetStatus("Starting training play.");
+            ShowGameplayWorld();
+            titleMenuUi?.Hide();
+            ApplyLocalBindingOverrides();
+            SessionState.Instance.RequestMatchStart();
         }
 
         void ResumeMatchAfterReload(SessionPlayMode resumePlayMode) {

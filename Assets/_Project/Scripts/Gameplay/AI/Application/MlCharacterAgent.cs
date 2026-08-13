@@ -6,6 +6,7 @@ using DiceGame.Gameplay.AI.Domain;
 using DiceGame.Grid;
 using DiceGame.Placement;
 using DiceGame.Session;
+using DiceGame.Versus;
 using Unity.MLAgents;
 using Unity.MLAgents.Actuators;
 using Unity.MLAgents.Sensors;
@@ -25,11 +26,13 @@ namespace DiceGame.Gameplay.AI.Application
         AiCharacterInputSource inputSource;
         MlAgentSettings settings;
         GameFlowController gameFlow;
+        DiceMatchErasureSystem erasureSystem;
         float[] observationBuffer;
         readonly AiDebugOverlaySnapshot debugOverlay = new AiDebugOverlaySnapshot();
 
         int lastActionId = MlDiscreteActions.Wait;
         int stepsThisEpisode;
+        float lastProgressScore;
         bool pulseConsumed;
         bool episodeClosing;
         bool hasPendingClose;
@@ -60,15 +63,18 @@ namespace DiceGame.Gameplay.AI.Application
 
             // Episode length is owned here so timeout rewards can be applied before EndEpisode.
             MaxStep = 0;
-            observationBuffer = new float[MlObservationEncoder.GetObservationSize(settings.MaxObservedDice)];
+            observationBuffer = new float[MlObservationEncoder.GetObservationSize(
+                registry != null ? registry.Board : null)];
             lastActionId = MlDiscreteActions.Wait;
             stepsThisEpisode = 0;
+            lastProgressScore = 0f;
             pulseConsumed = false;
             episodeClosing = false;
             hasPendingClose = false;
             pendingStepCell = null;
             AiDebugLog.Enabled = settings.DebugLog;
             BindGameFlow();
+            BindErasureSystem();
             EnsureDebugOverlayGizmo();
             LazyInitialize();
         }
@@ -76,17 +82,20 @@ namespace DiceGame.Gameplay.AI.Application
         protected override void OnEnable() {
             base.OnEnable();
             BindGameFlow();
+            BindErasureSystem();
         }
 
         protected override void OnDisable() {
             CancelPendingClose();
             UnbindGameFlow();
+            UnbindErasureSystem();
             base.OnDisable();
         }
 
         public override void OnEpisodeBegin() {
             lastActionId = MlDiscreteActions.Wait;
             stepsThisEpisode = 0;
+            lastProgressScore = CaptureProgressScore();
             pulseConsumed = false;
             episodeClosing = false;
             hasPendingClose = false;
@@ -96,7 +105,9 @@ namespace DiceGame.Gameplay.AI.Application
 
         public override void CollectObservations(VectorSensor sensor) {
             if (character == null || registry == null || settings == null || observationBuffer == null) {
-                WriteZeros(sensor, MlObservationEncoder.GetObservationSize(settings != null ? settings.MaxObservedDice : 0));
+                WriteZeros(sensor, observationBuffer != null
+                    ? observationBuffer.Length
+                    : MlObservationEncoder.GetObservationSize(null));
                 return;
             }
 
@@ -104,7 +115,6 @@ namespace DiceGame.Gameplay.AI.Application
             MlObservationEncoder.Write(
                 snapshot,
                 registry.Board,
-                settings.MaxObservedDice,
                 observationBuffer);
             sensor.AddObservation(observationBuffer);
         }
@@ -129,9 +139,7 @@ namespace DiceGame.Gameplay.AI.Application
 
             ApplyAction(actionId);
             AddReward(settings.StepPenalty);
-            if (character.CurrentDice != null) {
-                AddReward(settings.StandingOnDieReward);
-            }
+            ApplyProgressShapingReward();
 
             stepsThisEpisode++;
             if (settings.MaxEpisodeSteps > 0 && stepsThisEpisode >= settings.MaxEpisodeSteps) {
@@ -162,6 +170,69 @@ namespace DiceGame.Gameplay.AI.Application
 
             var reward = ResolveTerminalReward(matchEnd);
             ScheduleEpisodeClose(reward, matchEnd.IsStandardGameOver ? "StandardGameOver" : "RoundEnd");
+        }
+
+        void OnErasureResolved(ErasureResolvedEvent erasureEvent) {
+            if (!isActiveAndEnabled || episodeClosing || hasPendingClose || settings == null || character == null) {
+                return;
+            }
+
+            if (erasureEvent.Attacker != character.PlayerSlot) {
+                return;
+            }
+
+            var reward = settings.ErasureBaseReward
+                + settings.ErasurePerClusterWeight * erasureEvent.ClusterSize;
+
+            if (erasureEvent.ChainCount > 1) {
+                reward += settings.ChainBonusPerLink * (erasureEvent.ChainCount - 1);
+            }
+
+            if (erasureEvent.IsSnatch) {
+                reward += settings.SnatchBonus;
+            }
+
+            AddReward(reward);
+            SyncProgressScoreBaseline();
+
+            if (settings.DebugLog) {
+                AiDebugLog.Log(
+                    $"MlErasure face={erasureEvent.Face} cluster={erasureEvent.ClusterSize} " +
+                    $"chain={erasureEvent.ChainCount} snatch={erasureEvent.IsSnatch} reward={reward}");
+            }
+        }
+
+        void ApplyProgressShapingReward() {
+            if (character == null || registry == null || settings == null || !settings.ProgressShapingEnabled) {
+                return;
+            }
+
+            var snapshot = GameStateSnapshot.Capture(character, registry);
+            var currentScore = MlProgressRewardEvaluator.ComputeProgressScore(snapshot, settings);
+            var growth = MlProgressRewardEvaluator.ComputeGrowthReward(currentScore, lastProgressScore);
+            if (growth > 0f) {
+                AddReward(growth);
+            }
+
+            var hold = MlProgressRewardEvaluator.ComputeHoldReward(currentScore, settings);
+            if (hold > 0f) {
+                AddReward(hold);
+            }
+
+            lastProgressScore = currentScore;
+        }
+
+        void SyncProgressScoreBaseline() {
+            lastProgressScore = CaptureProgressScore();
+        }
+
+        float CaptureProgressScore() {
+            if (character == null || registry == null || settings == null) {
+                return 0f;
+            }
+
+            var snapshot = GameStateSnapshot.Capture(character, registry);
+            return MlProgressRewardEvaluator.ComputeProgressScore(snapshot, settings);
         }
 
         float ResolveTerminalReward(MatchEndEvent matchEnd) {
@@ -218,7 +289,6 @@ namespace DiceGame.Gameplay.AI.Application
                 Debug.LogError($"MlCharacterAgent: EndEpisode failed ({reason}): {ex}");
             }
 
-            // Only intentional episode closes reset the match (not Academy ForceReset / OnEpisodeBegin).
             RequestEnvironmentReset();
         }
 
@@ -271,8 +341,37 @@ namespace DiceGame.Gameplay.AI.Application
             gameFlow.MatchEnded -= OnMatchEnded;
         }
 
+        void BindErasureSystem() {
+            if (erasureSystem == null) {
+                erasureSystem = FindFirstObjectByType<DiceMatchErasureSystem>();
+            }
+
+            if (erasureSystem == null) {
+                return;
+            }
+
+            erasureSystem.ErasureResolved -= OnErasureResolved;
+            erasureSystem.ErasureResolved += OnErasureResolved;
+        }
+
+        void UnbindErasureSystem() {
+            if (erasureSystem == null) {
+                return;
+            }
+
+            erasureSystem.ErasureResolved -= OnErasureResolved;
+        }
+
         void ApplyAction(int actionId) {
             pendingStepCell = null;
+
+            if (character.IsLiftCarrying
+                && MlDiscreteActions.TryGetMoveDirection(actionId, out var placeDirection)) {
+                inputSource.SetMove(Vector2.zero);
+                inputSource.PulseDirection(placeDirection);
+                pendingStepCell = character.StandingGridCell + placeDirection.ToGridDelta();
+                return;
+            }
 
             if (MlDiscreteActions.TryGetMoveDirection(actionId, out var direction)) {
                 inputSource.SetMove(CharacterController.DirectionToMoveVector(direction));

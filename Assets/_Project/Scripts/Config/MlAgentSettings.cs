@@ -9,11 +9,24 @@ namespace DiceGame.Config
         [SerializeField] string behaviorName = "DiceBehavior";
         [SerializeField] int decisionPeriod = 5;
         [SerializeField] int maxEpisodeSteps = 5000;
-        [SerializeField] int maxObservedDice = 16;
 
-        [Header("Rewards")]
+        [Header("Step Rewards")]
         [SerializeField] float stepPenalty = -0.001f;
-        [SerializeField] float standingOnDieReward = 0.001f;
+
+        [Header("Erasure Rewards")]
+        [SerializeField] float erasureBaseReward = 0.5f;
+        [SerializeField] float erasurePerClusterWeight = 0.15f;
+        [SerializeField] float chainBonusPerLink = 0.25f;
+        [SerializeField] float snatchBonus = 0.3f;
+
+        [Header("Progress Shaping")]
+        [SerializeField] bool progressShapingEnabled = true;
+        [SerializeField] float clusterProgressWeight = 0.2f;
+        [SerializeField] float clusterSizeProgressWeight = 0.25f;
+        [SerializeField] float chainPotentialBonus = 0.1f;
+        [SerializeField] float clusterHoldWeight = 0.001f;
+
+        [Header("Terminal Rewards")]
         [SerializeField] float winReward = 1f;
         [SerializeField] float loseReward = -1f;
         [SerializeField] float drawReward = -0.2f;
@@ -26,9 +39,16 @@ namespace DiceGame.Config
         public string BehaviorName => behaviorName;
         public int DecisionPeriod => Mathf.Max(1, decisionPeriod);
         public int MaxEpisodeSteps => Mathf.Max(0, maxEpisodeSteps);
-        public int MaxObservedDice => Mathf.Max(0, maxObservedDice);
         public float StepPenalty => stepPenalty;
-        public float StandingOnDieReward => standingOnDieReward;
+        public float ErasureBaseReward => erasureBaseReward;
+        public float ErasurePerClusterWeight => erasurePerClusterWeight;
+        public float ChainBonusPerLink => chainBonusPerLink;
+        public float SnatchBonus => snatchBonus;
+        public bool ProgressShapingEnabled => progressShapingEnabled;
+        public float ClusterProgressWeight => clusterProgressWeight;
+        public float ClusterSizeProgressWeight => clusterSizeProgressWeight;
+        public float ChainPotentialBonus => chainPotentialBonus;
+        public float ClusterHoldWeight => Mathf.Max(0f, clusterHoldWeight);
         public float WinReward => winReward;
         public float LoseReward => loseReward;
         public float DrawReward => drawReward;

@@ -1,0 +1,1 @@
+uv run mlagents-learn config/trainer_config.yaml --run-id=dice-ppo-002 --env=Build/Dice.exe --no-graphics --num-envs=6 --env-args --dice-train --dice-mode single

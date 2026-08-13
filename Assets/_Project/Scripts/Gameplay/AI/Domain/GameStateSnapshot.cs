@@ -18,6 +18,7 @@ namespace DiceGame.Gameplay.AI.Domain
         public DiceKind Kind { get; }
         public bool IsBusy { get; }
         public bool IsErasing { get; }
+        public bool IsCarried { get; }
 
         public DiceSnapshot(DiceController controller) {
             Controller = controller;
@@ -28,6 +29,7 @@ namespace DiceGame.Gameplay.AI.Domain
             Kind = state.Kind;
             IsBusy = controller.IsBusy;
             IsErasing = controller.IsErasing || controller.IsSinkErasing;
+            IsCarried = controller.IsCarried;
         }
 
         public int TopFace => Orientation.Top;
@@ -57,6 +59,7 @@ namespace DiceGame.Gameplay.AI.Domain
         public bool PlayerIsCarrying { get; }
         public bool PlayerIsJumping { get; }
         public DiceController StandingDice { get; }
+        public int CarriedTopFace { get; }
 
         GameStateSnapshot(
             IReadOnlyList<DiceSnapshot> allDice,
@@ -68,7 +71,8 @@ namespace DiceGame.Gameplay.AI.Domain
             bool playerIsOnFloor,
             bool playerIsCarrying,
             bool playerIsJumping,
-            DiceController standingDice) {
+            DiceController standingDice,
+            int carriedTopFace) {
             AllDice = allDice;
             PlanningDice = planningDice;
             PlayerSlot = playerSlot;
@@ -79,6 +83,7 @@ namespace DiceGame.Gameplay.AI.Domain
             PlayerIsCarrying = playerIsCarrying;
             PlayerIsJumping = playerIsJumping;
             StandingDice = standingDice;
+            CarriedTopFace = carriedTopFace;
         }
 
         public bool IsInPlayerRegion(Vector2Int cell) {
@@ -101,6 +106,8 @@ namespace DiceGame.Gameplay.AI.Domain
             var versusLayout = board != null && board.IsVersusArena ? board.VersusLayout : null;
             var playerSlot = character.PlayerSlot;
             var planningDice = AiRegionFilter.FilterPlanningDice(diceList, versusLayout, playerSlot);
+            var carried = character.CarriedDice;
+            var carriedTopFace = carried != null ? carried.CurrentState.Orientation.Top : 0;
 
             return new GameStateSnapshot(
                 diceList,
@@ -112,7 +119,8 @@ namespace DiceGame.Gameplay.AI.Domain
                 character.IsOnFloor,
                 character.IsCarrying,
                 character.IsJumping,
-                character.CurrentDice);
+                character.CurrentDice,
+                carriedTopFace);
         }
     }
 }

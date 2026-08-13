@@ -15,7 +15,7 @@ namespace DiceGame.Gameplay
         [SerializeField] DiceRegistry registry;
         [SerializeField] DiceOneVanishSettings oneVanishSettings;
         DiceErasureSettings erasureSettings;
-        IVersusBoardSettings versusSettings;
+        IBoardSettings versusSettings;
 
         readonly HashSet<DiceController> subscribedDice = new();
         readonly List<CharacterController> characters = new();
@@ -40,7 +40,7 @@ namespace DiceGame.Gameplay
             SubscribeAllDice();
         }
 
-        public void ConfigureVersusAttack(IVersusBoardSettings settings) {
+        public void ConfigureVersusAttack(IBoardSettings settings) {
             versusSettings = settings;
         }
 

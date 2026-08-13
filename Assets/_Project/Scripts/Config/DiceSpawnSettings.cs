@@ -6,7 +6,7 @@ namespace DiceGame.Config
     public class DiceSpawnSettings : ScriptableObject
     {
         [Header("Initial (random Bottom / Top placement)")]
-        [Tooltip("For Versus, prefer VersusBoardSettings.Shared Initial Dice Count (synced to 1P/2P).")]
+        [Tooltip("For Versus, prefer BoardSettings.Shared Initial Dice Count (synced to 1P/2P).")]
         [Min(1)]
         [SerializeField] int initialDiceCount = 3;
         [SerializeField] bool animateInitialDiceSpawn = true;

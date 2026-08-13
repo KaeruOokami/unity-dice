@@ -7,7 +7,7 @@ namespace DiceGame.Config
     public sealed class ChallengeModeSettings : ScriptableObject
     {
         [Header("Fixed Match")]
-        [SerializeField] VersusBoardSettings boardSettings;
+        [SerializeField] BoardSettings boardSettings;
 
         [Header("Opponent Gauntlet")]
         [Tooltip("Index 0 = match 1, index 1 = match 2, and so on.")]
@@ -17,7 +17,7 @@ namespace DiceGame.Config
         [Tooltip("When null, MatchSetupPresetRegistry.AttackDefaultPresetCatalog is used.")]
         [SerializeField] AttackDefaultPresetCatalog playerAttackCatalog;
 
-        public VersusBoardSettings BoardSettings => boardSettings;
+        public BoardSettings BoardSettings => boardSettings;
         public PlayerAttackSettings[] OpponentAttacksByMatch =>
             opponentAttacksByMatch ?? Array.Empty<PlayerAttackSettings>();
         public AttackDefaultPresetCatalog PlayerAttackCatalog => playerAttackCatalog;

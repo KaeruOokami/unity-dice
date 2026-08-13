@@ -8,7 +8,7 @@ namespace DiceGame.Config
         public int RequiredPlayerCount { get; private set; }
         public DiceSpawnSettings SharedSpawnSettings { get; private set; }
         public DiceCatalog SharedDiceCatalog { get; private set; }
-        public IVersusBoardSettings VersusBoardSettings { get; private set; }
+        public IBoardSettings BoardSettings { get; private set; }
         public bool Player1IsAi { get; private set; }
         public bool Player2IsAi { get; private set; }
         public PlayerSlotInputConfig Player1Input { get; private set; }
@@ -45,19 +45,17 @@ namespace DiceGame.Config
             GameSessionSettings gameSessionSettings,
             MatchSetupSnapshot snapshot,
             MatchSetupPresetRegistry presetRegistry) {
-            IVersusBoardSettings versusSettings = null;
-            if (GameModeRules.IsVersusLike(snapshot.GameMode)) {
-                var template = ResolveVersusBoardTemplate(
-                    snapshot.GameMode,
-                    gameSessionSettings,
-                    presetRegistry);
-                if (template != null) {
-                    versusSettings = new RuntimeVersusBoardSettings(
-                        template,
-                        snapshot.Player1,
-                        snapshot.Player2,
-                        snapshot.Jumbo);
-                }
+            var template = ResolveBoardTemplate(
+                snapshot.GameMode,
+                gameSessionSettings,
+                presetRegistry);
+            IBoardSettings boardSettings = template;
+            if (GameModeRules.IsVersusLike(snapshot.GameMode) && template != null) {
+                boardSettings = new RuntimeBoardSettings(
+                    template,
+                    snapshot.Player1,
+                    snapshot.Player2,
+                    snapshot.Jumbo);
             }
 
             return new ResolvedSessionSetup {
@@ -65,7 +63,7 @@ namespace DiceGame.Config
                 RequiredPlayerCount = snapshot.RequiredPlayerCount,
                 SharedSpawnSettings = snapshot.SharedSpawn.ToRuntimeAsset(),
                 SharedDiceCatalog = snapshot.SharedCatalog.ToRuntimeAsset(),
-                VersusBoardSettings = versusSettings,
+                BoardSettings = boardSettings,
                 Player1IsAi = snapshot.Player1.IsAi,
                 Player2IsAi = snapshot.Player2.IsAi,
                 Player1Input = snapshot.Player1.InputConfig,
@@ -73,7 +71,7 @@ namespace DiceGame.Config
             };
         }
 
-        static VersusBoardSettings ResolveVersusBoardTemplate(
+        static BoardSettings ResolveBoardTemplate(
             GameMode mode,
             GameSessionSettings gameSessionSettings,
             MatchSetupPresetRegistry presetRegistry) {
@@ -84,7 +82,7 @@ namespace DiceGame.Config
                 return presetRegistry.ChallengeModeSettings.BoardSettings;
             }
 
-            return gameSessionSettings != null ? gameSessionSettings.VersusBoardSettings : null;
+            return gameSessionSettings != null ? gameSessionSettings.BoardSettings : null;
         }
 
         static ResolvedSessionSetup FromAssets(
@@ -103,7 +101,7 @@ namespace DiceGame.Config
                 RequiredPlayerCount = gameSessionSettings.RequiredPlayerCount,
                 SharedSpawnSettings = sceneSpawnSettings,
                 SharedDiceCatalog = sceneDiceCatalog,
-                VersusBoardSettings = gameSessionSettings.VersusBoardSettings,
+                BoardSettings = gameSessionSettings.BoardSettings,
                 Player1IsAi = !isOnline && player1Control.IsAi,
                 Player2IsAi = !isOnline && player2Control.IsAi,
                 Player1Input = player1Control.InputConfig,

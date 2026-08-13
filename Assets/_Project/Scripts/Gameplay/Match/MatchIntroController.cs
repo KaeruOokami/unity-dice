@@ -4,6 +4,7 @@ using System.Collections.Generic;
 using DiceGame.Config;
 using DiceGame.Gameplay.AI.Application;
 using DiceGame.Gameplay.Input;
+using DiceGame.Session;
 using DiceGame.Versus;
 using Unity.MLAgents;
 using UnityEngine;
@@ -92,6 +93,17 @@ namespace DiceGame.Gameplay
         }
 
         IEnumerator RunIntro() {
+            if (LaunchArgs.SkipIntro) {
+                introUi?.Hide();
+                while (attackController != null && !attackController.AreIconsReady) {
+                    yield return null;
+                }
+
+                ReleaseGameplayAndComplete();
+                introRoutine = null;
+                yield break;
+            }
+
             SetGameplayGated(true);
 
             introUi?.Show(settings.ReadyText);

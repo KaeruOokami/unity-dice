@@ -52,6 +52,7 @@
   </ItemGroup>
   <ItemGroup>
     <Compile Include="Assets\_Project\Scripts\Gameplay\Character\CharacterController.cs" />
+    <Compile Include="Assets\_Project\Scripts\Config\MatchSetup\RuntimeBoardSettings.cs" />
     <Compile Include="Assets\_Project\Scripts\Gameplay\AI\Domain\SinkingChainEvaluator.cs" />
     <Compile Include="Assets\_Project\Scripts\Placement\Interaction\CharacterPushExecutor.cs" />
     <Compile Include="Assets\_Project\Scripts\Session\MatchSetupPanelUi.cs" />
@@ -62,12 +63,14 @@
     <Compile Include="Assets\_Project\Scripts\Session\Network\OnlineSimHashPayload.cs" />
     <Compile Include="Assets\_Project\Scripts\Placement\Rules\IronAdjacencyBlock.cs" />
     <Compile Include="Assets\_Project\Scripts\Gameplay\AI\Domain\MatchGoalSelector.cs" />
+    <Compile Include="Assets\_Project\Scripts\Config\MatchSetup\IBoardSettings.cs" />
     <Compile Include="Assets\_Project\Scripts\Gameplay\AI\Application\AiSinkingClusterEscapeCoordinator.cs" />
     <Compile Include="Assets\_Project\Scripts\Config\MatchSetup\MatchSetupNetworkCodec.cs" />
     <Compile Include="Assets\_Project\Scripts\Placement\Interaction\LiftPassability.cs" />
     <Compile Include="Assets\_Project\Scripts\Session\Network\LockstepTickInputSource.cs" />
     <Compile Include="Assets\_Project\Scripts\Placement\Magnet\MagnetMoveExecutor.cs" />
     <Compile Include="Assets\_Project\Scripts\Placement\Movement\Walk\HeightTransferFacts.cs" />
+    <Compile Include="Assets\_Project\Scripts\Config\BoardSettings.cs" />
     <Compile Include="Assets\_Project\Scripts\Gameplay\AI\Application\IAiDebugOverlaySource.cs" />
     <Compile Include="Assets\_Project\Scripts\Session\DiceSpawnSettingsPanelUi.cs" />
     <Compile Include="Assets\_Project\Scripts\Gameplay\Coupling\RollCancelPolicy.cs" />
@@ -161,7 +164,6 @@
     <Compile Include="Assets\_Project\Scripts\Placement\Rules\SolidLandingTierResolver.cs" />
     <Compile Include="Assets\_Project\Scripts\Placement\Support\DiceSurfaceLevel.cs" />
     <Compile Include="Assets\_Project\Scripts\Gameplay\AI\Application\Actions\DissolveDescentAction.cs" />
-    <Compile Include="Assets\_Project\Scripts\Config\MatchSetup\IVersusBoardSettings.cs" />
     <Compile Include="Assets\_Project\Scripts\Placement\Movement\Grid\GridMovePlanBuilder.cs" />
     <Compile Include="Assets\_Project\Scripts\Core\Model\ErasureKind.cs" />
     <Compile Include="Assets\_Project\Scripts\Placement\Movement\Jump\JumpPlayerTransferPolicy.cs" />
@@ -204,7 +206,6 @@
     <Compile Include="Assets\_Project\Scripts\Config\MlAgentSettings.cs" />
     <Compile Include="Assets\_Project\Scripts\Session\Network\OnlineDiceSpawnCommand.cs" />
     <Compile Include="Assets\_Project\Scripts\Placement\Occupancy\HeightReachEvaluation.cs" />
-    <Compile Include="Assets\_Project\Scripts\Config\MatchSetup\RuntimeVersusBoardSettings.cs" />
     <Compile Include="Assets\_Project\Scripts\Gameplay\Match\PauseMenuUi.cs" />
     <Compile Include="Assets\_Project\Scripts\Versus\VersusAttackController.cs" />
     <Compile Include="Assets\_Project\Scripts\Gameplay\AI\Application\AiFloorRecoveryCoordinator.cs" />
@@ -212,7 +213,6 @@
     <Compile Include="Assets\_Project\Scripts\Placement\Movement\Walk\HeightTransferBuilder.cs" />
     <Compile Include="Assets\_Project\Scripts\Session\SessionConstants.cs" />
     <Compile Include="Assets\_Project\Scripts\Placement\Movement\Grid\DiceGridPassability.cs" />
-    <Compile Include="Assets\_Project\Scripts\Config\VersusBoardSettings.cs" />
     <Compile Include="Assets\_Project\Scripts\Session\SessionState.cs" />
     <Compile Include="Assets\_Project\Scripts\MirrorFloor.cs" />
     <Compile Include="Assets\_Project\Scripts\Gameplay\AI\Application\AiCharacterInputSource.cs" />
@@ -237,6 +237,7 @@
     <Compile Include="Assets\_Project\Scripts\Versus\AttackQueue.cs" />
     <Compile Include="Assets\_Project\Scripts\Session\SceneNames.cs" />
     <Compile Include="Assets\_Project\Scripts\Core\Behavior\DiceStandingMoveMode.cs" />
+    <Compile Include="Assets\_Project\Scripts\Gameplay\AI\Domain\MlProgressRewardEvaluator.cs" />
     <Compile Include="Assets\_Project\Scripts\Gameplay\Character\CharacterTransformDriver.cs" />
     <Compile Include="Assets\_Project\Scripts\Session\ChallengeSetupPanelUi.cs" />
     <Compile Include="Assets\_Project\Scripts\Placement\Occupancy\NormalizedHeight.cs" />
@@ -254,6 +255,7 @@
     <Compile Include="Assets\_Project\Scripts\Session\AttackPresetLibraryUi.cs" />
     <Compile Include="Assets\_Project\Scripts\Config\PlayerInputSettings.cs" />
     <Compile Include="Assets\_Project\Scripts\Session\Network\OnlineEntityIdMap.cs" />
+    <Compile Include="Assets\_Project\Scripts\Session\LaunchArgs.cs" />
     <Compile Include="Assets\_Project\Scripts\Session\PlayerAttackSettingsPanelUi.cs" />
     <Compile Include="Assets\_Project\Scripts\Core\Motion\GravityMotion.cs" />
     <Compile Include="Assets\_Project\Scripts\Gameplay\AI\Domain\AiRegionFilter.cs" />

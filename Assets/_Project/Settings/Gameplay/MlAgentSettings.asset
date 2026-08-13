@@ -15,9 +15,16 @@ MonoBehaviour:
   behaviorName: DiceBehavior
   decisionPeriod: 5
   maxEpisodeSteps: 5000
-  maxObservedDice: 16
   stepPenalty: -0.001
-  standingOnDieReward: 0.001
+  erasureBaseReward: 0.5
+  erasurePerClusterWeight: 0.15
+  chainBonusPerLink: 0.25
+  snatchBonus: 0.3
+  progressShapingEnabled: 1
+  clusterProgressWeight: 0.2
+  clusterSizeProgressWeight: 0.25
+  chainPotentialBonus: 0.1
+  clusterHoldWeight: 0.001
   winReward: 1
   loseReward: -1
   drawReward: -0.2

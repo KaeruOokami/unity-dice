@@ -596,8 +596,6 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 7f8091a2b3c4d5e6f708192a3b4c5d6e, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  width: 7
-  height: 7
   cellSize: 1.4
   floorSurfaceWorldY: 0
 --- !u!114 &1900000004

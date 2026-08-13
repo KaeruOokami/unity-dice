@@ -139,6 +139,7 @@ namespace DiceGame.Gameplay
             standingController != null ? standingController.Current : default;
         public bool IsJumping => jumpPhase != JumpPhase.None;
         public bool IsLiftCarrying => liftPhase == LiftPhase.Carrying;
+        public DiceController CarriedDice => liftPhase == LiftPhase.Carrying ? carriedDice : null;
         public bool IsLiftBusy => liftPhase == LiftPhase.Lifting || liftPhase == LiftPhase.Placing;
         public bool IsRollbackBusy => IsCarrying
             || IsJumping

@@ -14,7 +14,7 @@ namespace DiceGame.Versus
 {
     public sealed class VersusAttackController : MonoBehaviour
     {
-        IVersusBoardSettings versusSettings;
+        IBoardSettings versusSettings;
         Board board;
         DiceRegistry registry;
         DiceSpawnSystem spawnSystem;
@@ -33,7 +33,7 @@ namespace DiceGame.Versus
         public bool AreIconsReady => queueView == null || queueView.AreIconsReady;
 
         public void Configure(
-            IVersusBoardSettings settings,
+            IBoardSettings settings,
             Board targetBoard,
             DiceRegistry targetRegistry,
             DiceSpawnSystem targetSpawnSystem,
