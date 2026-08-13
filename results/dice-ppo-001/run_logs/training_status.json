@@ -1,0 +1,29 @@
+{
+    "DiceBehavior": {
+        "checkpoints": [
+            {
+                "steps": 8096,
+                "file_path": "results\\dice-ppo-001\\DiceBehavior\\DiceBehavior-8096.onnx",
+                "reward": -0.25,
+                "creation_time": 1786599720.0880117,
+                "auxillary_file_paths": [
+                    "results\\dice-ppo-001\\DiceBehavior\\DiceBehavior-8096.pt"
+                ]
+            }
+        ],
+        "final_checkpoint": {
+            "steps": 8096,
+            "file_path": "results\\dice-ppo-001\\DiceBehavior.onnx",
+            "reward": -0.25,
+            "creation_time": 1786599720.0880117,
+            "auxillary_file_paths": [
+                "results\\dice-ppo-001\\DiceBehavior\\DiceBehavior-8096.pt"
+            ]
+        }
+    },
+    "metadata": {
+        "stats_format_version": "0.3.0",
+        "mlagents_version": "1.1.0",
+        "torch_version": "2.5.1+cu121"
+    }
+}

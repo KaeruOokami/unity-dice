@@ -5,6 +5,10 @@ namespace DiceGame.Config
     [CreateAssetMenu(fileName = "AiPlayerSettings", menuName = "Dice/AI Player Settings")]
     public sealed class AiPlayerSettings : ScriptableObject
     {
+        [Header("Control")]
+        [SerializeField] AiControlMode controlMode = AiControlMode.Rule;
+        [SerializeField] MlAgentSettings mlAgentSettings;
+
         [Header("Replan Timing")]
         [SerializeField] float minReplanInterval = 0.3f;
         [SerializeField] float idleReplanInterval = 0.8f;
@@ -44,6 +48,9 @@ namespace DiceGame.Config
         [Header("Debug")]
         [SerializeField] bool debugLog;
         [SerializeField] bool debugGizmo;
+
+        public AiControlMode ControlMode => controlMode;
+        public MlAgentSettings MlAgentSettings => mlAgentSettings;
 
         public float MinReplanInterval => minReplanInterval;
         public float IdleReplanInterval => idleReplanInterval;

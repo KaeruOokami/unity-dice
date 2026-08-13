@@ -5,6 +5,7 @@ using DiceGame.Config;
 using DiceGame.Gameplay.AI.Application;
 using DiceGame.Gameplay.Input;
 using DiceGame.Versus;
+using Unity.MLAgents;
 using UnityEngine;
 
 namespace DiceGame.Gameplay
@@ -20,7 +21,7 @@ namespace DiceGame.Gameplay
         GameFlowInputReader inputReader;
         DiceSpawnSystem spawnSystem;
         VersusAttackController attackController;
-        readonly List<AiCharacterBrain> aiBrains = new();
+        readonly List<Behaviour> aiControllers = new();
         Coroutine introRoutine;
         bool gameplayReleased;
 
@@ -39,17 +40,14 @@ namespace DiceGame.Gameplay
             spawnSystem = targetSpawnSystem;
             attackController = targetAttackController;
 
-            aiBrains.Clear();
+            aiControllers.Clear();
             if (characters != null) {
                 for (var i = 0; i < characters.Count; i++) {
                     if (characters[i] == null) {
                         continue;
                     }
 
-                    var brain = characters[i].GetComponent<AiCharacterBrain>();
-                    if (brain != null) {
-                        aiBrains.Add(brain);
-                    }
+                    CollectAiControllers(characters[i].gameObject);
                 }
             }
 
@@ -128,10 +126,27 @@ namespace DiceGame.Gameplay
             spawnSystem?.SetGameplayEnabled(!gated);
             attackController?.SetGameplayEnabled(!gated);
 
-            for (var i = 0; i < aiBrains.Count; i++) {
-                if (aiBrains[i] != null) {
-                    aiBrains[i].enabled = !gated;
+            for (var i = 0; i < aiControllers.Count; i++) {
+                if (aiControllers[i] != null) {
+                    aiControllers[i].enabled = !gated;
                 }
+            }
+        }
+
+        void CollectAiControllers(GameObject characterObject) {
+            var brain = characterObject.GetComponent<AiCharacterBrain>();
+            if (brain != null && brain.enabled) {
+                aiControllers.Add(brain);
+            }
+
+            var agent = characterObject.GetComponent<MlCharacterAgent>();
+            if (agent != null && agent.enabled) {
+                aiControllers.Add(agent);
+            }
+
+            var decisionRequester = characterObject.GetComponent<DecisionRequester>();
+            if (decisionRequester != null && decisionRequester.enabled) {
+                aiControllers.Add(decisionRequester);
             }
         }
 

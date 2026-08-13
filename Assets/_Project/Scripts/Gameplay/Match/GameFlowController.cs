@@ -1,4 +1,5 @@
-﻿using System.Collections;
+﻿using System;
+using System.Collections;
 using System.Collections.Generic;
 using DiceGame.Config;
 using DiceGame.Gameplay.Input;
@@ -46,9 +47,12 @@ namespace DiceGame.Gameplay
         bool applyingRemoteFlow;
         bool pauseOwnerIsHost;
         Coroutine nextRoundRoutine;
+        Coroutine trainingResetRoutine;
+        bool trainingResetQueued;
 
         public GameFlowState State { get; private set; } = GameFlowState.Playing;
         public bool IsSimulationFrozen => State != GameFlowState.Playing;
+        public event Action<MatchEndEvent> MatchEnded;
 
         public void Configure(
             Board targetBoard,
@@ -552,6 +556,7 @@ namespace DiceGame.Gameplay
             FreezeSimulation();
             pauseMenuUi?.Hide();
             Debug.Log(resultLog);
+            RaiseMatchEnded(new MatchEndEvent(roundWinner: null, isStandardGameOver: true));
         }
 
         void EnterVersusRoundEnd(PlayerSlot? roundWinner, string resultLog)
@@ -565,6 +570,13 @@ namespace DiceGame.Gameplay
             FreezeSimulation();
             pauseMenuUi?.Hide();
             Debug.Log(resultLog);
+            RaiseMatchEnded(new MatchEndEvent(roundWinner, isStandardGameOver: false));
+
+            if (HasMatchEndedListeners())
+            {
+                // Training / external listeners own the reset path.
+                return;
+            }
 
             if (activeGameMode == GameMode.Challenge)
             {
@@ -594,6 +606,51 @@ namespace DiceGame.Gameplay
             }
 
             nextRoundRoutine = StartCoroutine(ContinueSeriesAfterDelay());
+        }
+
+        void RaiseMatchEnded(MatchEndEvent matchEnd)
+        {
+            MatchEnded?.Invoke(matchEnd);
+        }
+
+        bool HasMatchEndedListeners()
+        {
+            return MatchEnded != null;
+        }
+
+        /// <summary>
+        /// Queues a one-shot match reset on the next frame (used by ML episode boundaries).
+        /// </summary>
+        public void QueueTrainingMatchReset()
+        {
+            var session = SessionState.Instance;
+            if (session != null && session.IsOnline)
+            {
+                return;
+            }
+
+            if (trainingResetQueued)
+            {
+                return;
+            }
+
+            trainingResetQueued = true;
+            if (trainingResetRoutine != null)
+            {
+                StopCoroutine(trainingResetRoutine);
+            }
+
+            trainingResetRoutine = StartCoroutine(TrainingMatchResetNextFrame());
+        }
+
+        IEnumerator TrainingMatchResetNextFrame()
+        {
+            yield return null;
+            trainingResetRoutine = null;
+            trainingResetQueued = false;
+            MatchSeriesState.Clear();
+            ChallengeRunState.Clear();
+            ApplyResetMatch(broadcast: false);
         }
 
         void EnterChallengeRoundEnd(PlayerSlot? roundWinner)

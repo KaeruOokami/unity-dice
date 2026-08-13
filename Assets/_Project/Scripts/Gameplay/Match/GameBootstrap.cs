@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using DiceGame.Config;
 using DiceGame.Gameplay.AI.Application;
+using DiceGame.Gameplay.AI.Domain;
 using DiceGame.Gameplay.Input;
 using DiceGame.Grid;
 using DiceGame.Placement;
@@ -9,6 +10,9 @@ using DiceGame.Session;
 using DiceGame.Session.Network;
 using DiceGame.View;
 using DiceGame.Versus;
+using Unity.MLAgents;
+using Unity.MLAgents.Actuators;
+using Unity.MLAgents.Policies;
 using UnityEngine;
 using UnityEngine.Serialization;
 
@@ -692,13 +696,91 @@ namespace DiceGame.Gameplay
                 aiInput = characterObject.AddComponent<AiCharacterInputSource>();
             }
 
+            characterController.SetInputSource(aiInput);
+
+            switch (aiPlayerSettings.ControlMode) {
+                case AiControlMode.MlAgent:
+                    ConfigureMlAgentControl(characterObject, characterController, aiInput);
+                    break;
+                case AiControlMode.Rule:
+                default:
+                    ConfigureRuleAiControl(characterObject, characterController, aiInput);
+                    break;
+            }
+        }
+
+        void ConfigureRuleAiControl(
+            GameObject characterObject,
+            CharacterController characterController,
+            AiCharacterInputSource aiInput) {
+            DisableMlAgentControl(characterObject);
+
             var brain = characterObject.GetComponent<AiCharacterBrain>();
             if (brain == null) {
                 brain = characterObject.AddComponent<AiCharacterBrain>();
             }
 
-            characterController.SetInputSource(aiInput);
+            brain.enabled = true;
             brain.Configure(characterController, registry, aiInput, aiPlayerSettings);
+        }
+
+        void ConfigureMlAgentControl(
+            GameObject characterObject,
+            CharacterController characterController,
+            AiCharacterInputSource aiInput) {
+            var mlSettings = aiPlayerSettings.MlAgentSettings;
+            if (mlSettings == null) {
+                Debug.LogError(
+                    "GameBootstrap: AiControlMode is MlAgent but MlAgentSettings is not assigned on AiPlayerSettings.");
+                return;
+            }
+
+            var brain = characterObject.GetComponent<AiCharacterBrain>();
+            if (brain != null) {
+                brain.enabled = false;
+            }
+
+            var behaviorParameters = characterObject.GetComponent<BehaviorParameters>();
+            if (behaviorParameters == null) {
+                behaviorParameters = characterObject.AddComponent<BehaviorParameters>();
+            }
+
+            behaviorParameters.BehaviorName = mlSettings.BehaviorName;
+            behaviorParameters.BrainParameters.VectorObservationSize =
+                MlObservationEncoder.GetObservationSize(mlSettings.MaxObservedDice);
+            behaviorParameters.BrainParameters.ActionSpec =
+                ActionSpec.MakeDiscrete(MlDiscreteActions.Count);
+
+            var agent = characterObject.GetComponent<MlCharacterAgent>();
+            if (agent == null) {
+                agent = characterObject.AddComponent<MlCharacterAgent>();
+            }
+
+            agent.enabled = false;
+            agent.Configure(characterController, registry, aiInput, mlSettings);
+            agent.enabled = true;
+
+            var decisionRequester = characterObject.GetComponent<DecisionRequester>();
+            if (decisionRequester == null) {
+                decisionRequester = characterObject.AddComponent<DecisionRequester>();
+            }
+
+            decisionRequester.enabled = false;
+            decisionRequester.DecisionPeriod = Mathf.Max(1, mlSettings.DecisionPeriod);
+            decisionRequester.TakeActionsBetweenDecisions = true;
+            decisionRequester.enabled = true;
+        }
+
+        static void DisableMlAgentControl(GameObject characterObject) {
+            var agent = characterObject.GetComponent<MlCharacterAgent>();
+            if (agent != null) {
+                agent.enabled = false;
+            }
+
+            var decisionRequester = characterObject.GetComponent<DecisionRequester>();
+            if (decisionRequester != null) {
+                decisionRequester.enabled = false;
+            }
         }
     }
 }

@@ -8,7 +8,7 @@ using UnityEngine;
 namespace DiceGame.Gameplay.AI.Application
 {
     [DefaultExecutionOrder(-50)]
-    public sealed class AiCharacterBrain : MonoBehaviour
+    public sealed class AiCharacterBrain : MonoBehaviour, IAiDebugOverlaySource
     {
         CharacterController character;
         DiceRegistry registry;

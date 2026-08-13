@@ -9,7 +9,8 @@ namespace DiceGame.Gameplay.AI.Application
         Goal,
         SinkingMount,
         SinkingDescend,
-        FloorRecovery
+        FloorRecovery,
+        Ml
     }
 
     /// <summary>

@@ -22,20 +22,21 @@ namespace DiceGame.Gameplay.AI.Application
         static readonly Color MountColor = new Color(1f, 0.45f, 0.1f, 0.95f);
         static readonly Color RecoveryColor = new Color(0.3f, 0.95f, 0.95f, 0.95f);
         static readonly Color DescendColor = new Color(1f, 0.2f, 0.2f, 0.95f);
+        static readonly Color MlColor = new Color(0.55f, 0.75f, 1f, 0.95f);
 
-        AiCharacterBrain brain;
+        IAiDebugOverlaySource source;
 
-        public void Bind(AiCharacterBrain targetBrain) {
-            brain = targetBrain;
+        public void Bind(IAiDebugOverlaySource targetSource) {
+            source = targetSource;
         }
 
         void OnDrawGizmos() {
-            if (brain == null || !brain.DebugGizmoEnabled) {
+            if (source == null || !source.DebugGizmoEnabled) {
                 return;
             }
 
-            var snapshot = brain.DebugOverlay;
-            var board = brain.DebugBoard;
+            var snapshot = source.DebugOverlay;
+            var board = source.DebugBoard;
             if (snapshot == null || !snapshot.HasData || board == null) {
                 return;
             }
@@ -84,6 +85,7 @@ namespace DiceGame.Gameplay.AI.Application
                     AiDebugOverlayMode.SinkingMount => MountColor,
                     AiDebugOverlayMode.SinkingDescend => DescendColor,
                     AiDebugOverlayMode.FloorRecovery => RecoveryColor,
+                    AiDebugOverlayMode.Ml => MlColor,
                     _ => SubGoalColor
                 };
                 DrawCellWire(board, snapshot.HighlightCell.Value, cubeSize * 1.05f, liftY, highlightColor);

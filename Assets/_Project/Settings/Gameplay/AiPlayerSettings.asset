@@ -12,6 +12,8 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: a1b2c3d4e5f6478990abcdef12345678, type: 3}
   m_Name: AiPlayerSettings
   m_EditorClassIdentifier: 
+  controlMode: 0
+  mlAgentSettings: {fileID: 11400000, guid: d37a5e8b0c2f46a718293a4b5c6d7e8f, type: 2}
   minReplanInterval: 0
   idleReplanInterval: 0
   failedReplanInterval: 0
