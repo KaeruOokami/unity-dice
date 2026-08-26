@@ -432,12 +432,22 @@ namespace DiceGame.Session
                 return;
             }
 
-            var snapshot = matchSetupPresetRegistry.CreateDefaultSnapshot(LaunchArgs.TrainingGameMode);
-            if (snapshot == null) {
-                Debug.LogError("SessionController: Training launch setup is invalid. Snapshot is null.");
-                ResetToTitleState();
-                titleMenuUi?.ShowMainPanel();
-                return;
+            MatchSetupSnapshot snapshot;
+            if (LaunchArgs.HasCurriculumStage) {
+                if (!TryCreateCurriculumTrainingSnapshot(out snapshot, out var curriculumError)) {
+                    Debug.LogError($"SessionController: {curriculumError}");
+                    ResetToTitleState();
+                    titleMenuUi?.ShowMainPanel();
+                    return;
+                }
+            } else {
+                snapshot = matchSetupPresetRegistry.CreateDefaultSnapshot(LaunchArgs.TrainingGameMode);
+                if (snapshot == null) {
+                    Debug.LogError("SessionController: Training launch setup is invalid. Snapshot is null.");
+                    ResetToTitleState();
+                    titleMenuUi?.ShowMainPanel();
+                    return;
+                }
             }
 
             LaunchArgs.ApplyTrainingPlayerSetup(snapshot);
@@ -455,11 +465,44 @@ namespace DiceGame.Session
 
             SessionState.Instance.SetCurrentSetup(snapshot);
             SessionState.Instance.SetPlayMode(SessionPlayMode.Local);
-            SessionState.Instance.SetStatus("Starting training play.");
+            SessionState.Instance.SetStatus(
+                LaunchArgs.HasCurriculumStage
+                    ? $"Starting curriculum Stage {LaunchArgs.CurriculumStageNumber} training."
+                    : "Starting training play.");
             ShowGameplayWorld();
             titleMenuUi?.Hide();
             ApplyLocalBindingOverrides();
             SessionState.Instance.RequestMatchStart();
+        }
+
+        bool TryCreateCurriculumTrainingSnapshot(
+            out MatchSetupSnapshot snapshot,
+            out string errorMessage) {
+            snapshot = null;
+            var catalog = matchSetupPresetRegistry.MlCurriculumCatalog;
+            if (catalog == null) {
+                errorMessage =
+                    "Training curriculum requires MlCurriculumCatalog on MatchSetupPresetRegistry.";
+                return false;
+            }
+
+            if (!catalog.TryValidate(out errorMessage)) {
+                return false;
+            }
+
+            if (!catalog.TryGetStage(LaunchArgs.CurriculumStageNumber, out var stage)) {
+                errorMessage =
+                    $"Curriculum stage {LaunchArgs.CurriculumStageNumber} not found in MlCurriculumCatalog.";
+                return false;
+            }
+
+            if (!stage.TryValidate(out errorMessage)) {
+                return false;
+            }
+
+            snapshot = stage.CreateTrainingSnapshot(matchSetupPresetRegistry);
+            errorMessage = null;
+            return snapshot != null;
         }
 
         void ResumeMatchAfterReload(SessionPlayMode resumePlayMode) {

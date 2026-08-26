@@ -1,3 +1,5 @@
+using Unity.InferenceEngine;
+using Unity.MLAgents.Policies;
 using UnityEngine;
 
 namespace DiceGame.Config
@@ -9,6 +11,9 @@ namespace DiceGame.Config
         [SerializeField] string behaviorName = "DiceBehavior";
         [SerializeField] int decisionPeriod = 5;
         [SerializeField] int maxEpisodeSteps = 5000;
+        [Tooltip("Trained ONNX / ModelAsset used for local inference playback.")]
+        [SerializeField] ModelAsset model;
+        [SerializeField] InferenceDevice inferenceDevice = InferenceDevice.Default;
 
         [Header("Step Rewards")]
         [SerializeField] float stepPenalty = -0.001f;
@@ -39,6 +44,8 @@ namespace DiceGame.Config
         public string BehaviorName => behaviorName;
         public int DecisionPeriod => Mathf.Max(1, decisionPeriod);
         public int MaxEpisodeSteps => Mathf.Max(0, maxEpisodeSteps);
+        public ModelAsset Model => model;
+        public InferenceDevice InferenceDevice => inferenceDevice;
         public float StepPenalty => stepPenalty;
         public float ErasureBaseReward => erasureBaseReward;
         public float ErasurePerClusterWeight => erasurePerClusterWeight;

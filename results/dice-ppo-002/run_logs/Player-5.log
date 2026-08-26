@@ -1,0 +1,436 @@
+Mono path[0] = 'D:/Document/Unity/Project/Dice/Build/Dice_Data/Managed'
+Mono config path = 'D:/Document/Unity/Project/Dice/Build/MonoBleedingEdge/etc'
+Input System module state changed to: Initialized.
+[Physics::Module] Initialized fallback backend.
+[Physics::Module] Id: 0xdecafbad
+Initialize engine version: 6000.0.81f1 (6238fec1e98f)
+[Subsystems] Discovering subsystems at path D:/Document/Unity/Project/Dice/Build/Dice_Data/UnitySubsystems
+Forcing GfxDevice: Null
+GfxDevice: creating device client; kGfxThreadingModeNonThreaded
+NullGfxDevice:
+    Version:  NULL 1.0 [1.0]
+    Renderer: Null Device
+    Vendor:   Unity Technologies
+Begin MonoManager ReloadAssembly
+- Loaded All Assemblies, in  6.869 seconds
+- Finished resetting the current domain, in  0.002 seconds
+[Physics::Module] Selected backend.
+[Physics::Module] Name: PhysX
+[Physics::Module] Id: 0xf2b8ea05
+[Physics::Module] SDK Version: 4.1.2
+[Physics::Module] Integration Version: 1.0.0
+[Physics::Module] Threading Mode: Multi-Threaded
+Microsoft Media Foundation video decoding to texture disabled: graphics device is Null, only Direct3D 11 and Direct3D 12 (only on desktop) are supported for hardware-accelerated video decoding.
+<b>[App UI]</b> Unable to find an AppUISettings instance, creating a default one...
+UnloadTime: 0.319300 ms
+LaunchArgs: training launch mode=Single forceMlAgent=True skipIntro=True
+HDR Render Texture not supported, disabling HDR on reflection probe.
+Registered Communicator in Agent.
+Fewer observations (27) made than vector observation size (699). The observations will be padded.
+Unloading 5 Unused Serialized files (Serialized files now loaded: 0)
+UnloadTime: 4.531200 ms
+HDR Render Texture not supported, disabling HDR on reflection probe.
+Unloading 34 unused Assets to reduce memory usage. Loaded Objects now: 4479.
+Total: 2.034300 ms (FindLiveObjects: 0.205100 ms CreateObjectMapping: 0.089000 ms MarkObjects: 1.689200 ms  DeleteObjects: 0.050800 ms)
+
+Fewer observations (27) made than vector observation size (699). The observations will be padded.
+Unloading 2 Unused Serialized files (Serialized files now loaded: 0)
+UnloadTime: 0.544900 ms
+HDR Render Texture not supported, disabling HDR on reflection probe.
+Unloading 33 unused Assets to reduce memory usage. Loaded Objects now: 4479.
+Total: 1.838700 ms (FindLiveObjects: 0.209800 ms CreateObjectMapping: 0.087100 ms MarkObjects: 1.487900 ms  DeleteObjects: 0.053600 ms)
+
+Fewer observations (27) made than vector observation size (699). The observations will be padded.
+Unloading 2 Unused Serialized files (Serialized files now loaded: 0)
+UnloadTime: 0.536500 ms
+HDR Render Texture not supported, disabling HDR on reflection probe.
+Unloading 33 unused Assets to reduce memory usage. Loaded Objects now: 4479.
+Total: 1.762800 ms (FindLiveObjects: 0.166100 ms CreateObjectMapping: 0.079400 ms MarkObjects: 1.469500 ms  DeleteObjects: 0.047800 ms)
+
+Fewer observations (27) made than vector observation size (699). The observations will be padded.
+Unloading 2 Unused Serialized files (Serialized files now loaded: 0)
+UnloadTime: 1.038800 ms
+HDR Render Texture not supported, disabling HDR on reflection probe.
+Unloading 33 unused Assets to reduce memory usage. Loaded Objects now: 4479.
+Total: 1.723400 ms (FindLiveObjects: 0.161600 ms CreateObjectMapping: 0.080000 ms MarkObjects: 1.432400 ms  DeleteObjects: 0.049300 ms)
+
+Fewer observations (27) made than vector observation size (699). The observations will be padded.
+TryGetTierFallSupportOwner: fallenDice=DiceEntity_0_5_Bottom_Normal owner=True
+TryResolveAttackerForTierFall: resolved attacker=Player1 from support owner
+Unloading 2 Unused Serialized files (Serialized files now loaded: 0)
+UnloadTime: 0.501000 ms
+HDR Render Texture not supported, disabling HDR on reflection probe.
+Unloading 33 unused Assets to reduce memory usage. Loaded Objects now: 4479.
+Total: 1.695000 ms (FindLiveObjects: 0.158100 ms CreateObjectMapping: 0.079600 ms MarkObjects: 1.407700 ms  DeleteObjects: 0.049400 ms)
+
+Fewer observations (27) made than vector observation size (699). The observations will be padded.
+TryGetTierFallSupportOwner: fallenDice=DiceEntity_3_2_Bottom_Normal owner=True
+TryResolveAttackerForTierFall: resolved attacker=Player1 from support owner
+Unloading 2 Unused Serialized files (Serialized files now loaded: 0)
+UnloadTime: 0.637900 ms
+HDR Render Texture not supported, disabling HDR on reflection probe.
+Unloading 33 unused Assets to reduce memory usage. Loaded Objects now: 4479.
+Total: 3.245600 ms (FindLiveObjects: 0.163100 ms CreateObjectMapping: 0.080800 ms MarkObjects: 2.911200 ms  DeleteObjects: 0.090400 ms)
+
+Fewer observations (27) made than vector observation size (699). The observations will be padded.
+Unloading 2 Unused Serialized files (Serialized files now loaded: 0)
+UnloadTime: 0.596300 ms
+HDR Render Texture not supported, disabling HDR on reflection probe.
+Unloading 33 unused Assets to reduce memory usage. Loaded Objects now: 4479.
+Total: 1.865000 ms (FindLiveObjects: 0.180600 ms CreateObjectMapping: 0.087100 ms MarkObjects: 1.539300 ms  DeleteObjects: 0.057900 ms)
+
+Fewer observations (27) made than vector observation size (699). The observations will be padded.
+Unloading 2 Unused Serialized files (Serialized files now loaded: 0)
+UnloadTime: 0.542400 ms
+HDR Render Texture not supported, disabling HDR on reflection probe.
+Unloading 33 unused Assets to reduce memory usage. Loaded Objects now: 4479.
+Total: 1.810300 ms (FindLiveObjects: 0.155600 ms CreateObjectMapping: 0.079000 ms MarkObjects: 1.527900 ms  DeleteObjects: 0.047800 ms)
+
+Fewer observations (27) made than vector observation size (699). The observations will be padded.
+Unloading 2 Unused Serialized files (Serialized files now loaded: 0)
+UnloadTime: 0.629700 ms
+HDR Render Texture not supported, disabling HDR on reflection probe.
+Unloading 33 unused Assets to reduce memory usage. Loaded Objects now: 4479.
+Total: 2.399600 ms (FindLiveObjects: 0.171900 ms CreateObjectMapping: 0.084400 ms MarkObjects: 2.077000 ms  DeleteObjects: 0.066200 ms)
+
+Fewer observations (27) made than vector observation size (699). The observations will be padded.
+Unloading 2 Unused Serialized files (Serialized files now loaded: 0)
+UnloadTime: 0.505700 ms
+HDR Render Texture not supported, disabling HDR on reflection probe.
+Unloading 33 unused Assets to reduce memory usage. Loaded Objects now: 4479.
+Total: 1.743000 ms (FindLiveObjects: 0.162200 ms CreateObjectMapping: 0.080700 ms MarkObjects: 1.449800 ms  DeleteObjects: 0.050200 ms)
+
+Fewer observations (27) made than vector observation size (699). The observations will be padded.
+Unloading 2 Unused Serialized files (Serialized files now loaded: 0)
+UnloadTime: 0.952300 ms
+HDR Render Texture not supported, disabling HDR on reflection probe.
+Unloading 33 unused Assets to reduce memory usage. Loaded Objects now: 4479.
+Total: 1.852400 ms (FindLiveObjects: 0.169400 ms CreateObjectMapping: 0.084100 ms MarkObjects: 1.544300 ms  DeleteObjects: 0.054500 ms)
+
+Fewer observations (27) made than vector observation size (699). The observations will be padded.
+Unloading 2 Unused Serialized files (Serialized files now loaded: 0)
+UnloadTime: 0.525000 ms
+HDR Render Texture not supported, disabling HDR on reflection probe.
+Unloading 33 unused Assets to reduce memory usage. Loaded Objects now: 4479.
+Total: 1.742500 ms (FindLiveObjects: 0.159200 ms CreateObjectMapping: 0.080600 ms MarkObjects: 1.451900 ms  DeleteObjects: 0.050500 ms)
+
+Fewer observations (27) made than vector observation size (699). The observations will be padded.
+Unloading 2 Unused Serialized files (Serialized files now loaded: 0)
+UnloadTime: 1.039500 ms
+HDR Render Texture not supported, disabling HDR on reflection probe.
+Unloading 33 unused Assets to reduce memory usage. Loaded Objects now: 4479.
+Total: 2.508000 ms (FindLiveObjects: 0.301400 ms CreateObjectMapping: 0.335500 ms MarkObjects: 1.802500 ms  DeleteObjects: 0.068300 ms)
+
+Fewer observations (27) made than vector observation size (699). The observations will be padded.
+Unloading 2 Unused Serialized files (Serialized files now loaded: 0)
+UnloadTime: 0.535800 ms
+HDR Render Texture not supported, disabling HDR on reflection probe.
+Unloading 33 unused Assets to reduce memory usage. Loaded Objects now: 4479.
+Total: 2.420100 ms (FindLiveObjects: 0.764300 ms CreateObjectMapping: 0.142400 ms MarkObjects: 1.464400 ms  DeleteObjects: 0.048900 ms)
+
+Fewer observations (27) made than vector observation size (699). The observations will be padded.
+TryGetTierFallSupportOwner: fallenDice=DiceEntity_6_1_Bottom_Normal owner=True
+TryResolveAttackerForTierFall: resolved attacker=Player1 from support owner
+Unloading 2 Unused Serialized files (Serialized files now loaded: 0)
+UnloadTime: 0.523100 ms
+HDR Render Texture not supported, disabling HDR on reflection probe.
+Unloading 33 unused Assets to reduce memory usage. Loaded Objects now: 4479.
+Total: 1.855400 ms (FindLiveObjects: 0.180000 ms CreateObjectMapping: 0.084000 ms MarkObjects: 1.542000 ms  DeleteObjects: 0.049100 ms)
+
+Fewer observations (27) made than vector observation size (699). The observations will be padded.
+TryGetTierFallSupportOwner: fallenDice=DiceEntity_6_5_Bottom_Normal owner=True
+TryResolveAttackerForTierFall: resolved attacker=Player1 from support owner
+Unloading 2 Unused Serialized files (Serialized files now loaded: 0)
+UnloadTime: 0.518800 ms
+HDR Render Texture not supported, disabling HDR on reflection probe.
+Unloading 33 unused Assets to reduce memory usage. Loaded Objects now: 4479.
+Total: 1.816300 ms (FindLiveObjects: 0.160300 ms CreateObjectMapping: 0.080300 ms MarkObjects: 1.522700 ms  DeleteObjects: 0.053000 ms)
+
+Fewer observations (27) made than vector observation size (699). The observations will be padded.
+Unloading 2 Unused Serialized files (Serialized files now loaded: 0)
+UnloadTime: 0.548100 ms
+HDR Render Texture not supported, disabling HDR on reflection probe.
+Unloading 33 unused Assets to reduce memory usage. Loaded Objects now: 4479.
+Total: 2.417500 ms (FindLiveObjects: 0.190000 ms CreateObjectMapping: 0.089100 ms MarkObjects: 2.064900 ms  DeleteObjects: 0.073300 ms)
+
+Fewer observations (27) made than vector observation size (699). The observations will be padded.
+TryGetTierFallSupportOwner: fallenDice=DiceEntity_4_6_Bottom_Normal owner=True
+TryResolveAttackerForTierFall: resolved attacker=Player1 from support owner
+Unloading 2 Unused Serialized files (Serialized files now loaded: 0)
+UnloadTime: 0.489600 ms
+HDR Render Texture not supported, disabling HDR on reflection probe.
+Unloading 33 unused Assets to reduce memory usage. Loaded Objects now: 4479.
+Total: 2.443500 ms (FindLiveObjects: 0.265900 ms CreateObjectMapping: 0.113400 ms MarkObjects: 2.002600 ms  DeleteObjects: 0.061400 ms)
+
+Fewer observations (27) made than vector observation size (699). The observations will be padded.
+Unloading 2 Unused Serialized files (Serialized files now loaded: 0)
+UnloadTime: 0.631800 ms
+HDR Render Texture not supported, disabling HDR on reflection probe.
+Unloading 33 unused Assets to reduce memory usage. Loaded Objects now: 4479.
+Total: 1.987200 ms (FindLiveObjects: 0.200900 ms CreateObjectMapping: 0.105500 ms MarkObjects: 1.620000 ms  DeleteObjects: 0.060700 ms)
+
+Fewer observations (27) made than vector observation size (699). The observations will be padded.
+TryGetTierFallSupportOwner: fallenDice=DiceEntity_1_3_Bottom_Normal owner=True
+TryResolveAttackerForTierFall: resolved attacker=Player1 from support owner
+Unloading 2 Unused Serialized files (Serialized files now loaded: 0)
+UnloadTime: 0.501700 ms
+HDR Render Texture not supported, disabling HDR on reflection probe.
+Unloading 33 unused Assets to reduce memory usage. Loaded Objects now: 4479.
+Total: 1.889100 ms (FindLiveObjects: 0.162100 ms CreateObjectMapping: 0.082200 ms MarkObjects: 1.590100 ms  DeleteObjects: 0.054600 ms)
+
+Fewer observations (27) made than vector observation size (699). The observations will be padded.
+Unloading 2 Unused Serialized files (Serialized files now loaded: 0)
+UnloadTime: 0.519700 ms
+HDR Render Texture not supported, disabling HDR on reflection probe.
+Unloading 33 unused Assets to reduce memory usage. Loaded Objects now: 4479.
+Total: 1.723400 ms (FindLiveObjects: 0.160000 ms CreateObjectMapping: 0.080100 ms MarkObjects: 1.432400 ms  DeleteObjects: 0.050800 ms)
+
+Fewer observations (27) made than vector observation size (699). The observations will be padded.
+Unloading 2 Unused Serialized files (Serialized files now loaded: 0)
+UnloadTime: 0.470800 ms
+HDR Render Texture not supported, disabling HDR on reflection probe.
+Unloading 33 unused Assets to reduce memory usage. Loaded Objects now: 4479.
+Total: 1.869100 ms (FindLiveObjects: 0.177700 ms CreateObjectMapping: 0.087300 ms MarkObjects: 1.547500 ms  DeleteObjects: 0.056500 ms)
+
+Fewer observations (27) made than vector observation size (699). The observations will be padded.
+Unloading 2 Unused Serialized files (Serialized files now loaded: 0)
+UnloadTime: 0.529400 ms
+HDR Render Texture not supported, disabling HDR on reflection probe.
+Unloading 33 unused Assets to reduce memory usage. Loaded Objects now: 4479.
+Total: 2.981800 ms (FindLiveObjects: 0.158700 ms CreateObjectMapping: 0.081200 ms MarkObjects: 2.687700 ms  DeleteObjects: 0.054100 ms)
+
+Fewer observations (27) made than vector observation size (699). The observations will be padded.
+Unloading 2 Unused Serialized files (Serialized files now loaded: 0)
+UnloadTime: 1.166300 ms
+HDR Render Texture not supported, disabling HDR on reflection probe.
+Unloading 33 unused Assets to reduce memory usage. Loaded Objects now: 4479.
+Total: 2.893900 ms (FindLiveObjects: 0.187200 ms CreateObjectMapping: 0.229600 ms MarkObjects: 2.417600 ms  DeleteObjects: 0.059400 ms)
+
+Fewer observations (27) made than vector observation size (699). The observations will be padded.
+Unloading 2 Unused Serialized files (Serialized files now loaded: 0)
+UnloadTime: 1.401800 ms
+HDR Render Texture not supported, disabling HDR on reflection probe.
+Unloading 33 unused Assets to reduce memory usage. Loaded Objects now: 4479.
+Total: 1.804600 ms (FindLiveObjects: 0.161700 ms CreateObjectMapping: 0.081100 ms MarkObjects: 1.509500 ms  DeleteObjects: 0.052100 ms)
+
+Fewer observations (27) made than vector observation size (699). The observations will be padded.
+TryGetTierFallSupportOwner: fallenDice=DiceEntity_2_3_Bottom_Normal owner=True
+TryResolveAttackerForTierFall: resolved attacker=Player1 from support owner
+Unloading 2 Unused Serialized files (Serialized files now loaded: 0)
+UnloadTime: 0.833600 ms
+HDR Render Texture not supported, disabling HDR on reflection probe.
+Unloading 33 unused Assets to reduce memory usage. Loaded Objects now: 4479.
+Total: 1.696000 ms (FindLiveObjects: 0.159300 ms CreateObjectMapping: 0.079800 ms MarkObjects: 1.405500 ms  DeleteObjects: 0.051200 ms)
+
+Fewer observations (27) made than vector observation size (699). The observations will be padded.
+Unloading 2 Unused Serialized files (Serialized files now loaded: 0)
+UnloadTime: 0.605300 ms
+HDR Render Texture not supported, disabling HDR on reflection probe.
+Unloading 33 unused Assets to reduce memory usage. Loaded Objects now: 4479.
+Total: 1.681800 ms (FindLiveObjects: 0.160200 ms CreateObjectMapping: 0.079600 ms MarkObjects: 1.392700 ms  DeleteObjects: 0.049200 ms)
+
+Fewer observations (27) made than vector observation size (699). The observations will be padded.
+Unloading 2 Unused Serialized files (Serialized files now loaded: 0)
+UnloadTime: 0.529700 ms
+HDR Render Texture not supported, disabling HDR on reflection probe.
+Unloading 33 unused Assets to reduce memory usage. Loaded Objects now: 4479.
+Total: 1.740100 ms (FindLiveObjects: 0.192100 ms CreateObjectMapping: 0.086200 ms MarkObjects: 1.413500 ms  DeleteObjects: 0.048000 ms)
+
+Fewer observations (27) made than vector observation size (699). The observations will be padded.
+TryGetTierFallSupportOwner: fallenDice=DiceEntity_6_0_Bottom_Normal owner=False
+MatchAttackerResolver: Failed to resolve tier-fall attacker. fallen=DiceEntity_6_0_Bottom_Normal cell=(6, 3) Expected a support owner or a sinking cluster member.
+Unloading 2 Unused Serialized files (Serialized files now loaded: 0)
+UnloadTime: 0.489100 ms
+HDR Render Texture not supported, disabling HDR on reflection probe.
+Unloading 33 unused Assets to reduce memory usage. Loaded Objects now: 4479.
+Total: 1.851600 ms (FindLiveObjects: 0.167200 ms CreateObjectMapping: 0.080300 ms MarkObjects: 1.550500 ms  DeleteObjects: 0.053600 ms)
+
+Fewer observations (27) made than vector observation size (699). The observations will be padded.
+Unloading 2 Unused Serialized files (Serialized files now loaded: 0)
+UnloadTime: 0.541700 ms
+HDR Render Texture not supported, disabling HDR on reflection probe.
+Unloading 33 unused Assets to reduce memory usage. Loaded Objects now: 4479.
+Total: 2.103400 ms (FindLiveObjects: 0.167900 ms CreateObjectMapping: 0.080400 ms MarkObjects: 1.793800 ms  DeleteObjects: 0.061300 ms)
+
+Fewer observations (27) made than vector observation size (699). The observations will be padded.
+Unloading 2 Unused Serialized files (Serialized files now loaded: 0)
+UnloadTime: 0.669700 ms
+HDR Render Texture not supported, disabling HDR on reflection probe.
+Unloading 33 unused Assets to reduce memory usage. Loaded Objects now: 4479.
+Total: 1.771700 ms (FindLiveObjects: 0.172100 ms CreateObjectMapping: 0.091000 ms MarkObjects: 1.456100 ms  DeleteObjects: 0.052300 ms)
+
+Fewer observations (27) made than vector observation size (699). The observations will be padded.
+Unloading 2 Unused Serialized files (Serialized files now loaded: 0)
+UnloadTime: 0.618600 ms
+HDR Render Texture not supported, disabling HDR on reflection probe.
+Unloading 33 unused Assets to reduce memory usage. Loaded Objects now: 4479.
+Total: 1.828600 ms (FindLiveObjects: 0.157900 ms CreateObjectMapping: 0.081000 ms MarkObjects: 1.538900 ms  DeleteObjects: 0.050700 ms)
+
+Fewer observations (27) made than vector observation size (699). The observations will be padded.
+Unloading 2 Unused Serialized files (Serialized files now loaded: 0)
+UnloadTime: 0.612600 ms
+HDR Render Texture not supported, disabling HDR on reflection probe.
+Unloading 33 unused Assets to reduce memory usage. Loaded Objects now: 4479.
+Total: 1.920000 ms (FindLiveObjects: 0.171300 ms CreateObjectMapping: 0.081400 ms MarkObjects: 1.612400 ms  DeleteObjects: 0.054900 ms)
+
+Fewer observations (27) made than vector observation size (699). The observations will be padded.
+TryGetTierFallSupportOwner: fallenDice=DiceEntity_4_3_Bottom_Normal owner=False
+MatchAttackerResolver: Failed to resolve tier-fall attacker. fallen=DiceEntity_4_3_Bottom_Normal cell=(5, 2) Expected a support owner or a sinking cluster member.
+Unloading 2 Unused Serialized files (Serialized files now loaded: 0)
+UnloadTime: 0.485100 ms
+HDR Render Texture not supported, disabling HDR on reflection probe.
+Unloading 33 unused Assets to reduce memory usage. Loaded Objects now: 4479.
+Total: 2.942900 ms (FindLiveObjects: 0.158800 ms CreateObjectMapping: 0.080800 ms MarkObjects: 2.560400 ms  DeleteObjects: 0.142800 ms)
+
+Fewer observations (27) made than vector observation size (699). The observations will be padded.
+Unloading 2 Unused Serialized files (Serialized files now loaded: 0)
+UnloadTime: 0.503500 ms
+HDR Render Texture not supported, disabling HDR on reflection probe.
+Unloading 33 unused Assets to reduce memory usage. Loaded Objects now: 4479.
+Total: 2.369700 ms (FindLiveObjects: 0.158700 ms CreateObjectMapping: 0.079600 ms MarkObjects: 2.058000 ms  DeleteObjects: 0.073200 ms)
+
+Fewer observations (27) made than vector observation size (699). The observations will be padded.
+TryGetTierFallSupportOwner: fallenDice=DiceEntity_4_3_Bottom_Normal owner=True
+TryResolveAttackerForTierFall: resolved attacker=Player1 from support owner
+Unloading 2 Unused Serialized files (Serialized files now loaded: 0)
+UnloadTime: 0.585100 ms
+HDR Render Texture not supported, disabling HDR on reflection probe.
+Unloading 33 unused Assets to reduce memory usage. Loaded Objects now: 4479.
+Total: 1.831000 ms (FindLiveObjects: 0.157300 ms CreateObjectMapping: 0.081400 ms MarkObjects: 1.534200 ms  DeleteObjects: 0.057700 ms)
+
+Fewer observations (27) made than vector observation size (699). The observations will be padded.
+Unloading 2 Unused Serialized files (Serialized files now loaded: 0)
+UnloadTime: 0.554500 ms
+HDR Render Texture not supported, disabling HDR on reflection probe.
+Unloading 33 unused Assets to reduce memory usage. Loaded Objects now: 4479.
+Total: 2.021800 ms (FindLiveObjects: 0.177400 ms CreateObjectMapping: 0.084500 ms MarkObjects: 1.706400 ms  DeleteObjects: 0.053300 ms)
+
+Fewer observations (27) made than vector observation size (699). The observations will be padded.
+Unloading 2 Unused Serialized files (Serialized files now loaded: 0)
+UnloadTime: 0.549700 ms
+HDR Render Texture not supported, disabling HDR on reflection probe.
+Unloading 33 unused Assets to reduce memory usage. Loaded Objects now: 4479.
+Total: 2.264200 ms (FindLiveObjects: 0.160900 ms CreateObjectMapping: 0.081800 ms MarkObjects: 1.960600 ms  DeleteObjects: 0.060900 ms)
+
+Fewer observations (27) made than vector observation size (699). The observations will be padded.
+Unloading 2 Unused Serialized files (Serialized files now loaded: 0)
+UnloadTime: 0.549600 ms
+HDR Render Texture not supported, disabling HDR on reflection probe.
+Unloading 33 unused Assets to reduce memory usage. Loaded Objects now: 4479.
+Total: 1.829300 ms (FindLiveObjects: 0.159700 ms CreateObjectMapping: 0.080100 ms MarkObjects: 1.542400 ms  DeleteObjects: 0.047000 ms)
+
+Fewer observations (27) made than vector observation size (699). The observations will be padded.
+Unloading 2 Unused Serialized files (Serialized files now loaded: 0)
+UnloadTime: 0.536400 ms
+HDR Render Texture not supported, disabling HDR on reflection probe.
+Unloading 33 unused Assets to reduce memory usage. Loaded Objects now: 4479.
+Total: 1.879600 ms (FindLiveObjects: 0.160800 ms CreateObjectMapping: 0.080600 ms MarkObjects: 1.586900 ms  DeleteObjects: 0.051200 ms)
+
+Fewer observations (27) made than vector observation size (699). The observations will be padded.
+Unloading 2 Unused Serialized files (Serialized files now loaded: 0)
+UnloadTime: 0.571300 ms
+HDR Render Texture not supported, disabling HDR on reflection probe.
+Unloading 33 unused Assets to reduce memory usage. Loaded Objects now: 4479.
+Total: 1.700200 ms (FindLiveObjects: 0.166800 ms CreateObjectMapping: 0.081300 ms MarkObjects: 1.404300 ms  DeleteObjects: 0.047600 ms)
+
+Fewer observations (27) made than vector observation size (699). The observations will be padded.
+Unloading 2 Unused Serialized files (Serialized files now loaded: 0)
+UnloadTime: 0.618900 ms
+HDR Render Texture not supported, disabling HDR on reflection probe.
+Unloading 33 unused Assets to reduce memory usage. Loaded Objects now: 4479.
+Total: 1.723100 ms (FindLiveObjects: 0.180700 ms CreateObjectMapping: 0.087600 ms MarkObjects: 1.406800 ms  DeleteObjects: 0.047700 ms)
+
+Fewer observations (27) made than vector observation size (699). The observations will be padded.
+TryGetTierFallSupportOwner: fallenDice=DiceEntity_3_2_Bottom_Normal owner=True
+TryResolveAttackerForTierFall: resolved attacker=Player1 from support owner
+Unloading 2 Unused Serialized files (Serialized files now loaded: 0)
+UnloadTime: 0.476600 ms
+HDR Render Texture not supported, disabling HDR on reflection probe.
+Unloading 33 unused Assets to reduce memory usage. Loaded Objects now: 4479.
+Total: 1.999700 ms (FindLiveObjects: 0.163800 ms CreateObjectMapping: 0.081700 ms MarkObjects: 1.663600 ms  DeleteObjects: 0.090400 ms)
+
+Fewer observations (27) made than vector observation size (699). The observations will be padded.
+TryGetTierFallSupportOwner: fallenDice=DiceEntity_5_5_Bottom_Normal owner=True
+TryResolveAttackerForTierFall: resolved attacker=Player1 from support owner
+Unloading 2 Unused Serialized files (Serialized files now loaded: 0)
+UnloadTime: 0.508800 ms
+HDR Render Texture not supported, disabling HDR on reflection probe.
+Unloading 33 unused Assets to reduce memory usage. Loaded Objects now: 4479.
+Total: 1.717400 ms (FindLiveObjects: 0.157800 ms CreateObjectMapping: 0.081600 ms MarkObjects: 1.428700 ms  DeleteObjects: 0.049100 ms)
+
+Fewer observations (27) made than vector observation size (699). The observations will be padded.
+Unloading 2 Unused Serialized files (Serialized files now loaded: 0)
+UnloadTime: 0.537900 ms
+HDR Render Texture not supported, disabling HDR on reflection probe.
+Unloading 33 unused Assets to reduce memory usage. Loaded Objects now: 4479.
+Total: 2.284600 ms (FindLiveObjects: 0.254000 ms CreateObjectMapping: 0.120700 ms MarkObjects: 1.848700 ms  DeleteObjects: 0.061100 ms)
+
+Fewer observations (27) made than vector observation size (699). The observations will be padded.
+TryGetTierFallSupportOwner: fallenDice=DiceEntity_2_5_Bottom_Normal owner=False
+MatchAttackerResolver: Failed to resolve tier-fall attacker. fallen=DiceEntity_2_5_Bottom_Normal cell=(3, 5) Expected a support owner or a sinking cluster member.
+Unloading 2 Unused Serialized files (Serialized files now loaded: 0)
+UnloadTime: 0.528100 ms
+HDR Render Texture not supported, disabling HDR on reflection probe.
+Unloading 33 unused Assets to reduce memory usage. Loaded Objects now: 4479.
+Total: 1.810400 ms (FindLiveObjects: 0.176200 ms CreateObjectMapping: 0.082800 ms MarkObjects: 1.484800 ms  DeleteObjects: 0.066500 ms)
+
+Fewer observations (27) made than vector observation size (699). The observations will be padded.
+TryGetTierFallSupportOwner: fallenDice=DiceEntity_2_4_Bottom_Normal owner=True
+TryResolveAttackerForTierFall: resolved attacker=Player1 from support owner
+TryGetTierFallSupportOwner: fallenDice=DiceEntity_2_5_Bottom_Normal owner=False
+MatchAttackerResolver: Failed to resolve tier-fall attacker. fallen=DiceEntity_2_5_Bottom_Normal cell=(4, 5) Expected a support owner or a sinking cluster member.
+Unloading 2 Unused Serialized files (Serialized files now loaded: 0)
+UnloadTime: 0.527100 ms
+HDR Render Texture not supported, disabling HDR on reflection probe.
+Unloading 33 unused Assets to reduce memory usage. Loaded Objects now: 4479.
+Total: 1.758900 ms (FindLiveObjects: 0.162100 ms CreateObjectMapping: 0.081700 ms MarkObjects: 1.464700 ms  DeleteObjects: 0.050200 ms)
+
+Fewer observations (27) made than vector observation size (699). The observations will be padded.
+Unloading 2 Unused Serialized files (Serialized files now loaded: 0)
+UnloadTime: 0.523700 ms
+HDR Render Texture not supported, disabling HDR on reflection probe.
+Unloading 33 unused Assets to reduce memory usage. Loaded Objects now: 4479.
+Total: 1.806400 ms (FindLiveObjects: 0.160300 ms CreateObjectMapping: 0.081600 ms MarkObjects: 1.516100 ms  DeleteObjects: 0.048000 ms)
+
+Fewer observations (27) made than vector observation size (699). The observations will be padded.
+Unloading 2 Unused Serialized files (Serialized files now loaded: 0)
+UnloadTime: 0.608900 ms
+HDR Render Texture not supported, disabling HDR on reflection probe.
+Unloading 33 unused Assets to reduce memory usage. Loaded Objects now: 4479.
+Total: 1.724200 ms (FindLiveObjects: 0.161600 ms CreateObjectMapping: 0.080300 ms MarkObjects: 1.431100 ms  DeleteObjects: 0.051000 ms)
+
+Fewer observations (27) made than vector observation size (699). The observations will be padded.
+Unloading 2 Unused Serialized files (Serialized files now loaded: 0)
+UnloadTime: 0.518100 ms
+HDR Render Texture not supported, disabling HDR on reflection probe.
+Unloading 33 unused Assets to reduce memory usage. Loaded Objects now: 4479.
+Total: 1.781500 ms (FindLiveObjects: 0.172200 ms CreateObjectMapping: 0.080600 ms MarkObjects: 1.478400 ms  DeleteObjects: 0.050200 ms)
+
+Fewer observations (27) made than vector observation size (699). The observations will be padded.
+Unloading 2 Unused Serialized files (Serialized files now loaded: 0)
+UnloadTime: 0.503000 ms
+HDR Render Texture not supported, disabling HDR on reflection probe.
+Unloading 33 unused Assets to reduce memory usage. Loaded Objects now: 4479.
+Total: 2.375900 ms (FindLiveObjects: 0.169800 ms CreateObjectMapping: 0.082800 ms MarkObjects: 2.038300 ms  DeleteObjects: 0.084800 ms)
+
+Fewer observations (27) made than vector observation size (699). The observations will be padded.
+Unloading 2 Unused Serialized files (Serialized files now loaded: 0)
+UnloadTime: 0.587200 ms
+HDR Render Texture not supported, disabling HDR on reflection probe.
+Unloading 33 unused Assets to reduce memory usage. Loaded Objects now: 4479.
+Total: 2.415800 ms (FindLiveObjects: 0.193800 ms CreateObjectMapping: 0.086100 ms MarkObjects: 2.073900 ms  DeleteObjects: 0.061800 ms)
+
+Fewer observations (27) made than vector observation size (699). The observations will be padded.
+Unloading 2 Unused Serialized files (Serialized files now loaded: 0)
+UnloadTime: 0.530000 ms
+HDR Render Texture not supported, disabling HDR on reflection probe.
+Unloading 33 unused Assets to reduce memory usage. Loaded Objects now: 4479.
+Total: 1.882800 ms (FindLiveObjects: 0.203600 ms CreateObjectMapping: 0.121100 ms MarkObjects: 1.506800 ms  DeleteObjects: 0.051100 ms)
+
+Fewer observations (27) made than vector observation size (699). The observations will be padded.
+Unable to save timers to file D:/Document/Unity/Project/Dice/Build/Dice_Data\ML-Agents\Timers\Game_timers.json
+[Physics::Module] Cleanup current backned.
+[Physics::Module] Id: 0xf2b8ea05
+Input System module state changed to: ShutdownInProgress.
+Input System polling thread exited.
+Input System module state changed to: Shutdown.

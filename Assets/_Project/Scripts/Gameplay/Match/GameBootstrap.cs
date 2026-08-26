@@ -87,6 +87,7 @@ namespace DiceGame.Gameplay
         readonly List<CharacterController> characters = new();
         bool sessionStarted;
         ResolvedSessionSetup resolvedSetup;
+        MlCurriculumStage activeCurriculumStage;
 
         public Board Board => board;
         public GameObject DiceEntityPrefab => diceEntityPrefab;
@@ -178,6 +179,14 @@ namespace DiceGame.Gameplay
             }
 
             var session = SessionState.Instance;
+            activeCurriculumStage = ResolveActiveCurriculumStage();
+            if (LaunchArgs.HasCurriculumStage && activeCurriculumStage == null) {
+                Debug.LogError(
+                    $"GameBootstrap: Failed to resolve curriculum stage {LaunchArgs.CurriculumStageNumber}.");
+                AbortPendingSessionStart();
+                return;
+            }
+
             resolvedSetup = ResolvedSessionSetup.Resolve(
                 gameSessionSettings,
                 diceSpawnSettings,
@@ -186,13 +195,19 @@ namespace DiceGame.Gameplay
                 playerInputSettings,
                 session?.CurrentSetup);
 
-            if (resolvedSetup.BoardSettings == null) {
+            if (resolvedSetup.BoardSettings == null && activeCurriculumStage == null) {
                 Debug.LogError("GameBootstrap: BoardSettings is not assigned.");
                 AbortPendingSessionStart();
                 return;
             }
 
-            if (GameModeRules.IsVersusLike(resolvedSetup.GameMode)) {
+            if (activeCurriculumStage != null) {
+                if (!activeCurriculumStage.TryValidate(out var curriculumError)) {
+                    Debug.LogError($"GameBootstrap: {curriculumError}");
+                    AbortPendingSessionStart();
+                    return;
+                }
+            } else if (GameModeRules.IsVersusLike(resolvedSetup.GameMode)) {
                 if (!resolvedSetup.BoardSettings.TryValidate(out var versusError)) {
                     Debug.LogError($"GameBootstrap: {versusError}");
                     AbortPendingSessionStart();
@@ -298,7 +313,17 @@ namespace DiceGame.Gameplay
             spawnSystem.AllowAutonomousSpawning = true;
 
             var playerCount = resolvedSetup.RequiredPlayerCount;
-            var startDice = spawnSystem.SpawnInitialPlayerDice(playerCount);
+            List<DiceController> startDice;
+            if (activeCurriculumStage != null) {
+                if (!TrySpawnCurriculumStage(activeCurriculumStage, out startDice, out var curriculumSpawnError)) {
+                    Debug.LogError($"GameBootstrap: {curriculumSpawnError}");
+                    AbortPendingSessionStart();
+                    return;
+                }
+            } else {
+                startDice = spawnSystem.SpawnInitialPlayerDice(playerCount);
+            }
+
             if (startDice.Count < playerCount) {
                 Debug.LogError($"GameBootstrap: Failed to spawn initial dice for {playerCount} player(s).");
                 AbortPendingSessionStart();
@@ -538,8 +563,36 @@ namespace DiceGame.Gameplay
             return onlineController != null ? onlineController.MatchSetupPresetRegistry : null;
         }
 
+        MlCurriculumStage ResolveActiveCurriculumStage() {
+            if (!LaunchArgs.IsTrainingLaunch || !LaunchArgs.HasCurriculumStage) {
+                return null;
+            }
+
+            var catalog = FindPresetRegistry()?.MlCurriculumCatalog;
+            if (catalog == null) {
+                Debug.LogError("GameBootstrap: MlCurriculumCatalog is not assigned for curriculum training.");
+                return null;
+            }
+
+            if (!catalog.TryGetStage(LaunchArgs.CurriculumStageNumber, out var stage)) {
+                Debug.LogError(
+                    $"GameBootstrap: Curriculum stage {LaunchArgs.CurriculumStageNumber} not found.");
+                return null;
+            }
+
+            return stage;
+        }
+
         bool TryConfigureBoardForSession(out string errorMessage) {
             errorMessage = null;
+
+            if (activeCurriculumStage != null) {
+                board.ConfigureStandardArena(
+                    activeCurriculumStage.BoardWidth,
+                    activeCurriculumStage.BoardHeight);
+                boardView?.RebuildFloor();
+                return true;
+            }
 
             if (GameModeRules.IsVersusLike(resolvedSetup.GameMode)) {
                 var versusSettings = resolvedSetup.BoardSettings;
@@ -560,6 +613,34 @@ namespace DiceGame.Gameplay
 
         bool TryConfigureSpawnSystem(out string errorMessage) {
             errorMessage = null;
+
+            if (activeCurriculumStage != null) {
+                var plumbingCatalog = resolvedSetup.SharedDiceCatalog;
+                if (plumbingCatalog == null) {
+                    plumbingCatalog = FindPresetRegistry()?.DefaultSharedCatalog;
+                }
+
+                if (plumbingCatalog == null) {
+                    errorMessage =
+                        "Curriculum training needs a plumbing DiceCatalog " +
+                        "(MatchSetupPresetRegistry.DefaultSharedCatalog) for spawn system setup.";
+                    return false;
+                }
+
+                spawnSystem.Configure(
+                    board,
+                    registry,
+                    diceEntityPrefab,
+                    plumbingCatalog,
+                    transform,
+                    physicsSettings,
+                    diceAnimationSettings,
+                    diceErasureSettings,
+                    matchActionContext,
+                    activeCurriculumStage.SpawnSettings,
+                    spawnRandom);
+                return true;
+            }
 
             if (GameModeRules.IsVersusLike(resolvedSetup.GameMode)) {
                 var versusSettings = resolvedSetup.BoardSettings;
@@ -601,6 +682,53 @@ namespace DiceGame.Gameplay
                 matchActionContext,
                 resolvedSetup.SharedSpawnSettings,
                 spawnRandom);
+            return true;
+        }
+
+        bool TrySpawnCurriculumStage(
+            MlCurriculumStage stage,
+            out List<DiceController> startDice,
+            out string errorMessage) {
+            startDice = new List<DiceController>();
+            if (stage.StageNumber != 1) {
+                errorMessage =
+                    $"Curriculum stage {stage.StageNumber} is not implemented yet (only Stage 1).";
+                return false;
+            }
+
+            if (!MlCurriculumOneMoveSeeder.TryCreateLayout(board, stage, spawnRandom, out var layout)) {
+                errorMessage = "Failed to create Stage 1 one-move curriculum layout.";
+                return false;
+            }
+
+            var animate = stage.AnimateInitialDiceSpawn;
+            var work = spawnSystem.SpawnFixedDice(
+                layout.WorkCell,
+                layout.Tier,
+                layout.WorkKind,
+                layout.WorkOrientation,
+                animate,
+                PlayerSlot.Player1);
+            var partner = spawnSystem.SpawnFixedDice(
+                layout.PartnerCell,
+                layout.Tier,
+                layout.PartnerKind,
+                layout.PartnerOrientation,
+                animate,
+                PlayerSlot.Player1);
+
+            if (work == null || partner == null) {
+                errorMessage = "Failed to spawn Stage 1 curriculum dice.";
+                return false;
+            }
+
+            // Standing die for the trainee must be first.
+            startDice.Add(work);
+            errorMessage = null;
+            Debug.Log(
+                $"GameBootstrap: Curriculum Stage1 layout work={layout.WorkCell} " +
+                $"partner={layout.PartnerCell} solution={layout.SolutionDirection} " +
+                $"targetFace={stage.TargetFace}");
             return true;
         }
 
@@ -734,10 +862,11 @@ namespace DiceGame.Gameplay
             GameObject characterObject,
             CharacterController characterController,
             AiCharacterInputSource aiInput) {
-            var mlSettings = aiPlayerSettings.MlAgentSettings;
+            var mlSettings = ResolveMlAgentSettings();
             if (mlSettings == null) {
                 Debug.LogError(
-                    "GameBootstrap: AiControlMode is MlAgent but MlAgentSettings is not assigned on AiPlayerSettings.");
+                    "GameBootstrap: AiControlMode is MlAgent but MlAgentSettings is not assigned " +
+                    "(AiPlayerSettings or curriculum stage).");
                 return;
             }
 
@@ -751,24 +880,57 @@ namespace DiceGame.Gameplay
                 return;
             }
 
+            var observationSize = MlObservationEncoder.GetObservationSize(board);
+            if (observationSize <= MlObservationEncoder.GetObservationSize(1, 1)
+                && (board.Width > 1 || board.Height > 1)) {
+                Debug.LogError(
+                    $"GameBootstrap: Invalid ML observation size {observationSize} " +
+                    $"for board {board.Width}x{board.Height}.");
+                return;
+            }
+
+            // BehaviorParameters must be fully sized before the Agent initializes sensors.
+            var existingAgent = characterObject.GetComponent<MlCharacterAgent>();
+            if (existingAgent != null) {
+                existingAgent.enabled = false;
+                DestroyImmediate(existingAgent);
+            }
+
             var behaviorParameters = characterObject.GetComponent<BehaviorParameters>();
             if (behaviorParameters == null) {
                 behaviorParameters = characterObject.AddComponent<BehaviorParameters>();
             }
 
             behaviorParameters.BehaviorName = mlSettings.BehaviorName;
-            behaviorParameters.BrainParameters.VectorObservationSize =
-                MlObservationEncoder.GetObservationSize(board);
+            behaviorParameters.BrainParameters.VectorObservationSize = observationSize;
             behaviorParameters.BrainParameters.ActionSpec =
                 ActionSpec.MakeDiscrete(MlDiscreteActions.Count);
+            behaviorParameters.Model = mlSettings.Model;
+            behaviorParameters.InferenceDevice = mlSettings.InferenceDevice;
+            behaviorParameters.BehaviorType = ResolveMlBehaviorType(mlSettings);
 
-            var agent = characterObject.GetComponent<MlCharacterAgent>();
-            if (agent == null) {
-                agent = characterObject.AddComponent<MlCharacterAgent>();
+            if (!LaunchArgs.IsTrainingLaunch && mlSettings.Model == null) {
+                Debug.LogWarning(
+                    "GameBootstrap: MlAgentSettings.Model is not assigned; " +
+                    "local play falls back to Heuristic until a trainer connects.");
             }
 
+            var agent = characterObject.AddComponent<MlCharacterAgent>();
             agent.enabled = false;
-            agent.Configure(characterController, registry, aiInput, mlSettings);
+            agent.Configure(
+                characterController,
+                registry,
+                aiInput,
+                mlSettings,
+                activeCurriculumStage,
+                board);
+            if (mlSettings.Model != null) {
+                agent.SetModel(
+                    mlSettings.BehaviorName,
+                    mlSettings.Model,
+                    mlSettings.InferenceDevice);
+            }
+
             agent.enabled = true;
 
             var decisionRequester = characterObject.GetComponent<DecisionRequester>();
@@ -780,6 +942,24 @@ namespace DiceGame.Gameplay
             decisionRequester.DecisionPeriod = Mathf.Max(1, mlSettings.DecisionPeriod);
             decisionRequester.TakeActionsBetweenDecisions = true;
             decisionRequester.enabled = true;
+        }
+
+        static BehaviorType ResolveMlBehaviorType(MlAgentSettings mlSettings) {
+            if (LaunchArgs.IsTrainingLaunch) {
+                return BehaviorType.Default;
+            }
+
+            return mlSettings != null && mlSettings.Model != null
+                ? BehaviorType.InferenceOnly
+                : BehaviorType.Default;
+        }
+
+        MlAgentSettings ResolveMlAgentSettings() {
+            if (activeCurriculumStage != null && activeCurriculumStage.MlAgentSettings != null) {
+                return activeCurriculumStage.MlAgentSettings;
+            }
+
+            return aiPlayerSettings != null ? aiPlayerSettings.MlAgentSettings : null;
         }
 
         static void DisableMlAgentControl(GameObject characterObject) {

@@ -1,0 +1,38 @@
+{
+    "DiceBehavior": {
+        "checkpoints": [
+            {
+                "steps": 499996,
+                "file_path": "results\\dice-curriculum-stage01\\DiceBehavior\\DiceBehavior-499996.onnx",
+                "reward": -0.2921855706030253,
+                "creation_time": 1786677007.2619724,
+                "auxillary_file_paths": [
+                    "results\\dice-curriculum-stage01\\DiceBehavior\\DiceBehavior-499996.pt"
+                ]
+            },
+            {
+                "steps": 500013,
+                "file_path": "results\\dice-curriculum-stage01\\DiceBehavior\\DiceBehavior-500013.onnx",
+                "reward": -0.29212121554471626,
+                "creation_time": 1786677007.420613,
+                "auxillary_file_paths": [
+                    "results\\dice-curriculum-stage01\\DiceBehavior\\DiceBehavior-500013.pt"
+                ]
+            }
+        ],
+        "final_checkpoint": {
+            "steps": 500013,
+            "file_path": "results\\dice-curriculum-stage01\\DiceBehavior.onnx",
+            "reward": -0.29212121554471626,
+            "creation_time": 1786677007.420613,
+            "auxillary_file_paths": [
+                "results\\dice-curriculum-stage01\\DiceBehavior\\DiceBehavior-500013.pt"
+            ]
+        }
+    },
+    "metadata": {
+        "stats_format_version": "0.3.0",
+        "mlagents_version": "1.1.0",
+        "torch_version": "2.5.1+cu121"
+    }
+}

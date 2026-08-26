@@ -9,6 +9,7 @@ namespace DiceGame.Config
         [SerializeField] DiceCatalog[] catalogPresets = System.Array.Empty<DiceCatalog>();
         [SerializeField] AttackDefaultPresetCatalog attackDefaultPresetCatalog;
         [SerializeField] ChallengeModeSettings challengeModeSettings;
+        [SerializeField] MlCurriculumCatalog mlCurriculumCatalog;
         [SerializeField] PlayerNaturalSendSettings[] naturalSendPresets =
             System.Array.Empty<PlayerNaturalSendSettings>();
 
@@ -32,12 +33,15 @@ namespace DiceGame.Config
         public DiceCatalog[] CatalogPresets => catalogPresets;
         public AttackDefaultPresetCatalog AttackDefaultPresetCatalog => attackDefaultPresetCatalog;
         public ChallengeModeSettings ChallengeModeSettings => challengeModeSettings;
+        public MlCurriculumCatalog MlCurriculumCatalog => mlCurriculumCatalog;
         public PlayerAttackSettings[] AttackPresets =>
             attackDefaultPresetCatalog != null
                 ? attackDefaultPresetCatalog.Presets
                 : System.Array.Empty<PlayerAttackSettings>();
         public PlayerNaturalSendSettings[] NaturalSendPresets => naturalSendPresets;
         public PlayerInputSettings DefaultPlayerInputSettings => defaultPlayerInputSettings;
+        public DiceCatalog DefaultSharedCatalog => defaultSharedCatalog;
+        public DiceSpawnSettings DefaultSharedSpawn => defaultSharedSpawn;
 
         public MatchSetupSnapshot CreateDefaultSnapshot(GameMode mode) {
             if (mode == GameMode.Challenge) {

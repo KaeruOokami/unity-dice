@@ -9,6 +9,7 @@ using DiceGame.Session;
 using DiceGame.Versus;
 using Unity.MLAgents;
 using Unity.MLAgents.Actuators;
+using Unity.MLAgents.Policies;
 using Unity.MLAgents.Sensors;
 using UnityEngine;
 
@@ -23,11 +24,14 @@ namespace DiceGame.Gameplay.AI.Application
     {
         CharacterController character;
         DiceRegistry registry;
+        Board observationBoard;
         AiCharacterInputSource inputSource;
         MlAgentSettings settings;
+        MlCurriculumStage curriculumStage;
         GameFlowController gameFlow;
         DiceMatchErasureSystem erasureSystem;
         float[] observationBuffer;
+        int expectedObservationSize;
         readonly AiDebugOverlaySnapshot debugOverlay = new AiDebugOverlaySnapshot();
 
         int lastActionId = MlDiscreteActions.Wait;
@@ -42,18 +46,26 @@ namespace DiceGame.Gameplay.AI.Application
         Coroutine pendingCloseRoutine;
 
         public AiDebugOverlaySnapshot DebugOverlay => debugOverlay;
-        public Board DebugBoard => registry != null ? registry.Board : null;
+        public Board DebugBoard => observationBoard != null
+            ? observationBoard
+            : registry != null ? registry.Board : null;
         public bool DebugGizmoEnabled => settings != null && settings.DebugGizmo;
 
         public void Configure(
             CharacterController targetCharacter,
             DiceRegistry targetRegistry,
             AiCharacterInputSource targetInputSource,
-            MlAgentSettings targetSettings) {
+            MlAgentSettings targetSettings,
+            MlCurriculumStage targetCurriculumStage = null,
+            Board targetBoard = null) {
             character = targetCharacter;
             registry = targetRegistry;
             inputSource = targetInputSource;
             settings = targetSettings;
+            curriculumStage = targetCurriculumStage;
+            observationBoard = targetBoard != null
+                ? targetBoard
+                : targetRegistry != null ? targetRegistry.Board : null;
 
             if (settings == null) {
                 Debug.LogError("MlCharacterAgent.Configure: MlAgentSettings is null.");
@@ -63,8 +75,16 @@ namespace DiceGame.Gameplay.AI.Application
 
             // Episode length is owned here so timeout rewards can be applied before EndEpisode.
             MaxStep = 0;
-            observationBuffer = new float[MlObservationEncoder.GetObservationSize(
-                registry != null ? registry.Board : null)];
+            expectedObservationSize = ResolveObservationSize(observationBoard);
+            EnsureObservationBuffer(expectedObservationSize);
+            if (observationBoard != null
+                && (observationBoard.Width > 1 || observationBoard.Height > 1)
+                && expectedObservationSize <= MlObservationEncoder.GetObservationSize(1, 1)) {
+                Debug.LogError(
+                    "MlCharacterAgent.Configure: Observation size collapsed to 1x1 fallback " +
+                    $"despite board {observationBoard.Width}x{observationBoard.Height}.");
+            }
+
             lastActionId = MlDiscreteActions.Wait;
             stepsThisEpisode = 0;
             lastProgressScore = 0f;
@@ -101,22 +121,65 @@ namespace DiceGame.Gameplay.AI.Application
             hasPendingClose = false;
             pendingStepCell = null;
             inputSource?.SetMove(Vector2.zero);
+            SyncObservationBufferToBoard();
         }
 
         public override void CollectObservations(VectorSensor sensor) {
+            SyncObservationBufferToBoard();
+            var expected = expectedObservationSize > 0
+                ? expectedObservationSize
+                : ResolveObservationSize(observationBoard ?? registry?.Board);
+
             if (character == null || registry == null || settings == null || observationBuffer == null) {
-                WriteZeros(sensor, observationBuffer != null
-                    ? observationBuffer.Length
-                    : MlObservationEncoder.GetObservationSize(null));
+                WriteZeros(sensor, expected);
                 return;
             }
 
+            var boardForWrite = observationBoard != null ? observationBoard : registry.Board;
+            if (boardForWrite == null) {
+                WriteZeros(sensor, expected);
+                return;
+            }
+
+            var writeSize = MlObservationEncoder.GetObservationSize(boardForWrite);
+            EnsureObservationBuffer(Mathf.Max(expected, writeSize));
             var snapshot = GameStateSnapshot.Capture(character, registry);
-            MlObservationEncoder.Write(
-                snapshot,
-                registry.Board,
-                observationBuffer);
-            sensor.AddObservation(observationBuffer);
+            MlObservationEncoder.Write(snapshot, boardForWrite, observationBuffer);
+
+            // Emit exactly the BehaviorParameters size; pad/truncate explicitly.
+            for (var i = 0; i < expected; i++) {
+                sensor.AddObservation(i < writeSize ? observationBuffer[i] : 0f);
+            }
+        }
+
+        void SyncObservationBufferToBoard() {
+            var boardForSize = observationBoard != null ? observationBoard : registry?.Board;
+            if (boardForSize == null) {
+                return;
+            }
+
+            var size = ResolveObservationSize(boardForSize);
+            if (size != expectedObservationSize || observationBuffer == null || observationBuffer.Length != size) {
+                expectedObservationSize = size;
+                EnsureObservationBuffer(size);
+            }
+
+            var behaviorParameters = GetComponent<BehaviorParameters>();
+            if (behaviorParameters != null
+                && behaviorParameters.BrainParameters.VectorObservationSize != expectedObservationSize) {
+                behaviorParameters.BrainParameters.VectorObservationSize = expectedObservationSize;
+            }
+        }
+
+        void EnsureObservationBuffer(int size) {
+            size = Mathf.Max(1, size);
+            if (observationBuffer == null || observationBuffer.Length != size) {
+                observationBuffer = new float[size];
+            }
+        }
+
+        static int ResolveObservationSize(Board board) {
+            return MlObservationEncoder.GetObservationSize(board);
         }
 
         public override void OnActionReceived(ActionBuffers actions) {
@@ -199,6 +262,10 @@ namespace DiceGame.Gameplay.AI.Application
                 AiDebugLog.Log(
                     $"MlErasure face={erasureEvent.Face} cluster={erasureEvent.ClusterSize} " +
                     $"chain={erasureEvent.ChainCount} snatch={erasureEvent.IsSnatch} reward={reward}");
+            }
+
+            if (curriculumStage != null && curriculumStage.EndEpisodeOnErasure) {
+                ScheduleEpisodeClose(settings.WinReward, "CurriculumErasure");
             }
         }
 

@@ -1,4 +1,3 @@
-using System;
 using DiceGame.Config;
 using UnityEngine;
 
@@ -12,6 +11,7 @@ namespace DiceGame.Session
     {
         public const string TrainFlag = "--dice-train";
         public const string ModeFlag = "--dice-mode";
+        public const string CurriculumFlag = "--dice-curriculum";
         public const string SkipIntroFlag = "--dice-skip-intro";
 
         public static bool IsTrainingLaunch { get; private set; }
@@ -19,14 +19,22 @@ namespace DiceGame.Session
         public static bool SkipIntro { get; private set; }
         public static GameMode TrainingGameMode { get; private set; } = GameMode.Single;
 
+        /// <summary>
+        /// 1-based curriculum stage. 0 means no curriculum (use TrainingGameMode / Single defaults).
+        /// </summary>
+        public static int CurriculumStageNumber { get; private set; }
+
+        public static bool HasCurriculumStage => CurriculumStageNumber > 0;
+
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.BeforeSceneLoad)]
         static void Parse() {
             IsTrainingLaunch = false;
             ForceMlAgent = false;
             SkipIntro = false;
             TrainingGameMode = GameMode.Single;
+            CurriculumStageNumber = 0;
 
-            var args = Environment.GetCommandLineArgs();
+            var args = System.Environment.GetCommandLineArgs();
             for (var i = 0; i < args.Length; i++) {
                 var arg = args[i];
                 if (arg == TrainFlag) {
@@ -41,6 +49,19 @@ namespace DiceGame.Session
                     continue;
                 }
 
+                if (arg == CurriculumFlag) {
+                    if (i + 1 >= args.Length
+                        || !int.TryParse(args[++i], out var stage)
+                        || stage < 1) {
+                        Debug.LogError(
+                            $"LaunchArgs: {CurriculumFlag} requires a positive stage number.");
+                        continue;
+                    }
+
+                    CurriculumStageNumber = stage;
+                    continue;
+                }
+
                 if (arg != ModeFlag) {
                     continue;
                 }
@@ -51,7 +72,7 @@ namespace DiceGame.Session
                 }
 
                 var raw = args[++i];
-                if (!Enum.TryParse(raw, ignoreCase: true, out GameMode parsed)) {
+                if (!System.Enum.TryParse(raw, ignoreCase: true, out GameMode parsed)) {
                     Debug.LogError($"LaunchArgs: Unknown game mode '{raw}'. Using {GameMode.Single}.");
                     TrainingGameMode = GameMode.Single;
                     continue;
@@ -60,9 +81,19 @@ namespace DiceGame.Session
                 TrainingGameMode = parsed;
             }
 
+            if (CurriculumStageNumber > 0 && !IsTrainingLaunch) {
+                Debug.LogWarning(
+                    $"LaunchArgs: {CurriculumFlag} {CurriculumStageNumber} ignored without {TrainFlag}.");
+                CurriculumStageNumber = 0;
+            }
+
             if (IsTrainingLaunch) {
+                var curriculumLog = HasCurriculumStage
+                    ? $" curriculum={CurriculumStageNumber}"
+                    : string.Empty;
                 Debug.Log(
-                    $"LaunchArgs: training launch mode={TrainingGameMode} forceMlAgent={ForceMlAgent} skipIntro={SkipIntro}");
+                    $"LaunchArgs: training launch mode={TrainingGameMode}{curriculumLog} " +
+                    $"forceMlAgent={ForceMlAgent} skipIntro={SkipIntro}");
             }
         }
 

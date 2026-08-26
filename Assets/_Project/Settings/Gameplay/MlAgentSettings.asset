@@ -15,6 +15,8 @@ MonoBehaviour:
   behaviorName: DiceBehavior
   decisionPeriod: 5
   maxEpisodeSteps: 5000
+  model: {fileID: 5022602860645237092, guid: 61c177707c56e6149bae61364af3c1fe, type: 3}
+  inferenceDevice: 0
   stepPenalty: -0.001
   erasureBaseReward: 0.5
   erasurePerClusterWeight: 0.15

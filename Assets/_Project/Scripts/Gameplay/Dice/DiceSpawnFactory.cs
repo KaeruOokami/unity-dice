@@ -350,6 +350,33 @@ namespace DiceGame.Gameplay
             return results;
         }
 
+        /// <summary>
+        /// Spawns a die with fixed kind/orientation (curriculum / authored layouts).
+        /// </summary>
+        public DiceController SpawnFixedDice(
+            Vector2Int gridPos,
+            DiceStackTier tier,
+            DiceKind kind,
+            DiceOrientation orientation,
+            bool useSpawnAppear,
+            PlayerSlot? catalogOwner = null) {
+            if (spawnSettings == null || board == null || registry == null) {
+                Debug.LogError("DiceSpawnSystem: SpawnFixedDice requires Configure() first.");
+                return null;
+            }
+
+            return SpawnDiceAt(
+                gridPos,
+                tier,
+                spawnSettings,
+                diceCatalog,
+                useSpawnAppear,
+                onComplete: null,
+                fixedKind: kind,
+                fixedOrientation: orientation,
+                catalogOwner: catalogOwner);
+        }
+
         List<DiceController> SpawnInitialVersusPlayers(int playerCount) {
             var results = new List<DiceController>(playerCount);
             if (board == null || registry == null) {
@@ -607,9 +634,15 @@ namespace DiceGame.Gameplay
                 return null;
             }
 
-            if (!catalog.TryGetMeshPrefab(kind, out var meshPrefab)) {
-                Debug.LogError($"DiceSpawnSystem: Mesh prefab not found for kind={kind}.");
-                return null;
+            GameObject meshPrefab = null;
+            if (!catalog.TryGetMeshPrefab(kind, out meshPrefab)) {
+                if (!fixedKind.HasValue) {
+                    Debug.LogError($"DiceSpawnSystem: Mesh prefab not found for kind={kind}.");
+                    return null;
+                }
+
+                // Fixed curriculum spawns may rely on DiceEntity default mesh.
+                meshPrefab = null;
             }
 
             var orientation = fixedOrientation ?? DiceSpawnFactory.CreateRandomOrientation(random);

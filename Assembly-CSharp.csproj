@@ -65,6 +65,7 @@
     <Compile Include="Assets\_Project\Scripts\Gameplay\AI\Domain\MatchGoalSelector.cs" />
     <Compile Include="Assets\_Project\Scripts\Config\MatchSetup\IBoardSettings.cs" />
     <Compile Include="Assets\_Project\Scripts\Gameplay\AI\Application\AiSinkingClusterEscapeCoordinator.cs" />
+    <Compile Include="Assets\_Project\Scripts\Gameplay\AI\Domain\MlCurriculumOneMoveSeeder.cs" />
     <Compile Include="Assets\_Project\Scripts\Config\MatchSetup\MatchSetupNetworkCodec.cs" />
     <Compile Include="Assets\_Project\Scripts\Placement\Interaction\LiftPassability.cs" />
     <Compile Include="Assets\_Project\Scripts\Session\Network\LockstepTickInputSource.cs" />
@@ -90,6 +91,7 @@
     <Compile Include="Assets\_Project\Scripts\Session\TitleMenuUi.cs" />
     <Compile Include="Assets\_Project\Scripts\Gameplay\AI\Application\Actions\AiDiscreteActions.cs" />
     <Compile Include="Assets\_Project\Scripts\Placement\Movement\MovementTransition.cs" />
+    <Compile Include="Assets\_Project\Scripts\Config\MlCurriculum\MlCurriculumCatalog.cs" />
     <Compile Include="Assets\_Project\Scripts\Placement\Movement\MoveFacts.cs" />
     <Compile Include="Assets\_Project\Scripts\Gameplay\AI\Application\IAiDebugStepGeometry.cs" />
     <Compile Include="Assets\_Project\Scripts\Session\ControlsPanelLabels.cs" />
@@ -119,8 +121,8 @@
     <Compile Include="Assets\_Project\Scripts\Config\MatchSetup\DiceCatalogData.cs" />
     <Compile Include="Assets\_Project\Scripts\Placement\Occupancy\CellOccupancyQuery.cs" />
     <Compile Include="Assets\_Project\Scripts\Session\AttackPresetLabels.cs" />
-    <Compile Include="Assets\_Project\Scripts\Placement\Support\SupportKind.cs" />
     <Compile Include="Assets\_Project\Scripts\Gameplay\Match\MatchEndEvent.cs" />
+    <Compile Include="Assets\_Project\Scripts\Placement\Support\SupportKind.cs" />
     <Compile Include="Assets\_Project\Scripts\Core\Behavior\DiceEffectiveBehaviorResolver.cs" />
     <Compile Include="Assets\_Project\Scripts\Session\Network\OnlineClientFlowAdapter.cs" />
     <Compile Include="Assets\_Project\Scripts\Config\PlayerAttackSettings.cs" />
@@ -152,6 +154,7 @@
     <Compile Include="Assets\_Project\Scripts\Board\PartitionBoundaryPolicy.cs" />
     <Compile Include="Assets\_Project\Scripts\Gameplay\Match\MatchSeriesState.cs" />
     <Compile Include="Assets\_Project\Scripts\Session\Network\OnlineCharacterStatePayload.cs" />
+    <Compile Include="Assets\_Project\Scripts\Config\MlCurriculum\MlCurriculumStage.cs" />
     <Compile Include="Assets\_Project\Scripts\Session\MatchSetupCategoryLabels.cs" />
     <Compile Include="Assets\_Project\Scripts\Session\PlayerBindingOverridesPersistFile.cs" />
     <Compile Include="Assets\_Project\Scripts\Placement\Occupancy\SurfaceHeightLevel.cs" />
@@ -186,8 +189,8 @@
     <Compile Include="Assets\_Project\Scripts\Session\DiceCatalogPanelUi.cs" />
     <Compile Include="Assets\_Project\Scripts\Placement\Movement\Walk\HeightTransferAction.cs" />
     <Compile Include="Assets\_Project\Scripts\Gameplay\Dice\DiceController.cs" />
-    <Compile Include="Assets\_Project\Scripts\View\DiceVisualMotion.cs" />
     <Compile Include="Assets\_Project\Scripts\Session\Network\OnlineClientCharacterBinder.cs" />
+    <Compile Include="Assets\_Project\Scripts\View\DiceVisualMotion.cs" />
     <Compile Include="Assets\_Project\Scripts\Gameplay\Input\GameFlowInputReader.cs" />
     <Compile Include="Assets\_Project\Scripts\Gameplay\Match\MatchSeriesHud.cs" />
     <Compile Include="Assets\_Project\Scripts\Core\Motion\DiceTransition.cs" />
@@ -198,9 +201,9 @@
     <Compile Include="Assets\_Project\Scripts\Session\Network\RemoteNetworkInputSource.cs" />
     <Compile Include="Assets\_Project\Scripts\Placement\Registry\IDicePlacement.cs" />
     <Compile Include="Assets\_Project\Scripts\Gameplay\Dice\DiceMoveVisualContext.cs" />
-    <Compile Include="Assets\_Project\Scripts\Versus\ErasureResolvedEvent.cs" />
     <Compile Include="Assets\_Project\Scripts\Session\MatchSetupPersistence.cs" />
     <Compile Include="Assets\_Project\Scripts\Session\Network\OnlineSimResyncApplier.cs" />
+    <Compile Include="Assets\_Project\Scripts\Versus\ErasureResolvedEvent.cs" />
     <Compile Include="Assets\_Project\Scripts\Config\CharacterMovementSettings.cs" />
     <Compile Include="Assets\_Project\Scripts\Session\Network\OnlineNetMessenger.cs" />
     <Compile Include="Assets\_Project\Scripts\Config\MlAgentSettings.cs" />
@@ -209,8 +212,8 @@
     <Compile Include="Assets\_Project\Scripts\Gameplay\Match\PauseMenuUi.cs" />
     <Compile Include="Assets\_Project\Scripts\Versus\VersusAttackController.cs" />
     <Compile Include="Assets\_Project\Scripts\Gameplay\AI\Application\AiFloorRecoveryCoordinator.cs" />
-    <Compile Include="Assets\_Project\Scripts\Gameplay\AI\Domain\MatchGoalPlanner.cs" />
     <Compile Include="Assets\_Project\Scripts\Placement\Movement\Walk\HeightTransferBuilder.cs" />
+    <Compile Include="Assets\_Project\Scripts\Gameplay\AI\Domain\MatchGoalPlanner.cs" />
     <Compile Include="Assets\_Project\Scripts\Session\SessionConstants.cs" />
     <Compile Include="Assets\_Project\Scripts\Placement\Movement\Grid\DiceGridPassability.cs" />
     <Compile Include="Assets\_Project\Scripts\Session\SessionState.cs" />
@@ -236,8 +239,8 @@
     <Compile Include="Assets\_Project\Scripts\Placement\Movement\Grid\JumpGridPassability.cs" />
     <Compile Include="Assets\_Project\Scripts\Versus\AttackQueue.cs" />
     <Compile Include="Assets\_Project\Scripts\Session\SceneNames.cs" />
-    <Compile Include="Assets\_Project\Scripts\Core\Behavior\DiceStandingMoveMode.cs" />
     <Compile Include="Assets\_Project\Scripts\Gameplay\AI\Domain\MlProgressRewardEvaluator.cs" />
+    <Compile Include="Assets\_Project\Scripts\Core\Behavior\DiceStandingMoveMode.cs" />
     <Compile Include="Assets\_Project\Scripts\Gameplay\Character\CharacterTransformDriver.cs" />
     <Compile Include="Assets\_Project\Scripts\Session\ChallengeSetupPanelUi.cs" />
     <Compile Include="Assets\_Project\Scripts\Placement\Occupancy\NormalizedHeight.cs" />
@@ -269,10 +272,10 @@
     <Compile Include="Assets\_Project\Scripts\Gameplay\AI\Domain\LiftClearancePlanner.cs" />
     <Compile Include="Assets\_Project\Scripts\Core\Behavior\DicePushMoveStyle.cs" />
     <Compile Include="Assets\_Project\Scripts\Placement\Movement\MoveAction.cs" />
+    <Compile Include="Assets\_Project\Scripts\Gameplay\AI\Domain\MlObservationEncoder.cs" />
     <Compile Include="Assets\_Project\Scripts\Gameplay\AI\Domain\MatchGoalProgressSync.cs" />
     <Compile Include="Assets\_Project\Scripts\Placement\Movement\Grid\IceSlidePassability.cs" />
     <Compile Include="Assets\_Project\Scripts\Versus\Core\AttackKindBreakdown.cs" />
-    <Compile Include="Assets\_Project\Scripts\Gameplay\AI\Domain\MlObservationEncoder.cs" />
     <Compile Include="Assets\_Project\Scripts\Session\UnityGamingServicesAuth.cs" />
     <Compile Include="Assets\_Project\Scripts\Config\MatchSetup\GameModeDisplayNames.cs" />
     <Compile Include="Assets\_Project\Scripts\Gameplay\Character\CharacterStandingController.cs" />
@@ -301,8 +304,8 @@
     <Compile Include="Assets\_Project\Scripts\Core\Model\DiceState.cs" />
     <Compile Include="Assets\_Project\Scripts\Placement\Rules\DiceEffectiveBehaviorFactory.cs" />
     <Compile Include="Assets\_Project\Scripts\Board\VersusArenaLayout.cs" />
-    <Compile Include="Assets\_Project\Scripts\Gameplay\Match\MotionConflictEvaluator.cs" />
     <Compile Include="Assets\_Project\Scripts\Placement\Movement\Jump\JumpInputPolicy.cs" />
+    <Compile Include="Assets\_Project\Scripts\Gameplay\Match\MotionConflictEvaluator.cs" />
     <Compile Include="Assets\_Project\Scripts\Core\Motion\GhostLandingMode.cs" />
     <Compile Include="Assets\_Project\Scripts\Gameplay\AI\Domain\LiftJoinPlanner.cs" />
     <Compile Include="Assets\_Project\Scripts\View\BoardView.cs" />
@@ -870,6 +873,10 @@
       <HintPath>Library\PackageCache\com.unity.services.wire@aba8a6fb1fe2\Plugins\websocket-sharp.dll</HintPath>
       <Private>False</Private>
     </Reference>
+    <Reference Include="System.IO.Abstractions">
+      <HintPath>Library\PackageCache\com.unity.ml-agents@51fac9654958\Plugins\System.IO.Abstractions.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
     <Reference Include="Unity.Collections.LowLevel.ILSupport">
       <HintPath>Library\PackageCache\com.unity.collections@84e8eb3fc12e\Unity.Collections.LowLevel.ILSupport\Unity.Collections.LowLevel.ILSupport.dll</HintPath>
       <Private>False</Private>
@@ -882,6 +889,10 @@
       <HintPath>Library\PackageCache\com.unity.visualscripting@8bed5ad90189\Runtime\VisualScripting.Flow\Dependencies\NCalc\Unity.VisualScripting.Antlr3.Runtime.dll</HintPath>
       <Private>False</Private>
     </Reference>
+    <Reference Include="Grpc.Core">
+      <HintPath>Library\PackageCache\com.unity.ml-agents@51fac9654958\Plugins\ProtoBuffer\Grpc.Core.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
     <Reference Include="Newtonsoft.Json">
       <HintPath>Library\PackageCache\com.unity.nuget.newtonsoft-json@4dfd81071c64\Runtime\Newtonsoft.Json.dll</HintPath>
       <Private>False</Private>
@@ -892,14 +903,6 @@
     </Reference>
     <Reference Include="System.IO.Abstractions.TestingHelpers">
       <HintPath>Library\PackageCache\com.unity.ml-agents@51fac9654958\Plugins\System.IO.Abstractions.TestingHelpers.dll</HintPath>
-      <Private>False</Private>
-    </Reference>
-    <Reference Include="System.IO.Abstractions">
-      <HintPath>Library\PackageCache\com.unity.ml-agents@51fac9654958\Plugins\System.IO.Abstractions.dll</HintPath>
-      <Private>False</Private>
-    </Reference>
-    <Reference Include="Grpc.Core">
-      <HintPath>Library\PackageCache\com.unity.ml-agents@51fac9654958\Plugins\ProtoBuffer\Grpc.Core.dll</HintPath>
       <Private>False</Private>
     </Reference>
     <Reference Include="netstandard">
@@ -1398,20 +1401,16 @@
       <HintPath>Library\ScriptAssemblies\Unity.InputSystem.ForUI.dll</HintPath>
       <Private>False</Private>
     </Reference>
-    <Reference Include="UnityEditor.UI">
-      <HintPath>Library\ScriptAssemblies\UnityEditor.UI.dll</HintPath>
-      <Private>False</Private>
-    </Reference>
     <Reference Include="Unity.ML-Agents.CommunicatorObjects">
       <HintPath>Library\ScriptAssemblies\Unity.ML-Agents.CommunicatorObjects.dll</HintPath>
       <Private>False</Private>
     </Reference>
-    <Reference Include="Unity.Rider.Editor">
-      <HintPath>Library\ScriptAssemblies\Unity.Rider.Editor.dll</HintPath>
+    <Reference Include="UnityEditor.UI">
+      <HintPath>Library\ScriptAssemblies\UnityEditor.UI.dll</HintPath>
       <Private>False</Private>
     </Reference>
-    <Reference Include="Unity.Searcher.Editor">
-      <HintPath>Library\ScriptAssemblies\Unity.Searcher.Editor.dll</HintPath>
+    <Reference Include="Unity.Rider.Editor">
+      <HintPath>Library\ScriptAssemblies\Unity.Rider.Editor.dll</HintPath>
       <Private>False</Private>
     </Reference>
     <Reference Include="Unity.AppUI.Navigation.Editor">
@@ -1420,6 +1419,10 @@
     </Reference>
     <Reference Include="Unity.AI.Navigation">
       <HintPath>Library\ScriptAssemblies\Unity.AI.Navigation.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+    <Reference Include="Unity.Searcher.Editor">
+      <HintPath>Library\ScriptAssemblies\Unity.Searcher.Editor.dll</HintPath>
       <Private>False</Private>
     </Reference>
     <Reference Include="Unity.Networking.Editor">
@@ -1510,12 +1513,12 @@
       <HintPath>Library\ScriptAssemblies\Unity.InferenceEngine.Editor.dll</HintPath>
       <Private>False</Private>
     </Reference>
-    <Reference Include="Unity.Services.Authentication.PlayerAccounts">
-      <HintPath>Library\ScriptAssemblies\Unity.Services.Authentication.PlayerAccounts.dll</HintPath>
-      <Private>False</Private>
-    </Reference>
     <Reference Include="Unity.AppUI.Redux">
       <HintPath>Library\ScriptAssemblies\Unity.AppUI.Redux.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+    <Reference Include="Unity.Services.Authentication.PlayerAccounts">
+      <HintPath>Library\ScriptAssemblies\Unity.Services.Authentication.PlayerAccounts.dll</HintPath>
       <Private>False</Private>
     </Reference>
     <Reference Include="Unity.Collections">
@@ -1538,6 +1541,10 @@
       <HintPath>Library\ScriptAssemblies\Unity.VisualScripting.Core.dll</HintPath>
       <Private>False</Private>
     </Reference>
+    <Reference Include="Unity.ML-Agents.Editor.Input">
+      <HintPath>Library\ScriptAssemblies\Unity.ML-Agents.Editor.Input.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
     <Reference Include="Unity.RenderPipelines.Universal.Config.Runtime">
       <HintPath>Library\ScriptAssemblies\Unity.RenderPipelines.Universal.Config.Runtime.dll</HintPath>
       <Private>False</Private>
@@ -1548,10 +1555,6 @@
     </Reference>
     <Reference Include="Unity.AppUI">
       <HintPath>Library\ScriptAssemblies\Unity.AppUI.dll</HintPath>
-      <Private>False</Private>
-    </Reference>
-    <Reference Include="Unity.ML-Agents.Editor.Input">
-      <HintPath>Library\ScriptAssemblies\Unity.ML-Agents.Editor.Input.dll</HintPath>
       <Private>False</Private>
     </Reference>
     <Reference Include="Unity.Collections.Editor">
@@ -1586,12 +1589,12 @@
       <HintPath>Library\ScriptAssemblies\Unity.VisualScripting.Flow.Editor.dll</HintPath>
       <Private>False</Private>
     </Reference>
-    <Reference Include="Unity.ML-Agents.Input">
-      <HintPath>Library\ScriptAssemblies\Unity.ML-Agents.Input.dll</HintPath>
-      <Private>False</Private>
-    </Reference>
     <Reference Include="Unity.AppUI.Editor">
       <HintPath>Library\ScriptAssemblies\Unity.AppUI.Editor.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+    <Reference Include="Unity.ML-Agents.Input">
+      <HintPath>Library\ScriptAssemblies\Unity.ML-Agents.Input.dll</HintPath>
       <Private>False</Private>
     </Reference>
     <Reference Include="Unity.TextMeshPro">
@@ -1614,12 +1617,12 @@
       <HintPath>Library\ScriptAssemblies\Unity.VisualScripting.State.Editor.dll</HintPath>
       <Private>False</Private>
     </Reference>
-    <Reference Include="Unity.Services.Authentication">
-      <HintPath>Library\ScriptAssemblies\Unity.Services.Authentication.dll</HintPath>
-      <Private>False</Private>
-    </Reference>
     <Reference Include="Unity.AI.Navigation.Editor">
       <HintPath>Library\ScriptAssemblies\Unity.AI.Navigation.Editor.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+    <Reference Include="Unity.Services.Authentication">
+      <HintPath>Library\ScriptAssemblies\Unity.Services.Authentication.dll</HintPath>
       <Private>False</Private>
     </Reference>
     <Reference Include="Unity.Mathematics">
