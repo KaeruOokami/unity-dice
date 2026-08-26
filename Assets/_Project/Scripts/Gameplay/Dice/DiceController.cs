@@ -1594,5 +1594,65 @@ namespace DiceGame.Gameplay
 
             return true;
         }
+
+        /// <summary>
+        /// Aborts an in-progress carry place/lift logical timer without completing placement.
+        /// Visual motion is left mid-flight for a follow-up transition (e.g. throw).
+        /// </summary>
+        public bool TryAbortCarryLogicalMotion() {
+            if (!isCarried || !isRolling) {
+                return false;
+            }
+
+            ClearLogicalBusyWithoutComplete();
+            return true;
+        }
+
+        public bool TryGetVisualWorldPosition(out Vector3 worldPosition) {
+            worldPosition = default;
+            if (diceView == null || diceView.DiceTransform == null) {
+                return false;
+            }
+
+            worldPosition = diceView.DiceTransform.position;
+            return true;
+        }
+
+        public bool TryThrowAt(
+            Vector2Int targetGrid,
+            DiceStackTier targetTier,
+            DiceOrientation landingOrientation,
+            Vector3 fromWorld,
+            int cellDistance,
+            Action onComplete) {
+            if (!isCarried || isRolling || board == null || diceView == null || registry == null) {
+                return false;
+            }
+
+            var fromState = currentState;
+            var toState = new DiceState(targetGrid, landingOrientation, targetTier, currentState.Kind);
+            var toWorld = diceView.GetAnchoredWorldPosition(toState, board, registry);
+            var transition = DiceTransition.ThrowArc(fromState, toState, fromWorld, toWorld);
+            var throwDistance = Mathf.Max(0, cellDistance);
+
+            // Vacate lift-mount occupancy for the flight; Place happens on land.
+            registry.RemoveFromGrid(this);
+
+            StartLogicalBusy(
+                diceView.GetTransitionLogicalDuration(transition, board, registry, throwDistance),
+                () => {
+                    currentState = toState;
+                    isCarried = false;
+                    registry.Place(this, targetGrid, targetTier);
+                    ConfigurePushBody();
+                    FinishLogicalBusy();
+                    NotifyActionMoveCompleted();
+                    StateChanged?.Invoke(currentState);
+                    onComplete?.Invoke();
+                });
+            diceView.PlayTransition(transition, board, registry, null, throwDistance);
+
+            return true;
+        }
     }
 }

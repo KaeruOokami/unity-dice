@@ -11,6 +11,8 @@ namespace DiceGame.Config
         [SerializeField] float fallHorizontalDuration = 0.3f;
         [SerializeField] float liftDuration = 0.3f;
         [SerializeField] float placeDuration = 0.3f;
+        [SerializeField] float throwDuration = 0.45f;
+        [SerializeField] float throwSpinTurns = 2f;
 
         public float RollAnimationDuration => rollAnimationDuration;
         public float JumpParallelRollDurationPerCell => jumpParallelRollDurationPerCell;
@@ -18,6 +20,14 @@ namespace DiceGame.Config
         public float FallHorizontalDuration => fallHorizontalDuration;
         public float LiftDuration => liftDuration;
         public float PlaceDuration => placeDuration;
+        public float ThrowDuration => throwDuration;
+        public float ThrowSpinTurns => throwSpinTurns;
+
+        public float GetThrowDuration(int cellDistance = 1) {
+            // Flight time is distance-independent so vertical arc timing stays constant;
+            // longer throws simply move faster horizontally.
+            return throwDuration;
+        }
 
         public float GetGroundParallelRollDuration(int distance) {
             return rollAnimationDuration * Mathf.Max(1, distance);

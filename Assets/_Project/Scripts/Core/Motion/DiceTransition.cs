@@ -8,7 +8,8 @@ namespace DiceGame.Core
         HorizontalThenDrop,
         RollThenDrop,
         RollThenRise,
-        FreeMove
+        FreeMove,
+        ThrowArc
     }
 
     public struct DiceTransition
@@ -45,6 +46,21 @@ namespace DiceGame.Core
                 FromWorldOverride = fromWorld,
                 ToWorldOverride = toWorld,
                 SnapToGridOnComplete = snapToGridOnComplete
+            };
+        }
+
+        public static DiceTransition ThrowArc(
+            DiceState from,
+            DiceState to,
+            Vector3 fromWorld,
+            Vector3 toWorld) {
+            return new DiceTransition {
+                From = from,
+                To = to,
+                Path = DiceTransitionPath.ThrowArc,
+                FromWorldOverride = fromWorld,
+                ToWorldOverride = toWorld,
+                SnapToGridOnComplete = true
             };
         }
 

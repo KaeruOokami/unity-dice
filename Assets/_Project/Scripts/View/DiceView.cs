@@ -1152,6 +1152,8 @@ namespace DiceGame.View
                     return transition.SnapToGridOnComplete
                         ? animationSettings.PlaceDuration
                         : animationSettings.LiftDuration;
+                case DiceTransitionPath.ThrowArc:
+                    return animationSettings.ThrowDuration;
                 case DiceTransitionPath.RollThenDrop:
                     return rollDuration
                         + GetTierDropDuration(transition.From, transition.To, board, registry);
@@ -1691,6 +1693,8 @@ namespace DiceGame.View
                     : animationSettings.LiftDuration;
                 yield return AnimatePositionLerp(freeFrom, freeTo, freeMoveDuration);
                 positionRoot.position = freeTo;
+            } else if (transition.Path == DiceTransitionPath.ThrowArc) {
+                yield return ThrowArcCoroutine(transition, board, registry, slideCellDistance);
             } else if (transition.Path == DiceTransitionPath.RollThenDrop) {
                 if (rotationRoot == null) {
                     isAnimating = false;
@@ -1978,6 +1982,87 @@ namespace DiceGame.View
             rollCoroutine = null;
             ClearActiveSpawnFall();
             onComplete?.Invoke();
+        }
+
+        IEnumerator ThrowArcCoroutine(
+            DiceTransition transition,
+            Board board,
+            DiceRegistry registry,
+            int slideCellDistance) {
+            if (positionRoot == null
+                || rotationRoot == null
+                || board == null
+                || physicsSettings == null
+                || animationSettings == null
+                || !transition.FromWorldOverride.HasValue
+                || !transition.ToWorldOverride.HasValue) {
+                yield break;
+            }
+
+            positionRoot.SetParent(transform, true);
+            positionRoot.localRotation = Quaternion.identity;
+            positionRoot.localScale = Vector3.one;
+
+            var fromWorld = transition.FromWorldOverride.Value;
+            var toWorld = transition.ToWorldOverride.Value;
+            positionRoot.position = fromWorld;
+
+            currentTopFace = transition.From.Orientation.Top;
+            var orientFrom = DiceOrientationMapper.ToRotation(transition.From.Orientation);
+            var orientTo = DiceOrientationMapper.ToRotation(transition.To.Orientation);
+            rotationRoot.rotation = orientFrom;
+
+            var apexHeight = board.CellSize * physicsSettings.ThrowApexHeightMultiplier;
+            // Fixed flight time: vertical arc duration is constant; horizontal speed scales with range.
+            var duration = animationSettings.ThrowDuration;
+            // Distance-independent spin so angular speed stays constant for any throw range.
+            var spinTurns = Mathf.Max(0f, animationSettings.ThrowSpinTurns);
+            var inPlaceHop = slideCellDistance <= 0;
+            var throwAxis = (toWorld - fromWorld);
+            throwAxis.y = 0f;
+            if (inPlaceHop) {
+                throwAxis = Vector3.zero;
+            }
+
+            var spinAxis = throwAxis.sqrMagnitude > 0.0001f
+                ? Vector3.Cross(Vector3.up, throwAxis.normalized).normalized
+                : Vector3.right;
+
+            if (duration <= 0f) {
+                rotationRoot.rotation = orientTo;
+                positionRoot.position = toWorld;
+                currentTopFace = transition.To.Orientation.Top;
+                yield break;
+            }
+
+            var elapsed = 0f;
+            while (elapsed < duration) {
+                elapsed += GameplaySimClock.DeltaTime;
+                var linearT = Mathf.Clamp01(elapsed / duration);
+                var smoothT = Mathf.SmoothStep(0f, 1f, linearT);
+                // Constant apex height for any distance: peak at t=0.5 is apexHeight above the chord.
+                var arcOffset = 4f * apexHeight * linearT * (1f - linearT);
+                Vector3 position;
+                if (inPlaceHop) {
+                    // No horizontal travel: rise and fall on the landing cell XZ.
+                    var baseY = Mathf.Lerp(fromWorld.y, toWorld.y, smoothT);
+                    position = new Vector3(toWorld.x, baseY + arcOffset, toWorld.z);
+                } else {
+                    var chord = Vector3.Lerp(fromWorld, toWorld, smoothT);
+                    position = new Vector3(chord.x, chord.y + arcOffset, chord.z);
+                }
+
+                positionRoot.position = position;
+
+                var faceRotation = Quaternion.Slerp(orientFrom, orientTo, smoothT);
+                var tumble = Quaternion.AngleAxis(spinTurns * 360f * linearT, spinAxis);
+                rotationRoot.rotation = tumble * faceRotation;
+                yield return null;
+            }
+
+            rotationRoot.rotation = orientTo;
+            currentTopFace = transition.To.Orientation.Top;
+            positionRoot.position = toWorld;
         }
 
         IEnumerator AnimatePositionLerp(Vector3 fromWorld, Vector3 toWorld, float duration) {

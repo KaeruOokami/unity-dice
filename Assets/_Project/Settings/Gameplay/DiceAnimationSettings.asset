@@ -18,3 +18,5 @@ MonoBehaviour:
   fallHorizontalDuration: 0.2
   liftDuration: 0.2
   placeDuration: 0.2
+  throwDuration: 0.45
+  throwSpinTurns: 2

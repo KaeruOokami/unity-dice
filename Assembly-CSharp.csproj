@@ -237,6 +237,7 @@
     <Compile Include="Assets\_Project\Scripts\Placement\Movement\Walk\ExpandedFootprintWalkPolicy.cs" />
     <Compile Include="Assets\TutorialInfo\Scripts\Readme.cs" />
     <Compile Include="Assets\_Project\Scripts\Placement\Movement\Grid\TopFallPolicy.cs" />
+    <Compile Include="Assets\_Project\Scripts\Placement\Interaction\ThrowLandingResolver.cs" />
     <Compile Include="Assets\_Project\Scripts\Placement\Movement\Grid\JumpGridPassability.cs" />
     <Compile Include="Assets\_Project\Scripts\Versus\AttackQueue.cs" />
     <Compile Include="Assets\_Project\Scripts\Session\SceneNames.cs" />

@@ -100,6 +100,9 @@ namespace DiceGame.Gameplay
         DiceController carriedDice;
         Direction lastFacing;
         bool hasLastFacing;
+        Direction placeDirection;
+        bool hasPlaceDirection;
+        System.Random matchRandom;
         JumpPhase jumpPhase;
         bool pendingEndJump;
         bool isFalling;
@@ -251,7 +254,8 @@ namespace DiceGame.Gameplay
             PlayerInputSettings inputSettings,
             PlayerMatchActionContext actionContext = null,
             PlayerSlotInputConfig? inputConfigOverride = null,
-            PlayerSlot? inputBindingSlot = null) {
+            PlayerSlot? inputBindingSlot = null,
+            System.Random sharedMatchRandom = null) {
             board = targetBoard;
             placement = targetPlacement;
             registry = targetPlacement.Dice;
@@ -259,6 +263,7 @@ namespace DiceGame.Gameplay
             movementSettings = movement;
             physicsSettings = physics;
             PlayerSlot = slot;
+            matchRandom = sharedMatchRandom;
 
             if (inputReader == null) {
                 inputReader = GetComponent<CharacterInputReader>();
@@ -464,18 +469,40 @@ namespace DiceGame.Gameplay
             var input = ActiveInputSource.ReadMove();
             UpdateLastFacing(input);
 
-            if (liftPhase == LiftPhase.Lifting || liftPhase == LiftPhase.Placing) {
+            if (liftPhase == LiftPhase.Lifting) {
                 currentSpeed = 0f;
+                return;
+            }
+
+            if (liftPhase == LiftPhase.Placing) {
+                currentSpeed = 0f;
+                // Mid-adjacent-place: Lift cancels the drop and converts to a throw.
+                if (ActiveInputSource.WasLiftPressedThisFrame()
+                    && !suppressBoardMutation
+                    && hasPlaceDirection) {
+                    TryCancelPlaceAndThrow(placeDirection);
+                }
+
                 return;
             }
 
             if (liftPhase == LiftPhase.Carrying) {
                 currentSpeed = 0f;
+                // Second Lift while carrying: throw in facing direction (no move key required).
+                // Without a second Lift, move input places adjacent as usual.
+                if (ActiveInputSource.WasLiftPressedThisFrame()) {
+                    if (!suppressBoardMutation && hasLastFacing) {
+                        TryThrowCarriedDice(lastFacing);
+                    }
+
+                    return;
+                }
+
                 // Accept a fresh direction pulse (AI / discrete press) or a held move stick/key.
                 // Held input is ignored only while Lifting; once at the apex (Carrying), place.
-                if (ActiveInputSource.TryGetDirectionPressedThisFrame(out var placeDirection)
-                    || TryInputToDirection(input, out placeDirection)) {
-                    TryPlaceCarriedDice(placeDirection);
+                if (ActiveInputSource.TryGetDirectionPressedThisFrame(out var placeDir)
+                    || TryInputToDirection(input, out placeDir)) {
+                    TryPlaceCarriedDice(placeDir);
                 }
 
                 return;
@@ -1975,6 +2002,10 @@ namespace DiceGame.Gameplay
                 return false;
             }
 
+            placeDirection = direction;
+            hasPlaceDirection = true;
+            lastFacing = direction;
+            hasLastFacing = true;
             liftPhase = LiftPhase.Placing;
             var fromWorld = GetCarryWorldPosition();
             var placesOnSinkErasingBottom = targetTier == DiceStackTier.Top
@@ -1988,20 +2019,129 @@ namespace DiceGame.Gameplay
 
             if (!carriedDice.TryPlaceAt(targetGrid, targetTier, fromWorld, OnPlaceComplete)) {
                 liftPhase = LiftPhase.Carrying;
+                hasPlaceDirection = false;
                 return false;
             }
 
             return true;
         }
 
+        bool TryThrowCarriedDice(Direction direction) {
+            if (liftPhase != LiftPhase.Carrying || carriedDice == null || board == null || registry == null) {
+                return false;
+            }
+
+            return BeginThrowCarriedDice(direction, GetCarryWorldPosition(), registerAction: true);
+        }
+
+        bool TryCancelPlaceAndThrow(Direction direction) {
+            if (liftPhase != LiftPhase.Placing || carriedDice == null || board == null || registry == null) {
+                return false;
+            }
+
+            if (!carriedDice.IsCarried || !carriedDice.IsRolling) {
+                return false;
+            }
+
+            if (!carriedDice.TryGetVisualWorldPosition(out var fromWorld)) {
+                fromWorld = GetCarryWorldPosition();
+            }
+
+            // Resolve before aborting place so a failed throw leaves the place in progress.
+            if (!carriedDice.Capabilities.CanBeLiftedByPlayer) {
+                return false;
+            }
+
+            var originGrid = standingController.GridCell;
+            if (!ThrowLandingResolver.TryResolve(
+                originGrid,
+                direction,
+                board,
+                registry,
+                PlayerSlot,
+                carriedDice,
+                out _,
+                out _,
+                out _)) {
+                return false;
+            }
+
+            if (!carriedDice.TryAbortCarryLogicalMotion()) {
+                return false;
+            }
+
+            // Action dice already registered when place started (when applicable).
+            return BeginThrowCarriedDice(direction, fromWorld, registerAction: false);
+        }
+
+        bool BeginThrowCarriedDice(Direction direction, Vector3 fromWorld, bool registerAction) {
+            if (carriedDice == null || board == null || registry == null) {
+                return false;
+            }
+
+            if (!carriedDice.Capabilities.CanBeLiftedByPlayer) {
+                return false;
+            }
+
+            var originGrid = standingController.GridCell;
+            if (!ThrowLandingResolver.TryResolve(
+                originGrid,
+                direction,
+                board,
+                registry,
+                PlayerSlot,
+                carriedDice,
+                out var targetGrid,
+                out var targetTier,
+                out var cellDistance)) {
+                return false;
+            }
+
+            lastFacing = direction;
+            hasLastFacing = true;
+            if (registerAction) {
+                var placesOnSinkErasingBottom = targetTier == DiceStackTier.Top
+                    && registry.TryGetBottomAt(targetGrid, out var sinkingBottom)
+                    && sinkingBottom != null
+                    && sinkingBottom.IsSinkErasing;
+
+                if (!placesOnSinkErasingBottom) {
+                    matchActionContext?.RegisterActionDice(carriedDice, PlayerSlot);
+                }
+            }
+
+            var landingOrientation = DiceSpawnFactory.CreateRandomOrientation(matchRandom);
+            var thrownDice = carriedDice;
+            if (!thrownDice.TryThrowAt(
+                targetGrid,
+                targetTier,
+                landingOrientation,
+                fromWorld,
+                cellDistance,
+                onComplete: null)) {
+                // Cancel-throw may have aborted place; return to carrying so the player can retry.
+                liftPhase = LiftPhase.Carrying;
+                hasPlaceDirection = false;
+                return false;
+            }
+
+            // Release the player immediately; the die finishes flight on its own.
+            carriedDice = null;
+            liftPhase = LiftPhase.None;
+            hasPlaceDirection = false;
+            return true;
+        }
+
         void OnPlaceComplete() {
             carriedDice = null;
             liftPhase = LiftPhase.None;
+            hasPlaceDirection = false;
         }
 
         void EndCarryState() {
             carriedDice = null;
             liftPhase = LiftPhase.None;
+            hasPlaceDirection = false;
         }
 
         bool TryFindLiftTarget(out DiceController targetDice) {
@@ -2324,6 +2464,27 @@ namespace DiceGame.Gameplay
 
             var targetGrid = standingController.GridCell + direction.ToGridDelta();
             return CarryPlacementPassability.TryResolveTarget(targetGrid, registry, out _, out _);
+        }
+
+        public bool CanThrowCarriedIn(Direction direction) {
+            if (liftPhase != LiftPhase.Carrying || carriedDice == null || board == null || registry == null) {
+                return false;
+            }
+
+            if (!carriedDice.Capabilities.CanBeLiftedByPlayer) {
+                return false;
+            }
+
+            return ThrowLandingResolver.TryResolve(
+                standingController.GridCell,
+                direction,
+                board,
+                registry,
+                PlayerSlot,
+                carriedDice,
+                out _,
+                out _,
+                out _);
         }
 
         public bool IsReadyForAiPlanning() {

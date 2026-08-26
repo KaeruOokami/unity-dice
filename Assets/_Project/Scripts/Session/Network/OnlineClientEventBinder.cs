@@ -302,8 +302,18 @@ namespace DiceGame.Session.Network
             var transition = new DiceTransition {
                 From = motionEvent.FromState,
                 To = motionEvent.ToState,
-                Path = (DiceTransitionPath)motionEvent.TransitionPath
+                Path = (DiceTransitionPath)motionEvent.TransitionPath,
+                SnapToGridOnComplete =
+                    (motionEvent.Flags & OnlineDiceMotionEvent.FlagSnapToGridOnComplete) != 0
             };
+            if ((motionEvent.Flags & OnlineDiceMotionEvent.FlagHasFromWorldOverride) != 0) {
+                transition.FromWorldOverride = motionEvent.FromWorldOverride;
+            }
+
+            if ((motionEvent.Flags & OnlineDiceMotionEvent.FlagHasToWorldOverride) != 0) {
+                transition.ToWorldOverride = motionEvent.ToWorldOverride;
+            }
+
             diceView.PlayTransition(
                 transition,
                 board,

@@ -786,7 +786,8 @@ namespace DiceGame.Gameplay
                     inputSettingsForSlot,
                     matchActionContext,
                     inputOverride,
-                    inputBindingSlot);
+                    inputBindingSlot,
+                    spawnRandom);
                 TryConfigureAiControl(characterObject, characterController, slot);
                 spawnedCharacters.Add(characterController);
             }

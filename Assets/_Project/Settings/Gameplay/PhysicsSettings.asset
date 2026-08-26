@@ -15,6 +15,7 @@ MonoBehaviour:
   gravity: 55
   jumpHeightFallback: 1
   jumpHeightDiceMultiplier: 1
+  throwApexHeightMultiplier: 1.5
   jumpGridMoveTwoCellMaxTimeline: 0.3
   jumpGridMoveOneCellMaxTimeline: 0.5
   jumpGridMoveTierChangeMinTimeline: 0.3
