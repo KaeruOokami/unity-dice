@@ -1157,12 +1157,49 @@ namespace DiceGame.View
                         + GetTierDropDuration(transition.From, transition.To, board, registry);
                 case DiceTransitionPath.RollThenRise:
                     return rollDuration + animationSettings.LiftDuration;
-                case DiceTransitionPath.HorizontalThenDrop:
-                    return animationSettings.FallHorizontalDuration * cells
-                        + GetWorldDropDuration(transition, board, registry);
+                case DiceTransitionPath.HorizontalThenDrop: {
+                    var horizontalDuration = HasHorizontalTravel(transition, board, registry)
+                        ? animationSettings.FallHorizontalDuration * cells
+                        : 0f;
+                    return horizontalDuration + GetWorldDropDuration(transition, board, registry);
+                }
                 default:
                     return animationSettings.SlideDuration * cells;
             }
+        }
+
+        /// <summary>
+        /// Same-cell crush demote has no XZ travel — skip the hold-at-height horizontal phase.
+        /// </summary>
+        bool HasHorizontalTravel(DiceTransition transition, Board board, DiceRegistry registry) {
+            const float xzEpsilonSq = 0.0001f;
+            var fromWorld = ResolveTransitionFromWorld(transition, board, registry);
+            var toWorld = ResolveTransitionToWorld(transition, board, registry);
+            var dx = fromWorld.x - toWorld.x;
+            var dz = fromWorld.z - toWorld.z;
+            return dx * dx + dz * dz > xzEpsilonSq;
+        }
+
+        Vector3 ResolveTransitionFromWorld(
+            DiceTransition transition,
+            Board board,
+            DiceRegistry registry) {
+            if (transition.FromWorldOverride.HasValue) {
+                return transition.FromWorldOverride.Value;
+            }
+
+            return GetAnchoredWorldPosition(transition.From, board, registry);
+        }
+
+        Vector3 ResolveTransitionToWorld(
+            DiceTransition transition,
+            Board board,
+            DiceRegistry registry) {
+            if (transition.ToWorldOverride.HasValue) {
+                return transition.ToWorldOverride.Value;
+            }
+
+            return GetAnchoredWorldPosition(transition.To, board, registry);
         }
 
         /// <summary>
@@ -1696,20 +1733,23 @@ namespace DiceGame.View
 
                 PrepareGridTransition(transition.From);
 
-                var fromWorld = transition.FromWorldOverride
-                    ?? GetAnchoredWorldPosition(transition.From, board, registry);
-                var toWorld = transition.ToWorldOverride
-                    ?? GetAnchoredWorldPosition(transition.To, board, registry);
+                var fromWorld = ResolveTransitionFromWorld(transition, board, registry);
+                var toWorld = ResolveTransitionToWorld(transition, board, registry);
                 positionRoot.position = fromWorld;
 
                 if (transition.Path == DiceTransitionPath.Direct) {
                     var slideDuration = animationSettings.SlideDuration * Mathf.Max(1, slideCellDistance);
                     yield return AnimatePositionLerp(fromWorld, toWorld, slideDuration);
                 } else {
-                    var midWorld = new Vector3(toWorld.x, fromWorld.y, toWorld.z);
-                    var horizontalDuration = animationSettings.FallHorizontalDuration * Mathf.Max(1, slideCellDistance);
-                    yield return AnimatePositionLerp(fromWorld, midWorld, horizontalDuration);
-                    positionRoot.position = midWorld;
+                    // Same-cell crush: skip horizontal hold so the die does not float after support vanishes.
+                    if (HasHorizontalTravel(transition, board, registry)) {
+                        var midWorld = new Vector3(toWorld.x, fromWorld.y, toWorld.z);
+                        var horizontalDuration =
+                            animationSettings.FallHorizontalDuration * Mathf.Max(1, slideCellDistance);
+                        yield return AnimatePositionLerp(fromWorld, midWorld, horizontalDuration);
+                        positionRoot.position = midWorld;
+                    }
+
                     yield return AnimateGravityFall(toWorld);
                     positionRoot.position = toWorld;
                 }

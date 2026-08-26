@@ -167,6 +167,7 @@
     <Compile Include="Assets\_Project\Scripts\Placement\Rules\SolidLandingTierResolver.cs" />
     <Compile Include="Assets\_Project\Scripts\Placement\Support\DiceSurfaceLevel.cs" />
     <Compile Include="Assets\_Project\Scripts\Gameplay\AI\Application\Actions\DissolveDescentAction.cs" />
+    <Compile Include="Assets\_Project\Scripts\Config\PlayerEmissionColorSeparator.cs" />
     <Compile Include="Assets\_Project\Scripts\Placement\Movement\Grid\GridMovePlanBuilder.cs" />
     <Compile Include="Assets\_Project\Scripts\Core\Model\ErasureKind.cs" />
     <Compile Include="Assets\_Project\Scripts\Placement\Movement\Jump\JumpPlayerTransferPolicy.cs" />

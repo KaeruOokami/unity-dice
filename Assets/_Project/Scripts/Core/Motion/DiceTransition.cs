@@ -48,6 +48,10 @@ namespace DiceGame.Core
             };
         }
 
+        /// <summary>
+        /// Same-cell support crush: Top falls in place. Uses HorizontalThenDrop so gravity fall
+        /// still runs; zero XZ travel skips the horizontal hold phase in DiceView.
+        /// </summary>
         public static DiceTransition CrushDemote(DiceState from, DiceState to, Vector3 fromWorld) {
             return new DiceTransition {
                 From = from,

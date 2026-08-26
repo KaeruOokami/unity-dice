@@ -500,13 +500,19 @@ namespace DiceGame.Gameplay
                 return true;
             }
 
-            var attackSettings = versusSettings.GetAttackSettings(attacker);
-            if (attackSettings == null) {
-                Debug.LogError($"DiceMatchErasureSystem: Attack settings are missing for {attacker}.");
+            var player1Attack = versusSettings.GetAttackSettings(PlayerSlot.Player1);
+            var player2Attack = versusSettings.GetAttackSettings(PlayerSlot.Player2);
+            if (player1Attack == null || player2Attack == null) {
+                Debug.LogError("DiceMatchErasureSystem: Attack settings are missing for one or both players.");
                 return false;
             }
 
-            emissionColor = erasureSettings.ResolvePlayerEmissionColor(attackSettings);
+            erasureSettings.ResolveSeparatedVersusEmissionColors(
+                player1Attack,
+                player2Attack,
+                out var player1Color,
+                out var player2Color);
+            emissionColor = attacker == PlayerSlot.Player1 ? player1Color : player2Color;
             return true;
         }
 

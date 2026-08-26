@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using DiceGame.Config;
 using DiceGame.Grid;
 using DiceGame.Placement;
@@ -28,6 +29,7 @@ namespace DiceGame.Gameplay
         ErasureKind erasureKind = ErasureKind.None;
         bool isVanishing;
         bool isCarried;
+        bool wasSinkErasureGhost;
         bool isInitialized;
         DiceSpawnAppearMode spawnAppearMode = DiceSpawnAppearMode.None;
         Direction pendingElasticSlideDirection;
@@ -1414,17 +1416,76 @@ namespace DiceGame.Gameplay
         }
 
         /// <summary>
-        /// Called whenever sink erasure progress changes so Jumbo Top/Bottom occupancy stays in sync.
+        /// Called whenever sink erasure progress changes (Jumbo occupancy + stacked-top crush).
         /// </summary>
         public void NotifyErasureProgressChanged() {
-            if (!Capabilities.HasExpandedFootprint || !IsSinkErasing || registry == null) {
+            if (!IsSinkErasing || registry == null) {
                 return;
             }
 
-            var topChanged = registry.SyncJumboSinkOccupancy(this);
-            registry.SyncStackedTopsForDice(this, board);
-            if (topChanged) {
-                StateChanged?.Invoke(currentState);
+            if (Capabilities.HasExpandedFootprint) {
+                var topChanged = registry.SyncJumboSinkOccupancy(this);
+                registry.SyncStackedTopsForDice(this, board);
+                if (topChanged) {
+                    StateChanged?.Invoke(currentState);
+                }
+            }
+
+            TryCrushStackedTopsWhenBecameSinkGhost();
+        }
+
+        /// <summary>
+        /// Sink erasure ghost is player-solid but dice-crushable. Stacked Top loses support
+        /// at the ghost threshold and crushes this Bottom via <see cref="DemoteAfterSupportRemoved"/>.
+        /// </summary>
+        void TryCrushStackedTopsWhenBecameSinkGhost() {
+            if (!GhostPlacementRules.IsCrushableByDicePlacement(this)) {
+                wasSinkErasureGhost = false;
+                return;
+            }
+
+            if (wasSinkErasureGhost || registry == null) {
+                return;
+            }
+
+            wasSinkErasureGhost = true;
+
+            // Collect before demote — first Top destroys this Bottom.
+            var tops = new List<DiceController>(4);
+            CollectStackedTopsAbove(tops);
+            for (var i = 0; i < tops.Count; i++) {
+                var top = tops[i];
+                if (top != null) {
+                    top.OnBottomSupportLost(this);
+                }
+            }
+        }
+
+        void CollectStackedTopsAbove(List<DiceController> tops) {
+            tops.Clear();
+            if (registry == null) {
+                return;
+            }
+
+            if (Capabilities.HasExpandedFootprint) {
+                var cells = new List<Vector2Int>(JumboFootprint.CellCount);
+                JumboFootprint.AppendCells(currentState.GridPos, cells);
+                for (var i = 0; i < cells.Count; i++) {
+                    if (registry.TryGetTopAt(cells[i], out var top)
+                        && top != null
+                        && top != this
+                        && !tops.Contains(top)) {
+                        tops.Add(top);
+                    }
+                }
+
+                return;
+            }
+
+            if (registry.TryGetTopAt(currentState.GridPos, out var singleTop)
+                && singleTop != null
+                && singleTop != this) {
+                tops.Add(singleTop);
             }
         }
 
