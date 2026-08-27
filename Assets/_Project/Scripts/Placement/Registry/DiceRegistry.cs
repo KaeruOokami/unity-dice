@@ -81,11 +81,15 @@ namespace DiceGame.Placement
             }
 
             // Jumbo accepts stacked dice only in Bottom-only sink stage (≤ half height).
-            if (TryGetBottomAt(gridPos, out var bottom)
-                && bottom != null
-                && bottom.Capabilities.HasExpandedFootprint
-                && bottom.WantsJumboTopOccupancy) {
-                return false;
+            if (TryGetBottomAt(gridPos, out var bottom) && bottom != null) {
+                if (GhostPlacementRules.IsCrushableByDicePlacement(bottom)) {
+                    return false;
+                }
+
+                if (bottom.Capabilities.HasExpandedFootprint
+                    && bottom.WantsJumboTopOccupancy) {
+                    return false;
+                }
             }
 
             return true;
@@ -124,9 +128,19 @@ namespace DiceGame.Placement
             DiceController bottomGhost = null;
             DiceController topRadiance = null;
             DiceController bottomRadiance = null;
+            DiceController emergingGhost = null;
 
             foreach (var dice in allDice) {
-                if (dice == null || !dice.IsErasing || dice.CurrentState.GridPos != gridPos) {
+                if (dice == null || dice.CurrentState.GridPos != gridPos) {
+                    continue;
+                }
+
+                if (dice.IsEmergingGhost && dice.CurrentState.Tier == DiceStackTier.Bottom) {
+                    emergingGhost = dice;
+                    continue;
+                }
+
+                if (!dice.IsErasing) {
                     continue;
                 }
 
@@ -151,6 +165,7 @@ namespace DiceGame.Placement
 
             topErasing?.CompleteErasureFromOverride();
             bottomGhost?.CompleteErasureFromOverride();
+            emergingGhost?.CompleteEmergingCrushFromOverride();
             topRadiance?.CompleteErasureFromOverride();
             bottomRadiance?.CompleteErasureFromOverride();
         }

@@ -14,7 +14,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   initialDiceCount: 30
   animateInitialDiceSpawn: 1
-  continuousSpawnEnabled: 0
+  continuousSpawnEnabled: 1
   spawnInterval: 4
   spawnIntervalJitter: 2
   bottomSpawnWeight: 0.95

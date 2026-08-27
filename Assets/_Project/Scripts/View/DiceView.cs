@@ -86,6 +86,17 @@ namespace DiceGame.View
             && erasureProgress >= erasureSettings.SinkGhostThreshold
             && !ResolveVisualCapabilities().SuppressesErasureGhost;
 
+        /// <summary>
+        /// BottomEmergence reverse-ghost band (same squash threshold as sink ghost).
+        /// </summary>
+        public bool IsEmergingGhost =>
+            isEmergingVisual
+            && erasureSettings != null
+            && erasureProgress >= erasureSettings.SinkGhostThreshold
+            && !ResolveVisualCapabilities().SuppressesErasureGhost;
+
+        bool isEmergingVisual;
+
         public Transform DiceTransform => positionRoot;
         public Transform DiceRotationTransform => rotationRoot;
 
@@ -1041,6 +1052,7 @@ namespace DiceGame.View
 
             DetachFromActiveRollPivot(snapshot);
             isAnimating = false;
+            isEmergingVisual = false;
             visualYOffset = 0f;
             return snapshot.IsValid;
         }
@@ -1097,6 +1109,8 @@ namespace DiceGame.View
         /// <summary>
         /// Logical duration of <see cref="PlayJumpRoll"/>. Mirrors the phases of
         /// <see cref="JumpRollCoroutine"/>; keep both in sync.
+        /// Arc rolls use tick-configured constant speed along the visual arc path length
+        /// (chord + one-tier apex parabola).
         /// </summary>
         public float GetJumpRollLogicalDuration(
             DiceState fromState,
@@ -1106,20 +1120,17 @@ namespace DiceGame.View
             bool useArcRoll,
             Board board,
             DiceRegistry registry,
-            Func<VerticalMotionState> jumpMotionProvider = null) {
+            Vector3? arcStartWorld = null) {
             if (animationSettings == null || physicsSettings == null) {
                 return 0f;
             }
 
-            // Arc rolls end when the rider's jump lands — same clock as JumpArcRollCoroutine.
             if (useArcRoll) {
-                if (jumpMotionProvider == null) {
+                if (board == null) {
                     return GetJumpParallelRollDuration(rollDistance);
                 }
 
-                return GravityMotion.ComputeRemainingAirtime(
-                    jumpMotionProvider(),
-                    physicsSettings.Gravity);
+                return ComputeJumpArcMoveDuration(fromState, toState, board, registry, arcStartWorld);
             }
 
             var rolls = Mathf.Clamp(rollDistance, 1, DiceGridRollLimits.MaxParallelRollDistance);
@@ -1130,6 +1141,175 @@ namespace DiceGame.View
             }
 
             return duration;
+        }
+
+        const int JumpArcPathSamples = 32;
+
+        /// <summary>
+        /// Duration for a jump-arc dice move at tick-configured constant speed along the
+        /// actual visual path (chord + one-tier apex parabola), not the surface chord alone.
+        /// </summary>
+        float ComputeJumpArcMoveDuration(
+            DiceState fromState,
+            DiceState toState,
+            Board board,
+            DiceRegistry registry,
+            Vector3? startWorldOverride = null) {
+            if (!TryBuildJumpArcPath(
+                fromState,
+                toState,
+                board,
+                registry,
+                startWorldOverride,
+                out var path)) {
+                return animationSettings.JumpParallelRollDurationPerCell * GetRollDurationMultiplier();
+            }
+
+            return path.Duration;
+        }
+
+        struct JumpArcPath {
+            public Vector3 StartWorld;
+            public Vector3 EndWorld;
+            public float PeakOffset;
+            public float Length;
+            public float Duration;
+            public float[] CumulativeLengths;
+        }
+
+        bool TryBuildJumpArcPath(
+            DiceState fromState,
+            DiceState toState,
+            Board board,
+            DiceRegistry registry,
+            Vector3? startWorldOverride,
+            out JumpArcPath path) {
+            path = default;
+            if (board == null || animationSettings == null || rotationRoot == null) {
+                return false;
+            }
+
+            EnsureMesh();
+            var fromBaseY = ResolveSurfaceBaseWorldY(fromState, board, registry);
+            var toBaseY = ResolveSurfaceBaseWorldY(toState, board, registry);
+            var endGrid = board.GridToWorld(toState.GridPos);
+
+            var fromMinY = MeasureVerticalMinY(board, fromState.Orientation);
+            var toMinY = MeasureVerticalMinY(board, toState.Orientation);
+            var endWorld = new Vector3(endGrid.x, toBaseY - toMinY, endGrid.z);
+
+            Vector3 startWorld;
+            if (startWorldOverride.HasValue) {
+                startWorld = startWorldOverride.Value;
+            } else {
+                var fromGrid = board.GridToWorld(fromState.GridPos);
+                startWorld = new Vector3(fromGrid.x, fromBaseY - fromMinY, fromGrid.z);
+            }
+
+            var apexY = fromBaseY + board.CellSize - fromMinY;
+            var midChordY = Mathf.Lerp(startWorld.y, endWorld.y, 0.5f);
+            var peakOffset = Mathf.Max(0f, apexY - midChordY);
+
+            BuildJumpArcCumulativeLengths(
+                startWorld,
+                endWorld,
+                peakOffset,
+                out var cumulative,
+                out var length);
+            if (length <= 0.0001f) {
+                length = Mathf.Max(0.0001f, Vector3.Distance(startWorld, endWorld));
+            }
+
+            path = new JumpArcPath {
+                StartWorld = startWorld,
+                EndWorld = endWorld,
+                PeakOffset = peakOffset,
+                Length = length,
+                Duration = animationSettings.GetJumpArcPathDurationSeconds(
+                    length,
+                    board.CellSize,
+                    GetRollDurationMultiplier()),
+                CumulativeLengths = cumulative
+            };
+            return true;
+        }
+
+        float MeasureVerticalMinY(Board board, DiceOrientation orientation) {
+            var savedRotation = rotationRoot.rotation;
+            var savedFace = currentTopFace;
+            rotationRoot.rotation = DiceOrientationMapper.ToRotation(orientation);
+            currentTopFace = orientation.Top;
+            ComputeVerticalExtents(board, orientation.Top, 1f, out var minY, out _);
+            rotationRoot.rotation = savedRotation;
+            currentTopFace = savedFace;
+            return minY;
+        }
+
+        static Vector3 EvaluateJumpArcPoint(
+            Vector3 startWorld,
+            Vector3 endWorld,
+            float peakOffset,
+            float t) {
+            t = Mathf.Clamp01(t);
+            var xz = Vector2.Lerp(
+                new Vector2(startWorld.x, startWorld.z),
+                new Vector2(endWorld.x, endWorld.z),
+                t);
+            var y = Mathf.Lerp(startWorld.y, endWorld.y, t) + 4f * peakOffset * t * (1f - t);
+            return new Vector3(xz.x, y, xz.y);
+        }
+
+        static void BuildJumpArcCumulativeLengths(
+            Vector3 startWorld,
+            Vector3 endWorld,
+            float peakOffset,
+            out float[] cumulative,
+            out float length) {
+            cumulative = new float[JumpArcPathSamples + 1];
+            cumulative[0] = 0f;
+            var prev = EvaluateJumpArcPoint(startWorld, endWorld, peakOffset, 0f);
+            for (var i = 1; i <= JumpArcPathSamples; i++) {
+                var t = i / (float)JumpArcPathSamples;
+                var point = EvaluateJumpArcPoint(startWorld, endWorld, peakOffset, t);
+                cumulative[i] = cumulative[i - 1] + Vector3.Distance(prev, point);
+                prev = point;
+            }
+
+            length = cumulative[JumpArcPathSamples];
+        }
+
+        /// <summary>
+        /// Maps distance along the arc to the parametric t used by <see cref="EvaluateJumpArcPoint"/>.
+        /// </summary>
+        static float JumpArcDistanceToT(float[] cumulative, float distance) {
+            if (cumulative == null || cumulative.Length < 2) {
+                return 0f;
+            }
+
+            var total = cumulative[cumulative.Length - 1];
+            if (total <= 0.0001f || distance <= 0f) {
+                return 0f;
+            }
+
+            if (distance >= total) {
+                return 1f;
+            }
+
+            for (var i = 1; i < cumulative.Length; i++) {
+                if (distance > cumulative[i]) {
+                    continue;
+                }
+
+                var segment = cumulative[i] - cumulative[i - 1];
+                var localT = segment > 0.0001f
+                    ? (distance - cumulative[i - 1]) / segment
+                    : 0f;
+                var t0 = (i - 1) / (float)(cumulative.Length - 1);
+                var t1 = i / (float)(cumulative.Length - 1);
+                return Mathf.Lerp(t0, t1, localT);
+            }
+
+            return 1f;
         }
 
         /// <summary>
@@ -1285,9 +1465,8 @@ namespace DiceGame.View
             DiceGridMovePlan plan,
             Board board,
             DiceRegistry registry,
-            Action onComplete,
-            Func<VerticalMotionState> jumpMotionProvider) {
-            if (!HasGameplaySettings() || !snapshot.IsValid || jumpMotionProvider == null) {
+            Action onComplete) {
+            if (!HasGameplaySettings() || !snapshot.IsValid) {
                 onComplete?.Invoke();
                 return;
             }
@@ -1305,8 +1484,7 @@ namespace DiceGame.View
                 plan,
                 board,
                 registry,
-                onComplete,
-                jumpMotionProvider));
+                onComplete));
         }
 
         void UpdateSurfaceBase(DiceState state, Board board, DiceRegistry registry) {
@@ -1399,21 +1577,21 @@ namespace DiceGame.View
             }
 
             currentTopFace = fromState.Orientation.Top;
-            rotationRoot.rotation = DiceOrientationMapper.ToRotation(fromState.Orientation);
-
             var rolls = Mathf.Clamp(rollDistance, 1, DiceGridRollLimits.MaxParallelRollDistance);
             var useArcRoll = jumpMotionProvider != null;
             if (useArcRoll) {
+                // Keep current pose (e.g. mid-jump visual offset); arc continues from here.
                 visualYOffset = 0f;
                 yield return JumpArcRollCoroutine(
                     direction,
                     fromState,
                     toState,
                     rolls,
-                    jumpMotionProvider,
                     board,
-                    registry);
+                    registry,
+                    rotationRoot.rotation);
             } else {
+                rotationRoot.rotation = DiceOrientationMapper.ToRotation(fromState.Orientation);
                 groundRollProgress = 0f;
                 for (var i = 0; i < rolls; i++) {
                     yield return RollPhaseCoroutine(direction, board);
@@ -1440,11 +1618,13 @@ namespace DiceGame.View
             DiceState fromState,
             DiceState toState,
             int rollCount,
-            Func<VerticalMotionState> jumpMotionProvider,
             Board board,
             DiceRegistry registry,
             Quaternion? rotationStartOverride = null) {
-            if (positionRoot == null || rotationRoot == null || board == null || jumpMotionProvider == null) {
+            if (positionRoot == null
+                || rotationRoot == null
+                || board == null
+                || animationSettings == null) {
                 yield break;
             }
 
@@ -1452,61 +1632,61 @@ namespace DiceGame.View
             positionRoot.localRotation = Quaternion.identity;
             positionRoot.localScale = Vector3.one;
 
-            var jumpHeight = board.CellSize * physicsSettings.JumpHeightDiceMultiplier;
-            var launchVelocityY = GravityMotion.ComputeLaunchVelocity(jumpHeight, physicsSettings.Gravity);
-            var startWorld = positionRoot.position;
-            var endGrid = board.GridToWorld(toState.GridPos);
-            var fromBaseY = ResolveSurfaceBaseWorldY(fromState, board, registry);
-            var toBaseY = ResolveSurfaceBaseWorldY(toState, board, registry);
+            if (!TryBuildJumpArcPath(
+                fromState,
+                toState,
+                board,
+                registry,
+                positionRoot.position,
+                out var path)) {
+                yield break;
+            }
+
+            var startWorld = path.StartWorld;
+            var endWorld = path.EndWorld;
+            var peakOffset = path.PeakOffset;
+            var duration = path.Duration;
 
             var midOrientation = fromState.Orientation.Roll(direction);
-            var orientFrom = rotationStartOverride ?? DiceOrientationMapper.ToRotation(fromState.Orientation);
+            var orientFrom = rotationStartOverride ?? rotationRoot.rotation;
             var orientMid = DiceOrientationMapper.ToRotation(midOrientation);
             var orientTo = DiceOrientationMapper.ToRotation(toState.Orientation);
             var useSplitRotation = rollCount >= 2;
 
-            var startMotion = jumpMotionProvider();
-            var jumpTimelineAtRollStart = GravityMotion.ComputeFullJumpTimeline(
-                startMotion,
-                launchVelocityY,
-                jumpHeight);
+            if (duration <= 0f) {
+                rotationRoot.rotation = orientTo;
+                currentTopFace = toState.Orientation.Top;
+                gridWorldPosition = board.GridToWorld(toState.GridPos);
+                UpdateSurfaceBase(toState, board, registry);
+                positionRoot.position = endWorld;
+                yield break;
+            }
 
-            while (true) {
-                var motion = jumpMotionProvider();
-                if (motion.IsGrounded) {
-                    break;
-                }
-
-                var jumpTimeline = GravityMotion.ComputeFullJumpTimeline(motion, launchVelocityY, jumpHeight);
-                var rollT = GravityMotion.ComputeRollArcProgress(jumpTimeline, jumpTimelineAtRollStart);
-                var smoothT = Mathf.SmoothStep(0f, 1f, rollT);
-
-                var xz = Vector2.Lerp(
-                    new Vector2(startWorld.x, startWorld.z),
-                    new Vector2(endGrid.x, endGrid.z),
-                    smoothT);
+            rotationRoot.rotation = orientFrom;
+            var elapsed = 0f;
+            while (elapsed < duration) {
+                elapsed += GameplaySimClock.DeltaTime;
+                var distance = Mathf.Clamp01(elapsed / duration) * path.Length;
+                var t = JumpArcDistanceToT(path.CumulativeLengths, distance);
 
                 var rotation = useSplitRotation
-                    ? rollT <= 0.5f
-                        ? Quaternion.Slerp(orientFrom, orientMid, rollT * 2f)
-                        : Quaternion.Slerp(orientMid, orientTo, (rollT - 0.5f) * 2f)
-                    : Quaternion.Slerp(orientFrom, orientTo, smoothT);
+                    ? t <= 0.5f
+                        ? Quaternion.Slerp(orientFrom, orientMid, t * 2f)
+                        : Quaternion.Slerp(orientMid, orientTo, (t - 0.5f) * 2f)
+                    : Quaternion.Slerp(orientFrom, orientTo, t);
                 rotationRoot.rotation = rotation;
 
-                ComputeVerticalExtents(board, currentTopFace, 1f, out var minY, out _);
-                var baseY = Mathf.Lerp(fromBaseY, toBaseY, smoothT);
-                positionRoot.position = new Vector3(xz.x, baseY - minY + motion.Offset, xz.y);
+                positionRoot.position = EvaluateJumpArcPoint(startWorld, endWorld, peakOffset, t);
                 yield return null;
             }
 
             rotationRoot.rotation = orientTo;
             currentTopFace = toState.Orientation.Top;
-            gridWorldPosition = endGrid;
+            gridWorldPosition = board.GridToWorld(toState.GridPos);
             UpdateSurfaceBase(toState, board, registry);
             ApplyErasureVisual(board, erasureProgress);
 
-            ComputeVerticalExtents(board, currentTopFace, 1f, out var landedMinY, out _);
-            positionRoot.position = new Vector3(endGrid.x, toBaseY - landedMinY, endGrid.z);
+            positionRoot.position = endWorld;
         }
 
         IEnumerator CancelJumpParallelRollCoroutine(
@@ -1514,8 +1694,7 @@ namespace DiceGame.View
             DiceGridMovePlan plan,
             Board board,
             DiceRegistry registry,
-            Action onComplete,
-            Func<VerticalMotionState> jumpMotionProvider) {
+            Action onComplete) {
             isAnimating = true;
             EnsureMesh();
             if (positionRoot == null || rotationRoot == null || board == null) {
@@ -1531,7 +1710,6 @@ namespace DiceGame.View
                 plan.From,
                 plan.To,
                 plan.Distance,
-                jumpMotionProvider,
                 board,
                 registry,
                 snapshot.Rotation);
@@ -1951,8 +2129,10 @@ namespace DiceGame.View
             float emergenceDuration,
             Action onComplete) {
             isAnimating = true;
+            isEmergingVisual = true;
             EnsureMesh();
             if (dissolvePivot == null || rotationRoot == null || positionRoot == null) {
+                isEmergingVisual = false;
                 isAnimating = false;
                 rollCoroutine = null;
                 onComplete?.Invoke();
@@ -1978,6 +2158,7 @@ namespace DiceGame.View
             }
 
             SnapTo(activeSpawnState, board, registry);
+            isEmergingVisual = false;
             isAnimating = false;
             rollCoroutine = null;
             ClearActiveSpawnFall();
@@ -2217,7 +2398,8 @@ namespace DiceGame.View
         }
 
         /// <summary>
-        /// Spawn emergence only. Applies sink visuals without ghost gameplay side effects.
+        /// Spawn emergence: sink squash reversed. Early frames are reverse-ghost (crushable);
+        /// later frames are solid stack bases. Stacked Tops follow surface height each tick.
         /// </summary>
         void ApplyEmergenceVisual(Board board, float progress) {
             if (dissolvePivot == null || positionRoot == null || rotationRoot == null || board == null) {
@@ -2226,10 +2408,16 @@ namespace DiceGame.View
 
             erasureProgress = progress;
             ApplySurfaceLayout(board, progress);
-            ApplyErasureAlpha(progress, allowGhostAlpha: false);
+            var allowGhostAlpha = erasureSettings != null
+                && progress >= erasureSettings.SinkGhostThreshold
+                && !ResolveVisualCapabilities().SuppressesErasureGhost;
+            ApplyErasureAlpha(progress, allowGhostAlpha: allowGhostAlpha);
             ApplyErasureEmission(progress, useNeutralColor: true);
             EnsurePushBody();
-            pushBody?.SetCollisionEnabled(progress < erasureSettings.SinkGhostThreshold);
+            // Player-solid throughout; dice crush uses placement rules while ghost.
+            pushBody?.SetCollisionEnabled(true);
+            EnsureDiceController();
+            diceController?.NotifyEmergenceProgressChanged();
         }
 
         void ApplyRadianceLayout(Board board) {

@@ -20,3 +20,4 @@ MonoBehaviour:
   placeDuration: 0.2
   throwDuration: 0.45
   throwSpinTurns: 2
+  jumpArcMoveTicksPerCell: 12

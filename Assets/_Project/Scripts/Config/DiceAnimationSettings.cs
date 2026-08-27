@@ -1,3 +1,4 @@
+using DiceGame.Session;
 using UnityEngine;
 
 namespace DiceGame.Config
@@ -13,6 +14,7 @@ namespace DiceGame.Config
         [SerializeField] float placeDuration = 0.3f;
         [SerializeField] float throwDuration = 0.45f;
         [SerializeField] float throwSpinTurns = 2f;
+        [SerializeField, Min(1)] int jumpArcMoveTicksPerCell = 12;
 
         public float RollAnimationDuration => rollAnimationDuration;
         public float JumpParallelRollDurationPerCell => jumpParallelRollDurationPerCell;
@@ -22,6 +24,10 @@ namespace DiceGame.Config
         public float PlaceDuration => placeDuration;
         public float ThrowDuration => throwDuration;
         public float ThrowSpinTurns => throwSpinTurns;
+        /// <summary>
+        /// Sim ticks to travel one cell on a jump-arc dice move (at <see cref="SessionConstants.SimTickHz"/>).
+        /// </summary>
+        public int JumpArcMoveTicksPerCell => jumpArcMoveTicksPerCell;
 
         public float GetThrowDuration(int cellDistance = 1) {
             // Flight time is distance-independent so vertical arc timing stays constant;
@@ -35,6 +41,23 @@ namespace DiceGame.Config
 
         public float GetJumpParallelRollDuration(int distance) {
             return jumpParallelRollDurationPerCell * Mathf.Max(1, distance);
+        }
+
+        /// <summary>
+        /// Seconds to travel <paramref name="pathLength"/> at jump-arc speed
+        /// (<see cref="jumpArcMoveTicksPerCell"/> ticks per cell of path length).
+        /// </summary>
+        public float GetJumpArcPathDurationSeconds(
+            float pathLength,
+            float cellSize,
+            float rollDurationMultiplier = 1f) {
+            var ticksPerCell = Mathf.Max(1, jumpArcMoveTicksPerCell)
+                * Mathf.Max(0.01f, rollDurationMultiplier);
+            var safeCellSize = Mathf.Max(0.01f, cellSize);
+            var cells = pathLength <= 0.0001f
+                ? 1f
+                : pathLength / safeCellSize;
+            return cells * ticksPerCell * SessionConstants.SimTickSeconds;
         }
     }
 }

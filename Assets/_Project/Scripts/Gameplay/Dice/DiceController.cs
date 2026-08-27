@@ -65,6 +65,15 @@ namespace DiceGame.Gameplay
         public bool IsErasureGhost =>
             IsSinkErasing && diceView != null && diceView.IsErasureGhost;
         /// <summary>
+        /// BottomEmergence while still underground (same squash band as sink ghost, reverse timeline).
+        /// Player-solid, dice-crushable via <see cref="GhostPlacementRules.IsCrushableByDicePlacement"/>.
+        /// </summary>
+        public bool IsEmergingGhost =>
+            isSpawning
+            && spawnAppearMode == DiceSpawnAppearMode.BottomEmergence
+            && diceView != null
+            && diceView.IsEmergingGhost;
+        /// <summary>
         /// True while this jumbo currently occupies Top footprint slots.
         /// Driven by <see cref="DiceRegistry.SyncJumboSinkOccupancy"/> (progress threshold + stack gate).
         /// </summary>
@@ -240,6 +249,11 @@ namespace DiceGame.Gameplay
                 return LogicalMotionFallbackSeconds;
             }
 
+            Vector3? arcStartWorld = null;
+            if (context.IsJump && context.JumpMotionProvider != null && TryGetVisualWorldPosition(out var visualStart)) {
+                arcStartWorld = visualStart;
+            }
+
             switch (plan.Kind) {
                 case DiceGridMoveKind.Parallel:
                     return diceView.GetJumpRollLogicalDuration(
@@ -250,7 +264,7 @@ namespace DiceGame.Gameplay
                         useArcRoll: context.IsJump && context.JumpMotionProvider != null,
                         board,
                         registry,
-                        context.JumpMotionProvider);
+                        arcStartWorld);
                 case DiceGridMoveKind.Demote:
                     if (UsesSlideVisualForDemote(plan)) {
                         return ResolveSlideLogicalDuration(plan.From, plan.To);
@@ -267,7 +281,7 @@ namespace DiceGame.Gameplay
                             useArcRoll: context.JumpMotionProvider != null,
                             board,
                             registry,
-                            context.JumpMotionProvider)
+                            arcStartWorld)
                         : diceView.GetTransitionLogicalDuration(
                             BuildTierChangeTransition(plan),
                             board,
@@ -484,14 +498,24 @@ namespace DiceGame.Gameplay
                 ? DiceSpawnAppearMode.BottomEmergence
                 : DiceSpawnAppearMode.FallFromAbove;
             currentState = new DiceState(gridPos, orientation, tier, kind);
-            registry?.RegisterPendingSpawn(this, gridPos, tier);
+
+            // Emergence commits Bottom immediately so Tops can stack after the ghost phase.
+            // Fall-from-above stays pending until land.
+            if (spawnAppearMode == DiceSpawnAppearMode.BottomEmergence) {
+                registry?.Place(this, gridPos, tier);
+            } else {
+                registry?.RegisterPendingSpawn(this, gridPos, tier);
+            }
 
             void OnSpawnComplete() {
                 if (!isSpawning) {
                     return;
                 }
 
-                registry?.CommitPendingSpawn(this, currentState.GridPos, currentState.Tier);
+                if (spawnAppearMode != DiceSpawnAppearMode.BottomEmergence) {
+                    registry?.CommitPendingSpawn(this, currentState.GridPos, currentState.Tier);
+                }
+
                 isSpawning = false;
                 spawnAppearMode = DiceSpawnAppearMode.None;
                 logicalSpawnRemaining = 0f;
@@ -887,7 +911,7 @@ namespace DiceGame.Gameplay
                     useArcRoll: true,
                     board,
                     registry,
-                    jumpMotionProvider)
+                    snapshot.WorldPosition)
                 : LogicalMotionFallbackSeconds;
             StartLogicalBusy(duration, () => {
                 FinishLogicalBusy();
@@ -899,8 +923,7 @@ namespace DiceGame.Gameplay
                 plan,
                 board,
                 registry,
-                null,
-                jumpMotionProvider);
+                null);
 
             return true;
         }
@@ -1279,7 +1302,10 @@ namespace DiceGame.Gameplay
             pendingSpawnComplete = null;
             logicalSpawnRemaining = 0f;
             diceView?.InterruptRollAnimation();
-            registry?.CommitPendingSpawn(this, currentState.GridPos, currentState.Tier);
+            if (spawnAppearMode != DiceSpawnAppearMode.BottomEmergence) {
+                registry?.CommitPendingSpawn(this, currentState.GridPos, currentState.Tier);
+            }
+
             isSpawning = false;
             spawnAppearMode = DiceSpawnAppearMode.None;
             ConfigurePushBody();
@@ -1363,8 +1389,13 @@ namespace DiceGame.Gameplay
 
             ownershipContext?.CaptureTierFallSupportOwner(this, removedBottom);
 
-            if (removedBottom != null && removedBottom.IsErasureGhost) {
-                removedBottom.CompleteErasureFromOverride();
+            if (removedBottom != null
+                && (removedBottom.IsErasureGhost || removedBottom.IsEmergingGhost)) {
+                if (removedBottom.IsErasureGhost) {
+                    removedBottom.CompleteErasureFromOverride();
+                } else {
+                    removedBottom.CompleteEmergingCrushFromOverride();
+                }
             }
 
             var fromWorld = diceView.DiceTransform.position;
@@ -1413,6 +1444,19 @@ namespace DiceGame.Gameplay
 
         public void NotifyStackedTopSync() {
             registry?.SyncStackedTopsForDice(this, board);
+        }
+
+        /// <summary>
+        /// BottomEmergence progress tick — keep stacked Tops aligned to rising surface.
+        /// </summary>
+        public void NotifyEmergenceProgressChanged() {
+            if (!isSpawning
+                || spawnAppearMode != DiceSpawnAppearMode.BottomEmergence
+                || registry == null) {
+                return;
+            }
+
+            registry.SyncStackedTopsForDice(this, board);
         }
 
         /// <summary>
@@ -1496,6 +1540,24 @@ namespace DiceGame.Gameplay
 
             diceView?.CancelErasure();
             erasureKind = ErasureKind.None;
+            registry?.Unregister(this);
+            Erased?.Invoke(this);
+            Destroy(gameObject);
+        }
+
+        /// <summary>
+        /// Dice Place/Move crushed this Bottom while it was still emerging (reverse ghost).
+        /// </summary>
+        public void CompleteEmergingCrushFromOverride() {
+            if (!isSpawning || spawnAppearMode != DiceSpawnAppearMode.BottomEmergence) {
+                return;
+            }
+
+            pendingSpawnComplete = null;
+            logicalSpawnRemaining = 0f;
+            diceView?.InterruptRollAnimation();
+            isSpawning = false;
+            spawnAppearMode = DiceSpawnAppearMode.None;
             registry?.Unregister(this);
             Erased?.Invoke(this);
             Destroy(gameObject);

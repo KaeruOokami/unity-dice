@@ -14,9 +14,11 @@ namespace DiceGame.Placement
         /// <summary>
         /// Sink erasure ghost stays player-solid but may be overwritten by dice Place/Move
         /// (<see cref="DiceRegistry.EvictErasingDiceAt"/>).
+        /// Emerging bottoms use the same crush rule while still underground
+        /// (progress ≥ ghost threshold — reverse of sink).
         /// </summary>
         public static bool IsCrushableByDicePlacement(DiceController dice) {
-            return dice != null && dice.IsErasureGhost;
+            return dice != null && (dice.IsErasureGhost || dice.IsEmergingGhost);
         }
 
         public static bool AllowsDiceSwapThrough(DiceController dice) {
