@@ -35,11 +35,23 @@ namespace DiceGame.Gameplay.AI.Domain
             GameStateSnapshot snapshot,
             DiceRegistry registry,
             AiPlayerSettings settings,
-            int? sourceTrappedFace) {
+            int? sourceTrappedFace,
+            MovementTransitionEvaluator passability = null,
+            AiNavigationState? navigationState = null,
+            float footingWorldY = 0f,
+            PlayerSlot movementOwner = default) {
             var session = new AiFloorRecoverySession {
                 SourceTrappedFace = sourceTrappedFace
             };
-            AdvancePhase(session, snapshot, registry, settings);
+            AdvancePhase(
+                session,
+                snapshot,
+                registry,
+                settings,
+                passability,
+                navigationState,
+                footingWorldY,
+                movementOwner);
             return session;
         }
 
@@ -47,7 +59,11 @@ namespace DiceGame.Gameplay.AI.Domain
             AiFloorRecoverySession session,
             GameStateSnapshot snapshot,
             DiceRegistry registry,
-            AiPlayerSettings settings) {
+            AiPlayerSettings settings,
+            MovementTransitionEvaluator passability = null,
+            AiNavigationState? navigationState = null,
+            float footingWorldY = 0f,
+            PlayerSlot movementOwner = default) {
             if (session == null || snapshot == null || settings == null) {
                 return;
             }
@@ -59,7 +75,11 @@ namespace DiceGame.Gameplay.AI.Domain
                     snapshot,
                     trappedFace,
                     settings,
-                    out var workDie)) {
+                    out var workDie,
+                    passability,
+                    navigationState,
+                    footingWorldY,
+                    movementOwner)) {
                 session.AlternateWorkDie = workDie;
             }
 
@@ -69,7 +89,14 @@ namespace DiceGame.Gameplay.AI.Domain
             }
         }
 
-        public static void InvalidateFailedTargets(AiFloorRecoverySession session, GameStateSnapshot snapshot) {
+        public static void InvalidateFailedTargets(
+            AiFloorRecoverySession session,
+            GameStateSnapshot snapshot,
+            MovementTransitionEvaluator passability = null,
+            AiNavigationState? navigationState = null,
+            float footingWorldY = 0f,
+            PlayerSlot movementOwner = default,
+            AiPlayerSettings settings = null) {
             if (session == null || snapshot == null) {
                 return;
             }
@@ -86,7 +113,12 @@ namespace DiceGame.Gameplay.AI.Domain
                 && !IsLockedAlternateStillValid(
                     session.AlternateWorkDie,
                     snapshot,
-                    session.SourceTrappedFace ?? 0)) {
+                    session.SourceTrappedFace ?? 0,
+                    passability,
+                    navigationState,
+                    footingWorldY,
+                    movementOwner,
+                    settings)) {
                 AiDebugLogClearAlternate(session);
                 session.AlternateWorkDie = null;
             }
@@ -112,13 +144,32 @@ namespace DiceGame.Gameplay.AI.Domain
             AiFloorRecoverySession session,
             GameStateSnapshot snapshot,
             DiceRegistry registry,
-            AiPlayerSettings settings) {
+            AiPlayerSettings settings,
+            MovementTransitionEvaluator passability = null,
+            AiNavigationState? navigationState = null,
+            float footingWorldY = 0f,
+            PlayerSlot movementOwner = default) {
             if (session == null) {
                 return;
             }
 
-            InvalidateFailedTargets(session, snapshot);
-            EnsureSessionTargets(session, snapshot, registry, settings);
+            InvalidateFailedTargets(
+                session,
+                snapshot,
+                passability,
+                navigationState,
+                footingWorldY,
+                movementOwner,
+                settings);
+            EnsureSessionTargets(
+                session,
+                snapshot,
+                registry,
+                settings,
+                passability,
+                navigationState,
+                footingWorldY,
+                movementOwner);
             session.Phase = ResolvePhase(session, snapshot);
         }
 
@@ -168,7 +219,11 @@ namespace DiceGame.Gameplay.AI.Domain
             GameStateSnapshot snapshot,
             int excludedTrappedFace,
             AiPlayerSettings settings,
-            out DiceController workDie) {
+            out DiceController workDie,
+            MovementTransitionEvaluator passability = null,
+            AiNavigationState? navigationState = null,
+            float footingWorldY = 0f,
+            PlayerSlot movementOwner = default) {
             workDie = null;
             if (snapshot == null || settings == null) {
                 return false;
@@ -176,6 +231,7 @@ namespace DiceGame.Gameplay.AI.Domain
 
             var bestScore = float.MinValue;
             var found = false;
+            var maxSearchSteps = Mathf.Max(1, settings.PathSearchMaxSteps);
 
             for (var face = 2; face <= 6; face++) {
                 if (excludedTrappedFace > 0 && face == excludedTrappedFace) {
@@ -204,6 +260,23 @@ namespace DiceGame.Gameplay.AI.Domain
                     preferChain: true,
                     out var candidateWorkDie)
                     || candidateWorkDie.Controller == null) {
+                    continue;
+                }
+
+                // Require mount/path feasibility before committing to walk there.
+                if (passability == null || !navigationState.HasValue) {
+                    continue;
+                }
+
+                if (!AiMountFeasibility.CanStandOnDie(
+                    passability,
+                    navigationState.Value,
+                    footingWorldY,
+                    movementOwner,
+                    candidateWorkDie.Controller,
+                    maxSearchSteps,
+                    settings.AllowJump,
+                    snapshot.PlanningDice)) {
                     continue;
                 }
 
@@ -271,7 +344,12 @@ namespace DiceGame.Gameplay.AI.Domain
         public static bool IsLockedAlternateStillValid(
             DiceController workDie,
             GameStateSnapshot snapshot,
-            int excludedTrappedFace) {
+            int excludedTrappedFace,
+            MovementTransitionEvaluator passability = null,
+            AiNavigationState? navigationState = null,
+            float footingWorldY = 0f,
+            PlayerSlot movementOwner = default,
+            AiPlayerSettings settings = null) {
             if (workDie == null
                 || snapshot == null
                 || workDie.IsErasing
@@ -279,6 +357,7 @@ namespace DiceGame.Gameplay.AI.Domain
                 return false;
             }
 
+            var stillAdjacentToChain = false;
             for (var face = 2; face <= 6; face++) {
                 if (excludedTrappedFace > 0 && face == excludedTrappedFace) {
                     continue;
@@ -298,11 +377,28 @@ namespace DiceGame.Gameplay.AI.Domain
                     clusterGroup,
                     face,
                     snapshot.PlanningDice)) {
-                    return true;
+                    stillAdjacentToChain = true;
+                    break;
                 }
             }
 
-            return false;
+            if (!stillAdjacentToChain) {
+                return false;
+            }
+
+            if (passability == null || !navigationState.HasValue || settings == null) {
+                return true;
+            }
+
+            return AiMountFeasibility.CanStandOnDie(
+                passability,
+                navigationState.Value,
+                footingWorldY,
+                movementOwner,
+                workDie,
+                Mathf.Max(1, settings.PathSearchMaxSteps),
+                settings.AllowJump,
+                snapshot.PlanningDice);
         }
 
         public static bool HasAdjacentClusterExternalDie(

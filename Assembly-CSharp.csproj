@@ -71,6 +71,7 @@
     <Compile Include="Assets\_Project\Scripts\Session\Network\LockstepTickInputSource.cs" />
     <Compile Include="Assets\_Project\Scripts\Placement\Magnet\MagnetMoveExecutor.cs" />
     <Compile Include="Assets\_Project\Scripts\Placement\Movement\Walk\HeightTransferFacts.cs" />
+    <Compile Include="Assets\_Project\Scripts\Gameplay\AI\Domain\AiMountFeasibility.cs" />
     <Compile Include="Assets\_Project\Scripts\Config\BoardSettings.cs" />
     <Compile Include="Assets\_Project\Scripts\Gameplay\AI\Application\IAiDebugOverlaySource.cs" />
     <Compile Include="Assets\_Project\Scripts\Session\DiceSpawnSettingsPanelUi.cs" />

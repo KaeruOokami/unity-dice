@@ -27,7 +27,7 @@ namespace DiceGame.Gameplay.AI.Domain
             return subGoal.Kind switch {
                 AiSubGoalKind.ReachParticipant => BuildReachAction(goal, subGoal, snapshot, character, registry, settings),
                 AiSubGoalKind.ReachWorkDie => BuildReachAction(goal, subGoal, snapshot, character, registry, settings),
-                AiSubGoalKind.OrientDie => BuildOrientAction(subGoal, snapshot, character, registry, settings),
+                AiSubGoalKind.OrientDie => BuildOrientAction(goal, subGoal, snapshot, character, registry, settings),
                 AiSubGoalKind.JoinCluster => BuildJoinClusterAction(goal, subGoal, snapshot, character, registry, settings),
                 AiSubGoalKind.LiftDie => BuildLiftAction(goal, subGoal, snapshot, character, registry, settings),
                 _ => BuildReachAction(goal, subGoal, snapshot, character, registry, settings)
@@ -282,6 +282,7 @@ namespace DiceGame.Gameplay.AI.Domain
         }
 
         static Application.AiDiscreteAction BuildOrientAction(
+            MatchGoal goal,
             AiSubGoal subGoal,
             GameStateSnapshot snapshot,
             CharacterController character,
@@ -325,7 +326,15 @@ namespace DiceGame.Gameplay.AI.Domain
 
                 subGoal.TryAdvanceOrientRollStep(state);
 
-                if (!TryEnsureOrientRollPlan(subGoal, state, passability, character, footingWorldY, settings)) {
+                if (!TryEnsureOrientRollPlan(
+                    goal,
+                    subGoal,
+                    state,
+                    passability,
+                    character,
+                    footingWorldY,
+                    settings,
+                    registry)) {
                     Application.AiDebugLog.Log(
                         $"OrientPlan FAILED die={die.name} cell={state.GridPos} " +
                         $"currentTop={state.Orientation.Top} targetTop={subGoal.TargetFace} " +
@@ -381,12 +390,14 @@ namespace DiceGame.Gameplay.AI.Domain
         }
 
         static bool TryEnsureOrientRollPlan(
+            MatchGoal goal,
             AiSubGoal subGoal,
             DiceState state,
             MovementTransitionEvaluator passability,
             CharacterController character,
             float footingWorldY,
-            AiPlayerSettings settings) {
+            AiPlayerSettings settings,
+            DiceRegistry registry) {
             if (subGoal.HasOrientRollPlan) {
                 var existing = subGoal.OrientRollPlan.Value;
                 if (WorkDieSlidePlanner.IsPlanStillValid(existing, subGoal.OrientRollStepIndex, state)) {
@@ -397,7 +408,43 @@ namespace DiceGame.Gameplay.AI.Domain
             }
 
             var allowJump = settings != null && settings.AllowJump;
-            if (!WorkDieOrientPlanner.TryBuildOrientPlan(
+            var preferredAvoidance = ResolveChainCrushAvoidance(goal, registry);
+            if (TryBuildOrientPlanWithAvoidance(
+                    passability,
+                    subGoal,
+                    character,
+                    footingWorldY,
+                    state,
+                    allowJump,
+                    preferredAvoidance,
+                    out var plan)
+                || (preferredAvoidance.IsActive
+                    && TryBuildOrientPlanWithAvoidance(
+                        passability,
+                        subGoal,
+                        character,
+                        footingWorldY,
+                        state,
+                        allowJump,
+                        WorkDieRollCrushAvoidance.None,
+                        out plan))) {
+                subGoal.SetOrientRollPlan(plan);
+                return true;
+            }
+
+            return false;
+        }
+
+        static bool TryBuildOrientPlanWithAvoidance(
+            MovementTransitionEvaluator passability,
+            AiSubGoal subGoal,
+            CharacterController character,
+            float footingWorldY,
+            DiceState state,
+            bool allowJump,
+            WorkDieRollCrushAvoidance crushAvoidance,
+            out WorkDieSlidePlan plan) {
+            return WorkDieOrientPlanner.TryBuildOrientPlan(
                 passability,
                 subGoal.TargetDie,
                 character.StandingPlacement.Level,
@@ -406,14 +453,18 @@ namespace DiceGame.Gameplay.AI.Domain
                 state,
                 subGoal.TargetFace,
                 allowJump,
-                out var plan)
-                || plan.Directions == null
-                || plan.Directions.Count == 0) {
-                return false;
+                out plan,
+                crushAvoidance)
+                && plan.Directions != null
+                && plan.Directions.Count > 0;
+        }
+
+        static WorkDieRollCrushAvoidance ResolveChainCrushAvoidance(MatchGoal goal, DiceRegistry registry) {
+            if (goal == null || !goal.IsChainGoal || registry == null || goal.Face < 2) {
+                return WorkDieRollCrushAvoidance.None;
             }
 
-            subGoal.SetOrientRollPlan(plan);
-            return true;
+            return new WorkDieRollCrushAvoidance(goal.Face, registry);
         }
 
         static Application.AiDiscreteAction BuildJoinClusterAction(
@@ -493,10 +544,18 @@ namespace DiceGame.Gameplay.AI.Domain
                 subGoal.TryAdvanceJoinSlideStep(state);
 
                 if (!subGoal.HasJoinSlidePlan && state.Orientation.Top != subGoal.TargetFace) {
-                    return BuildOrientAction(subGoal, snapshot, character, registry, settings);
+                    return BuildOrientAction(goal, subGoal, snapshot, character, registry, settings);
                 }
 
-                if (!TryEnsureJoinSlidePlan(subGoal, state, passability, character, footingWorldY, settings)) {
+                if (!TryEnsureJoinSlidePlan(
+                    goal,
+                    subGoal,
+                    state,
+                    passability,
+                    character,
+                    footingWorldY,
+                    settings,
+                    registry)) {
                     if (!TryRetargetJoin(goal, subGoal, snapshot, registry)) {
                         Application.AiDebugLog.Log(
                             $"JoinPlan FAILED die={die.name} cell={state.GridPos} " +
@@ -622,12 +681,14 @@ namespace DiceGame.Gameplay.AI.Domain
         }
 
         static bool TryEnsureJoinSlidePlan(
+            MatchGoal goal,
             AiSubGoal subGoal,
             DiceState state,
             MovementTransitionEvaluator passability,
             CharacterController character,
             float footingWorldY,
-            AiPlayerSettings settings) {
+            AiPlayerSettings settings,
+            DiceRegistry registry) {
             if (subGoal.HasJoinSlidePlan) {
                 var existing = subGoal.JoinSlidePlan.Value;
                 if (WorkDieSlidePlanner.IsPlanStillValid(existing, subGoal.JoinSlideStepIndex, state)) {
@@ -652,7 +713,43 @@ namespace DiceGame.Gameplay.AI.Domain
             }
 
             var allowJump = settings != null && settings.AllowJump;
-            if (!WorkDieSlidePlanner.TryBuildSlidePlan(
+            var preferredAvoidance = ResolveChainCrushAvoidance(goal, registry);
+            if (TryBuildJoinSlidePlanWithAvoidance(
+                    passability,
+                    subGoal,
+                    character,
+                    footingWorldY,
+                    state,
+                    allowJump,
+                    preferredAvoidance,
+                    out var plan)
+                || (preferredAvoidance.IsActive
+                    && TryBuildJoinSlidePlanWithAvoidance(
+                        passability,
+                        subGoal,
+                        character,
+                        footingWorldY,
+                        state,
+                        allowJump,
+                        WorkDieRollCrushAvoidance.None,
+                        out plan))) {
+                subGoal.SetJoinSlidePlan(plan);
+                return true;
+            }
+
+            return false;
+        }
+
+        static bool TryBuildJoinSlidePlanWithAvoidance(
+            MovementTransitionEvaluator passability,
+            AiSubGoal subGoal,
+            CharacterController character,
+            float footingWorldY,
+            DiceState state,
+            bool allowJump,
+            WorkDieRollCrushAvoidance crushAvoidance,
+            out WorkDieSlidePlan plan) {
+            return WorkDieSlidePlanner.TryBuildSlidePlan(
                 passability,
                 subGoal.TargetDie,
                 character.StandingPlacement.Level,
@@ -662,14 +759,10 @@ namespace DiceGame.Gameplay.AI.Domain
                 subGoal.TargetCell,
                 subGoal.TargetTier,
                 allowJump,
-                out var plan)
-                || plan.Directions == null
-                || plan.Directions.Count == 0) {
-                return false;
-            }
-
-            subGoal.SetJoinSlidePlan(plan);
-            return true;
+                out plan,
+                crushAvoidance)
+                && plan.Directions != null
+                && plan.Directions.Count > 0;
         }
 
         static Application.AiDiscreteAction BuildWorkDieRollAction(

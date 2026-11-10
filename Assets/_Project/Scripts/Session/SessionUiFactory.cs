@@ -705,6 +705,60 @@ namespace DiceGame.Session
             return CreateLayoutToggle(cell, $"{label}Toggle", 36f);
         }
 
+        /// <summary>
+        /// Trigger Faces 用: Normal ダイスの出目アイコン（固定）+ ラベル + Toggle。
+        /// </summary>
+        public static Toggle CreateFaceLabeledToggle(Transform parent, int face) {
+            var label = $"Face {face}";
+            var cell = CreateFieldCell(parent, label);
+            CreateFaceLabeledRow(cell, face, label, 18, 28f);
+            return CreateLayoutToggle(cell, $"{label}Toggle", 36f);
+        }
+
+        public static TextMeshProUGUI CreateFaceLabeledRow(
+            Transform parent,
+            int face,
+            string text,
+            int fontSize,
+            float height) {
+            var go = CreateLayoutRow(parent, text, height);
+            var layout = go.AddComponent<HorizontalLayoutGroup>();
+            layout.spacing = 8f;
+            layout.padding = new RectOffset(4, 4, 0, 0);
+            layout.childAlignment = TextAnchor.MiddleLeft;
+            layout.childControlWidth = true;
+            layout.childControlHeight = true;
+            layout.childForceExpandWidth = false;
+            layout.childForceExpandHeight = false;
+
+            if (diceKindIcons != null
+                && diceKindIcons.TryGet(DiceKind.Normal, face, out var icon)
+                && icon != null) {
+                var iconGo = new GameObject("FaceIcon");
+                iconGo.transform.SetParent(go.transform, false);
+                var iconImage = iconGo.AddComponent<Image>();
+                iconImage.sprite = icon;
+                iconImage.preserveAspect = true;
+                iconImage.raycastTarget = false;
+                var iconElement = iconGo.AddComponent<LayoutElement>();
+                var size = Mathf.Min(diceKindIcons.IconSize, height - 4f);
+                iconElement.preferredWidth = size;
+                iconElement.preferredHeight = size;
+                iconElement.minWidth = size;
+                iconElement.minHeight = size;
+            }
+
+            var labelGo = new GameObject("Label");
+            labelGo.transform.SetParent(go.transform, false);
+            var labelElement = labelGo.AddComponent<LayoutElement>();
+            labelElement.minWidth = 0f;
+            labelElement.preferredWidth = 0f;
+            labelElement.flexibleWidth = 1f;
+            var labelText = CreateInlineText(labelGo, text, fontSize, TextAlignmentOptions.MidlineLeft);
+            labelText.overflowMode = TextOverflowModes.Ellipsis;
+            return labelText;
+        }
+
         public static Button CreateTwoColumnLayoutButton(
             Transform parent,
             string name,

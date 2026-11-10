@@ -188,7 +188,8 @@ namespace DiceGame.Gameplay.AI.Domain
             Vector2Int targetCell,
             DiceStackTier targetTier,
             bool allowJump,
-            out WorkDieSlidePlan plan) {
+            out WorkDieSlidePlan plan,
+            WorkDieRollCrushAvoidance crushAvoidance = default) {
             plan = default;
             if (!TryBuildSlideDirections(
                 passability,
@@ -200,7 +201,8 @@ namespace DiceGame.Gameplay.AI.Domain
                 targetCell,
                 targetTier,
                 allowJump,
-                out var directions)) {
+                out var directions,
+                crushAvoidance)) {
                 return false;
             }
 
@@ -322,7 +324,8 @@ namespace DiceGame.Gameplay.AI.Domain
             Vector2Int targetCell,
             DiceStackTier targetTier,
             bool allowJump,
-            out List<Direction> directions) {
+            out List<Direction> directions,
+            WorkDieRollCrushAvoidance crushAvoidance = default) {
             directions = null;
             if (startState.GridPos == targetCell) {
                 if (startState.Tier != targetTier) {
@@ -346,7 +349,8 @@ namespace DiceGame.Gameplay.AI.Domain
                     targetTier,
                     axisXFirst: true,
                     allowJump,
-                    out directions)) {
+                    out directions,
+                    crushAvoidance)) {
                     return true;
                 }
 
@@ -361,7 +365,8 @@ namespace DiceGame.Gameplay.AI.Domain
                     targetTier,
                     axisXFirst: false,
                     allowJump,
-                    out directions);
+                    out directions,
+                    crushAvoidance);
             }
 
             return TryBuildSlideDirectionsAxisOrder(
@@ -375,7 +380,8 @@ namespace DiceGame.Gameplay.AI.Domain
                 targetTier,
                 axisXFirst: delta.x != 0,
                 allowJump,
-                out directions);
+                out directions,
+                crushAvoidance);
         }
 
         static bool TryBuildSlideDirectionsAxisOrder(
@@ -389,7 +395,8 @@ namespace DiceGame.Gameplay.AI.Domain
             DiceStackTier targetTier,
             bool axisXFirst,
             bool allowJump,
-            out List<Direction> directions) {
+            out List<Direction> directions,
+            WorkDieRollCrushAvoidance crushAvoidance = default) {
             directions = new List<Direction>();
             var delta = targetCell - startState.GridPos;
             var currentState = startState;
@@ -408,7 +415,8 @@ namespace DiceGame.Gameplay.AI.Domain
                     directions,
                     allowJump,
                     out currentState,
-                    out currentLevel)) {
+                    out currentLevel,
+                    crushAvoidance)) {
                     return false;
                 }
 
@@ -424,7 +432,8 @@ namespace DiceGame.Gameplay.AI.Domain
                     directions,
                     allowJump,
                     out currentState,
-                    out currentLevel)) {
+                    out currentLevel,
+                    crushAvoidance)) {
                     return false;
                 }
             } else {
@@ -440,7 +449,8 @@ namespace DiceGame.Gameplay.AI.Domain
                     directions,
                     allowJump,
                     out currentState,
-                    out currentLevel)) {
+                    out currentLevel,
+                    crushAvoidance)) {
                     return false;
                 }
 
@@ -456,7 +466,8 @@ namespace DiceGame.Gameplay.AI.Domain
                     directions,
                     allowJump,
                     out currentState,
-                    out currentLevel)) {
+                    out currentLevel,
+                    crushAvoidance)) {
                     return false;
                 }
             }
@@ -478,7 +489,8 @@ namespace DiceGame.Gameplay.AI.Domain
             List<Direction> directions,
             bool allowJump,
             out DiceState resultState,
-            out int resultLevel) {
+            out int resultLevel,
+            WorkDieRollCrushAvoidance crushAvoidance = default) {
             resultState = startState;
             resultLevel = fromLevel;
             if (deltaComponent == 0) {
@@ -499,7 +511,8 @@ namespace DiceGame.Gameplay.AI.Domain
                 directions,
                 allowJump,
                 out resultState,
-                out resultLevel);
+                out resultLevel,
+                crushAvoidance);
         }
 
         static Direction ResolveAxisDirection(int deltaComponent, bool isXAxis) {
@@ -522,7 +535,8 @@ namespace DiceGame.Gameplay.AI.Domain
             List<Direction> directions,
             bool allowJump,
             out DiceState resultState,
-            out int resultLevel) {
+            out int resultLevel,
+            WorkDieRollCrushAvoidance crushAvoidance = default) {
             resultState = startState;
             resultLevel = fromLevel;
             if (steps <= 0) {
@@ -544,7 +558,8 @@ namespace DiceGame.Gameplay.AI.Domain
                     perpendicular,
                     allowJump,
                     out simulated,
-                    out var segmentLevel)) {
+                    out var segmentLevel,
+                    crushAvoidance)) {
                     continue;
                 }
 
@@ -560,7 +575,8 @@ namespace DiceGame.Gameplay.AI.Domain
                         axisDirection,
                         allowJump,
                         out simulated,
-                        out segmentLevel)) {
+                        out segmentLevel,
+                        crushAvoidance)) {
                         segment = null;
                         break;
                     }
@@ -582,7 +598,8 @@ namespace DiceGame.Gameplay.AI.Domain
                     closing,
                     allowJump,
                     out simulated,
-                    out segmentLevel)) {
+                    out segmentLevel,
+                    crushAvoidance)) {
                     continue;
                 }
 

@@ -124,6 +124,10 @@ namespace DiceGame.Gameplay.AI.Domain
                         continue;
                     }
 
+                    if (IsAccidentalSinkRemount(standOnDie, neighborState.StandingDice)) {
+                        continue;
+                    }
+
                     if (!constraints.IsTransitionAllowed(transition, node.State)) {
                         log += $" {neighborCell}:cluster-move-forbidden";
                         continue;
@@ -182,6 +186,22 @@ namespace DiceGame.Gameplay.AI.Domain
             return neighborCell == standOnDie.CurrentState.GridPos;
         }
 
+        /// <summary>
+        /// Prevents TierLanding remount onto ghost sink dice during general navigation.
+        /// Non-ghost sinks stay pathable via floor mount / jump stack; coupled ground TierLanding
+        /// onto them is blocked in <c>MoveActionSelector</c> (jump roll required).
+        /// Explicit StandOnDie of that die is allowed.
+        /// </summary>
+        public static bool IsAccidentalSinkRemount(
+            DiceController standOnDie,
+            DiceController landingStandingDice) {
+            if (landingStandingDice == null || !landingStandingDice.IsErasureGhost) {
+                return false;
+            }
+
+            return standOnDie != landingStandingDice;
+        }
+
         public static bool TrySelectBestNavigableNeighbor(
             MovementTransitionEvaluator passability,
             AiNavigationState start,
@@ -218,7 +238,7 @@ namespace DiceGame.Gameplay.AI.Domain
                     direction,
                     start,
                     out var neighborCell,
-                    out _,
+                    out var neighborState,
                     out var edgeKind)) {
                     log += $" {start.Cell + direction.ToGridDelta()}:blocked({transition.Kind})";
                     continue;
@@ -226,6 +246,11 @@ namespace DiceGame.Gameplay.AI.Domain
 
                 if (IsCanRollIncompatibleWithStandOnDie(standOnDie, start.StandingDice, edgeKind, neighborCell)) {
                     log += $" {neighborCell}:can-roll-no-remount";
+                    continue;
+                }
+
+                if (IsAccidentalSinkRemount(standOnDie, neighborState.StandingDice)) {
+                    log += $" {neighborCell}:avoid-ghost-sink-remount";
                     continue;
                 }
 

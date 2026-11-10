@@ -7,6 +7,29 @@ using UnityEngine;
 
 namespace DiceGame.Gameplay.AI.Domain
 {
+    /// <summary>
+    /// Soft avoidance for chain-path rolls that would crush a ghost sink of the active chain face.
+    /// Normal (non-chain) pathing leaves this inactive.
+    /// </summary>
+    public readonly struct WorkDieRollCrushAvoidance
+    {
+        public int ChainFace { get; }
+        public DiceRegistry Registry { get; }
+
+        public WorkDieRollCrushAvoidance(int chainFace, DiceRegistry registry) {
+            ChainFace = chainFace;
+            Registry = registry;
+        }
+
+        public static WorkDieRollCrushAvoidance None => default;
+
+        public bool IsActive => ChainFace >= 2 && Registry != null;
+
+        public bool RejectsLanding(Vector2Int cell) {
+            return IsActive && SinkingChainEvaluator.WouldCrushChainGhostAt(Registry, cell, ChainFace);
+        }
+    }
+
     public static class WorkDieRollPathPlanner
     {
         static readonly Direction[] Directions = {
@@ -24,7 +47,8 @@ namespace DiceGame.Gameplay.AI.Domain
             DiceState startState,
             int targetFace,
             bool allowJump,
-            out List<Direction> directions) {
+            out List<Direction> directions,
+            WorkDieRollCrushAvoidance crushAvoidance = default) {
             directions = null;
             if (passability == null || workDie == null || startState.Orientation.Top == targetFace) {
                 return false;
@@ -58,7 +82,8 @@ namespace DiceGame.Gameplay.AI.Domain
                         direction,
                         allowJump,
                         out var landingState,
-                        out var landingLevel)) {
+                        out var landingLevel,
+                        crushAvoidance)) {
                         continue;
                     }
 
@@ -85,7 +110,8 @@ namespace DiceGame.Gameplay.AI.Domain
             IReadOnlyList<Direction> directions,
             bool allowJump,
             Vector2Int? requiredEndCell = null,
-            int? requiredEndTop = null) {
+            int? requiredEndTop = null,
+            WorkDieRollCrushAvoidance crushAvoidance = default) {
             if (passability == null || workDie == null || directions == null) {
                 return false;
             }
@@ -103,7 +129,8 @@ namespace DiceGame.Gameplay.AI.Domain
                     directions[i],
                     allowJump,
                     out state,
-                    out level)) {
+                    out level,
+                    crushAvoidance)) {
                     return false;
                 }
             }
@@ -129,7 +156,8 @@ namespace DiceGame.Gameplay.AI.Domain
             Direction direction,
             bool allowJump,
             out DiceState landingState,
-            out int landingLevel) {
+            out int landingLevel,
+            WorkDieRollCrushAvoidance crushAvoidance = default) {
             landingState = fromState;
             landingLevel = fromLevel;
             if (passability == null || workDie == null) {
@@ -144,9 +172,13 @@ namespace DiceGame.Gameplay.AI.Domain
                 groundContext,
                 out var groundPlan,
                 out _)) {
-                landingState = CreateLandingState(fromState, groundPlan);
-                landingLevel = SurfaceHeightLevel.FromDiceStackTier(groundPlan.To.Tier);
-                return true;
+                if (crushAvoidance.RejectsLanding(groundPlan.To.GridPos)) {
+                    // Fall through: prefer JumpRoll over crushing a chain ghost when possible.
+                } else {
+                    landingState = CreateLandingState(fromState, groundPlan);
+                    landingLevel = SurfaceHeightLevel.FromDiceStackTier(groundPlan.To.Tier);
+                    return true;
+                }
             }
 
             if (!allowJump || !workDie.CanJumpCoupleWithPlayer) {
@@ -161,6 +193,10 @@ namespace DiceGame.Gameplay.AI.Domain
                 jumpContext,
                 out var jumpPlan,
                 out _)) {
+                return false;
+            }
+
+            if (crushAvoidance.RejectsLanding(jumpPlan.To.GridPos)) {
                 return false;
             }
 

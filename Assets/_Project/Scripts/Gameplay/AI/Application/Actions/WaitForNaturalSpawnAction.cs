@@ -1,5 +1,6 @@
 using DiceGame.Gameplay;
 using DiceGame.Gameplay.AI.Domain;
+using DiceGame.Placement;
 using UnityEngine;
 
 namespace DiceGame.Gameplay.AI.Application.Actions
@@ -54,11 +55,22 @@ namespace DiceGame.Gameplay.AI.Application.Actions
                 return false;
             }
 
+            AiNavigationState? navigationState = null;
+            float footingWorldY = 0f;
+            MovementTransitionEvaluator passability = null;
+            if (context.Character.TryGetAiNavigationQuery(out passability, out footingWorldY)) {
+                navigationState = context.Character.GetAiNavigationState();
+            }
+
             return AiFloorRecoveryPlanner.TrySelectAlternateSinkingTarget(
                 snapshot,
                 excludedTrappedFace,
                 context.Settings,
-                out _);
+                out _,
+                passability,
+                navigationState,
+                footingWorldY,
+                context.Character.PlayerSlot);
         }
     }
 }

@@ -303,7 +303,7 @@ namespace DiceGame.Session
                     currentRow = SessionUiFactory.CreateTwoColumnRow(parent, $"FaceToggleRow_{index / 2}");
                 }
 
-                var toggle = SessionUiFactory.CreateLabeledToggle(currentRow, $"Face {face}");
+                var toggle = SessionUiFactory.CreateFaceLabeledToggle(currentRow, face);
                 toggle.isOn = selected[index];
                 toggles[index] = toggle;
             }

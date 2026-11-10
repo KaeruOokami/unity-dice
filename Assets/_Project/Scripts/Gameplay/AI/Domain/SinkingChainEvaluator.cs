@@ -247,5 +247,28 @@ namespace DiceGame.Gameplay.AI.Domain
         static bool IsSinkErasing(DiceSnapshot snapshot) {
             return snapshot.Controller != null && snapshot.Controller.IsSinkErasing;
         }
+
+        /// <summary>
+        /// True when landing on <paramref name="cell"/> would crush a ghost sink of the chain face.
+        /// Crushing remains legal in gameplay; AI chain pathing uses this for soft avoidance.
+        /// </summary>
+        public static bool WouldCrushChainGhostAt(DiceRegistry registry, Vector2Int cell, int face) {
+            if (registry == null || face < 2) {
+                return false;
+            }
+
+            if (registry.TryGetBottomAt(cell, out var bottom)
+                && IsChainFaceGhost(bottom, face)) {
+                return true;
+            }
+
+            return registry.TryGetTopAt(cell, out var top) && IsChainFaceGhost(top, face);
+        }
+
+        static bool IsChainFaceGhost(DiceController dice, int face) {
+            return dice != null
+                && dice.IsErasureGhost
+                && dice.CurrentState.Orientation.Top == face;
+        }
     }
 }

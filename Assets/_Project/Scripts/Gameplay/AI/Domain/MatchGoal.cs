@@ -161,6 +161,8 @@ namespace DiceGame.Gameplay.AI.Domain
         public IReadOnlyList<AiSubGoal> SubGoals => subGoals;
         public float PriorityScore { get; }
         public bool IsImmediateMatch { get; }
+        /// <summary>True when this goal expands a sinking chain cluster (not a normal face cluster).</summary>
+        public bool IsChainGoal { get; }
         public bool IsMarkedUnplannable { get; private set; }
 
         public MatchGoal(
@@ -169,7 +171,8 @@ namespace DiceGame.Gameplay.AI.Domain
             DiceController participantTarget,
             IReadOnlyList<AiSubGoal> subGoals,
             float priorityScore,
-            bool isImmediateMatch) {
+            bool isImmediateMatch,
+            bool isChainGoal = false) {
             Face = face;
             ClusterDice = clusterDice;
             ParticipantTarget = participantTarget;
@@ -178,6 +181,7 @@ namespace DiceGame.Gameplay.AI.Domain
                 : new List<AiSubGoal>();
             PriorityScore = priorityScore;
             IsImmediateMatch = isImmediateMatch;
+            IsChainGoal = isChainGoal;
         }
 
         public void MarkUnplannable() {

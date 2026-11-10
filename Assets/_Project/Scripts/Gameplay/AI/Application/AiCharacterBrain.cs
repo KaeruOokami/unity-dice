@@ -243,12 +243,24 @@ namespace DiceGame.Gameplay.AI.Application
         }
 
         bool TryHandleSinkingClusterEscape(GameStateSnapshot snapshot) {
+            AiNavigationState? navigationState = null;
+            float footingWorldY = 0f;
+            MovementTransitionEvaluator passability = null;
+            if (character.TryGetAiNavigationQuery(out passability, out footingWorldY)) {
+                navigationState = character.GetAiNavigationState();
+            }
+
             var escapeKind = AiSinkingClusterEscapePlanner.ResolveEscape(
                 snapshot,
                 settings,
                 out var clusterFace,
                 out _,
-                out var mountTarget);
+                out var mountTarget,
+                passability,
+                navigationState,
+                footingWorldY,
+                character.PlayerSlot,
+                settings.PathSearchMaxSteps);
 
             if (escapeKind == AiSinkingClusterEscapeKind.None) {
                 return false;
@@ -274,7 +286,7 @@ namespace DiceGame.Gameplay.AI.Application
                     return true;
                 }
 
-                // Adjacent target exists but cannot step onto it this frame — fall through to descend.
+                // Feasibility passed but action build failed this frame — descend instead.
                 AiDebugLog.Log(
                     $"SinkingMount FAILED face={clusterFace} " +
                     $"die={(mountTarget != null ? mountTarget.name : "none")} fallback=descend");
@@ -368,11 +380,23 @@ namespace DiceGame.Gameplay.AI.Application
                 return;
             }
 
+            AiNavigationState? navigationState = null;
+            float footingWorldY = 0f;
+            MovementTransitionEvaluator passability = null;
+            if (character != null
+                && character.TryGetAiNavigationQuery(out passability, out footingWorldY)) {
+                navigationState = character.GetAiNavigationState();
+            }
+
             floorRecoverySession = AiFloorRecoveryPlanner.CreateSession(
                 snapshot,
                 registry,
                 settings,
-                sourceTrappedFace);
+                sourceTrappedFace,
+                passability,
+                navigationState,
+                footingWorldY,
+                character != null ? character.PlayerSlot : default);
             AiDebugLog.Log(
                 $"FloorRecoveryStart phase={floorRecoverySession.Phase} " +
                 $"sourceFace={(sourceTrappedFace.HasValue ? sourceTrappedFace.Value.ToString() : "none")} " +
@@ -495,12 +519,24 @@ namespace DiceGame.Gameplay.AI.Application
 
             var snapshot = GameStateSnapshot.Capture(character, registry);
             var playerCell = snapshot.PlayerCell;
+            AiNavigationState? navigationState = null;
+            float footingWorldY = 0f;
+            MovementTransitionEvaluator passability = null;
+            if (character.TryGetAiNavigationQuery(out passability, out footingWorldY)) {
+                navigationState = character.GetAiNavigationState();
+            }
+
             var escapeKind = AiSinkingClusterEscapePlanner.ResolveEscape(
                 snapshot,
                 settings,
                 out var escapeFace,
                 out _,
-                out var mountTarget);
+                out var mountTarget,
+                passability,
+                navigationState,
+                footingWorldY,
+                character.PlayerSlot,
+                settings.PathSearchMaxSteps);
 
             if (escapeKind == AiSinkingClusterEscapeKind.MountAdjacent && mountTarget != null) {
                 debugOverlay.BeginFrame(

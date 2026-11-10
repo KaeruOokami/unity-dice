@@ -168,7 +168,8 @@ namespace DiceGame.Gameplay.AI.Domain
                         face,
                         snapshot.PlanningDice,
                         DiceBoardAnalyzer.ManhattanDistance(snapshot.PlayerCell, sameFaceWorkDie.GridPos),
-                        settings));
+                        settings),
+                    isChainGoal: true);
             }
 
             if (TrySelectExternalWorkDie(
@@ -214,7 +215,8 @@ namespace DiceGame.Gameplay.AI.Domain
                     workDie.Controller,
                     subGoals,
                     score,
-                    false);
+                    false,
+                    isChainGoal: true);
             }
 
             return null;
@@ -464,13 +466,14 @@ namespace DiceGame.Gameplay.AI.Domain
             IReadOnlyList<DiceSnapshot> cluster,
             DiceController workDie,
             LiftJoinPlan liftPlan,
-            float score) {
+            float score,
+            bool isChainGoal = false) {
             var subGoals = new List<AiSubGoal> {
                 AiSubGoal.LiftDie(liftPlan.WorkDie),
                 AiSubGoal.PlaceCarriedDie(liftPlan.PlaceCell)
             };
 
-            return new MatchGoal(face, cluster, workDie, subGoals, score, false);
+            return new MatchGoal(face, cluster, workDie, subGoals, score, false, isChainGoal);
         }
 
         static MatchGoal BuildImmediateMatchGoal(

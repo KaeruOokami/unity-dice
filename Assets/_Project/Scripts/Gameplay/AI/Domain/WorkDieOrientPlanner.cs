@@ -17,7 +17,8 @@ namespace DiceGame.Gameplay.AI.Domain
             DiceState startState,
             int targetFace,
             bool allowJump,
-            out WorkDieSlidePlan plan) {
+            out WorkDieSlidePlan plan,
+            WorkDieRollCrushAvoidance crushAvoidance = default) {
             plan = default;
             if (passability == null || workDie == null) {
                 return false;
@@ -32,7 +33,8 @@ namespace DiceGame.Gameplay.AI.Domain
                 startState,
                 targetFace,
                 allowJump,
-                out var directions)
+                out var directions,
+                crushAvoidance)
                 || directions == null
                 || directions.Count == 0) {
                 return false;

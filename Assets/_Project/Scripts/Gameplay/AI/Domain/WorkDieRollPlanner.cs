@@ -62,7 +62,15 @@ namespace DiceGame.Gameplay.AI.Domain
                 workDie,
                 groundContext);
 
-            if (TryResolveGroundRoll(groundTransition, landingCell, out var groundLandingTier, out var groundEdgeKind)) {
+            // Non-ghost sink on the landing cell: Bottom→Top stack entry is jump-only.
+            var landingNeedsJumpOntoNonGhostSink = IsNonGhostSinkOccupant(groundTransition);
+
+            if (!landingNeedsJumpOntoNonGhostSink
+                && TryResolveGroundRoll(
+                    groundTransition,
+                    landingCell,
+                    out var groundLandingTier,
+                    out var groundEdgeKind)) {
                 step = new WorkDieRollStep(
                     direction,
                     landingCell,
@@ -76,8 +84,9 @@ namespace DiceGame.Gameplay.AI.Domain
                 return false;
             }
 
-            // Ground already resolved a dice grid move (CanRoll / TopFall). Do not escalate to JumpRoll.
-            if (groundTransition.HasDiceGridMovePlan) {
+            // Ground already resolved a dice grid move (CanRoll / TopFall). Do not escalate to JumpRoll
+            // unless that landing is a non-ghost sink (jump-only stack entry).
+            if (groundTransition.HasDiceGridMovePlan && !landingNeedsJumpOntoNonGhostSink) {
                 return false;
             }
 
@@ -99,6 +108,12 @@ namespace DiceGame.Gameplay.AI.Domain
             }
 
             return false;
+        }
+
+        static bool IsNonGhostSinkOccupant(MovementTransition transition) {
+            return transition.TargetDice != null
+                && transition.TargetDice.IsSinkErasing
+                && !transition.TargetDice.IsErasureGhost;
         }
 
         public static bool TryResolveGroundRoll(

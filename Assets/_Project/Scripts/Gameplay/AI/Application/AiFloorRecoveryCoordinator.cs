@@ -21,7 +21,22 @@ namespace DiceGame.Gameplay.AI.Application
                 return false;
             }
 
-            AiFloorRecoveryPlanner.AdvancePhase(session, snapshot, registry, settings);
+            AiNavigationState? navigationState = null;
+            float footingWorldY = 0f;
+            MovementTransitionEvaluator passability = null;
+            if (character.TryGetAiNavigationQuery(out passability, out footingWorldY)) {
+                navigationState = character.GetAiNavigationState();
+            }
+
+            AiFloorRecoveryPlanner.AdvancePhase(
+                session,
+                snapshot,
+                registry,
+                settings,
+                passability,
+                navigationState,
+                footingWorldY,
+                character.PlayerSlot);
 
             switch (session.Phase) {
                 case AiFloorRecoveryPhase.ReachAlternateWorkDie:

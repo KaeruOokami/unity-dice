@@ -22,14 +22,20 @@ namespace DiceGame.Gameplay.AI.Domain
 
         /// <summary>
         /// While standing on a sink-erasing cluster:
-        /// adjacent external die → mount it for chain; otherwise descend immediately.
+        /// adjacent external die that is mountable now (height-aware) → mount;
+        /// otherwise descend immediately.
         /// </summary>
         public static AiSinkingClusterEscapeKind ResolveEscape(
             GameStateSnapshot snapshot,
             AiPlayerSettings settings,
             out int clusterFace,
             out List<DiceSnapshot> sinkingGroup,
-            out DiceController mountTarget) {
+            out DiceController mountTarget,
+            MovementTransitionEvaluator passability = null,
+            AiNavigationState? navigationState = null,
+            float footingWorldY = 0f,
+            PlayerSlot movementOwner = default,
+            int maxSearchSteps = 64) {
             clusterFace = 0;
             sinkingGroup = null;
             mountTarget = null;
@@ -48,27 +54,90 @@ namespace DiceGame.Gameplay.AI.Domain
                 return AiSinkingClusterEscapeKind.None;
             }
 
-            if (AiFloorRecoveryPlanner.TrySelectNearestAdjacentExternalDie(
+            if (TrySelectMountableAdjacentExternalDie(
+                snapshot,
+                settings,
                 sinkingGroup,
                 clusterFace,
-                snapshot.PlanningDice,
-                snapshot.PlayerCell,
-                out var adjacent)
-                && adjacent.Controller != null
-                && adjacent.Controller != standing) {
-                mountTarget = adjacent.Controller;
+                standing,
+                passability,
+                navigationState,
+                footingWorldY,
+                movementOwner,
+                maxSearchSteps,
+                out mountTarget)) {
                 return AiSinkingClusterEscapeKind.MountAdjacent;
             }
 
             return AiSinkingClusterEscapeKind.DescendToFloor;
         }
 
+        static bool TrySelectMountableAdjacentExternalDie(
+            GameStateSnapshot snapshot,
+            AiPlayerSettings settings,
+            List<DiceSnapshot> sinkingGroup,
+            int clusterFace,
+            DiceController standing,
+            MovementTransitionEvaluator passability,
+            AiNavigationState? navigationState,
+            float footingWorldY,
+            PlayerSlot movementOwner,
+            int maxSearchSteps,
+            out DiceController mountTarget) {
+            mountTarget = null;
+            if (!AiFloorRecoveryPlanner.TrySelectNearestAdjacentExternalDie(
+                sinkingGroup,
+                clusterFace,
+                snapshot.PlanningDice,
+                snapshot.PlayerCell,
+                out var adjacent)
+                || adjacent.Controller == null
+                || adjacent.Controller == standing) {
+                return false;
+            }
+
+            // Without a nav query, do not claim mount is possible — prefer descend.
+            if (passability == null || !navigationState.HasValue) {
+                return false;
+            }
+
+            if (!AiMountFeasibility.CanStandOnDie(
+                passability,
+                navigationState.Value,
+                footingWorldY,
+                movementOwner,
+                adjacent.Controller,
+                maxSearchSteps,
+                settings.AllowJump,
+                snapshot.PlanningDice)) {
+                return false;
+            }
+
+            mountTarget = adjacent.Controller;
+            return true;
+        }
+
         public static bool IsTrappedOnSinkingCluster(
             GameStateSnapshot snapshot,
             AiPlayerSettings settings,
             out int trappedFace,
-            out List<DiceSnapshot> sinkingGroup) {
-            var kind = ResolveEscape(snapshot, settings, out trappedFace, out sinkingGroup, out _);
+            out List<DiceSnapshot> sinkingGroup,
+            MovementTransitionEvaluator passability = null,
+            AiNavigationState? navigationState = null,
+            float footingWorldY = 0f,
+            PlayerSlot movementOwner = default,
+            int maxSearchSteps = 64) {
+            var kind = ResolveEscape(
+                snapshot,
+                settings,
+                out trappedFace,
+                out sinkingGroup,
+                out _,
+                passability,
+                navigationState,
+                footingWorldY,
+                movementOwner,
+                maxSearchSteps);
             if (kind != AiSinkingClusterEscapeKind.DescendToFloor) {
                 sinkingGroup = null;
                 trappedFace = 0;

@@ -89,6 +89,11 @@ namespace DiceGame.Placement
                 return MoveAction.CoupledJumpGrid;
             }
 
+            // Non-ghost sink: jump CoupledJumpGrid only — no TierLanding / HeightTransfer remount.
+            if (f.ToCellIsOccupiedForCoupled && IsNonGhostSinkOccupant(f)) {
+                return MoveAction.Blocked;
+            }
+
             if (f.ToCellIsOccupiedForCoupled && f.CanTierLand) {
                 return MoveAction.TierLanding;
             }
@@ -105,6 +110,12 @@ namespace DiceGame.Placement
                 return MoveAction.TopFall;
             }
 
+            // Non-ghost sink occupies Bottom: upward stack is jump CoupledJumpGrid only.
+            // Block ground TierLanding / HeightTransfer remount that caused sink↔adjacent loops.
+            if (f.ToCellIsOccupiedForCoupled && IsNonGhostSinkOccupant(f)) {
+                return MoveAction.Blocked;
+            }
+
             if (f.ToCellIsOccupiedForCoupled && f.CanTierLand) {
                 return MoveAction.TierLanding;
             }
@@ -118,6 +129,15 @@ namespace DiceGame.Placement
             }
 
             return MoveAction.ContinueToLanding;
+        }
+
+        /// <summary>
+        /// Solid sink (not erasure ghost): dice entry needs jump upward stack, not player TierLanding.
+        /// </summary>
+        static bool IsNonGhostSinkOccupant(in MoveFacts f) {
+            return f.TargetDice != null
+                && f.TargetDice.IsSinkErasing
+                && !f.TargetDice.IsErasureGhost;
         }
 
         static MoveAction SelectLanding(in MoveFacts f) {
