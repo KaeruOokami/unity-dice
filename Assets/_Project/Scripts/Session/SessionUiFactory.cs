@@ -1,4 +1,6 @@
 using System;
+using System.Collections.Generic;
+using DiceGame.Core;
 using TMPro;
 using UnityEngine;
 using UnityEngine.UI;
@@ -8,9 +10,14 @@ namespace DiceGame.Session
     public static class SessionUiFactory
     {
         static TMP_FontAsset uiFont;
+        static DiceKindIconCatalog diceKindIcons;
 
         public static void Configure(TMP_FontAsset font) {
             uiFont = font;
+        }
+
+        public static void ConfigureDiceKindIcons(DiceKindIconCatalog icons) {
+            diceKindIcons = icons;
         }
 
         public static void StretchFull(RectTransform rect) {
@@ -26,6 +33,77 @@ namespace DiceGame.Session
             rect.pivot = new Vector2(0.5f, 0.5f);
             rect.sizeDelta = size;
             rect.anchoredPosition = Vector2.zero;
+        }
+
+        public static void AnchorBottomCenter(RectTransform rect, float yFromBottom) {
+            rect.anchorMin = new Vector2(0.5f, 0f);
+            rect.anchorMax = new Vector2(0.5f, 0f);
+            rect.pivot = new Vector2(0.5f, 0f);
+            rect.anchoredPosition = new Vector2(0f, yFromBottom);
+        }
+
+        public static RectTransform CreateTwoColumnRow(Transform parent, string name = "TwoColumnRow") {
+            var go = new GameObject(name);
+            go.transform.SetParent(parent, false);
+            var rect = go.AddComponent<RectTransform>();
+            var layout = go.AddComponent<HorizontalLayoutGroup>();
+            layout.spacing = 16f;
+            layout.childAlignment = TextAnchor.UpperCenter;
+            layout.childControlWidth = true;
+            layout.childControlHeight = true;
+            layout.childForceExpandWidth = true;
+            layout.childForceExpandHeight = false;
+            var fitter = go.AddComponent<ContentSizeFitter>();
+            fitter.horizontalFit = ContentSizeFitter.FitMode.Unconstrained;
+            fitter.verticalFit = ContentSizeFitter.FitMode.PreferredSize;
+            var element = go.AddComponent<LayoutElement>();
+            element.flexibleWidth = 1f;
+            return rect;
+        }
+
+        public static RectTransform CreateFieldCell(Transform parent, string name) {
+            var go = new GameObject(name);
+            go.transform.SetParent(parent, false);
+            var rect = go.AddComponent<RectTransform>();
+            var layout = go.AddComponent<VerticalLayoutGroup>();
+            layout.spacing = 4f;
+            layout.childAlignment = TextAnchor.UpperLeft;
+            layout.childControlWidth = true;
+            layout.childControlHeight = true;
+            layout.childForceExpandWidth = true;
+            layout.childForceExpandHeight = false;
+            var fitter = go.AddComponent<ContentSizeFitter>();
+            fitter.horizontalFit = ContentSizeFitter.FitMode.Unconstrained;
+            fitter.verticalFit = ContentSizeFitter.FitMode.PreferredSize;
+            var element = go.AddComponent<LayoutElement>();
+            // ラベル文字の preferred 幅で列が広がらないよう、幅は flex のみで等分する。
+            element.minWidth = 0f;
+            element.preferredWidth = 0f;
+            element.flexibleWidth = 1f;
+            return rect;
+        }
+
+        public static RectTransform CreateBottomButtonBar(
+            Transform parent,
+            string name,
+            float height,
+            float yFromBottom) {
+            var go = new GameObject(name);
+            go.transform.SetParent(parent, false);
+            var rect = go.AddComponent<RectTransform>();
+            rect.anchorMin = new Vector2(0.08f, 0f);
+            rect.anchorMax = new Vector2(0.92f, 0f);
+            rect.pivot = new Vector2(0.5f, 0f);
+            rect.sizeDelta = new Vector2(0f, height);
+            rect.anchoredPosition = new Vector2(0f, yFromBottom);
+            var layout = go.AddComponent<HorizontalLayoutGroup>();
+            layout.spacing = 16f;
+            layout.childAlignment = TextAnchor.MiddleCenter;
+            layout.childControlWidth = true;
+            layout.childControlHeight = true;
+            layout.childForceExpandWidth = true;
+            layout.childForceExpandHeight = true;
+            return rect;
         }
 
         public static GameObject CreatePanel(Transform parent, string name, Color color) {
@@ -178,12 +256,12 @@ namespace DiceGame.Session
             return text;
         }
 
-        public static TextMeshProUGUI CreateDropdownCaption(Transform parent) {
+        public static TextMeshProUGUI CreateDropdownCaption(Transform parent, float textLeftInset = 12f) {
             var labelGo = new GameObject("Label");
             labelGo.transform.SetParent(parent, false);
             var labelRect = labelGo.AddComponent<RectTransform>();
             StretchFull(labelRect);
-            labelRect.offsetMin = new Vector2(12f, 0f);
+            labelRect.offsetMin = new Vector2(textLeftInset, 0f);
             labelRect.offsetMax = new Vector2(-36f, 0f);
             var labelText = labelGo.AddComponent<TextMeshProUGUI>();
             ApplyFont(labelText);
@@ -194,7 +272,27 @@ namespace DiceGame.Session
             return labelText;
         }
 
-        public static RectTransform CreateDropdownTemplate(Transform parent) {
+        public static Image CreateDropdownCaptionIcon(Transform parent, float iconSize) {
+            var iconGo = new GameObject("Caption Icon");
+            iconGo.transform.SetParent(parent, false);
+            var iconRect = iconGo.AddComponent<RectTransform>();
+            iconRect.anchorMin = new Vector2(0f, 0.5f);
+            iconRect.anchorMax = new Vector2(0f, 0.5f);
+            iconRect.pivot = new Vector2(0f, 0.5f);
+            iconRect.sizeDelta = new Vector2(iconSize, iconSize);
+            iconRect.anchoredPosition = new Vector2(8f, 0f);
+            var image = iconGo.AddComponent<Image>();
+            image.preserveAspect = true;
+            image.raycastTarget = false;
+            image.color = Color.white;
+            return image;
+        }
+
+        public static RectTransform CreateDropdownTemplate(
+            Transform parent,
+            float itemHeight = 36f,
+            bool withIcons = false,
+            float iconSize = 32f) {
             var template = new GameObject("Template");
             template.transform.SetParent(parent, false);
             template.SetActive(false);
@@ -202,7 +300,7 @@ namespace DiceGame.Session
             templateRect.anchorMin = new Vector2(0f, 0f);
             templateRect.anchorMax = new Vector2(1f, 0f);
             templateRect.pivot = new Vector2(0.5f, 1f);
-            templateRect.sizeDelta = new Vector2(0f, 160f);
+            templateRect.sizeDelta = new Vector2(0f, Mathf.Max(160f, itemHeight * 4f));
             templateRect.anchoredPosition = new Vector2(0f, 2f);
             template.AddComponent<Image>().color = new Color(0.12f, 0.12f, 0.14f, 1f);
 
@@ -219,7 +317,7 @@ namespace DiceGame.Session
             contentRect.anchorMin = new Vector2(0f, 1f);
             contentRect.anchorMax = new Vector2(1f, 1f);
             contentRect.pivot = new Vector2(0.5f, 1f);
-            contentRect.sizeDelta = new Vector2(0f, 36f);
+            contentRect.sizeDelta = new Vector2(0f, itemHeight);
 
             var scroll = template.AddComponent<ScrollRect>();
             scroll.viewport = viewportRect;
@@ -235,7 +333,7 @@ namespace DiceGame.Session
             itemRect.anchorMin = new Vector2(0f, 0.5f);
             itemRect.anchorMax = new Vector2(1f, 0.5f);
             itemRect.pivot = new Vector2(0.5f, 0.5f);
-            itemRect.sizeDelta = new Vector2(0f, 36f);
+            itemRect.sizeDelta = new Vector2(0f, itemHeight);
 
             var itemBackground = item.AddComponent<Image>();
             itemBackground.color = new Color(0.18f, 0.18f, 0.2f, 1f);
@@ -251,11 +349,29 @@ namespace DiceGame.Session
             toggle.targetGraphic = itemBackground;
             toggle.graphic = checkmark;
 
+            var labelLeft = 12f;
+            if (withIcons) {
+                var resolvedIconSize = Mathf.Max(16f, Mathf.Min(iconSize, itemHeight - 8f));
+                var itemIconGo = new GameObject("Item Icon");
+                itemIconGo.transform.SetParent(item.transform, false);
+                var itemIconRect = itemIconGo.AddComponent<RectTransform>();
+                itemIconRect.anchorMin = new Vector2(0f, 0.5f);
+                itemIconRect.anchorMax = new Vector2(0f, 0.5f);
+                itemIconRect.pivot = new Vector2(0f, 0.5f);
+                itemIconRect.sizeDelta = new Vector2(resolvedIconSize, resolvedIconSize);
+                itemIconRect.anchoredPosition = new Vector2(8f, 0f);
+                var itemIcon = itemIconGo.AddComponent<Image>();
+                itemIcon.preserveAspect = true;
+                itemIcon.raycastTarget = false;
+                itemIcon.color = Color.white;
+                labelLeft = 8f + resolvedIconSize + 8f;
+            }
+
             var itemLabelGo = new GameObject("Item Label");
             itemLabelGo.transform.SetParent(item.transform, false);
             var itemLabelRect = itemLabelGo.AddComponent<RectTransform>();
             StretchFull(itemLabelRect);
-            itemLabelRect.offsetMin = new Vector2(12f, 0f);
+            itemLabelRect.offsetMin = new Vector2(labelLeft, 0f);
             var itemLabel = itemLabelGo.AddComponent<TextMeshProUGUI>();
             ApplyFont(itemLabel);
             itemLabel.fontSize = 20;
@@ -312,6 +428,8 @@ namespace DiceGame.Session
             var element = go.AddComponent<LayoutElement>();
             element.minHeight = height;
             element.preferredHeight = height;
+            element.minWidth = 0f;
+            element.preferredWidth = 0f;
             element.flexibleWidth = 1f;
             return go;
         }
@@ -385,21 +503,116 @@ namespace DiceGame.Session
         }
 
         public static TMP_Dropdown CreateLayoutDropdown(Transform parent, string name, string[] options, float height) {
+            var optionData = new List<TMP_Dropdown.OptionData>(options.Length);
+            for (var i = 0; i < options.Length; i++) {
+                optionData.Add(new TMP_Dropdown.OptionData(options[i]));
+            }
+
+            return CreateLayoutDropdown(parent, name, optionData, height, withIcons: false);
+        }
+
+        public static TMP_Dropdown CreateDiceKindDropdown(Transform parent, string name, float height) {
+            var kinds = (DiceKind[])Enum.GetValues(typeof(DiceKind));
+            var optionData = new List<TMP_Dropdown.OptionData>(kinds.Length);
+            for (var i = 0; i < kinds.Length; i++) {
+                var kind = kinds[i];
+                Sprite icon = null;
+                diceKindIcons?.TryGet(kind, out icon);
+                var option = new TMP_Dropdown.OptionData(kind.ToString()) {
+                    image = icon
+                };
+                optionData.Add(option);
+            }
+
+            var iconSize = diceKindIcons != null ? diceKindIcons.IconSize : 32f;
+            var dropdown = CreateLayoutDropdown(parent, name, optionData, height, withIcons: true, iconSize);
+            diceKindIcons?.RegisterDropdown(dropdown);
+            return dropdown;
+        }
+
+        public static TMP_Dropdown CreateLayoutDropdown(
+            Transform parent,
+            string name,
+            List<TMP_Dropdown.OptionData> options,
+            float height,
+            bool withIcons,
+            float iconSize = 32f) {
             var go = CreateLayoutRow(parent, name, height);
             go.AddComponent<Image>().color = new Color(0.18f, 0.18f, 0.2f, 1f);
             var dropdown = go.AddComponent<TMP_Dropdown>();
-            dropdown.captionText = CreateDropdownCaption(go.transform);
-            var template = CreateDropdownTemplate(go.transform);
-            dropdown.template = template;
-            dropdown.itemText = template.GetComponentInChildren<TextMeshProUGUI>();
-            dropdown.options = new System.Collections.Generic.List<TMP_Dropdown.OptionData>(options.Length);
-            for (var i = 0; i < options.Length; i++) {
-                dropdown.options.Add(new TMP_Dropdown.OptionData(options[i]));
+            var textInset = withIcons ? 8f + iconSize + 8f : 12f;
+            dropdown.captionText = CreateDropdownCaption(go.transform, textInset);
+            if (withIcons) {
+                dropdown.captionImage = CreateDropdownCaptionIcon(go.transform, iconSize);
             }
 
+            var template = CreateDropdownTemplate(
+                go.transform,
+                withIcons ? height : 36f,
+                withIcons,
+                iconSize);
+            dropdown.template = template;
+            dropdown.itemText = template.GetComponentInChildren<TextMeshProUGUI>();
+            if (withIcons) {
+                var itemIcon = template.Find("Viewport/Content/Item/Item Icon");
+                if (itemIcon != null) {
+                    dropdown.itemImage = itemIcon.GetComponent<Image>();
+                }
+            }
+
+            dropdown.options = options ?? new List<TMP_Dropdown.OptionData>();
             dropdown.value = 0;
             dropdown.RefreshShownValue();
             return dropdown;
+        }
+
+        public static TextMeshProUGUI CreateKindLabeledRow(
+            Transform parent,
+            DiceKind kind,
+            string text,
+            int fontSize,
+            float height) {
+            var go = CreateLayoutRow(parent, text, height);
+            var layout = go.AddComponent<HorizontalLayoutGroup>();
+            layout.spacing = 8f;
+            layout.padding = new RectOffset(4, 4, 0, 0);
+            layout.childAlignment = TextAnchor.MiddleLeft;
+            layout.childControlWidth = true;
+            layout.childControlHeight = true;
+            layout.childForceExpandWidth = false;
+            layout.childForceExpandHeight = false;
+
+            if (diceKindIcons != null && diceKindIcons.TryGet(kind, out var icon) && icon != null) {
+                var iconGo = new GameObject("KindIcon");
+                iconGo.transform.SetParent(go.transform, false);
+                var iconImage = iconGo.AddComponent<Image>();
+                iconImage.sprite = icon;
+                iconImage.preserveAspect = true;
+                iconImage.raycastTarget = false;
+                var iconElement = iconGo.AddComponent<LayoutElement>();
+                var size = Mathf.Min(diceKindIcons.IconSize, height - 4f);
+                iconElement.preferredWidth = size;
+                iconElement.preferredHeight = size;
+                iconElement.minWidth = size;
+                iconElement.minHeight = size;
+                diceKindIcons.RegisterImage(iconImage, kind);
+            }
+
+            var labelGo = new GameObject("Label");
+            labelGo.transform.SetParent(go.transform, false);
+            var labelElement = labelGo.AddComponent<LayoutElement>();
+            labelElement.minWidth = 0f;
+            labelElement.preferredWidth = 0f;
+            labelElement.flexibleWidth = 1f;
+            var labelText = CreateInlineText(labelGo, text, fontSize, TextAlignmentOptions.MidlineLeft);
+            labelText.overflowMode = TextOverflowModes.Ellipsis;
+            return labelText;
+        }
+
+        public static TMP_InputField CreateKindLabeledFloatInput(Transform parent, DiceKind kind, string suffix) {
+            var cell = CreateFieldCell(parent, kind.ToString());
+            CreateKindLabeledRow(cell, kind, $"{kind} {suffix}", 18, 28f);
+            return CreateLayoutInputField(cell, $"{kind}{suffix}Input", 40f, TMP_InputField.ContentType.DecimalNumber);
         }
 
         public static Slider CreateLayoutSlider(Transform parent, string name, float height, out TextMeshProUGUI valueLabel) {
@@ -468,34 +681,38 @@ namespace DiceGame.Session
             }
         }
 
-        public static string[] GetDiceKindOptionLabels() {
-            var values = (DiceGame.Core.DiceKind[])System.Enum.GetValues(typeof(DiceGame.Core.DiceKind));
-            var labels = new string[values.Length];
-            for (var i = 0; i < values.Length; i++) {
-                labels[i] = values[i].ToString();
-            }
-
-            return labels;
-        }
-
         public static TMP_InputField CreateLabeledTextInput(Transform parent, string label) {
-            CreateLayoutLabel(parent, label, 18, 24f);
-            return CreateLayoutInputField(parent, $"{label}Input", 40f, TMP_InputField.ContentType.Standard);
+            var cell = CreateFieldCell(parent, label);
+            CreateLayoutLabel(cell, label, 18, 24f);
+            return CreateLayoutInputField(cell, $"{label}Input", 40f, TMP_InputField.ContentType.Standard);
         }
 
         public static TMP_InputField CreateLabeledIntInput(Transform parent, string label) {
-            CreateLayoutLabel(parent, label, 18, 24f);
-            return CreateLayoutInputField(parent, $"{label}Input", 40f, TMP_InputField.ContentType.IntegerNumber);
+            var cell = CreateFieldCell(parent, label);
+            CreateLayoutLabel(cell, label, 18, 24f);
+            return CreateLayoutInputField(cell, $"{label}Input", 40f, TMP_InputField.ContentType.IntegerNumber);
         }
 
         public static TMP_InputField CreateLabeledFloatInput(Transform parent, string label) {
-            CreateLayoutLabel(parent, label, 18, 24f);
-            return CreateLayoutInputField(parent, $"{label}Input", 40f, TMP_InputField.ContentType.DecimalNumber);
+            var cell = CreateFieldCell(parent, label);
+            CreateLayoutLabel(cell, label, 18, 24f);
+            return CreateLayoutInputField(cell, $"{label}Input", 40f, TMP_InputField.ContentType.DecimalNumber);
         }
 
         public static Toggle CreateLabeledToggle(Transform parent, string label) {
-            CreateLayoutLabel(parent, label, 18, 24f);
-            return CreateLayoutToggle(parent, $"{label}Toggle", 36f);
+            var cell = CreateFieldCell(parent, label);
+            CreateLayoutLabel(cell, label, 18, 24f);
+            return CreateLayoutToggle(cell, $"{label}Toggle", 36f);
+        }
+
+        public static Button CreateTwoColumnLayoutButton(
+            Transform parent,
+            string name,
+            string label,
+            float height,
+            Action onClick) {
+            var cell = CreateFieldCell(parent, name);
+            return CreateLayoutButton(cell, name, label, height, onClick);
         }
 
         public static void ForceRebuildLayout(RectTransform root) {

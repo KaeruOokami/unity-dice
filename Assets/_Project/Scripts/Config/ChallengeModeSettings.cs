@@ -102,6 +102,22 @@ namespace DiceGame.Config
             int matchIndex,
             out MatchSetupSnapshot snapshot,
             out string errorMessage) {
+            return TryCreateSnapshot(
+                registry,
+                playerAttack,
+                matchIndex,
+                player1Input: null,
+                out snapshot,
+                out errorMessage);
+        }
+
+        public bool TryCreateSnapshot(
+            MatchSetupPresetRegistry registry,
+            PlayerAttackSettings playerAttack,
+            int matchIndex,
+            PlayerSlotInputConfig? player1Input,
+            out MatchSetupSnapshot snapshot,
+            out string errorMessage) {
             snapshot = null;
             if (registry == null) {
                 errorMessage = "ChallengeModeSettings: Preset registry is not assigned.";
@@ -129,6 +145,7 @@ namespace DiceGame.Config
 
             var player1Control = registry.GetControlDefaults(PlayerSlot.Player1);
             var player2Control = registry.GetControlDefaults(PlayerSlot.Player2);
+            var resolvedPlayer1Input = player1Input ?? player1Control.InputConfig;
             var board = boardSettings;
             var sharedInitialDiceCount = board.SharedInitialDiceCount;
 
@@ -141,7 +158,7 @@ namespace DiceGame.Config
                 Jumbo = JumboDiceSettingsData.FromTemplate(board.JumboDiceSettings),
                 Player1 = PlayerSlotSetup.CreateDefault(
                     isAi: false,
-                    inputConfig: player1Control.InputConfig,
+                    inputConfig: resolvedPlayer1Input,
                     spawn: DiceSpawnSettingsData.FromTemplate(board.Player1.SpawnSettings)
                         .WithInitialDiceCount(sharedInitialDiceCount),
                     catalog: DiceCatalogData.FromTemplate(board.Player1.DiceCatalog),

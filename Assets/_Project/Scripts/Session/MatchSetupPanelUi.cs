@@ -78,14 +78,16 @@ namespace DiceGame.Session
             }
 
             if (mode == GameMode.Versus) {
+                var sharedRoot = categoryRoots[VersusCategoryShared].transform;
+                var versusSharedRow = SessionUiFactory.CreateTwoColumnRow(sharedRoot, "VersusSharedRow");
                 versusSharedInitialDiceCount = SessionUiFactory.CreateLabeledIntInput(
-                    categoryRoots[VersusCategoryShared].transform,
+                    versusSharedRow,
                     "Initial Dice Count (1P/2P Shared)");
                 versusWinsToWin = SessionUiFactory.CreateLabeledIntInput(
-                    categoryRoots[VersusCategoryShared].transform,
+                    versusSharedRow,
                     "Wins To Win");
                 jumboUi = JumboDiceSettingsPanelUi.Build(
-                    categoryRoots[VersusCategoryShared].transform,
+                    sharedRoot,
                     "Jumbo Dice Settings");
                 attackPresetLibraryUi = new AttackPresetLibraryUi(
                     categoryRoots[VersusCategoryAttack].transform,
@@ -211,11 +213,13 @@ namespace DiceGame.Session
                 versus ? VersusCategoryControl : NonVersusCategoryControl].transform;
             var controlRoot = SessionUiFactory.CreateVerticalSection(controlParent, $"{slotLabel}Control");
             SessionUiFactory.CreateLayoutLabel(controlRoot, $"{slotLabel} Settings", 22, 30f);
+            var controlRow1 = SessionUiFactory.CreateTwoColumnRow(controlRoot, $"{slotLabel}ControlRow1");
+            var controlRow2 = SessionUiFactory.CreateTwoColumnRow(controlRoot, $"{slotLabel}ControlRow2");
             var section = new PlayerSlotUi {
                 ControlRoot = controlRoot.gameObject,
-                AiDropdown = CreateEnumRow(controlRoot, $"{slotLabel} Control", new[] { "Controller", "AI" }),
-                DeviceDropdown = CreateEnumRow(controlRoot, $"{slotLabel} Device", new[] { "Keyboard", "Gamepad" }),
-                GamepadIndexDropdown = CreateEnumRow(controlRoot, $"{slotLabel} Gamepad", new[] { "1", "2" })
+                AiDropdown = CreateEnumRow(controlRow1, $"{slotLabel} Control", new[] { "Controller", "AI" }),
+                DeviceDropdown = CreateEnumRow(controlRow1, $"{slotLabel} Device", new[] { "Keyboard", "Gamepad" }),
+                GamepadIndexDropdown = CreateEnumRow(controlRow2, $"{slotLabel} Gamepad", new[] { "1", "2" })
             };
 
             if (versus) {
@@ -264,8 +268,10 @@ namespace DiceGame.Session
 
         void RefreshPlayerControlVisibility(PlayerSlotUi section) {
             var isAi = section.AiDropdown.value == 1;
-            section.DeviceDropdown.gameObject.SetActive(!isAi);
-            section.GamepadIndexDropdown.gameObject.SetActive(!isAi && section.DeviceDropdown.value == 1);
+            SetFieldCellActive(section.DeviceDropdown, !isAi);
+            SetFieldCellActive(
+                section.GamepadIndexDropdown,
+                !isAi && section.DeviceDropdown.value == 1);
             RebuildContentLayout();
         }
 
@@ -470,8 +476,17 @@ namespace DiceGame.Session
         }
 
         static TMP_Dropdown CreateEnumRow(Transform parent, string label, string[] options) {
-            SessionUiFactory.CreateLayoutLabel(parent, label, 18, 24f);
-            return SessionUiFactory.CreateLayoutDropdown(parent, $"{label}Dropdown", options, 40f);
+            var cell = SessionUiFactory.CreateFieldCell(parent, label);
+            SessionUiFactory.CreateLayoutLabel(cell, label, 18, 24f);
+            return SessionUiFactory.CreateLayoutDropdown(cell, $"{label}Dropdown", options, 40f);
+        }
+
+        static void SetFieldCellActive(Component control, bool active) {
+            if (control == null || control.transform.parent == null) {
+                return;
+            }
+
+            control.transform.parent.gameObject.SetActive(active);
         }
     }
 }

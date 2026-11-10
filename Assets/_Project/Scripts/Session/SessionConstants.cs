@@ -147,5 +147,9 @@ namespace DiceGame.Session
         public const string InputBindingsPersistFileName = "binding_overrides.json";
         public const string AttackPresetsPersistDirectory = "AttackPresets";
         public const int AttackPresetNameMaxLength = 32;
+        /// <summary>
+        /// Title settings: Kind アイコンの出目（1〜6）切替間隔。
+        /// </summary>
+        public const float DiceKindIconPipCycleSeconds = 0.5f;
     }
 }

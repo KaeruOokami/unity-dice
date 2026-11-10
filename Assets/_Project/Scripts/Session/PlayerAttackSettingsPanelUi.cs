@@ -58,16 +58,24 @@ namespace DiceGame.Session
             });
 
             SessionUiFactory.CreateLayoutLabel(section, "Power", 20, 28f);
-            bindings.AttackMultiplier = SessionUiFactory.CreateLabeledFloatInput(section, "Attack Multiplier");
-            bindings.FaceGain = SessionUiFactory.CreateLabeledFloatInput(section, "Face Gain");
-            bindings.ChainGain = SessionUiFactory.CreateLabeledFloatInput(section, "Chain Gain");
-            bindings.SizeGain = SessionUiFactory.CreateLabeledFloatInput(section, "Size Gain");
-            bindings.SnatchMultiplier = SessionUiFactory.CreateLabeledFloatInput(section, "Snatch Multiplier");
-            bindings.Face2Weight = SessionUiFactory.CreateLabeledFloatInput(section, "Face 2 Weight");
-            bindings.Face3Weight = SessionUiFactory.CreateLabeledFloatInput(section, "Face 3 Weight");
-            bindings.Face4Weight = SessionUiFactory.CreateLabeledFloatInput(section, "Face 4 Weight");
-            bindings.Face5Weight = SessionUiFactory.CreateLabeledFloatInput(section, "Face 5 Weight");
-            bindings.Face6Weight = SessionUiFactory.CreateLabeledFloatInput(section, "Face 6 Weight");
+            var powerRow1 = SessionUiFactory.CreateTwoColumnRow(section, "PowerRow1");
+            bindings.AttackMultiplier = SessionUiFactory.CreateLabeledFloatInput(powerRow1, "Attack Multiplier");
+            bindings.FaceGain = SessionUiFactory.CreateLabeledFloatInput(powerRow1, "Face Gain");
+            var powerRow2 = SessionUiFactory.CreateTwoColumnRow(section, "PowerRow2");
+            bindings.ChainGain = SessionUiFactory.CreateLabeledFloatInput(powerRow2, "Chain Gain");
+            bindings.SizeGain = SessionUiFactory.CreateLabeledFloatInput(powerRow2, "Size Gain");
+            var powerRow3 = SessionUiFactory.CreateTwoColumnRow(section, "PowerRow3");
+            bindings.SnatchMultiplier = SessionUiFactory.CreateLabeledFloatInput(powerRow3, "Snatch Multiplier");
+
+            SessionUiFactory.CreateLayoutLabel(section, "Face Weights", 20, 28f);
+            var weightRow1 = SessionUiFactory.CreateTwoColumnRow(section, "FaceWeightRow1");
+            bindings.Face2Weight = SessionUiFactory.CreateLabeledFloatInput(weightRow1, "Face 2 Weight");
+            bindings.Face3Weight = SessionUiFactory.CreateLabeledFloatInput(weightRow1, "Face 3 Weight");
+            var weightRow2 = SessionUiFactory.CreateTwoColumnRow(section, "FaceWeightRow2");
+            bindings.Face4Weight = SessionUiFactory.CreateLabeledFloatInput(weightRow2, "Face 4 Weight");
+            bindings.Face5Weight = SessionUiFactory.CreateLabeledFloatInput(weightRow2, "Face 5 Weight");
+            var weightRow3 = SessionUiFactory.CreateTwoColumnRow(section, "FaceWeightRow3");
+            bindings.Face6Weight = SessionUiFactory.CreateLabeledFloatInput(weightRow3, "Face 6 Weight");
 
             RebuildProfiles(bindings, CloneProfiles(template.FaceSendProfiles));
             return bindings;
@@ -203,7 +211,6 @@ namespace DiceGame.Session
             SessionUiFactory.ClearChildren(bindings.ProfilesRoot);
             bindings.ProfileRows.Clear();
 
-            var kindLabels = SessionUiFactory.GetDiceKindOptionLabels();
             for (var i = 0; i < profiles.Count; i++) {
                 var profileIndex = i;
                 var profile = profiles[i];
@@ -221,19 +228,20 @@ namespace DiceGame.Session
                     var kindSection = SessionUiFactory.CreateVerticalSection(kindsRoot, $"Kind_{j}");
                     SessionUiFactory.CreateLayoutLabel(kindSection, $"Kind {j + 1}", 18, 24f);
                     SessionUiFactory.CreateLayoutLabel(kindSection, "Kind", 18, 24f);
-                    var kindDropdown = SessionUiFactory.CreateLayoutDropdown(
+                    var kindDropdown = SessionUiFactory.CreateDiceKindDropdown(
                         kindSection,
                         "KindDropdown",
-                        kindLabels,
-                        40f);
+                        44f);
                     kindDropdown.value = (int)kinds[j].Kind;
                     kindDropdown.RefreshShownValue();
 
-                    var maxField = SessionUiFactory.CreateLabeledIntInput(kindSection, "Max / Volley");
+                    var fieldsRow1 = SessionUiFactory.CreateTwoColumnRow(kindSection, "KindFieldsRow1");
+                    var maxField = SessionUiFactory.CreateLabeledIntInput(fieldsRow1, "Max / Volley");
                     SetInputText(maxField, kinds[j].MaxCountPerVolley.ToString());
-                    var minPowerField = SessionUiFactory.CreateLabeledFloatInput(kindSection, "Min Power");
+                    var minPowerField = SessionUiFactory.CreateLabeledFloatInput(fieldsRow1, "Min Power");
                     SetInputText(minPowerField, kinds[j].MinimumPower.ToString("0.###"));
-                    var weightField = SessionUiFactory.CreateLabeledFloatInput(kindSection, "Weight");
+                    var fieldsRow2 = SessionUiFactory.CreateTwoColumnRow(kindSection, "KindFieldsRow2");
+                    var weightField = SessionUiFactory.CreateLabeledFloatInput(fieldsRow2, "Weight");
                     SetInputText(weightField, kinds[j].SelectionWeight.ToString("0.###"));
 
                     SessionUiFactory.CreateLayoutButton(kindSection, "RemoveKindButton", "Remove Kind", 36f, () => {
@@ -248,12 +256,19 @@ namespace DiceGame.Session
                     });
                 }
 
-                SessionUiFactory.CreateLayoutButton(profileSection, "AddKindButton", "Add Kind", 36f, () => {
-                    AddKind(bindings, profileIndex);
-                });
-                SessionUiFactory.CreateLayoutButton(profileSection, "RemoveProfileButton", "Remove Profile", 36f, () => {
-                    RemoveProfile(bindings, profileIndex);
-                });
+                var profileActions = SessionUiFactory.CreateTwoColumnRow(profileSection, "ProfileActions");
+                SessionUiFactory.CreateTwoColumnLayoutButton(
+                    profileActions,
+                    "AddKindButton",
+                    "Add Kind",
+                    36f,
+                    () => { AddKind(bindings, profileIndex); });
+                SessionUiFactory.CreateTwoColumnLayoutButton(
+                    profileActions,
+                    "RemoveProfileButton",
+                    "Remove Profile",
+                    36f,
+                    () => { RemoveProfile(bindings, profileIndex); });
 
                 bindings.ProfileRows.Add(new ProfileRow {
                     FaceToggles = faceToggles,
@@ -281,10 +296,16 @@ namespace DiceGame.Session
                 }
             }
 
+            RectTransform currentRow = null;
             for (var face = MinTriggerFace; face <= MaxTriggerFace; face++) {
-                var toggle = SessionUiFactory.CreateLabeledToggle(parent, $"Face {face}");
-                toggle.isOn = selected[face - MinTriggerFace];
-                toggles[face - MinTriggerFace] = toggle;
+                var index = face - MinTriggerFace;
+                if (index % 2 == 0) {
+                    currentRow = SessionUiFactory.CreateTwoColumnRow(parent, $"FaceToggleRow_{index / 2}");
+                }
+
+                var toggle = SessionUiFactory.CreateLabeledToggle(currentRow, $"Face {face}");
+                toggle.isOn = selected[index];
+                toggles[index] = toggle;
             }
 
             return toggles;

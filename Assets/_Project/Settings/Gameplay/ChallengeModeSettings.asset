@@ -14,7 +14,6 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   boardSettings: {fileID: 11400000, guid: e1f2a3b4c5d6478899aabbccddeeff25, type: 2}
   opponentAttacksByMatch:
-  - {fileID: 11400000, guid: cc7aae1a3570db84dbe026d4d4e0a248, type: 2}
   - {fileID: 11400000, guid: 6576aa5aadab793459784ab3905feb69, type: 2}
   - {fileID: 11400000, guid: 6d26fa35cc51d6d4e9f7d4f5612c2880, type: 2}
   - {fileID: 11400000, guid: 2d6d4fa4710c6744883eb0de5f4c6aee, type: 2}
@@ -30,5 +29,6 @@ MonoBehaviour:
   - {fileID: 11400000, guid: a612bd4f0365b454897fe4ac3ac4de4f, type: 2}
   - {fileID: 11400000, guid: f7aaf7143af6d9c42a98c29582ad3e24, type: 2}
   - {fileID: 11400000, guid: 37ce2d26adbfee044a80341e85e46919, type: 2}
+  - {fileID: 11400000, guid: cc7aae1a3570db84dbe026d4d4e0a248, type: 2}
   playerAttackCatalog: {fileID: 11400000, guid: b2c3d4e5f6a7488990abcdef20000012,
     type: 2}

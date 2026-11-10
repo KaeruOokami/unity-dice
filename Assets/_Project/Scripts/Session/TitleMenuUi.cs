@@ -1,4 +1,5 @@
 using System;
+using System.Collections;
 using DiceGame.Config;
 using DiceGame.Session.Network;
 using TMPro;
@@ -36,12 +37,17 @@ namespace DiceGame.Session
         MatchSetupPanelUi setupPanelUi;
         ChallengeSetupPanelUi challengeSetupPanelUi;
         ControlsPanelUi controlsPanelUi;
+        DiceKindIconCatalog diceKindIconCatalog;
         GameMode selectedMode;
         bool onlineSharedSetupActive;
         bool onlineSetupIsHost;
         bool applyingRemoteSetup;
         float onlineSetupSyncTimer;
         string lastSyncedSetupJson = string.Empty;
+        /// <summary>
+        /// Hide() may run before BuildUi finishes. Keep canvas suppressed until an explicit Show*.
+        /// </summary>
+        bool suppressAutoShow;
 
         public void Configure(
             SessionController sessionController,
@@ -56,23 +62,46 @@ namespace DiceGame.Session
             presetRegistry = registry;
             SessionUiFactory.Configure(font);
             EnsureEventSystem();
-            BuildUi();
-            ShowMainPanel();
+            StartCoroutine(ConfigureUiRoutine(registry));
 
             if (SessionState.Instance != null) {
                 SessionState.Instance.StateChanged += RefreshStatus;
             }
         }
 
+        IEnumerator ConfigureUiRoutine(MatchSetupPresetRegistry registry) {
+            // URP の一時 RT が揃うまで1フレーム待つ。
+            yield return null;
+            yield return WarmDiceKindIconsRoutine(registry);
+            BuildUi();
+            if (suppressAutoShow) {
+                Hide();
+                yield break;
+            }
+
+            ShowMainPanel();
+        }
+
+        IEnumerator WarmDiceKindIconsRoutine(MatchSetupPresetRegistry registry) {
+            diceKindIconCatalog?.Dispose();
+            diceKindIconCatalog = new DiceKindIconCatalog();
+            yield return diceKindIconCatalog.WarmRoutine(transform, registry);
+            SessionUiFactory.ConfigureDiceKindIcons(diceKindIconCatalog);
+        }
+
         void OnDestroy() {
             controlsPanelUi?.Dispose();
             controlsPanelUi = null;
+            diceKindIconCatalog?.Dispose();
+            diceKindIconCatalog = null;
+            SessionUiFactory.ConfigureDiceKindIcons(null);
             if (SessionState.Instance != null) {
                 SessionState.Instance.StateChanged -= RefreshStatus;
             }
         }
 
         void Update() {
+            diceKindIconCatalog?.Tick(Time.unscaledDeltaTime);
             TickOnlineSetupSync();
         }
 
@@ -253,6 +282,7 @@ namespace DiceGame.Session
         }
 
         public void Hide() {
+            suppressAutoShow = true;
             onlineSharedSetupActive = false;
             controlsPanelUi?.CancelRebind();
             if (canvas != null) {
@@ -275,6 +305,7 @@ namespace DiceGame.Session
             bool host,
             bool client,
             bool controls) {
+            suppressAutoShow = false;
             if (canvas != null) {
                 canvas.gameObject.SetActive(true);
             }
@@ -372,6 +403,11 @@ namespace DiceGame.Session
                 Debug.LogError($"[TitleMenuUi] Failed to build Challenge setup panel: {ex}");
                 SessionState.Instance?.SetStatus("Failed to build Challenge settings UI. Check the Console.");
                 return;
+            }
+
+            var defaults = MatchSetupPersistence.LoadOrCreate(GameMode.Challenge, registry);
+            if (defaults != null) {
+                challengeSetupPanelUi.ApplyDefaults(defaults);
             }
 
             if (setupErrorText != null) {
@@ -815,14 +851,14 @@ namespace DiceGame.Session
 
         void BuildMatchSetupPanel(Transform root) {
             matchSetupPanel = SessionUiFactory.CreatePanel(root, "MatchSetupPanel", new Color(0.12f, 0.12f, 0.14f, 0.95f));
-            SessionUiFactory.CenterPanel(matchSetupPanel.GetComponent<RectTransform>(), new Vector2(760f, 860f));
+            SessionUiFactory.StretchFull(matchSetupPanel.GetComponent<RectTransform>());
             setupTitleText = SessionUiFactory.CreateText(matchSetupPanel.transform, "Title", "Settings", 36, TextAnchor.UpperCenter);
 
             var scrollGo = new GameObject("SetupScroll");
             scrollGo.transform.SetParent(matchSetupPanel.transform, false);
             var scrollRect = scrollGo.AddComponent<RectTransform>();
             scrollRect.anchorMin = new Vector2(0.08f, 0.22f);
-            scrollRect.anchorMax = new Vector2(0.92f, 0.82f);
+            scrollRect.anchorMax = new Vector2(0.92f, 0.9f);
             scrollRect.offsetMin = Vector2.zero;
             scrollRect.offsetMax = Vector2.zero;
             var scroll = scrollGo.AddComponent<ScrollRect>();
@@ -848,23 +884,28 @@ namespace DiceGame.Session
             errorRect.offsetMax = Vector2.zero;
             setupErrorText.color = new Color(1f, 0.45f, 0.45f, 1f);
 
-            setupPrimaryButton = SessionUiFactory.CreateButton(
+            var setupFooter = SessionUiFactory.CreateBottomButtonBar(
                 matchSetupPanel.transform,
+                "SetupFooter",
+                56f,
+                32f);
+            setupPrimaryButton = SessionUiFactory.CreateLayoutButton(
+                setupFooter,
                 "PlayButton",
                 "Play",
-                new Vector2(0f, -320f),
+                56f,
                 OnMatchSetupPrimaryClicked);
-            setupBackButton = SessionUiFactory.CreateButton(
-                matchSetupPanel.transform,
+            setupBackButton = SessionUiFactory.CreateLayoutButton(
+                setupFooter,
                 "SetupBackButton",
                 "Back",
-                new Vector2(0f, -390f),
+                56f,
                 OnMatchSetupBackClicked);
         }
 
         void BuildControlsPanel(Transform root) {
             controlsPanel = SessionUiFactory.CreatePanel(root, "ControlsPanel", new Color(0.12f, 0.12f, 0.14f, 0.95f));
-            SessionUiFactory.CenterPanel(controlsPanel.GetComponent<RectTransform>(), new Vector2(760f, 860f));
+            SessionUiFactory.StretchFull(controlsPanel.GetComponent<RectTransform>());
             SessionUiFactory.CreateText(
                 controlsPanel.transform,
                 "Title",
@@ -875,8 +916,8 @@ namespace DiceGame.Session
             var scrollGo = new GameObject("ControlsScroll");
             scrollGo.transform.SetParent(controlsPanel.transform, false);
             var scrollRect = scrollGo.AddComponent<RectTransform>();
-            scrollRect.anchorMin = new Vector2(0.08f, 0.18f);
-            scrollRect.anchorMax = new Vector2(0.92f, 0.82f);
+            scrollRect.anchorMin = new Vector2(0.08f, 0.14f);
+            scrollRect.anchorMax = new Vector2(0.92f, 0.9f);
             scrollRect.offsetMin = Vector2.zero;
             scrollRect.offsetMax = Vector2.zero;
             var scroll = scrollGo.AddComponent<ScrollRect>();
@@ -894,11 +935,16 @@ namespace DiceGame.Session
             scroll.viewport = viewport.GetComponent<RectTransform>();
             scroll.content = contentRect;
 
-            SessionUiFactory.CreateButton(
+            var controlsFooter = SessionUiFactory.CreateBottomButtonBar(
                 controlsPanel.transform,
+                "ControlsFooter",
+                56f,
+                32f);
+            SessionUiFactory.CreateLayoutButton(
+                controlsFooter,
                 "ControlsBackButton",
                 "Back",
-                new Vector2(0f, -360f),
+                56f,
                 ShowMainPanel);
         }
 

@@ -313,53 +313,71 @@ namespace DiceGame.Gameplay.AI.Domain
                 return null;
             }
 
-            subGoal.TryAdvanceOrientRollStep(state);
-
-            if (!TryEnsureOrientRollPlan(subGoal, state, passability, character, footingWorldY, settings)) {
-                Application.AiDebugLog.Log(
-                    $"OrientPlan FAILED die={die.name} cell={state.GridPos} " +
-                    $"currentTop={state.Orientation.Top} targetTop={subGoal.TargetFace}");
-                return null;
-            }
-
-            var plan = subGoal.OrientRollPlan.Value;
-            var stepIndex = subGoal.OrientRollStepIndex;
-            if (stepIndex >= plan.Directions.Count) {
+            // Join-equivalent: blocked next step clears the plan and re-searches.
+            // Abandon only when no alternate orient path remains.
+            const int maxOrientReplans = 4;
+            for (var replanAttempt = 0; replanAttempt < maxOrientReplans; replanAttempt++) {
+                state = die.CurrentState;
                 if (state.Orientation.Top == subGoal.TargetFace) {
                     subGoal.MarkComplete();
+                    return null;
                 }
 
-                return null;
-            }
+                subGoal.TryAdvanceOrientRollStep(state);
 
-            var fromLevel = character.StandingPlacement.Level;
-            var allowJump = settings != null && settings.AllowJump;
-            if (!WorkDieOrientPlanner.TrySelectNextStep(
-                passability,
-                die,
-                fromLevel,
-                footingWorldY,
-                character.PlayerSlot,
-                plan,
-                stepIndex,
-                allowJump,
-                out var orientStep,
-                out var remainingRolls)) {
-                subGoal.ClearOrientRollPlan();
+                if (!TryEnsureOrientRollPlan(subGoal, state, passability, character, footingWorldY, settings)) {
+                    Application.AiDebugLog.Log(
+                        $"OrientPlan FAILED die={die.name} cell={state.GridPos} " +
+                        $"currentTop={state.Orientation.Top} targetTop={subGoal.TargetFace} " +
+                        $"reason=no-alternate-path");
+                    return null;
+                }
+
+                var plan = subGoal.OrientRollPlan.Value;
+                var stepIndex = subGoal.OrientRollStepIndex;
+                if (stepIndex >= plan.Directions.Count) {
+                    if (state.Orientation.Top == subGoal.TargetFace) {
+                        subGoal.MarkComplete();
+                    }
+
+                    return null;
+                }
+
+                var fromLevel = character.StandingPlacement.Level;
+                var allowJump = settings != null && settings.AllowJump;
+                if (!WorkDieOrientPlanner.TrySelectNextStep(
+                    passability,
+                    die,
+                    fromLevel,
+                    footingWorldY,
+                    character.PlayerSlot,
+                    plan,
+                    stepIndex,
+                    allowJump,
+                    out var orientStep,
+                    out var remainingRolls)) {
+                    Application.AiDebugLog.Log(
+                        $"OrientStepBlocked die={die.name} cell={state.GridPos} " +
+                        $"currentTop={state.Orientation.Top} targetTop={subGoal.TargetFace} " +
+                        $"step={stepIndex}/{plan.Directions.Count} replan={replanAttempt + 1}");
+                    subGoal.ClearOrientRollPlan();
+                    continue;
+                }
+
                 Application.AiDebugLog.Log(
-                    $"OrientPlan FAILED die={die.name} cell={state.GridPos} " +
-                    $"currentTop={state.Orientation.Top} targetTop={subGoal.TargetFace} " +
-                    $"step={stepIndex}/{plan.Directions.Count}");
-                return null;
+                    $"OrientPlan die={die.name} currentTop={state.Orientation.Top} targetTop={subGoal.TargetFace} " +
+                    $"stepIndex={stepIndex}/{plan.Directions.Count} planned={plan.Directions[stepIndex]} " +
+                    $"exec={orientStep.Direction} mode={orientStep.Mode} landing={orientStep.LandingCell} " +
+                    $"landingTier={orientStep.LandingTier} remainingRolls={remainingRolls}");
+
+                return BuildWorkDieRollAction(orientStep, die, settings, allowJump);
             }
 
             Application.AiDebugLog.Log(
-                $"OrientPlan die={die.name} currentTop={state.Orientation.Top} targetTop={subGoal.TargetFace} " +
-                $"stepIndex={stepIndex}/{plan.Directions.Count} planned={plan.Directions[stepIndex]} " +
-                $"exec={orientStep.Direction} mode={orientStep.Mode} landing={orientStep.LandingCell} " +
-                $"landingTier={orientStep.LandingTier} remainingRolls={remainingRolls}");
-
-            return BuildWorkDieRollAction(orientStep, die, settings, allowJump);
+                $"OrientPlan FAILED die={die.name} cell={die.CurrentState.GridPos} " +
+                $"currentTop={die.CurrentState.Orientation.Top} targetTop={subGoal.TargetFace} " +
+                $"reason=replan-budget-exhausted");
+            return null;
         }
 
         static bool TryEnsureOrientRollPlan(

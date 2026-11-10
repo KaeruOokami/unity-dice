@@ -24,15 +24,27 @@ namespace DiceGame.Session
             bool includeInitialDiceCount = true) {
             var section = SessionUiFactory.CreateVerticalSection(parent, sectionLabel);
             SessionUiFactory.CreateLayoutLabel(section, sectionLabel, 20, 28f);
-            var bindings = new Bindings {
-                InitialDiceCount = includeInitialDiceCount
-                    ? SessionUiFactory.CreateLabeledIntInput(section, "Initial Dice Count")
-                    : null,
-                AnimateInitialDiceSpawn = SessionUiFactory.CreateLabeledToggle(section, "Animate Initial Spawn"),
-                ContinuousSpawnEnabled = SessionUiFactory.CreateLabeledToggle(section, "Continuous Spawn Enabled"),
-                SpawnInterval = SessionUiFactory.CreateLabeledFloatInput(section, "Spawn Interval"),
-                SpawnIntervalJitter = SessionUiFactory.CreateLabeledFloatInput(section, "Spawn Interval Jitter")
-            };
+            var bindings = new Bindings();
+            if (includeInitialDiceCount) {
+                var initialRow = SessionUiFactory.CreateTwoColumnRow(section, "InitialSpawnRow");
+                bindings.InitialDiceCount = SessionUiFactory.CreateLabeledIntInput(
+                    initialRow,
+                    "Initial Dice Count");
+            }
+
+            var toggleRow = SessionUiFactory.CreateTwoColumnRow(section, "SpawnToggleRow");
+            bindings.AnimateInitialDiceSpawn = SessionUiFactory.CreateLabeledToggle(
+                toggleRow,
+                "Animate Initial Spawn");
+            bindings.ContinuousSpawnEnabled = SessionUiFactory.CreateLabeledToggle(
+                toggleRow,
+                "Continuous Spawn Enabled");
+
+            var intervalRow = SessionUiFactory.CreateTwoColumnRow(section, "SpawnIntervalRow");
+            bindings.SpawnInterval = SessionUiFactory.CreateLabeledFloatInput(intervalRow, "Spawn Interval");
+            bindings.SpawnIntervalJitter = SessionUiFactory.CreateLabeledFloatInput(
+                intervalRow,
+                "Spawn Interval Jitter");
 
             SessionUiFactory.CreateLayoutLabel(section, "Bottom Spawn Weight", 18, 24f);
             bindings.BottomSpawnWeight = SessionUiFactory.CreateLayoutSlider(

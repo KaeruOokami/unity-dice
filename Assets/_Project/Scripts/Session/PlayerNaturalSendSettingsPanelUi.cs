@@ -29,10 +29,11 @@ namespace DiceGame.Session
             var section = SessionUiFactory.CreateVerticalSection(parent, sectionLabel);
             SessionUiFactory.CreateLayoutLabel(section, sectionLabel, 20, 28f);
 
+            var headerRow = SessionUiFactory.CreateTwoColumnRow(section, "NaturalSendHeaderRow");
             var bindings = new Bindings {
                 SectionRoot = section,
-                Enabled = SessionUiFactory.CreateLabeledToggle(section, "Natural Send Enabled"),
-                DiceCountPerVolley = SessionUiFactory.CreateLabeledIntInput(section, "Dice Count / Volley"),
+                Enabled = SessionUiFactory.CreateLabeledToggle(headerRow, "Natural Send Enabled"),
+                DiceCountPerVolley = SessionUiFactory.CreateLabeledIntInput(headerRow, "Dice Count / Volley"),
                 ListRoot = SessionUiFactory.CreateVerticalSection(section, "SendableKinds")
             };
 
@@ -115,24 +116,23 @@ namespace DiceGame.Session
             SessionUiFactory.ClearChildren(bindings.ListRoot);
             bindings.KindRows.Clear();
 
-            var kindLabels = SessionUiFactory.GetDiceKindOptionLabels();
             for (var i = 0; i < kinds.Count; i++) {
                 var index = i;
                 var kindSection = SessionUiFactory.CreateVerticalSection(bindings.ListRoot, $"Kind_{i}");
                 SessionUiFactory.CreateLayoutLabel(kindSection, $"Kind {i + 1}", 18, 24f);
 
                 SessionUiFactory.CreateLayoutLabel(kindSection, "Kind", 18, 24f);
-                var kindDropdown = SessionUiFactory.CreateLayoutDropdown(
+                var kindDropdown = SessionUiFactory.CreateDiceKindDropdown(
                     kindSection,
                     "KindDropdown",
-                    kindLabels,
-                    40f);
+                    44f);
                 kindDropdown.value = (int)kinds[i].Kind;
                 kindDropdown.RefreshShownValue();
 
-                var maxField = SessionUiFactory.CreateLabeledIntInput(kindSection, "Max / Volley");
+                var fieldsRow = SessionUiFactory.CreateTwoColumnRow(kindSection, "KindFieldsRow");
+                var maxField = SessionUiFactory.CreateLabeledIntInput(fieldsRow, "Max / Volley");
                 SetInputText(maxField, kinds[i].MaxCountPerVolley.ToString());
-                var weightField = SessionUiFactory.CreateLabeledFloatInput(kindSection, "Weight");
+                var weightField = SessionUiFactory.CreateLabeledFloatInput(fieldsRow, "Weight");
                 SetInputText(weightField, kinds[i].SelectionWeight.ToString("0.###"));
 
                 SessionUiFactory.CreateLayoutButton(kindSection, "RemoveKindButton", "Remove Kind", 36f, () => {

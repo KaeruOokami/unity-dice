@@ -147,6 +147,8 @@ namespace DiceGame.View
             previewCamera.transform.position = bounds.center + Vector3.up * 2f;
             previewCamera.transform.rotation = Quaternion.LookRotation(Vector3.down, Vector3.forward);
 
+            // 同一フレーム内の連続ウォームで、Destroy 遅延中の前インスタンスが混ざらないようにする。
+            ClearPreviewRenderTarget();
             previewCamera.Render();
             // Ensure GPU work for this camera is submitted before CPU readback.
             GL.Flush();
@@ -159,13 +161,25 @@ namespace DiceGame.View
             texture.Apply();
             RenderTexture.active = previousTarget;
 
-            UnityEngine.Object.Destroy(instance);
+            // Destroy 遅延だと次の Render に残るため即時破棄する。
+            UnityEngine.Object.DestroyImmediate(instance);
 
             return Sprite.Create(
                 texture,
                 new Rect(0f, 0f, resolution, resolution),
                 new Vector2(0.5f, 0.5f),
                 settings.IconPixelsPerUnit);
+        }
+
+        void ClearPreviewRenderTarget() {
+            if (renderTexture == null) {
+                return;
+            }
+
+            var previousTarget = RenderTexture.active;
+            RenderTexture.active = renderTexture;
+            GL.Clear(true, true, Color.clear);
+            RenderTexture.active = previousTarget;
         }
 
         public void Dispose() {

@@ -81,12 +81,15 @@ namespace DiceGame.Session
             var lift = map.FindAction(PlayerInputSettings.LiftAction, throwIfNotFound: true);
             var jump = map.FindAction(PlayerInputSettings.JumpAction, throwIfNotFound: true);
 
-            AddCompositeRow(parent, ControlsPanelLabels.MoveUp, move, PlayerInputSettings.MovePartUp);
-            AddCompositeRow(parent, ControlsPanelLabels.MoveDown, move, PlayerInputSettings.MovePartDown);
-            AddCompositeRow(parent, ControlsPanelLabels.MoveLeft, move, PlayerInputSettings.MovePartLeft);
-            AddCompositeRow(parent, ControlsPanelLabels.MoveRight, move, PlayerInputSettings.MovePartRight);
-            AddButtonRow(parent, ControlsPanelLabels.Lift, lift);
-            AddButtonRow(parent, ControlsPanelLabels.Jump, jump);
+            var moveRow1 = SessionUiFactory.CreateTwoColumnRow(parent, "MoveRow1");
+            AddCompositeRow(moveRow1, ControlsPanelLabels.MoveUp, move, PlayerInputSettings.MovePartUp);
+            AddCompositeRow(moveRow1, ControlsPanelLabels.MoveDown, move, PlayerInputSettings.MovePartDown);
+            var moveRow2 = SessionUiFactory.CreateTwoColumnRow(parent, "MoveRow2");
+            AddCompositeRow(moveRow2, ControlsPanelLabels.MoveLeft, move, PlayerInputSettings.MovePartLeft);
+            AddCompositeRow(moveRow2, ControlsPanelLabels.MoveRight, move, PlayerInputSettings.MovePartRight);
+            var actionRow = SessionUiFactory.CreateTwoColumnRow(parent, "ActionRow");
+            AddButtonRow(actionRow, ControlsPanelLabels.Lift, lift);
+            AddButtonRow(actionRow, ControlsPanelLabels.Jump, jump);
         }
 
         void AddCompositeRow(
@@ -122,9 +125,10 @@ namespace DiceGame.Session
         }
 
         void AddRow(Transform parent, string label, InputAction action, int bindingIndex) {
-            SessionUiFactory.CreateLayoutLabel(parent, label, 18, 24f);
+            var cell = SessionUiFactory.CreateFieldCell(parent, label);
+            SessionUiFactory.CreateLayoutLabel(cell, label, 18, 24f);
             var button = SessionUiFactory.CreateLayoutButton(
-                parent,
+                cell,
                 $"{label}Rebind",
                 string.Empty,
                 40f,

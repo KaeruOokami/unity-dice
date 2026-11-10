@@ -18,11 +18,18 @@ namespace DiceGame.Session
         public static Bindings Build(Transform parent, string sectionLabel) {
             var section = SessionUiFactory.CreateVerticalSection(parent, sectionLabel);
             SessionUiFactory.CreateLayoutLabel(section, sectionLabel, 20, 28f);
+            var enabledRow = SessionUiFactory.CreateTwoColumnRow(section, "JumboEnabledRow");
+            var enabled = SessionUiFactory.CreateLabeledToggle(enabledRow, "Jumbo Enabled");
+            var sequenceRow = SessionUiFactory.CreateTwoColumnRow(section, "JumboSequenceRow");
+            var sequenceStart = SessionUiFactory.CreateLabeledIntInput(sequenceRow, "Sequence Start Face");
+            var sequenceEnd = SessionUiFactory.CreateLabeledIntInput(sequenceRow, "Sequence End Face");
+            var maxRow = SessionUiFactory.CreateTwoColumnRow(section, "JumboMaxRow");
+            var maxPerBoard = SessionUiFactory.CreateLabeledIntInput(maxRow, "Max Jumbo / Board");
             return new Bindings {
-                Enabled = SessionUiFactory.CreateLabeledToggle(section, "Jumbo Enabled"),
-                SequenceStartFace = SessionUiFactory.CreateLabeledIntInput(section, "Sequence Start Face"),
-                SequenceEndFace = SessionUiFactory.CreateLabeledIntInput(section, "Sequence End Face"),
-                MaxPerBoard = SessionUiFactory.CreateLabeledIntInput(section, "Max Jumbo / Board")
+                Enabled = enabled,
+                SequenceStartFace = sequenceStart,
+                SequenceEndFace = sequenceEnd,
+                MaxPerBoard = maxPerBoard
             };
         }
 

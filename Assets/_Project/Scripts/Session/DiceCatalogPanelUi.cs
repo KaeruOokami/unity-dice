@@ -19,8 +19,16 @@ namespace DiceGame.Session
 
             var entries = template.Entries ?? System.Array.Empty<DiceCatalogEntryData>();
             var weightFields = new TMP_InputField[entries.Length];
+            RectTransform currentRow = null;
             for (var i = 0; i < entries.Length; i++) {
-                weightFields[i] = SessionUiFactory.CreateLabeledFloatInput(section, $"{entries[i].Kind} Spawn Weight");
+                if (i % 2 == 0) {
+                    currentRow = SessionUiFactory.CreateTwoColumnRow(section, $"CatalogRow_{i / 2}");
+                }
+
+                weightFields[i] = SessionUiFactory.CreateKindLabeledFloatInput(
+                    currentRow,
+                    entries[i].Kind,
+                    "Spawn Weight");
             }
 
             return new Bindings {

@@ -43,12 +43,12 @@
     <UnityVersion>6000.0.81f1</UnityVersion>
   </PropertyGroup>
   <ItemGroup>
-    <Analyzer Include="C:\Users\s4tar\.vscode\extensions\visualstudiotoolsforunity.vstuc-1.2.2\Analyzers\Microsoft.Unity.Analyzers.dll" />
+    <Analyzer Include="C:\Users\s4tar\.vscode\extensions\visualstudiotoolsforunity.vstuc-1.3.2\Analyzers\Microsoft.Unity.Analyzers.dll" />
     <Analyzer Include="D:\Program Files\Unity\Hub\Editor\6000.0.81f1\Editor\Data\Tools\Unity.SourceGenerators\Unity.SourceGenerators.dll" />
     <Analyzer Include="D:\Program Files\Unity\Hub\Editor\6000.0.81f1\Editor\Data\Tools\Unity.SourceGenerators\Unity.Properties.SourceGenerator.dll" />
     <Analyzer Include="D:\Program Files\Unity\Hub\Editor\6000.0.81f1\Editor\Data\Tools\Unity.SourceGenerators\Unity.UIToolkit.SourceGenerator.dll" />
-    <Analyzer Include="D:\Document\Unity\Project\Dice\Library\PackageCache\com.unity.dt.app-ui@3bbd9e4c5c92\Runtime\SourceGenerators\netstandard2.0\EnumToLowerCase.dll" />
-    <Analyzer Include="D:\Document\Unity\Project\Dice\Library\PackageCache\com.unity.ai.inference@9a123aee5df7\Runtime\Core\SourceGenerator\SourceGenerators.dll" />
+    <Analyzer Include="D:\Document\Dev\Projects\Unity\Project\Dice\Library\PackageCache\com.unity.dt.app-ui@3bbd9e4c5c92\Runtime\SourceGenerators\netstandard2.0\EnumToLowerCase.dll" />
+    <Analyzer Include="D:\Document\Dev\Projects\Unity\Project\Dice\Library\PackageCache\com.unity.ai.inference@9a123aee5df7\Runtime\Core\SourceGenerator\SourceGenerators.dll" />
   </ItemGroup>
   <ItemGroup>
     <Compile Include="Assets\_Project\Scripts\Gameplay\Character\CharacterController.cs" />
@@ -88,6 +88,7 @@
     <Compile Include="Assets\_Project\Scripts\Gameplay\Match\GameBootstrap.cs" />
     <Compile Include="Assets\_Project\Scripts\Core\Motion\DiceSlidePlan.cs" />
     <Compile Include="Assets\_Project\Scripts\Session\Network\OnlineMatchSnapshot.cs" />
+    <Compile Include="Assets\_Project\Scripts\Session\DiceKindIconCatalog.cs" />
     <Compile Include="Assets\_Project\Scripts\Session\TitleMenuUi.cs" />
     <Compile Include="Assets\_Project\Scripts\Gameplay\AI\Application\Actions\AiDiscreteActions.cs" />
     <Compile Include="Assets\_Project\Scripts\Placement\Movement\MovementTransition.cs" />

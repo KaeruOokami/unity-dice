@@ -38,17 +38,29 @@ namespace DiceGame.Session
                 40f);
             presetDropdown.onValueChanged.AddListener(_ => RefreshDeleteInteractable());
 
-            SessionUiFactory.CreateLayoutButton(parent, "LoadAttackPresetButton", AttackPresetLabels.Load, 40f, LoadSelected);
-            deleteButton = SessionUiFactory.CreateLayoutButton(
-                parent,
+            var actionRow = SessionUiFactory.CreateTwoColumnRow(parent, "AttackPresetActions");
+            SessionUiFactory.CreateTwoColumnLayoutButton(
+                actionRow,
+                "LoadAttackPresetButton",
+                AttackPresetLabels.Load,
+                40f,
+                LoadSelected);
+            deleteButton = SessionUiFactory.CreateTwoColumnLayoutButton(
+                actionRow,
                 "DeleteAttackPresetButton",
                 AttackPresetLabels.Delete,
                 40f,
                 DeleteSelected);
 
-            nameInput = SessionUiFactory.CreateLabeledTextInput(parent, AttackPresetLabels.Name);
+            var saveRow = SessionUiFactory.CreateTwoColumnRow(parent, "AttackPresetSaveRow");
+            nameInput = SessionUiFactory.CreateLabeledTextInput(saveRow, AttackPresetLabels.Name);
             nameInput.characterLimit = SessionConstants.AttackPresetNameMaxLength;
-            SessionUiFactory.CreateLayoutButton(parent, "SaveAttackPresetButton", AttackPresetLabels.Save, 40f, SaveCurrent);
+            SessionUiFactory.CreateTwoColumnLayoutButton(
+                saveRow,
+                "SaveAttackPresetButton",
+                AttackPresetLabels.Save,
+                40f,
+                SaveCurrent);
 
             statusLabel = SessionUiFactory.CreateLayoutLabel(parent, string.Empty, 16, 28f);
             statusLabel.color = new Color(0.85f, 0.85f, 0.9f, 1f);
