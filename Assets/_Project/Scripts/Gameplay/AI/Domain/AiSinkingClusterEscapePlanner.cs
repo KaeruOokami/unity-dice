@@ -21,9 +21,9 @@ namespace DiceGame.Gameplay.AI.Domain
         };
 
         /// <summary>
-        /// While standing on a sink-erasing cluster:
-        /// adjacent external die that is mountable now (height-aware) → mount;
-        /// otherwise descend immediately.
+        /// Proactive sink escape is disabled. Standing on a sink-erasing cluster must not
+        /// preempt match goals (MountAdjacent / forced descend caused leave↔mount loops).
+        /// After an actual floor fall, FloorRecovery handles remount.
         /// </summary>
         public static AiSinkingClusterEscapeKind ResolveEscape(
             GameStateSnapshot snapshot,
@@ -39,82 +39,7 @@ namespace DiceGame.Gameplay.AI.Domain
             clusterFace = 0;
             sinkingGroup = null;
             mountTarget = null;
-
-            var standing = snapshot?.StandingDice;
-            if (standing == null || !standing.IsSinkErasing || settings == null) {
-                return AiSinkingClusterEscapeKind.None;
-            }
-
-            clusterFace = standing.CurrentState.Orientation.Top;
-            sinkingGroup = SinkingChainEvaluator.GetSinkingDice(clusterFace, snapshot.PlanningDice);
-            if (sinkingGroup.Count == 0
-                || !ClusterSelectionEvaluator.ClusterContainsController(sinkingGroup, standing)) {
-                sinkingGroup = null;
-                clusterFace = 0;
-                return AiSinkingClusterEscapeKind.None;
-            }
-
-            if (TrySelectMountableAdjacentExternalDie(
-                snapshot,
-                settings,
-                sinkingGroup,
-                clusterFace,
-                standing,
-                passability,
-                navigationState,
-                footingWorldY,
-                movementOwner,
-                maxSearchSteps,
-                out mountTarget)) {
-                return AiSinkingClusterEscapeKind.MountAdjacent;
-            }
-
-            return AiSinkingClusterEscapeKind.DescendToFloor;
-        }
-
-        static bool TrySelectMountableAdjacentExternalDie(
-            GameStateSnapshot snapshot,
-            AiPlayerSettings settings,
-            List<DiceSnapshot> sinkingGroup,
-            int clusterFace,
-            DiceController standing,
-            MovementTransitionEvaluator passability,
-            AiNavigationState? navigationState,
-            float footingWorldY,
-            PlayerSlot movementOwner,
-            int maxSearchSteps,
-            out DiceController mountTarget) {
-            mountTarget = null;
-            if (!AiFloorRecoveryPlanner.TrySelectNearestAdjacentExternalDie(
-                sinkingGroup,
-                clusterFace,
-                snapshot.PlanningDice,
-                snapshot.PlayerCell,
-                out var adjacent)
-                || adjacent.Controller == null
-                || adjacent.Controller == standing) {
-                return false;
-            }
-
-            // Without a nav query, do not claim mount is possible — prefer descend.
-            if (passability == null || !navigationState.HasValue) {
-                return false;
-            }
-
-            if (!AiMountFeasibility.CanStandOnDie(
-                passability,
-                navigationState.Value,
-                footingWorldY,
-                movementOwner,
-                adjacent.Controller,
-                maxSearchSteps,
-                settings.AllowJump,
-                snapshot.PlanningDice)) {
-                return false;
-            }
-
-            mountTarget = adjacent.Controller;
-            return true;
+            return AiSinkingClusterEscapeKind.None;
         }
 
         public static bool IsTrappedOnSinkingCluster(

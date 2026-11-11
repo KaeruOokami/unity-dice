@@ -262,11 +262,11 @@ namespace DiceGame.Gameplay.AI.Application
                 character.PlayerSlot,
                 settings.PathSearchMaxSteps);
 
+            // ResolveEscape is disabled (None): keep match goals while on sink; FloorRecovery
+            // after fall. Descend helpers below remain for any future re-enable path.
             if (escapeKind == AiSinkingClusterEscapeKind.None) {
                 return false;
             }
-
-            activeGoal = null;
 
             if (escapeKind == AiSinkingClusterEscapeKind.MountAdjacent) {
                 if (AiSinkingClusterEscapeCoordinator.TryBuildMountAdjacentAction(
@@ -300,6 +300,11 @@ namespace DiceGame.Gameplay.AI.Application
                     character,
                     settings,
                     out var action)) {
+                    stuckActionCount++;
+                    if (stuckActionCount >= GetStuckThreshold()) {
+                        AbandonActiveGoal("escape-path-failed");
+                    }
+
                     replanCooldown = settings.FailedReplanInterval;
                     return true;
                 }
@@ -348,7 +353,7 @@ namespace DiceGame.Gameplay.AI.Application
                 return false;
             }
 
-            activeGoal = null;
+            // Keep activeGoal across FloorRecovery. Reselect only when recovery path fails.
 
             if (!AiFloorRecoveryCoordinator.TryBuildAction(
                 floorRecoverySession,
@@ -357,6 +362,11 @@ namespace DiceGame.Gameplay.AI.Application
                 character,
                 settings,
                 out var action)) {
+                stuckActionCount++;
+                if (stuckActionCount >= GetStuckThreshold()) {
+                    AbandonActiveGoal("floor-recovery-path-failed");
+                }
+
                 replanCooldown = settings.FailedReplanInterval;
                 return true;
             }

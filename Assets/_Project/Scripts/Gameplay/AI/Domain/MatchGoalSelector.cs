@@ -26,13 +26,13 @@ namespace DiceGame.Gameplay.AI.Domain
             MatchGoal bestGoal = null;
             var bestScore = float.MinValue;
 
-            if (TrySelectBestChainGoal(snapshot, registry, settings, failureMemory, out var chainGoal)
+            if (TrySelectBestChainGoal(snapshot, character, registry, settings, failureMemory, out var chainGoal)
                 && chainGoal.PriorityScore > bestScore) {
                 bestScore = chainGoal.PriorityScore;
                 bestGoal = chainGoal;
             }
 
-            if (TrySelectBestGoal(snapshot, registry, settings, failureMemory, out var clusterGoal)
+            if (TrySelectBestGoal(snapshot, character, registry, settings, failureMemory, out var clusterGoal)
                 && clusterGoal.PriorityScore > bestScore) {
                 bestGoal = clusterGoal;
             }
@@ -42,6 +42,7 @@ namespace DiceGame.Gameplay.AI.Domain
 
         static bool TrySelectBestChainGoal(
             GameStateSnapshot snapshot,
+            CharacterController character,
             DiceRegistry registry,
             AiPlayerSettings settings,
             MatchGoalFailureMemory failureMemory,
@@ -55,7 +56,7 @@ namespace DiceGame.Gameplay.AI.Domain
                     continue;
                 }
 
-                var goal = BuildGoalForChain(snapshot, face, registry, settings);
+                var goal = BuildGoalForChain(snapshot, character, face, registry, settings);
                 if (goal == null || IsExcluded(goal, failureMemory, now)) {
                     continue;
                 }
@@ -71,12 +72,14 @@ namespace DiceGame.Gameplay.AI.Domain
 
         static bool TrySelectBestGoal(
             GameStateSnapshot snapshot,
+            CharacterController character,
             DiceRegistry registry,
             AiPlayerSettings settings,
             MatchGoalFailureMemory failureMemory,
             out MatchGoal bestGoal) {
             if (TrySelectBestGoalPass(
                 snapshot,
+                character,
                 registry,
                 settings,
                 abandonStrandedIslands: true,
@@ -87,6 +90,7 @@ namespace DiceGame.Gameplay.AI.Domain
 
             return TrySelectBestGoalPass(
                 snapshot,
+                character,
                 registry,
                 settings,
                 abandonStrandedIslands: false,
@@ -96,6 +100,7 @@ namespace DiceGame.Gameplay.AI.Domain
 
         static bool TrySelectBestGoalPass(
             GameStateSnapshot snapshot,
+            CharacterController character,
             DiceRegistry registry,
             AiPlayerSettings settings,
             bool abandonStrandedIslands,
@@ -111,6 +116,7 @@ namespace DiceGame.Gameplay.AI.Domain
                     var cluster = clusters[i];
                     var goal = BuildGoalForCluster(
                         snapshot,
+                        character,
                         face,
                         cluster,
                         registry,
@@ -136,6 +142,7 @@ namespace DiceGame.Gameplay.AI.Domain
 
         static MatchGoal BuildGoalForChain(
             GameStateSnapshot snapshot,
+            CharacterController character,
             int face,
             DiceRegistry registry,
             AiPlayerSettings settings) {
@@ -176,20 +183,14 @@ namespace DiceGame.Gameplay.AI.Domain
                 sinkingDice,
                 face,
                 snapshot,
+                character,
                 settings,
                 preferChain: true,
                 registry,
-                out var workDie)
-                && registry != null
-                && SinkingChainEvaluator.TrySelectChainJoinTargetCell(
-                    face,
-                    snapshot.PlanningDice,
-                    workDie,
-                    registry,
-                    snapshot.VersusLayout,
-                    snapshot.PlayerSlot,
-                    out var joinCell,
-                    out var joinTier)) {
+                out var workDie,
+                out var joinCell,
+                out var joinTier,
+                out var pathLength)) {
                 var subGoals = new List<AiSubGoal>();
                 if (!IsStandingOnDice(snapshot, workDie.Controller)) {
                     subGoals.Add(AiSubGoal.ReachWorkDie(workDie.Controller));
@@ -201,12 +202,11 @@ namespace DiceGame.Gameplay.AI.Domain
 
                 subGoals.Add(AiSubGoal.JoinCluster(workDie.Controller, face, joinCell, joinTier));
 
-                var distanceToWorkDie = DiceBoardAnalyzer.ManhattanDistance(snapshot.PlayerCell, workDie.GridPos);
                 var score = ScoreChainGoal(
                     sinkingDice,
                     face,
                     snapshot.PlanningDice,
-                    distanceToWorkDie,
+                    pathLength,
                     settings);
 
                 return new MatchGoal(
@@ -318,6 +318,7 @@ namespace DiceGame.Gameplay.AI.Domain
 
         static MatchGoal BuildGoalForCluster(
             GameStateSnapshot snapshot,
+            CharacterController character,
             int face,
             List<DiceSnapshot> cluster,
             DiceRegistry registry,
@@ -379,20 +380,14 @@ namespace DiceGame.Gameplay.AI.Domain
                 cluster,
                 face,
                 snapshot,
+                character,
                 settings,
                 preferChain: false,
                 registry,
-                out var workDie)
-                && registry != null
-                && WorkDieSlidePlanner.TrySelectJoinTargetCell(
-                    cluster,
-                    workDie,
-                    snapshot.PlanningDice,
-                    registry,
-                    snapshot.VersusLayout,
-                    snapshot.PlayerSlot,
-                    out var joinCell,
-                    out var joinTier)) {
+                out var workDie,
+                out var joinCell,
+                out var joinTier,
+                out var pathLength)) {
                 var subGoals = new List<AiSubGoal>();
                 if (!IsStandingOnDice(snapshot, workDie.Controller)) {
                     subGoals.Add(AiSubGoal.ReachWorkDie(workDie.Controller));
@@ -404,13 +399,12 @@ namespace DiceGame.Gameplay.AI.Domain
 
                 subGoals.Add(AiSubGoal.JoinCluster(workDie.Controller, face, joinCell, joinTier));
 
-                var distanceToWorkDie = DiceBoardAnalyzer.ManhattanDistance(snapshot.PlayerCell, workDie.GridPos);
                 var score = ClusterSelectionEvaluator.ScoreCluster(
                     cluster,
                     face,
                     snapshot.PlanningDice,
                     snapshot.PlayerCell,
-                    distanceToWorkDie,
+                    pathLength,
                     settings);
 
                 return new MatchGoal(
@@ -429,26 +423,101 @@ namespace DiceGame.Gameplay.AI.Domain
             List<DiceSnapshot> cluster,
             int face,
             GameStateSnapshot snapshot,
+            CharacterController character,
             AiPlayerSettings settings,
             bool preferChain,
             DiceRegistry registry,
-            out DiceSnapshot workDie) {
+            out DiceSnapshot workDie,
+            out Vector2Int joinCell,
+            out DiceStackTier joinTier,
+            out int pathLength) {
+            workDie = default;
+            joinCell = default;
+            joinTier = default;
+            pathLength = int.MaxValue;
+            if (registry == null || cluster == null || cluster.Count == 0) {
+                return false;
+            }
+
+            var constraints = AiReachExternalWorkDieNavigation.ResolveConstraints(snapshot, cluster, face);
+            // Slide-join Reach requires verified stand-on path; without nav query do not guess by Manhattan.
+            if (!AiWorkDieReachContext.TryCreate(character, settings, constraints, out var createdReach)) {
+                return false;
+            }
+
+            AiWorkDieReachContext? reachContext = createdReach;
+
+            ClusterSelectionEvaluator.WorkDieJoinSlotPredicate joinSlotAvailable = preferChain
+                ? candidate => SinkingChainEvaluator.TrySelectChainJoinTargetCell(
+                    face,
+                    snapshot.PlanningDice,
+                    candidate,
+                    registry,
+                    snapshot.VersusLayout,
+                    snapshot.PlayerSlot,
+                    out _,
+                    out _)
+                : candidate => WorkDieSlidePlanner.TrySelectJoinTargetCell(
+                    cluster,
+                    candidate,
+                    snapshot.PlanningDice,
+                    registry,
+                    snapshot.VersusLayout,
+                    snapshot.PlayerSlot,
+                    out _,
+                    out _);
+
             // Same-face first (Lift already failed): slide-join without Orient.
-            if (ClusterSelectionEvaluator.TrySelectNearestExternalDie(
+            if (TrySelectExternalWorkDiePass(
                 cluster,
                 face,
-                snapshot.PlanningDice,
-                snapshot.PlayerCell,
+                snapshot,
                 settings,
                 preferChain,
-                out workDie,
                 registry,
-                requireMatchingTopFace: true)
-                && workDie.Controller != null) {
+                requireMatchingTopFace: true,
+                reachContext,
+                joinSlotAvailable,
+                out workDie,
+                out joinCell,
+                out joinTier,
+                out pathLength)) {
                 return true;
             }
 
-            return ClusterSelectionEvaluator.TrySelectNearestExternalDie(
+            return TrySelectExternalWorkDiePass(
+                cluster,
+                face,
+                snapshot,
+                settings,
+                preferChain,
+                registry,
+                requireMatchingTopFace: false,
+                reachContext,
+                joinSlotAvailable,
+                out workDie,
+                out joinCell,
+                out joinTier,
+                out pathLength);
+        }
+
+        static bool TrySelectExternalWorkDiePass(
+            List<DiceSnapshot> cluster,
+            int face,
+            GameStateSnapshot snapshot,
+            AiPlayerSettings settings,
+            bool preferChain,
+            DiceRegistry registry,
+            bool requireMatchingTopFace,
+            AiWorkDieReachContext? reachContext,
+            ClusterSelectionEvaluator.WorkDieJoinSlotPredicate joinSlotAvailable,
+            out DiceSnapshot workDie,
+            out Vector2Int joinCell,
+            out DiceStackTier joinTier,
+            out int pathLength) {
+            joinCell = default;
+            joinTier = default;
+            if (!ClusterSelectionEvaluator.TrySelectNearestExternalDie(
                 cluster,
                 face,
                 snapshot.PlanningDice,
@@ -456,9 +525,36 @@ namespace DiceGame.Gameplay.AI.Domain
                 settings,
                 preferChain,
                 out workDie,
+                out pathLength,
                 registry,
-                requireMatchingTopFace: false)
-                && workDie.Controller != null;
+                requireMatchingTopFace,
+                reachContext,
+                joinSlotAvailable)
+                || workDie.Controller == null) {
+                return false;
+            }
+
+            if (preferChain) {
+                return SinkingChainEvaluator.TrySelectChainJoinTargetCell(
+                    face,
+                    snapshot.PlanningDice,
+                    workDie,
+                    registry,
+                    snapshot.VersusLayout,
+                    snapshot.PlayerSlot,
+                    out joinCell,
+                    out joinTier);
+            }
+
+            return WorkDieSlidePlanner.TrySelectJoinTargetCell(
+                cluster,
+                workDie,
+                snapshot.PlanningDice,
+                registry,
+                snapshot.VersusLayout,
+                snapshot.PlayerSlot,
+                out joinCell,
+                out joinTier);
         }
 
         static MatchGoal BuildLiftJoinGoal(

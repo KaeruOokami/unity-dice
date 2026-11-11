@@ -26,14 +26,41 @@ namespace DiceGame.Gameplay.AI.Domain
 
     public static class WorkDieSlidePlanner
     {
+        /// <summary>
+        /// Join succeeds when the work die shares the goal face and is match-adjacent
+        /// to any live member of the target cluster (planned landing cell is irrelevant).
+        /// </summary>
         public static bool IsJoinComplete(
             DiceState state,
-            Vector2Int targetCell,
-            DiceStackTier targetTier,
+            IReadOnlyList<DiceSnapshot> cluster,
             int targetFace) {
-            return state.GridPos == targetCell
-                && state.Tier == targetTier
-                && state.Orientation.Top == targetFace;
+            if (cluster == null || cluster.Count == 0) {
+                return false;
+            }
+
+            if (state.Orientation.Top != targetFace) {
+                return false;
+            }
+
+            var workSlot = new DiceSlot(state.GridPos, state.Tier);
+            for (var i = 0; i < cluster.Count; i++) {
+                var controller = cluster[i].Controller;
+                if (controller == null) {
+                    continue;
+                }
+
+                var memberState = controller.CurrentState;
+                if (memberState.Orientation.Top != targetFace) {
+                    continue;
+                }
+
+                var memberSlot = new DiceSlot(memberState.GridPos, memberState.Tier);
+                if (DiceStackAdjacency.IsAdjacentForMatch(workSlot, memberSlot)) {
+                    return true;
+                }
+            }
+
+            return false;
         }
 
         public static bool IsJoinLandingAvailable(

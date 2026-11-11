@@ -28,11 +28,23 @@ namespace DiceGame.Gameplay.AI.Domain
                 return true;
             }
 
+            // Sink-specific preference: skip remount onto ghost sinks in the protected cluster.
+            // Solid sinks and other occupied dice use the normal HeightTransfer / JumpRoll paths.
             if (transition.Kind == MovementTransitionKind.Walkable) {
-                return true;
+                return !IsProtectedClusterGhostRemount(ProtectedCluster, transition.TargetDice);
             }
 
             return !WouldMoveProtectedClusterDice(ProtectedCluster, transition, fromState);
+        }
+
+        static bool IsProtectedClusterGhostRemount(
+            IReadOnlyList<DiceSnapshot> protectedCluster,
+            DiceController landingDice) {
+            if (landingDice == null || !landingDice.IsErasureGhost) {
+                return false;
+            }
+
+            return ClusterSelectionEvaluator.ClusterContainsController(protectedCluster, landingDice);
         }
 
         static bool WouldMoveProtectedClusterDice(

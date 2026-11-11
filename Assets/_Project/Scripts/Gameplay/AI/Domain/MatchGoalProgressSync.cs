@@ -32,8 +32,7 @@ namespace DiceGame.Gameplay.AI.Domain
                         if (subGoal.TargetDie != null
                             && WorkDieSlidePlanner.IsJoinComplete(
                                 subGoal.TargetDie.CurrentState,
-                                subGoal.TargetCell,
-                                subGoal.TargetTier,
+                                goal.ClusterDice,
                                 subGoal.TargetFace)) {
                             subGoal.MarkComplete();
                         }

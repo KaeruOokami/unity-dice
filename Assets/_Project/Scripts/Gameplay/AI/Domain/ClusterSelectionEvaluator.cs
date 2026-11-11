@@ -186,6 +186,8 @@ namespace DiceGame.Gameplay.AI.Domain
             return best;
         }
 
+        public delegate bool WorkDieJoinSlotPredicate(DiceSnapshot candidate);
+
         public static bool TrySelectNearestExternalDie(
             List<DiceSnapshot> cluster,
             int clusterFace,
@@ -194,12 +196,17 @@ namespace DiceGame.Gameplay.AI.Domain
             AiPlayerSettings settings,
             bool preferChain,
             out DiceSnapshot workDie,
+            out int pathLength,
             IDicePlacement placement = null,
-            bool requireMatchingTopFace = false) {
+            bool requireMatchingTopFace = false,
+            AiWorkDieReachContext? reachContext = null,
+            WorkDieJoinSlotPredicate joinSlotAvailable = null) {
             workDie = default;
+            pathLength = int.MaxValue;
             var bestScore = float.MinValue;
             var found = false;
             var clusterCells = GetClusterCells(cluster);
+            var playerDistancePenalty = settings != null ? settings.PlayerDistancePenalty : 1f;
 
             for (var i = 0; i < allDice.Count; i++) {
                 var candidate = allDice[i];
@@ -232,9 +239,27 @@ namespace DiceGame.Gameplay.AI.Domain
                     continue;
                 }
 
+                if (joinSlotAvailable != null && !joinSlotAvailable(candidate)) {
+                    continue;
+                }
+
                 var distanceToCluster = GetDistanceToCluster(candidate.GridPos, cluster);
                 var distanceToPlayer = DiceBoardAnalyzer.ManhattanDistance(playerCell, candidate.GridPos);
+                var candidatePathLength = distanceToPlayer;
                 var score = -distanceToCluster * 10f - distanceToPlayer;
+
+                if (reachContext.HasValue && reachContext.Value.IsValid) {
+                    if (!AiMountFeasibility.CanStandOnDie(
+                        reachContext.Value,
+                        candidate.Controller,
+                        allDice,
+                        out candidatePathLength)) {
+                        continue;
+                    }
+
+                    // Prefer true stand-on path length over Manhattan when available.
+                    score = -candidatePathLength * playerDistancePenalty - distanceToCluster * 10f;
+                }
 
                 if (preferChain && settings != null) {
                     var sinkingDistance = SinkingChainEvaluator.GetMinDistanceToSinkingSameFace(
@@ -249,11 +274,35 @@ namespace DiceGame.Gameplay.AI.Domain
                 if (score > bestScore) {
                     bestScore = score;
                     workDie = candidate;
+                    pathLength = candidatePathLength;
                     found = true;
                 }
             }
 
             return found;
+        }
+
+        public static bool TrySelectNearestExternalDie(
+            List<DiceSnapshot> cluster,
+            int clusterFace,
+            IReadOnlyList<DiceSnapshot> allDice,
+            Vector2Int playerCell,
+            AiPlayerSettings settings,
+            bool preferChain,
+            out DiceSnapshot workDie,
+            IDicePlacement placement = null,
+            bool requireMatchingTopFace = false) {
+            return TrySelectNearestExternalDie(
+                cluster,
+                clusterFace,
+                allDice,
+                playerCell,
+                settings,
+                preferChain,
+                out workDie,
+                out _,
+                placement,
+                requireMatchingTopFace);
         }
 
         public static bool IsStandableWorkDie(

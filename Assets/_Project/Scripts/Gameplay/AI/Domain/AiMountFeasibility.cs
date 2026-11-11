@@ -22,6 +22,49 @@ namespace DiceGame.Gameplay.AI.Domain
             int maxSearchSteps,
             bool allowJump,
             IReadOnlyList<DiceSnapshot> planningDice = null) {
+            return TryMeasureStandOnDie(
+                passability,
+                start,
+                footingWorldY,
+                movementOwner,
+                targetDie,
+                maxSearchSteps,
+                allowJump,
+                AiNavigationConstraints.None,
+                planningDice,
+                out _);
+        }
+
+        public static bool CanStandOnDie(
+            in AiWorkDieReachContext reach,
+            DiceController targetDie,
+            IReadOnlyList<DiceSnapshot> planningDice,
+            out int pathLength) {
+            return TryMeasureStandOnDie(
+                reach.Passability,
+                reach.Start,
+                reach.FootingWorldY,
+                reach.MovementOwner,
+                targetDie,
+                reach.MaxSearchSteps,
+                reach.AllowJump,
+                reach.Constraints,
+                planningDice,
+                out pathLength);
+        }
+
+        public static bool TryMeasureStandOnDie(
+            MovementTransitionEvaluator passability,
+            AiNavigationState start,
+            float footingWorldY,
+            PlayerSlot movementOwner,
+            DiceController targetDie,
+            int maxSearchSteps,
+            bool allowJump,
+            AiNavigationConstraints constraints,
+            IReadOnlyList<DiceSnapshot> planningDice,
+            out int pathLength) {
+            pathLength = int.MaxValue;
             if (passability == null || targetDie == null) {
                 return false;
             }
@@ -34,6 +77,7 @@ namespace DiceGame.Gameplay.AI.Domain
             }
 
             if (start.StandingDice == targetDie) {
+                pathLength = 0;
                 return true;
             }
 
@@ -41,10 +85,15 @@ namespace DiceGame.Gameplay.AI.Domain
             if (start.StandingDice == null
                 && start.Level == SurfaceHeightLevel.Floor
                 && start.Cell == targetDie.CurrentState.GridPos) {
-                return targetDie.AllowsUnconditionalMount
+                if (targetDie.AllowsUnconditionalMount
                     || ClusterSelectionEvaluator.IsStandableWorkDie(
                         new DiceSnapshot(targetDie),
-                        planningDice);
+                        planningDice)) {
+                    pathLength = 0;
+                    return true;
+                }
+
+                return false;
             }
 
             if (TryFindDirectMountStep(
@@ -54,6 +103,7 @@ namespace DiceGame.Gameplay.AI.Domain
                 movementOwner,
                 targetDie,
                 allowJump)) {
+                pathLength = 1;
                 return true;
             }
 
@@ -61,17 +111,22 @@ namespace DiceGame.Gameplay.AI.Domain
                 return false;
             }
 
-            return AiCellPathfinder.TryFindFirstStep(
+            if (!AiCellPathfinder.TryFindFirstStep(
                 passability,
                 start,
                 targetDie.CurrentState.GridPos,
                 footingWorldY,
                 movementOwner,
                 maxSearchSteps,
-                AiNavigationConstraints.None,
+                constraints,
+                out var step,
                 out _,
-                out _,
-                targetDie);
+                targetDie)) {
+                return false;
+            }
+
+            pathLength = step.PathLength;
+            return true;
         }
 
         static bool TryFindDirectMountStep(

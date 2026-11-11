@@ -242,14 +242,12 @@ namespace DiceGame.Gameplay.AI.Domain
 
             if (ParticipantTarget == null
                 || ParticipantTarget.IsSpawning
-                || ParticipantTarget.IsErasing
-                || ParticipantTarget.IsSinkErasing) {
+                || ParticipantTarget.IsErasing) {
                 return true;
             }
 
-            if (snapshot.StandingDice != null && snapshot.StandingDice.IsSinkErasing) {
-                return true;
-            }
+            // Sink footing / sink work die must not force goal discard by themselves.
+            // Escape / FloorRecovery keep the goal; reselect only when planning cannot find a path.
 
             // Keep carrying goals only while the planned place cell is orthogonally adjacent.
             if (snapshot.PlayerIsCarrying && HasIncompleteSubGoalOfKind(AiSubGoalKind.PlaceCarriedDie)) {

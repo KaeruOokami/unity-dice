@@ -121,12 +121,18 @@ namespace DiceGame.Gameplay.AI.Application.Actions
             var rollStepSettled = IsGroundRollEdge() && atStepCell;
 
             if (purpose == MoveActionPurpose.StandOnDie) {
-                // Mount only: cell arrival while on another die is not success.
-                // Center snap is not required once mounted on the target die.
+                // Final mount: standing on the target die at the planned step cell.
                 if (standOnDie != null
                     && context.Character.CurrentDice == standOnDie
                     && atStepCell) {
                     reason = "StandOnDie";
+                    return true;
+                }
+
+                // Intermediate BFS steps: arriving at nextCell is success; brain keeps the
+                // same goal and re-plans the next step.
+                if (rollStepSettled || atStepCenter) {
+                    reason = "ReachedStepCell";
                     return true;
                 }
 

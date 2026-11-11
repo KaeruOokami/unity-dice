@@ -251,6 +251,19 @@ namespace DiceGame.Gameplay.AI.Domain
                     continue;
                 }
 
+                if (passability == null || !navigationState.HasValue) {
+                    continue;
+                }
+
+                var reachContext = new AiWorkDieReachContext(
+                    passability,
+                    navigationState.Value,
+                    footingWorldY,
+                    movementOwner,
+                    maxSearchSteps,
+                    settings.AllowJump,
+                    AiNavigationConstraints.None);
+
                 if (!ClusterSelectionEvaluator.TrySelectNearestExternalDie(
                     candidateGroup,
                     face,
@@ -258,29 +271,16 @@ namespace DiceGame.Gameplay.AI.Domain
                     snapshot.PlayerCell,
                     settings,
                     preferChain: true,
-                    out var candidateWorkDie)
+                    out var candidateWorkDie,
+                    out var pathLength,
+                    reachContext: reachContext)
                     || candidateWorkDie.Controller == null) {
                     continue;
                 }
 
-                // Require mount/path feasibility before committing to walk there.
-                if (passability == null || !navigationState.HasValue) {
-                    continue;
-                }
-
-                if (!AiMountFeasibility.CanStandOnDie(
-                    passability,
-                    navigationState.Value,
-                    footingWorldY,
-                    movementOwner,
-                    candidateWorkDie.Controller,
-                    maxSearchSteps,
-                    settings.AllowJump,
-                    snapshot.PlanningDice)) {
-                    continue;
-                }
-
-                var distance = DiceBoardAnalyzer.ManhattanDistance(snapshot.PlayerCell, candidateWorkDie.GridPos);
+                var distance = pathLength < int.MaxValue
+                    ? pathLength
+                    : DiceBoardAnalyzer.ManhattanDistance(snapshot.PlayerCell, candidateWorkDie.GridPos);
                 var score = candidateGroup.Count * settings.ClusterSizeWeight
                     + settings.SinkingChainBonus
                     - distance * settings.PlayerDistancePenalty;

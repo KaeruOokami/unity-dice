@@ -114,20 +114,13 @@ namespace DiceGame.Gameplay.AI.Domain
                 }
             }
 
-            var strandedOnProtectedCluster = avoidClusterCells
-                && goal.ClusterDice != null
-                && ClusterSelectionEvaluator.IsStandingOnCluster(snapshot, goal.ClusterDice)
-                && snapshot.StandingDice != null
-                && !snapshot.StandingDice.IsSinkErasing
-                && !AiFloorRecoveryPlanner.HasAdjacentClusterExternalDie(
+            var constraints = avoidClusterCells
+                ? AiReachExternalWorkDieNavigation.ResolveConstraints(
+                    snapshot,
                     goal.ClusterDice,
-                    goal.Face,
-                    snapshot.PlanningDice);
-
-            var constraints = avoidClusterCells && !strandedOnProtectedCluster
-                ? AiNavigationConstraints.ForClusterProtection(goal.ClusterDice)
+                    goal.Face)
                 : AiNavigationConstraints.None;
-            if (strandedOnProtectedCluster) {
+            if (avoidClusterCells && constraints.ProtectedCluster == null) {
                 Application.AiDebugLog.Log(
                     $"ReachWorkDie allow-cluster-roll player={snapshot.PlayerCell} " +
                     $"standOn={(snapshot.StandingDice != null ? snapshot.StandingDice.name : "none")} " +
@@ -158,31 +151,8 @@ namespace DiceGame.Gameplay.AI.Domain
                 return null;
             }
 
-            var standingOnOtherDie = snapshot.StandingDice != null
-                && snapshot.StandingDice != targetDie;
-            var needsClimb = RequiresJumpToStandOn(snapshot, targetDie);
-
-            if (needsClimb && standingOnOtherDie) {
-                if (TryBuildLeaveCellAction(
-                    snapshot,
-                    character,
-                    settings,
-                    snapshot.PlayerCell,
-                    out var leaveAction)) {
-                    Application.AiDebugLog.Log(
-                        $"ReachClimbLeave from={snapshot.PlayerCell} " +
-                        $"standOn={snapshot.StandingDice.name} target={targetDie.name} " +
-                        $"targetTier={targetDie.CurrentState.Tier}");
-                    return leaveAction;
-                }
-
-                Application.AiDebugLog.Log(
-                    $"ReachClimbBlocked from={snapshot.PlayerCell} " +
-                    $"standOn={snapshot.StandingDice.name} target={targetDie.name} " +
-                    $"targetTier={targetDie.CurrentState.Tier} reason=no-leave");
-                return null;
-            }
-
+            // Leave-to-climb is not a separate policy: BFS toward the target die yields the
+            // same first step (often walking off the current footing) without sink-blind leave.
             var preferJump = settings == null || settings.AllowJump;
 
             return SelectMovementAction(
@@ -482,8 +452,7 @@ namespace DiceGame.Gameplay.AI.Domain
             var state = die.CurrentState;
             if (WorkDieSlidePlanner.IsJoinComplete(
                 state,
-                subGoal.TargetCell,
-                subGoal.TargetTier,
+                goal.ClusterDice,
                 subGoal.TargetFace)) {
                 subGoal.MarkComplete();
                 return null;
@@ -498,8 +467,7 @@ namespace DiceGame.Gameplay.AI.Domain
 
             if (WorkDieSlidePlanner.IsJoinComplete(
                 state,
-                subGoal.TargetCell,
-                subGoal.TargetTier,
+                goal.ClusterDice,
                 subGoal.TargetFace)) {
                 subGoal.MarkComplete();
                 return null;
@@ -543,6 +511,14 @@ namespace DiceGame.Gameplay.AI.Domain
                 state = die.CurrentState;
                 subGoal.TryAdvanceJoinSlideStep(state);
 
+                if (WorkDieSlidePlanner.IsJoinComplete(
+                    state,
+                    goal.ClusterDice,
+                    subGoal.TargetFace)) {
+                    subGoal.MarkComplete();
+                    return null;
+                }
+
                 if (!subGoal.HasJoinSlidePlan && state.Orientation.Top != subGoal.TargetFace) {
                     return BuildOrientAction(goal, subGoal, snapshot, character, registry, settings);
                 }
@@ -575,8 +551,7 @@ namespace DiceGame.Gameplay.AI.Domain
                     state = die.CurrentState;
                     if (WorkDieSlidePlanner.IsJoinComplete(
                         state,
-                        subGoal.TargetCell,
-                        subGoal.TargetTier,
+                        goal.ClusterDice,
                         subGoal.TargetFace)) {
                         subGoal.MarkComplete();
                     }
@@ -704,8 +679,7 @@ namespace DiceGame.Gameplay.AI.Domain
 
             if (WorkDieSlidePlanner.IsJoinComplete(
                 state,
-                subGoal.TargetCell,
-                subGoal.TargetTier,
+                goal.ClusterDice,
                 subGoal.TargetFace)) {
                 subGoal.SetJoinSlidePlan(
                     new WorkDieSlidePlan(state.GridPos, state.Orientation, new List<Direction>()));

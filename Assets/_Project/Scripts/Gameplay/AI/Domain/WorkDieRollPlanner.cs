@@ -62,15 +62,13 @@ namespace DiceGame.Gameplay.AI.Domain
                 workDie,
                 groundContext);
 
-            // Non-ghost sink on the landing cell: Bottom→Top stack entry is jump-only.
-            var landingNeedsJumpOntoNonGhostSink = IsNonGhostSinkOccupant(groundTransition);
-
-            if (!landingNeedsJumpOntoNonGhostSink
-                && TryResolveGroundRoll(
-                    groundTransition,
-                    landingCell,
-                    out var groundLandingTier,
-                    out var groundEdgeKind)) {
+            // Occupied cell (including solid sink): ground grid roll cannot ascend; JumpRoll stacks Top.
+            // No sink-specific branch — same as any occupied Bottom.
+            if (TryResolveGroundRoll(
+                groundTransition,
+                landingCell,
+                out var groundLandingTier,
+                out var groundEdgeKind)) {
                 step = new WorkDieRollStep(
                     direction,
                     landingCell,
@@ -84,9 +82,8 @@ namespace DiceGame.Gameplay.AI.Domain
                 return false;
             }
 
-            // Ground already resolved a dice grid move (CanRoll / TopFall). Do not escalate to JumpRoll
-            // unless that landing is a non-ghost sink (jump-only stack entry).
-            if (groundTransition.HasDiceGridMovePlan && !landingNeedsJumpOntoNonGhostSink) {
+            // Ground already resolved a dice grid move (CanRoll / TopFall). Do not escalate to JumpRoll.
+            if (groundTransition.HasDiceGridMovePlan) {
                 return false;
             }
 
@@ -108,12 +105,6 @@ namespace DiceGame.Gameplay.AI.Domain
             }
 
             return false;
-        }
-
-        static bool IsNonGhostSinkOccupant(MovementTransition transition) {
-            return transition.TargetDice != null
-                && transition.TargetDice.IsSinkErasing
-                && !transition.TargetDice.IsErasureGhost;
         }
 
         public static bool TryResolveGroundRoll(
