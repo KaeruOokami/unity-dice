@@ -188,4 +188,55 @@ namespace DiceGame.Core
             sinkingMatchWeightPerTier: JumboFootprint.MatchWeightPerTierWhileErasing,
             participatesInBothTiersWhileSinking: true);
     }
+
+    /// <summary>
+    /// Pushable but not grid-rollable. Produced when wood fire extinguishes.
+    /// </summary>
+    public sealed class CharcoalDiceBehavior : DiceBehaviorBase
+    {
+        public static readonly CharcoalDiceBehavior Instance = new();
+
+        CharcoalDiceBehavior() {
+        }
+
+        public override DiceKind Kind => DiceKind.Charcoal;
+
+        public override DiceCapabilities Capabilities { get; } = new(
+            canBePushedByPlayer: true,
+            canBeLiftedByPlayer: true,
+            canJumpCoupleWithPlayer: false,
+            pushUsesRoll: false,
+            canGridRoll: false,
+            slideUntilBlocked: false,
+            hasMagnetCoupling: false,
+            hasSpawnBounce: true,
+            rollDurationMultiplier: DiceBehaviorConstants.DefaultRollDurationMultiplier);
+    }
+
+    /// <summary>
+    /// Immovable like iron, but does not block adjacent magnets. Stuns standing players.
+    /// </summary>
+    public sealed class RedHotDiceBehavior : DiceBehaviorBase
+    {
+        public static readonly RedHotDiceBehavior Instance = new();
+
+        RedHotDiceBehavior() {
+        }
+
+        public override DiceKind Kind => DiceKind.RedHot;
+
+        public override DiceCapabilities Capabilities { get; } = new(
+            canBePushedByPlayer: false,
+            canBeLiftedByPlayer: false,
+            canJumpCoupleWithPlayer: false,
+            pushUsesRoll: false,
+            canGridRoll: false,
+            slideUntilBlocked: false,
+            hasMagnetCoupling: false,
+            hasSpawnBounce: false,
+            rollDurationMultiplier: DiceBehaviorConstants.DefaultRollDurationMultiplier,
+            blocksAdjacentMagnet: false,
+            crushesPlayerOnCover: true,
+            stunsStandingPlayer: true);
+    }
 }

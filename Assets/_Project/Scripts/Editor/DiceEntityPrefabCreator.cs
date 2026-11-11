@@ -11,18 +11,20 @@ namespace DiceGame.Editor
     public static class DiceEntityPrefabCreator
     {
         const string DiceVisualPrefabPath = "Assets/Packages/Dice_6/Prefabs/Dice_d6_Plastic Glossy Pure blue.prefab";
-        const string NormalDicePrefabPath = "Assets/_Project/Prefabs/Normal Dice.prefab";
-        const string DiceEntityPrefabPath = "Assets/_Project/Prefabs/DiceEntity.prefab";
+        const string NormalDicePrefabPath = "Assets/_Project/Prefabs/Dice/Normal Dice.prefab";
+        const string DiceEntityPrefabPath = "Assets/_Project/Prefabs/Dice/DiceEntity.prefab";
         const string CharacterPrefabPath = "Assets/_Project/Prefabs/Character.prefab";
         const string DiceSpawnSettingsPath = "Assets/_Project/Settings/Gameplay/DiceSpawnSettings.asset";
         const string DiceCatalogPath = "Assets/_Project/Settings/Gameplay/DiceCatalog/SharedDiceCatalog.asset";
 
-        const string WoodDicePrefabPath = "Assets/_Project/Prefabs/Wood Dice.prefab";
-        const string IronDicePrefabPath = "Assets/_Project/Prefabs/Iron Dice.prefab";
-        const string MagnetDicePrefabPath = "Assets/_Project/Prefabs/Magnet Dice.prefab";
-        const string IceDicePrefabPath = "Assets/_Project/Prefabs/Ice Dice.prefab";
-        const string StoneDicePrefabPath = "Assets/_Project/Prefabs/Stone Dice.prefab";
-        const string GhostDicePrefabPath = "Assets/_Project/Prefabs/Ghost Dice.prefab";
+        const string WoodDicePrefabPath = "Assets/_Project/Prefabs/Dice/Wood Dice.prefab";
+        const string IronDicePrefabPath = "Assets/_Project/Prefabs/Dice/Iron Dice.prefab";
+        const string MagnetDicePrefabPath = "Assets/_Project/Prefabs/Dice/Magnet Dice.prefab";
+        const string IceDicePrefabPath = "Assets/_Project/Prefabs/Dice/Ice Dice.prefab";
+        const string StoneDicePrefabPath = "Assets/_Project/Prefabs/Dice/Stone Dice.prefab";
+        const string GhostDicePrefabPath = "Assets/_Project/Prefabs/Dice/Ghost Dice.prefab";
+        const string CharcoalDicePrefabPath = "Assets/_Project/Prefabs/Dice/Coal Dice.prefab";
+        const string RedHotDicePrefabPath = "Assets/_Project/Prefabs/Dice/Red Hot Dice.prefab";
 
         [MenuItem("Dice/Create DiceEntity Prefab")]
         public static void CreateDiceEntityPrefab() {
@@ -84,7 +86,7 @@ namespace DiceGame.Editor
             var catalog = ScriptableObject.CreateInstance<DiceCatalog>();
             var serialized = new SerializedObject(catalog);
             var entries = serialized.FindProperty("entries");
-            entries.arraySize = 8;
+            entries.arraySize = 10;
             SetCatalogEntry(entries, 0, DiceKind.Normal, NormalDicePrefabPath, 5f);
             SetCatalogEntry(entries, 1, DiceKind.Wood, WoodDicePrefabPath, 2f);
             SetCatalogEntry(entries, 2, DiceKind.Iron, IronDicePrefabPath, 1f);
@@ -93,6 +95,8 @@ namespace DiceGame.Editor
             SetCatalogEntry(entries, 5, DiceKind.Stone, StoneDicePrefabPath, 1.5f);
             SetCatalogEntry(entries, 6, DiceKind.Ghost, GhostDicePrefabPath, 1f);
             SetCatalogEntry(entries, 7, DiceKind.Jumbo, NormalDicePrefabPath, 0f);
+            SetCatalogEntry(entries, 8, DiceKind.Charcoal, CharcoalDicePrefabPath, 0f);
+            SetCatalogEntry(entries, 9, DiceKind.RedHot, RedHotDicePrefabPath, 0f);
             serialized.ApplyModifiedPropertiesWithoutUndo();
 
             AssetDatabase.CreateAsset(catalog, DiceCatalogPath);

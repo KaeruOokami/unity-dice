@@ -29,6 +29,7 @@ namespace DiceGame.Gameplay
         DiceFireSettings fireSettings;
         float fireStunRemaining;
         DiceController fireStunStandingDice;
+        DiceController standingStunImmunityDice;
         Vector2Int fireStunStandingCell;
         DiceStackTier fireStunStandingTier;
 
@@ -646,9 +647,16 @@ namespace DiceGame.Gameplay
                 return;
             }
 
-            if (!standingController.TryGetStandingDice(out var standing)
-                || standing == null
-                || !standing.IsOnFire) {
+            if (!standingController.TryGetStandingDice(out var standing) || standing == null) {
+                standingStunImmunityDice = null;
+                return;
+            }
+
+            if (standing != standingStunImmunityDice) {
+                standingStunImmunityDice = null;
+            }
+
+            if (standing == standingStunImmunityDice || !ShouldStunFromStanding(standing)) {
                 return;
             }
 
@@ -657,6 +665,11 @@ namespace DiceGame.Gameplay
             fireStunStandingCell = standing.CurrentState.GridPos;
             fireStunStandingTier = standing.CurrentState.Tier;
             currentSpeed = 0f;
+        }
+
+        static bool ShouldStunFromStanding(DiceController standing) {
+            return standing != null
+                && (standing.IsOnFire || standing.Capabilities.StunsStandingPlayer);
         }
 
         bool HasFireStunSupportMovedOrGone() {
@@ -678,9 +691,19 @@ namespace DiceGame.Gameplay
                 && fireStunStandingDice != null
                 && standingController != null
                 && standingController.TryGetStandingDice(out var standing)
-                && standing == fireStunStandingDice
-                && standing.IsOnFire) {
-                standing.ExtinguishFire();
+                && standing == fireStunStandingDice) {
+                // Early fire clear: no burn-aftermath Kind change.
+                if (standing.IsOnFire) {
+                    standing.ExtinguishFire(applyBurnAftermath: false);
+                }
+
+                // RedHot cool-complete via stun (same path as timer expiry).
+                standing.TryCoolRedHotToIron();
+
+                // If still stunning (e.g. still on fire somehow), require leave before re-arm.
+                if (ShouldStunFromStanding(standing)) {
+                    standingStunImmunityDice = standing;
+                }
             }
 
             fireStunRemaining = 0f;

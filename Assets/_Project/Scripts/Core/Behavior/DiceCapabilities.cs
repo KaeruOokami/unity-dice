@@ -70,6 +70,10 @@ namespace DiceGame.Core
         /// While sink-erasing, participate in both Bottom and Top match layers.
         /// </summary>
         public bool ParticipatesInBothTiersWhileSinking { get; }
+        /// <summary>
+        /// Standing on this die stuns the player (same contact path as standing on fire).
+        /// </summary>
+        public bool StunsStandingPlayer { get; }
 
         public DiceCapabilities(
             bool canBePushedByPlayer,
@@ -99,7 +103,8 @@ namespace DiceGame.Core
             bool blocksJumpLandingSinkAdvance = false,
             float sinkDurationMultiplier = 1f,
             int sinkingMatchWeightPerTier = 0,
-            bool participatesInBothTiersWhileSinking = false) {
+            bool participatesInBothTiersWhileSinking = false,
+            bool stunsStandingPlayer = false) {
             CanBePushedByPlayer = canBePushedByPlayer;
             CanBeLiftedByPlayer = canBeLiftedByPlayer;
             CanJumpCoupleWithPlayer = canJumpCoupleWithPlayer;
@@ -128,6 +133,7 @@ namespace DiceGame.Core
             SinkDurationMultiplier = sinkDurationMultiplier <= 0f ? 1f : sinkDurationMultiplier;
             SinkingMatchWeightPerTier = sinkingMatchWeightPerTier;
             ParticipatesInBothTiersWhileSinking = participatesInBothTiersWhileSinking;
+            StunsStandingPlayer = stunsStandingPlayer;
         }
 
         public int GetEffectiveMaxJumpGridMoveDistance() {

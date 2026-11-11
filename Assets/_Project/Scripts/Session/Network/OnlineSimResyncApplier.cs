@@ -165,7 +165,11 @@ namespace DiceGame.Session.Network
             }
 
             if (!entity.IsOnFire) {
-                dice.ExtinguishFire();
+                dice.ExtinguishFire(applyBurnAftermath: false);
+                var coolRemaining = entity.FireRemainingMs > 0
+                    ? entity.FireRemainingMs / 1000f
+                    : 0f;
+                dice.ApplyNetworkRedHotCool(coolRemaining);
                 return;
             }
 

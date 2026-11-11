@@ -21,6 +21,7 @@ namespace DiceGame.Gameplay
         DiceRegistry registry;
         PlayerMatchActionContext matchActionContext;
         DiceMatchOwnershipContext ownershipContext;
+        DiceCatalog kindMeshCatalog;
         ITierFallMatchNotifier tierFallMatchNotifier;
         ICarryTopMountMatchNotifier carryTopMountMatchNotifier;
         DiceState currentState;
@@ -29,6 +30,8 @@ namespace DiceGame.Gameplay
         ErasureKind erasureKind = ErasureKind.None;
         bool isOnFire;
         float fireRemaining;
+        float lastFireDuration;
+        float redHotCoolRemaining;
         bool isVanishing;
         bool isCarried;
         bool wasSinkErasureGhost;
@@ -64,6 +67,7 @@ namespace DiceGame.Gameplay
         public ErasureKind ErasureKind => erasureKind;
         public bool IsOnFire => isOnFire;
         public float FireRemaining => fireRemaining;
+        public float RedHotCoolRemaining => redHotCoolRemaining;
         public bool IsVanishing => isVanishing;
         public Board Board => board;
         public bool IsErasureGhost =>
@@ -369,6 +373,10 @@ namespace DiceGame.Gameplay
             ownershipContext = targetOwnershipContext;
         }
 
+        public void ConfigureKindMeshCatalog(DiceCatalog catalog) {
+            kindMeshCatalog = catalog;
+        }
+
         public void ConfigureTierFallMatchNotifier(ITierFallMatchNotifier notifier) {
             tierFallMatchNotifier = notifier;
         }
@@ -621,7 +629,16 @@ namespace DiceGame.Gameplay
         }
 
         public void ApplyExternalState(DiceState state, bool snapVisual = false) {
+            var kindChanged = currentState.Kind != state.Kind;
             currentState = state;
+            if (kindChanged) {
+                if (!DiceFireTransformPolicy.TryResolveRedHotCool(currentState.Kind, out _)) {
+                    redHotCoolRemaining = 0f;
+                }
+
+                RemeshForCurrentKind();
+            }
+
             if (snapVisual && diceView != null && board != null && registry != null) {
                 diceView.SnapTo(currentState, board, registry);
             }
@@ -1259,6 +1276,10 @@ namespace DiceGame.Gameplay
                 return false;
             }
 
+            // (C) Ignite clears RedHot cool; cool restarts from scratch after fire ends.
+            redHotCoolRemaining = 0f;
+            lastFireDuration = duration;
+
             if (isOnFire) {
                 fireRemaining = Mathf.Max(fireRemaining, duration);
                 return true;
@@ -1271,7 +1292,10 @@ namespace DiceGame.Gameplay
             return true;
         }
 
-        public void ExtinguishFire() {
+        /// <param name="applyBurnAftermath">
+        /// True only when fire reached full duration. Early extinguish keeps Kind unchanged.
+        /// </param>
+        public void ExtinguishFire(bool applyBurnAftermath = false) {
             if (!isOnFire) {
                 return;
             }
@@ -1280,20 +1304,102 @@ namespace DiceGame.Gameplay
             fireRemaining = 0f;
             diceView?.SetOnFire(false);
             FireStateChanged?.Invoke(false);
+
+            if (applyBurnAftermath) {
+                ApplyBurnAftermathTransform();
+            }
+
+            // Fire ended: if this is (or became) RedHot, start cool from scratch.
+            BeginRedHotCool(lastFireDuration);
+        }
+
+        void ApplyBurnAftermathTransform() {
+            if (!DiceFireTransformPolicy.TryResolveBurnAftermath(currentState.Kind, out var nextKind)) {
+                return;
+            }
+
+            ApplyKindChange(nextKind);
+        }
+
+        /// <summary>
+        /// Standing-stun completion or cool timer expiry: RedHot → Iron.
+        /// </summary>
+        public bool TryCoolRedHotToIron() {
+            if (!DiceFireTransformPolicy.TryResolveRedHotCool(currentState.Kind, out var nextKind)) {
+                return false;
+            }
+
+            redHotCoolRemaining = 0f;
+            ApplyKindChange(nextKind);
+            return true;
+        }
+
+        public void BeginRedHotCool(float duration) {
+            if (isOnFire
+                || duration <= 0f
+                || !DiceFireTransformPolicy.TryResolveRedHotCool(currentState.Kind, out _)) {
+                redHotCoolRemaining = 0f;
+                return;
+            }
+
+            redHotCoolRemaining = duration;
+        }
+
+        public void ApplyNetworkRedHotCool(float remainingDuration) {
+            if (isOnFire || !DiceFireTransformPolicy.TryResolveRedHotCool(currentState.Kind, out _)) {
+                redHotCoolRemaining = 0f;
+                return;
+            }
+
+            redHotCoolRemaining = Mathf.Max(0f, remainingDuration);
+        }
+
+        void ApplyKindChange(DiceKind nextKind) {
+            if (currentState.Kind == nextKind) {
+                return;
+            }
+
+            currentState = new DiceState(
+                currentState.GridPos,
+                currentState.Orientation,
+                currentState.Tier,
+                nextKind);
+            if (!DiceFireTransformPolicy.TryResolveRedHotCool(nextKind, out _)) {
+                redHotCoolRemaining = 0f;
+            }
+
+            RemeshForCurrentKind();
+            ConfigurePushBody();
+            StateChanged?.Invoke(currentState);
+        }
+
+        void RemeshForCurrentKind() {
+            if (diceView == null || board == null) {
+                return;
+            }
+
+            GameObject meshPrefab = null;
+            kindMeshCatalog?.TryGetMeshPrefab(currentState.Kind, out meshPrefab);
+            diceView.ApplyNetworkKindPresentation(board, currentState.Kind, meshPrefab);
         }
 
         public void ApplyNetworkFireState(bool onFire, float remainingDuration) {
             if (!onFire) {
-                ExtinguishFire();
+                ExtinguishFire(applyBurnAftermath: false);
                 return;
             }
 
             if (!DiceFirePolicy.CanCarryFire(Behavior)) {
-                ExtinguishFire();
+                ExtinguishFire(applyBurnAftermath: false);
                 return;
             }
 
             var duration = Mathf.Max(0.01f, remainingDuration);
+            redHotCoolRemaining = 0f;
+            if (lastFireDuration <= 0f) {
+                lastFireDuration = duration;
+            }
+
             if (isOnFire) {
                 fireRemaining = duration;
                 return;
@@ -1312,7 +1418,24 @@ namespace DiceGame.Gameplay
 
             fireRemaining -= deltaTime;
             if (fireRemaining <= 0f) {
-                ExtinguishFire();
+                ExtinguishFire(applyBurnAftermath: true);
+            }
+        }
+
+        public void TickRedHotCool(float deltaTime) {
+            if (redHotCoolRemaining <= 0f || isOnFire || deltaTime <= 0f) {
+                return;
+            }
+
+            if (!DiceFireTransformPolicy.TryResolveRedHotCool(currentState.Kind, out _)) {
+                redHotCoolRemaining = 0f;
+                return;
+            }
+
+            redHotCoolRemaining -= deltaTime;
+            if (redHotCoolRemaining <= 0f) {
+                redHotCoolRemaining = 0f;
+                TryCoolRedHotToIron();
             }
         }
 

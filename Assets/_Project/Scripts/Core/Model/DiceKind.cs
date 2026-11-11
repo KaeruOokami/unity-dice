@@ -9,6 +9,8 @@ namespace DiceGame.Core
         Ice,
         Stone,
         Ghost,
-        Jumbo
+        Jumbo,
+        Charcoal,
+        RedHot
     }
 }

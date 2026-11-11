@@ -678,6 +678,7 @@ namespace DiceGame.Gameplay
             }
 
             diceController.ConfigureMatchActionContext(matchActionContext);
+            diceController.ConfigureKindMeshCatalog(catalog);
             if (ownershipContext != null) {
                 diceController.ConfigureOwnershipContext(ownershipContext);
                 if (catalogOwner.HasValue) {
@@ -785,6 +786,7 @@ namespace DiceGame.Gameplay
             }
 
             diceController.ConfigureMatchActionContext(matchActionContext);
+            diceController.ConfigureKindMeshCatalog(catalog);
             if (ownershipContext != null) {
                 diceController.ConfigureOwnershipContext(ownershipContext);
                 ownershipContext.SetOwner(diceController, targetSlot);
@@ -879,6 +881,7 @@ namespace DiceGame.Gameplay
             }
 
             diceController.ConfigureMatchActionContext(matchActionContext);
+            diceController.ConfigureKindMeshCatalog(catalog);
             if (assignOwner && ownershipContext != null) {
                 diceController.ConfigureOwnershipContext(ownershipContext);
                 ownershipContext.SetOwner(diceController, targetSlot);
@@ -957,6 +960,7 @@ namespace DiceGame.Gameplay
             }
 
             diceController.ConfigureMatchActionContext(matchActionContext);
+            diceController.ConfigureKindMeshCatalog(catalog);
             if (ownershipContext != null) {
                 diceController.ConfigureOwnershipContext(ownershipContext);
                 ownershipContext.SetOwner(diceController, ownerSlot);

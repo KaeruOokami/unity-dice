@@ -48,6 +48,7 @@ namespace DiceGame.Gameplay
             }
 
             TickLifetime(deltaTime);
+            TickRedHotCool(deltaTime);
             ExtinguishCoveredBottoms();
             TickSpread(deltaTime);
         }
@@ -77,6 +78,18 @@ namespace DiceGame.Gameplay
                 }
 
                 dice.TickFire(deltaTime);
+            }
+        }
+
+        void TickRedHotCool(float deltaTime) {
+            var diceList = registry.AllDice;
+            for (var i = 0; i < diceList.Count; i++) {
+                var dice = diceList[i];
+                if (dice == null || dice.IsOnFire || dice.RedHotCoolRemaining <= 0f) {
+                    continue;
+                }
+
+                dice.TickRedHotCool(deltaTime);
             }
         }
 

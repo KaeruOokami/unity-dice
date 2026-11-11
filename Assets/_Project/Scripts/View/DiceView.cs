@@ -26,6 +26,7 @@ namespace DiceGame.View
         VisualEffect fireVfxInstance;
         VisualEffect fireVfxFadingInstance;
         Coroutine fireFadeCoroutine;
+        VisualEffect spawnAppearVfxInstance;
 
         Transform meshInstance;
         Coroutine rollCoroutine;
@@ -844,6 +845,8 @@ namespace DiceGame.View
                 return;
             }
 
+            ClearSpawnAppearVfx();
+
             var end = GetAnchoredWorldPosition(state, board, registry);
             var instance = Instantiate(vfxSettings.SpawnAppearPrefab);
             instance.transform.position = end;
@@ -853,34 +856,26 @@ namespace DiceGame.View
                 Vector3.up * vfxSettings.SpawnAppearStartHeight);
             instance.SetVector3(SpawnAppearVfxEndPositionId, Vector3.zero);
             instance.Play();
-            StartCoroutine(FadeOutSpawnAppearVfxCoroutine(instance));
+
+            spawnAppearVfxInstance = instance;
+            var fadeDuration = Mathf.Max(
+                MinSpawnAppearVfxFadeOutDuration,
+                vfxSettings.SpawnAppearFadeOutDuration);
+            var fade = instance.gameObject.AddComponent<SpawnAppearVfxLifetime>();
+            fade.Begin(instance, SpawnAppearVfxStripSizeMaxId, fadeDuration);
         }
 
-        IEnumerator FadeOutSpawnAppearVfxCoroutine(VisualEffect visualEffect) {
-            if (visualEffect == null) {
-                yield break;
+        void ClearSpawnAppearVfx() {
+            if (spawnAppearVfxInstance == null) {
+                return;
             }
 
-            var fadeDuration = vfxSettings != null
-                ? Mathf.Max(MinSpawnAppearVfxFadeOutDuration, vfxSettings.SpawnAppearFadeOutDuration)
-                : MinSpawnAppearVfxFadeOutDuration;
-            var fromSize = visualEffect.HasFloat(SpawnAppearVfxStripSizeMaxId)
-                ? visualEffect.GetFloat(SpawnAppearVfxStripSizeMaxId)
-                : 0f;
-            var elapsed = 0f;
-            while (elapsed < fadeDuration && visualEffect != null) {
-                elapsed += Time.deltaTime;
-                var t = Mathf.Clamp01(elapsed / fadeDuration);
-                visualEffect.SetFloat(SpawnAppearVfxStripSizeMaxId, Mathf.Lerp(fromSize, 0f, t));
-                yield return null;
-            }
+            Destroy(spawnAppearVfxInstance.gameObject);
+            spawnAppearVfxInstance = null;
+        }
 
-            if (visualEffect == null) {
-                yield break;
-            }
-
-            visualEffect.SetFloat(SpawnAppearVfxStripSizeMaxId, 0f);
-            Destroy(visualEffect.gameObject);
+        void OnDestroy() {
+            ClearSpawnAppearVfx();
         }
 
         /// <summary>

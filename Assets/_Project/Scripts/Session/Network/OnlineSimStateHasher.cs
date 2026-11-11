@@ -85,6 +85,9 @@ namespace DiceGame.Session.Network
             hash = Mix(hash, dice.IsErasing ? 1u : 0u);
             hash = Mix(hash, dice.IsVanishing ? 1u : 0u);
             hash = Mix(hash, dice.IsOnFire ? 1u : 0u);
+            hash = Mix(
+                hash,
+                (uint)Mathf.Clamp(Mathf.CeilToInt(dice.RedHotCoolRemaining * 1000f), 0, ushort.MaxValue));
         }
 
         static GameCharacterController FindCharacter(
@@ -225,6 +228,12 @@ namespace DiceGame.Session.Network
                     flags |= OnlineTransformSnapshot.FlagOnFire;
                     fireRemainingMs = (ushort)Mathf.Clamp(
                         Mathf.CeilToInt(dice.FireRemaining * 1000f),
+                        1,
+                        ushort.MaxValue);
+                } else if (dice.RedHotCoolRemaining > 0f) {
+                    // Reuse FireRemainingMs while !OnFire to carry RedHot cool remaining.
+                    fireRemainingMs = (ushort)Mathf.Clamp(
+                        Mathf.CeilToInt(dice.RedHotCoolRemaining * 1000f),
                         1,
                         ushort.MaxValue);
                 }
