@@ -8,6 +8,7 @@ using DiceGame.Grid;
 using DiceGame.Placement;
 using UnityEngine;
 using UnityEngine.Rendering;
+using UnityEngine.VFX;
 
 namespace DiceGame.View
 {
@@ -21,6 +22,7 @@ namespace DiceGame.View
         PhysicsSettings physicsSettings;
         DiceAnimationSettings animationSettings;
         DiceErasureSettings erasureSettings;
+        DiceSpawnVfxSettings spawnVfxSettings;
 
         Transform meshInstance;
         Coroutine rollCoroutine;
@@ -105,16 +107,23 @@ namespace DiceGame.View
 
         const float MinPhaseDuration = 0.01f;
         const float MinFallGravityScale = 0.01f;
+        const float MinSpawnAppearVfxFadeOutDuration = 0.01f;
+
+        static readonly int SpawnAppearVfxStartPositionId = Shader.PropertyToID("Start Position");
+        static readonly int SpawnAppearVfxEndPositionId = Shader.PropertyToID("End Position");
+        static readonly int SpawnAppearVfxStripSizeMaxId = Shader.PropertyToID("Strip Size Max");
 
         float oneVanishProgress;
 
         public void Configure(
             PhysicsSettings physics,
             DiceAnimationSettings animation,
-            DiceErasureSettings erasure) {
+            DiceErasureSettings erasure,
+            DiceSpawnVfxSettings spawnVfx = null) {
             physicsSettings = physics;
             animationSettings = animation;
             erasureSettings = erasure;
+            spawnVfxSettings = spawnVfx;
         }
 
         public void SetEmitVisualMotionEvents(bool enabled) {
@@ -718,6 +727,8 @@ namespace DiceGame.View
                 ToSurfaceWorldY = ResolveSurfaceBaseWorldY(state, board, registry)
             });
 
+            PlaySpawnAppearVfx(state, board, registry);
+
             CacheSpawnFallParams(
                 state,
                 board,
@@ -734,6 +745,50 @@ namespace DiceGame.View
                 registry,
                 physicsSettings.BottomEmergenceDuration,
                 onComplete));
+        }
+
+        void PlaySpawnAppearVfx(DiceState state, Board board, DiceRegistry registry) {
+            if (spawnVfxSettings == null || spawnVfxSettings.Prefab == null || board == null) {
+                return;
+            }
+
+            var end = GetAnchoredWorldPosition(state, board, registry);
+            var instance = Instantiate(spawnVfxSettings.Prefab);
+            instance.transform.position = end;
+            // Lightning system is Local space: Start/End are relative to the VFX transform.
+            instance.SetVector3(
+                SpawnAppearVfxStartPositionId,
+                Vector3.up * spawnVfxSettings.StartHeight);
+            instance.SetVector3(SpawnAppearVfxEndPositionId, Vector3.zero);
+            instance.Play();
+            StartCoroutine(FadeOutSpawnAppearVfxCoroutine(instance));
+        }
+
+        IEnumerator FadeOutSpawnAppearVfxCoroutine(VisualEffect visualEffect) {
+            if (visualEffect == null) {
+                yield break;
+            }
+
+            var fadeDuration = spawnVfxSettings != null
+                ? Mathf.Max(MinSpawnAppearVfxFadeOutDuration, spawnVfxSettings.FadeOutDuration)
+                : MinSpawnAppearVfxFadeOutDuration;
+            var fromSize = visualEffect.HasFloat(SpawnAppearVfxStripSizeMaxId)
+                ? visualEffect.GetFloat(SpawnAppearVfxStripSizeMaxId)
+                : 0f;
+            var elapsed = 0f;
+            while (elapsed < fadeDuration && visualEffect != null) {
+                elapsed += Time.deltaTime;
+                var t = Mathf.Clamp01(elapsed / fadeDuration);
+                visualEffect.SetFloat(SpawnAppearVfxStripSizeMaxId, Mathf.Lerp(fromSize, 0f, t));
+                yield return null;
+            }
+
+            if (visualEffect == null) {
+                yield break;
+            }
+
+            visualEffect.SetFloat(SpawnAppearVfxStripSizeMaxId, 0f);
+            Destroy(visualEffect.gameObject);
         }
 
         /// <summary>

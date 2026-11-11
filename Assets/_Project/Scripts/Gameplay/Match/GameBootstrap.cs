@@ -69,6 +69,7 @@ namespace DiceGame.Gameplay
         [SerializeField] DiceAnimationSettings diceAnimationSettings;
         [FormerlySerializedAs("diceDissolveSettings")]
         [SerializeField] DiceErasureSettings diceErasureSettings;
+        [SerializeField] DiceSpawnVfxSettings diceSpawnVfxSettings;
         [SerializeField] DiceOneVanishSettings diceOneVanishSettings;
         [SerializeField] DiceSpawnSettings diceSpawnSettings;
         [SerializeField] DiceCatalog diceCatalog;
@@ -636,6 +637,7 @@ namespace DiceGame.Gameplay
                     physicsSettings,
                     diceAnimationSettings,
                     diceErasureSettings,
+                    diceSpawnVfxSettings,
                     matchActionContext,
                     activeCurriculumStage.SpawnSettings,
                     spawnRandom);
@@ -653,6 +655,7 @@ namespace DiceGame.Gameplay
                     physicsSettings,
                     diceAnimationSettings,
                     diceErasureSettings,
+                    diceSpawnVfxSettings,
                     matchActionContext,
                     versusSettings.Player1.SpawnSettings,
                     spawnRandom);
@@ -679,6 +682,7 @@ namespace DiceGame.Gameplay
                 physicsSettings,
                 diceAnimationSettings,
                 diceErasureSettings,
+                diceSpawnVfxSettings,
                 matchActionContext,
                 resolvedSetup.SharedSpawnSettings,
                 spawnRandom);

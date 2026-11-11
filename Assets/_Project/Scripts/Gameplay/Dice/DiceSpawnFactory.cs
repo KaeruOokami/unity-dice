@@ -20,7 +20,8 @@ namespace DiceGame.Gameplay
             GameObject meshPrefab,
             PhysicsSettings physicsSettings,
             DiceAnimationSettings animationSettings,
-            DiceErasureSettings erasureSettings) {
+            DiceErasureSettings erasureSettings,
+            DiceSpawnVfxSettings spawnVfxSettings) {
             if (prefab == null) {
                 return null;
             }
@@ -36,7 +37,7 @@ namespace DiceGame.Gameplay
                 return null;
             }
 
-            diceView.Configure(physicsSettings, animationSettings, erasureSettings);
+            diceView.Configure(physicsSettings, animationSettings, erasureSettings, spawnVfxSettings);
             if (meshPrefab != null) {
                 diceView.SetMeshPrefab(meshPrefab);
             }
@@ -83,6 +84,7 @@ namespace DiceGame.Gameplay
         PhysicsSettings physicsSettings;
         DiceAnimationSettings diceAnimationSettings;
         DiceErasureSettings diceErasureSettings;
+        DiceSpawnVfxSettings diceSpawnVfxSettings;
         PlayerMatchActionContext matchActionContext;
         DiceMatchOwnershipContext ownershipContext;
         DiceMatchErasureSystem erasureSystem;
@@ -130,6 +132,7 @@ namespace DiceGame.Gameplay
             PhysicsSettings physics,
             DiceAnimationSettings animationSettings,
             DiceErasureSettings erasureSettings,
+            DiceSpawnVfxSettings spawnVfxSettings,
             PlayerMatchActionContext actionContext,
             DiceSpawnSettings settings,
             System.Random spawnRandom) {
@@ -141,6 +144,7 @@ namespace DiceGame.Gameplay
             physicsSettings = physics;
             diceAnimationSettings = animationSettings;
             diceErasureSettings = erasureSettings;
+            diceSpawnVfxSettings = spawnVfxSettings;
             matchActionContext = actionContext;
             spawnSettings = settings;
             random = spawnRandom;
@@ -655,7 +659,8 @@ namespace DiceGame.Gameplay
                 meshPrefab,
                 physicsSettings,
                 diceAnimationSettings,
-                diceErasureSettings);
+                diceErasureSettings,
+                diceSpawnVfxSettings);
 
             if (diceController == null) {
                 return null;
@@ -759,7 +764,8 @@ namespace DiceGame.Gameplay
                 meshPrefab,
                 physicsSettings,
                 diceAnimationSettings,
-                diceErasureSettings);
+                diceErasureSettings,
+                diceSpawnVfxSettings);
 
             if (diceController == null) {
                 return null;
@@ -851,7 +857,8 @@ namespace DiceGame.Gameplay
                 meshPrefab,
                 physicsSettings,
                 diceAnimationSettings,
-                diceErasureSettings);
+                diceErasureSettings,
+                diceSpawnVfxSettings);
 
             if (diceController == null) {
                 return null;
@@ -926,7 +933,8 @@ namespace DiceGame.Gameplay
                 meshPrefab,
                 physicsSettings,
                 diceAnimationSettings,
-                diceErasureSettings);
+                diceErasureSettings,
+                diceSpawnVfxSettings);
 
             if (diceController == null) {
                 emitNetworkSpawns = previousEmit;

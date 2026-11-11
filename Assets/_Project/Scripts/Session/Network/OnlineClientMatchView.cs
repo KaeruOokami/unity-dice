@@ -65,6 +65,7 @@ namespace DiceGame.Session.Network
         PhysicsSettings physicsSettings;
         DiceAnimationSettings animationSettings;
         DiceErasureSettings erasureSettings;
+        DiceSpawnVfxSettings spawnVfxSettings;
         DiceOneVanishSettings oneVanishSettings;
         Transform proxyRoot;
         readonly Dictionary<uint, Transform> proxies = new();
@@ -98,6 +99,7 @@ namespace DiceGame.Session.Network
             PhysicsSettings matchPhysicsSettings,
             DiceAnimationSettings matchAnimationSettings,
             DiceErasureSettings diceErasureSettings,
+            DiceSpawnVfxSettings diceSpawnVfxSettings,
             DiceOneVanishSettings diceOneVanishSettings,
             Board matchBoard,
             DiceCatalog catalog,
@@ -110,6 +112,7 @@ namespace DiceGame.Session.Network
             physicsSettings = matchPhysicsSettings;
             animationSettings = matchAnimationSettings;
             erasureSettings = diceErasureSettings;
+            spawnVfxSettings = diceSpawnVfxSettings;
             oneVanishSettings = diceOneVanishSettings;
             board = matchBoard;
             primaryCatalog = catalog;
@@ -655,7 +658,11 @@ namespace DiceGame.Session.Network
                 instance.name = $"ProxyDice_{entity.Id}_{((DiceKind)entity.Kind)}";
                 var diceView = instance.GetComponentInChildren<DiceView>(true);
                 if (diceView != null) {
-                    diceView.Configure(physicsSettings, animationSettings, erasureSettings);
+                    diceView.Configure(
+                        physicsSettings,
+                        animationSettings,
+                        erasureSettings,
+                        spawnVfxSettings);
                     diceView.SetEmitVisualMotionEvents(false);
                     diceViews[entity.Id] = diceView;
                     ApplyKindMesh(diceView, entity.Id, (DiceKind)entity.Kind, entity.CatalogPlayerSlot);
@@ -727,7 +734,11 @@ namespace DiceGame.Session.Network
                     return;
                 }
 
-                diceView.Configure(physicsSettings, animationSettings, erasureSettings);
+                diceView.Configure(
+                    physicsSettings,
+                    animationSettings,
+                    erasureSettings,
+                    spawnVfxSettings);
                 diceView.SetEmitVisualMotionEvents(false);
                 diceViews[entityId] = diceView;
             }
