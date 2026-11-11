@@ -14,12 +14,14 @@ namespace DiceGame.Config
         [SerializeField] float minimumPower;
         [Min(0f)]
         [SerializeField] float selectionWeight;
+        [SerializeField] bool igniteOnSpawn;
 
         public SendableKindLimit(DiceKind diceKind, int maxCount) {
             kind = diceKind;
             maxCountPerVolley = maxCount;
             minimumPower = 0f;
             selectionWeight = 1f;
+            igniteOnSpawn = false;
         }
 
         public SendableKindLimit(DiceKind diceKind, int maxCount, float minPower, float weight) {
@@ -27,12 +29,27 @@ namespace DiceGame.Config
             maxCountPerVolley = maxCount;
             minimumPower = minPower;
             selectionWeight = weight;
+            igniteOnSpawn = false;
+        }
+
+        public SendableKindLimit(
+            DiceKind diceKind,
+            int maxCount,
+            float minPower,
+            float weight,
+            bool ignite) {
+            kind = diceKind;
+            maxCountPerVolley = maxCount;
+            minimumPower = minPower;
+            selectionWeight = weight;
+            igniteOnSpawn = ignite;
         }
 
         public DiceKind Kind => kind;
         public int MaxCountPerVolley => Mathf.Max(0, maxCountPerVolley);
         public float MinimumPower => Mathf.Clamp01(minimumPower);
         public float SelectionWeight => Mathf.Max(0f, selectionWeight);
+        public bool IgniteOnSpawn => igniteOnSpawn && DiceFirePolicy.CanCarryFire(kind);
 
         public bool IsEligibleAtPower(float power) {
             return MaxCountPerVolley > 0
@@ -231,7 +248,8 @@ namespace DiceGame.Config
                         kinds[j].Kind,
                         kinds[j].MaxCountPerVolley,
                         kinds[j].MinimumPower,
-                        kinds[j].SelectionWeight);
+                        kinds[j].SelectionWeight,
+                        kinds[j].IgniteOnSpawn);
                 }
 
                 var faces = source.TriggerFaces ?? Array.Empty<int>();

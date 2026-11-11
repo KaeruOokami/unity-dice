@@ -45,6 +45,7 @@ namespace DiceGame.Session
     {
         public byte Kind;
         public float SpawnWeight;
+        public bool IgniteOnSpawn;
     }
 
     [Serializable]
@@ -60,6 +61,7 @@ namespace DiceGame.Session
         public int MaxCountPerVolley;
         public float MinimumPower;
         public float SelectionWeight;
+        public bool IgniteOnSpawn;
     }
 
     [Serializable]
@@ -91,6 +93,7 @@ namespace DiceGame.Session
         public byte Kind;
         public int MaxCountPerVolley;
         public float SelectionWeight;
+        public bool IgniteOnSpawn;
     }
 
     [Serializable]
@@ -231,7 +234,8 @@ namespace DiceGame.Session
             for (var i = 0; i < source.Length; i++) {
                 entries[i] = new DiceCatalogEntryPersistDto {
                     Kind = source[i].Kind,
-                    SpawnWeight = source[i].SpawnWeight
+                    SpawnWeight = source[i].SpawnWeight,
+                    IgniteOnSpawn = source[i].IgniteOnSpawn != 0
                 };
             }
 
@@ -244,7 +248,8 @@ namespace DiceGame.Session
             for (var i = 0; i < source.Length; i++) {
                 entries[i] = new DiceCatalogEntryNetworkPayload {
                     Kind = source[i].Kind,
-                    SpawnWeight = source[i].SpawnWeight
+                    SpawnWeight = source[i].SpawnWeight,
+                    IgniteOnSpawn = (byte)(source[i].IgniteOnSpawn ? 1 : 0)
                 };
             }
 
@@ -262,7 +267,8 @@ namespace DiceGame.Session
                         Kind = kindsSource[j].Kind,
                         MaxCountPerVolley = kindsSource[j].MaxCountPerVolley,
                         MinimumPower = kindsSource[j].MinimumPower,
-                        SelectionWeight = kindsSource[j].SelectionWeight
+                        SelectionWeight = kindsSource[j].SelectionWeight,
+                        IgniteOnSpawn = kindsSource[j].IgniteOnSpawn != 0
                     };
                 }
 
@@ -302,7 +308,8 @@ namespace DiceGame.Session
                         Kind = kindsSource[j].Kind,
                         MaxCountPerVolley = kindsSource[j].MaxCountPerVolley,
                         MinimumPower = kindsSource[j].MinimumPower,
-                        SelectionWeight = kindsSource[j].SelectionWeight
+                        SelectionWeight = kindsSource[j].SelectionWeight,
+                        IgniteOnSpawn = (byte)(kindsSource[j].IgniteOnSpawn ? 1 : 0)
                     };
                 }
 
@@ -337,7 +344,8 @@ namespace DiceGame.Session
                 kinds[i] = new NaturalSendKindLimitPersistDto {
                     Kind = source[i].Kind,
                     MaxCountPerVolley = source[i].MaxCountPerVolley,
-                    SelectionWeight = source[i].SelectionWeight
+                    SelectionWeight = source[i].SelectionWeight,
+                    IgniteOnSpawn = source[i].IgniteOnSpawn != 0
                 };
             }
 
@@ -356,7 +364,8 @@ namespace DiceGame.Session
                 kinds[i] = new NaturalSendKindLimitNetworkPayload {
                     Kind = source[i].Kind,
                     MaxCountPerVolley = source[i].MaxCountPerVolley,
-                    SelectionWeight = source[i].SelectionWeight
+                    SelectionWeight = source[i].SelectionWeight,
+                    IgniteOnSpawn = (byte)(source[i].IgniteOnSpawn ? 1 : 0)
                 };
             }
 

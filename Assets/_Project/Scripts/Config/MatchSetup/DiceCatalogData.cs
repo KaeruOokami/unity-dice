@@ -10,6 +10,7 @@ namespace DiceGame.Config
         public DiceKind Kind;
         public GameObject MeshPrefab;
         public float SpawnWeight;
+        public bool IgniteOnSpawn;
     }
 
     public struct DiceCatalogData
@@ -27,7 +28,8 @@ namespace DiceGame.Config
                 entries[i] = new DiceCatalogEntryData {
                     Kind = source[i].Kind,
                     MeshPrefab = source[i].MeshPrefab,
-                    SpawnWeight = source[i].SpawnWeight
+                    SpawnWeight = source[i].SpawnWeight,
+                    IgniteOnSpawn = source[i].IgniteOnSpawn
                 };
             }
 
@@ -54,7 +56,8 @@ namespace DiceGame.Config
                 result[i] = new DiceCatalogEntryData {
                     Kind = entry.Kind,
                     MeshPrefab = mesh ?? entry.MeshPrefab,
-                    SpawnWeight = entry.SpawnWeight
+                    SpawnWeight = entry.SpawnWeight,
+                    IgniteOnSpawn = entry.IgniteOnSpawn
                 };
             }
 

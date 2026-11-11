@@ -23,16 +23,19 @@ namespace DiceGame.Session.Network
         public byte TopFace;
         public byte NorthFace;
         public byte EastFace;
+        public ushort FireRemainingMs;
         public Vector3 Position;
         public Quaternion Rotation;
 
         public const byte FlagCharacter = 1 << 0;
         public const byte FlagDice = 1 << 1;
         public const byte FlagActive = 1 << 2;
+        public const byte FlagOnFire = 1 << 3;
 
         public bool IsCharacter => (Flags & FlagCharacter) != 0;
         public bool IsDice => (Flags & FlagDice) != 0;
         public bool IsActive => (Flags & FlagActive) != 0;
+        public bool IsOnFire => (Flags & FlagOnFire) != 0;
 
         public PlayerSlot CatalogPlayerSlot => (PlayerSlot)CatalogSide;
 
@@ -57,6 +60,7 @@ namespace DiceGame.Session.Network
                 serializer.SerializeValue(ref TopFace);
                 serializer.SerializeValue(ref NorthFace);
                 serializer.SerializeValue(ref EastFace);
+                serializer.SerializeValue(ref FireRemainingMs);
                 if (serializer.IsReader) {
                     Position = default;
                     Rotation = Quaternion.identity;

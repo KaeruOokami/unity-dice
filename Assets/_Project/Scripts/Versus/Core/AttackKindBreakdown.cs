@@ -10,6 +10,7 @@ namespace DiceGame.Versus.Core
         struct KindSlot
         {
             public DiceKind Kind;
+            public bool IgniteOnSpawn;
             public int Remaining;
             public float Weight;
         }
@@ -19,7 +20,7 @@ namespace DiceGame.Versus.Core
             int totalCount,
             float power,
             System.Random random,
-            out List<(DiceKind kind, int count)> breakdown) {
+            out List<(DiceKind kind, bool igniteOnSpawn, int count)> breakdown) {
             return TryBuild(sendableKinds, totalCount, power, random, int.MaxValue, out breakdown);
         }
 
@@ -29,8 +30,8 @@ namespace DiceGame.Versus.Core
             float power,
             System.Random random,
             int jumboSendableRemaining,
-            out List<(DiceKind kind, int count)> breakdown) {
-            breakdown = new List<(DiceKind, int)>();
+            out List<(DiceKind kind, bool igniteOnSpawn, int count)> breakdown) {
+            breakdown = new List<(DiceKind, bool, int)>();
             if (sendableKinds == null || sendableKinds.Length == 0 || totalCount <= 0 || random == null) {
                 return false;
             }
@@ -55,6 +56,7 @@ namespace DiceGame.Versus.Core
 
                 slots.Add(new KindSlot {
                     Kind = limit.Kind,
+                    IgniteOnSpawn = limit.IgniteOnSpawn,
                     Remaining = remaining,
                     Weight = limit.SelectionWeight
                 });
@@ -69,7 +71,7 @@ namespace DiceGame.Versus.Core
                 totalCount = pickCapacity;
             }
 
-            var assigned = new Dictionary<DiceKind, int>();
+            var assigned = new Dictionary<(DiceKind kind, bool ignite), int>();
             for (var i = 0; i < totalCount; i++) {
                 if (!TryPickWeightedKind(slots, random, out var pickedIndex)) {
                     break;
@@ -79,12 +81,13 @@ namespace DiceGame.Versus.Core
                 slot.Remaining -= 1;
                 slots[pickedIndex] = slot;
 
-                assigned.TryGetValue(slot.Kind, out var current);
-                assigned[slot.Kind] = current + 1;
+                var key = (slot.Kind, slot.IgniteOnSpawn);
+                assigned.TryGetValue(key, out var current);
+                assigned[key] = current + 1;
             }
 
             foreach (var pair in assigned) {
-                breakdown.Add((pair.Key, pair.Value));
+                breakdown.Add((pair.Key.kind, pair.Key.ignite, pair.Value));
             }
 
             return breakdown.Count > 0;

@@ -84,6 +84,7 @@ namespace DiceGame.Session.Network
             hash = Mix(hash, dice.IsCarried ? 1u : 0u);
             hash = Mix(hash, dice.IsErasing ? 1u : 0u);
             hash = Mix(hash, dice.IsVanishing ? 1u : 0u);
+            hash = Mix(hash, dice.IsOnFire ? 1u : 0u);
         }
 
         static GameCharacterController FindCharacter(
@@ -218,6 +219,16 @@ namespace DiceGame.Session.Network
                     ownershipContext.TryGetOwner(dice, out owner);
                 }
 
+                var flags = (byte)(OnlineTransformSnapshot.FlagDice | OnlineTransformSnapshot.FlagActive);
+                ushort fireRemainingMs = 0;
+                if (dice.IsOnFire) {
+                    flags |= OnlineTransformSnapshot.FlagOnFire;
+                    fireRemainingMs = (ushort)Mathf.Clamp(
+                        Mathf.CeilToInt(dice.FireRemaining * 1000f),
+                        1,
+                        ushort.MaxValue);
+                }
+
                 entities.Add(new OnlineTransformSnapshot {
                     Id = id,
                     Kind = (byte)state.Kind,
@@ -228,7 +239,8 @@ namespace DiceGame.Session.Network
                     TopFace = (byte)state.Orientation.Top,
                     NorthFace = (byte)state.Orientation.North,
                     EastFace = (byte)state.Orientation.East,
-                    Flags = (byte)(OnlineTransformSnapshot.FlagDice | OnlineTransformSnapshot.FlagActive)
+                    FireRemainingMs = fireRemainingMs,
+                    Flags = flags
                 });
             }
 

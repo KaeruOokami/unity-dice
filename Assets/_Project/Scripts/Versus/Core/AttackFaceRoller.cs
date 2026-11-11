@@ -6,7 +6,7 @@ namespace DiceGame.Versus.Core
     public static class AttackFaceRoller
     {
         public static List<AttackDieSpec> RollDice(
-            IReadOnlyList<(DiceKind kind, int count)> breakdown,
+            IReadOnlyList<(DiceKind kind, bool igniteOnSpawn, int count)> breakdown,
             int faceCap,
             System.Random random) {
             var results = new List<AttackDieSpec>();
@@ -19,7 +19,7 @@ namespace DiceGame.Versus.Core
                 var entry = breakdown[i];
                 for (var j = 0; j < entry.count; j++) {
                     var pip = random.Next(1, cap + 1);
-                    results.Add(new AttackDieSpec(entry.kind, pip));
+                    results.Add(new AttackDieSpec(entry.kind, pip, entry.igniteOnSpawn));
                 }
             }
 

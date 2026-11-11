@@ -133,7 +133,8 @@ namespace DiceGame.Config
             for (var i = 0; i < source.Length; i++) {
                 entries[i] = new DiceCatalogEntryNetworkPayload {
                     Kind = (byte)source[i].Kind,
-                    SpawnWeight = source[i].SpawnWeight
+                    SpawnWeight = source[i].SpawnWeight,
+                    IgniteOnSpawn = (byte)(source[i].IgniteOnSpawn ? 1 : 0)
                 };
             }
 
@@ -148,7 +149,8 @@ namespace DiceGame.Config
                 entries[i] = new DiceCatalogEntryData {
                     Kind = kind,
                     MeshPrefab = FindMesh(meshSource, kind),
-                    SpawnWeight = source[i].SpawnWeight
+                    SpawnWeight = source[i].SpawnWeight,
+                    IgniteOnSpawn = source[i].IgniteOnSpawn != 0
                 };
             }
 
@@ -166,7 +168,8 @@ namespace DiceGame.Config
                         Kind = (byte)kindsSource[j].Kind,
                         MaxCountPerVolley = kindsSource[j].MaxCountPerVolley,
                         MinimumPower = kindsSource[j].MinimumPower,
-                        SelectionWeight = kindsSource[j].SelectionWeight
+                        SelectionWeight = kindsSource[j].SelectionWeight,
+                        IgniteOnSpawn = (byte)(kindsSource[j].IgniteOnSpawn ? 1 : 0)
                     };
                 }
 
@@ -205,7 +208,8 @@ namespace DiceGame.Config
                         Kind = (DiceKind)kindsSource[j].Kind,
                         MaxCountPerVolley = kindsSource[j].MaxCountPerVolley,
                         MinimumPower = kindsSource[j].MinimumPower,
-                        SelectionWeight = kindsSource[j].SelectionWeight
+                        SelectionWeight = kindsSource[j].SelectionWeight,
+                        IgniteOnSpawn = kindsSource[j].IgniteOnSpawn != 0
                     };
                 }
 
@@ -240,7 +244,8 @@ namespace DiceGame.Config
                 kinds[i] = new NaturalSendKindLimitNetworkPayload {
                     Kind = (byte)source[i].Kind,
                     MaxCountPerVolley = source[i].MaxCountPerVolley,
-                    SelectionWeight = source[i].SelectionWeight
+                    SelectionWeight = source[i].SelectionWeight,
+                    IgniteOnSpawn = (byte)(source[i].IgniteOnSpawn ? 1 : 0)
                 };
             }
 
@@ -258,7 +263,8 @@ namespace DiceGame.Config
                 kinds[i] = new NaturalSendKindLimitData {
                     Kind = (DiceKind)source[i].Kind,
                     MaxCountPerVolley = source[i].MaxCountPerVolley,
-                    SelectionWeight = source[i].SelectionWeight
+                    SelectionWeight = source[i].SelectionWeight,
+                    IgniteOnSpawn = source[i].IgniteOnSpawn != 0
                 };
             }
 

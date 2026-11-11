@@ -344,7 +344,12 @@ namespace DiceGame.Versus
             var remaining = new List<AttackDieSpec>();
             for (var i = 0; i < volley.Count; i++) {
                 var spec = volley.Dice[i];
-                var spawned = spawnSystem.SpawnAttackDice(defenderSlot, spec.Kind, spec.Pip, spawnSettings);
+                var spawned = spawnSystem.SpawnAttackDice(
+                    defenderSlot,
+                    spec.Kind,
+                    spec.Pip,
+                    spawnSettings,
+                    spec.IsOnFire);
                 if (spawned == null) {
                     remaining.Add(spec);
                 }

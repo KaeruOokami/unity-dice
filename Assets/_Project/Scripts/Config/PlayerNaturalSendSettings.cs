@@ -12,16 +12,26 @@ namespace DiceGame.Config
         [SerializeField] int maxCountPerVolley;
         [Min(0f)]
         [SerializeField] float selectionWeight;
+        [SerializeField] bool igniteOnSpawn;
 
         public NaturalSendKindLimit(DiceKind diceKind, int maxCount, float weight) {
             kind = diceKind;
             maxCountPerVolley = maxCount;
             selectionWeight = weight;
+            igniteOnSpawn = false;
+        }
+
+        public NaturalSendKindLimit(DiceKind diceKind, int maxCount, float weight, bool ignite) {
+            kind = diceKind;
+            maxCountPerVolley = maxCount;
+            selectionWeight = weight;
+            igniteOnSpawn = ignite;
         }
 
         public DiceKind Kind => kind;
         public int MaxCountPerVolley => Mathf.Max(0, maxCountPerVolley);
         public float SelectionWeight => Mathf.Max(0f, selectionWeight);
+        public bool IgniteOnSpawn => igniteOnSpawn && DiceFirePolicy.CanCarryFire(kind);
 
         public bool IsEligible() {
             return MaxCountPerVolley > 0 && SelectionWeight > 0f;
@@ -85,7 +95,8 @@ namespace DiceGame.Config
                 sendableKinds[i] = new NaturalSendKindLimit(
                     kinds[i].Kind,
                     kinds[i].MaxCountPerVolley,
-                    kinds[i].SelectionWeight);
+                    kinds[i].SelectionWeight,
+                    kinds[i].IgniteOnSpawn);
             }
         }
     }

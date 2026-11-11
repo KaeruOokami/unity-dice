@@ -10,6 +10,7 @@ namespace DiceGame.Config
         public DiceKind Kind;
         public int MaxCountPerVolley;
         public float SelectionWeight;
+        public bool IgniteOnSpawn;
     }
 
     public struct PlayerNaturalSendSettingsData
@@ -29,7 +30,8 @@ namespace DiceGame.Config
                 kinds[i] = new NaturalSendKindLimitData {
                     Kind = source[i].Kind,
                     MaxCountPerVolley = source[i].MaxCountPerVolley,
-                    SelectionWeight = source[i].SelectionWeight
+                    SelectionWeight = source[i].SelectionWeight,
+                    IgniteOnSpawn = source[i].IgniteOnSpawn
                 };
             }
 

@@ -69,7 +69,9 @@ namespace DiceGame.Gameplay
         [SerializeField] DiceAnimationSettings diceAnimationSettings;
         [FormerlySerializedAs("diceDissolveSettings")]
         [SerializeField] DiceErasureSettings diceErasureSettings;
-        [SerializeField] DiceSpawnVfxSettings diceSpawnVfxSettings;
+        [FormerlySerializedAs("diceSpawnVfxSettings")]
+        [SerializeField] DiceVfxSettings diceVfxSettings;
+        [SerializeField] DiceFireSettings diceFireSettings;
         [SerializeField] DiceOneVanishSettings diceOneVanishSettings;
         [SerializeField] DiceSpawnSettings diceSpawnSettings;
         [SerializeField] DiceCatalog diceCatalog;
@@ -313,6 +315,18 @@ namespace DiceGame.Gameplay
             spawnSystem.EmitNetworkSpawns = false;
             spawnSystem.AllowAutonomousSpawning = true;
 
+            var fireSystem = GetComponent<DiceFireSystem>();
+            if (fireSystem == null) {
+                fireSystem = gameObject.AddComponent<DiceFireSystem>();
+            }
+
+            if (diceFireSettings == null) {
+                Debug.LogWarning("GameBootstrap: DiceFireSettings is not assigned; fire overlay is disabled.");
+            }
+
+            fireSystem.Configure(registry, diceFireSettings, spawnRandom);
+            spawnSystem.ConfigureFireSystem(fireSystem);
+
             var playerCount = resolvedSetup.RequiredPlayerCount;
             List<DiceController> startDice;
             if (activeCurriculumStage != null) {
@@ -537,7 +551,8 @@ namespace DiceGame.Gameplay
                 spawnSystem,
                 attackController,
                 erasureSystem,
-                GetComponent<JumboDiceSequenceController>());
+                GetComponent<JumboDiceSequenceController>(),
+                GetComponent<DiceFireSystem>());
         }
 
         void DestroyLegacyOnlineSyncComponents() {
@@ -637,7 +652,7 @@ namespace DiceGame.Gameplay
                     physicsSettings,
                     diceAnimationSettings,
                     diceErasureSettings,
-                    diceSpawnVfxSettings,
+                    diceVfxSettings,
                     matchActionContext,
                     activeCurriculumStage.SpawnSettings,
                     spawnRandom);
@@ -655,7 +670,7 @@ namespace DiceGame.Gameplay
                     physicsSettings,
                     diceAnimationSettings,
                     diceErasureSettings,
-                    diceSpawnVfxSettings,
+                    diceVfxSettings,
                     matchActionContext,
                     versusSettings.Player1.SpawnSettings,
                     spawnRandom);
@@ -682,7 +697,7 @@ namespace DiceGame.Gameplay
                 physicsSettings,
                 diceAnimationSettings,
                 diceErasureSettings,
-                diceSpawnVfxSettings,
+                diceVfxSettings,
                 matchActionContext,
                 resolvedSetup.SharedSpawnSettings,
                 spawnRandom);
@@ -792,6 +807,7 @@ namespace DiceGame.Gameplay
                     inputOverride,
                     inputBindingSlot,
                     spawnRandom);
+                characterController.ConfigureFireSettings(diceFireSettings);
                 TryConfigureAiControl(characterObject, characterController, slot);
                 spawnedCharacters.Add(characterController);
             }

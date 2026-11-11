@@ -26,6 +26,11 @@ namespace DiceGame.Gameplay
 
         CharacterMovementSettings movementSettings;
         PhysicsSettings physicsSettings;
+        DiceFireSettings fireSettings;
+        float fireStunRemaining;
+        DiceController fireStunStandingDice;
+        Vector2Int fireStunStandingCell;
+        DiceStackTier fireStunStandingTier;
 
         const float MovementBlockLogInterval = 0.25f;
         const float PushDebugLogInterval = 0.25f;
@@ -144,11 +149,13 @@ namespace DiceGame.Gameplay
         public bool IsLiftCarrying => liftPhase == LiftPhase.Carrying;
         public DiceController CarriedDice => liftPhase == LiftPhase.Carrying ? carriedDice : null;
         public bool IsLiftBusy => liftPhase == LiftPhase.Lifting || liftPhase == LiftPhase.Placing;
+        public bool IsFireStunned => fireStunRemaining > 0f;
         public bool IsRollbackBusy => IsCarrying
             || IsJumping
             || isPushFollowing
             || isFalling
-            || IsBusy;
+            || IsBusy
+            || IsFireStunned;
 
         ICharacterInputSource ActiveInputSource => inputSource != null ? inputSource : inputReader;
 
@@ -291,6 +298,10 @@ namespace DiceGame.Gameplay
             }
 
             Initialize();
+        }
+
+        public void ConfigureFireSettings(DiceFireSettings settings) {
+            fireSettings = settings;
         }
 
         Vector2Int startGridCellFromTransform() {
@@ -466,6 +477,12 @@ namespace DiceGame.Gameplay
                 return;
             }
 
+            UpdateFireStun(simDeltaTime);
+            if (IsFireStunned) {
+                currentSpeed = 0f;
+                return;
+            }
+
             var input = ActiveInputSource.ReadMove();
             UpdateLastFacing(input);
 
@@ -596,6 +613,78 @@ namespace DiceGame.Gameplay
 
             UpdateFall();
             UpdatePlayerSupportAndHeightState();
+            TryBeginFireStunFromStanding();
+        }
+
+        void UpdateFireStun(float deltaTime) {
+            if (!IsFireStunned) {
+                TryBeginFireStunFromStanding();
+                return;
+            }
+
+            if (HasFireStunSupportMovedOrGone()) {
+                ClearFireStun(extinguishStandingFire: false);
+                return;
+            }
+
+            fireStunRemaining -= Mathf.Max(0f, deltaTime);
+            if (fireStunRemaining > 0f) {
+                return;
+            }
+
+            ClearFireStun(extinguishStandingFire: true);
+        }
+
+        void TryBeginFireStunFromStanding() {
+            if (IsFireStunned
+                || fireSettings == null
+                || fireSettings.PlayerStunDuration <= 0f
+                || standingController == null
+                || isFalling
+                || jumpPhase != JumpPhase.None
+                || liftPhase != LiftPhase.None) {
+                return;
+            }
+
+            if (!standingController.TryGetStandingDice(out var standing)
+                || standing == null
+                || !standing.IsOnFire) {
+                return;
+            }
+
+            fireStunRemaining = fireSettings.PlayerStunDuration;
+            fireStunStandingDice = standing;
+            fireStunStandingCell = standing.CurrentState.GridPos;
+            fireStunStandingTier = standing.CurrentState.Tier;
+            currentSpeed = 0f;
+        }
+
+        bool HasFireStunSupportMovedOrGone() {
+            if (fireStunStandingDice == null) {
+                return true;
+            }
+
+            if (!standingController.TryGetStandingDice(out var standing)
+                || standing != fireStunStandingDice) {
+                return true;
+            }
+
+            var state = fireStunStandingDice.CurrentState;
+            return state.GridPos != fireStunStandingCell || state.Tier != fireStunStandingTier;
+        }
+
+        void ClearFireStun(bool extinguishStandingFire) {
+            if (extinguishStandingFire
+                && fireStunStandingDice != null
+                && standingController != null
+                && standingController.TryGetStandingDice(out var standing)
+                && standing == fireStunStandingDice
+                && standing.IsOnFire) {
+                standing.ExtinguishFire();
+            }
+
+            fireStunRemaining = 0f;
+            fireStunStandingDice = null;
         }
 
         void UpdatePlayerSupportAndHeightState() {

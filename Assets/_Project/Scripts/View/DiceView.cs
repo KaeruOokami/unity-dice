@@ -22,7 +22,10 @@ namespace DiceGame.View
         PhysicsSettings physicsSettings;
         DiceAnimationSettings animationSettings;
         DiceErasureSettings erasureSettings;
-        DiceSpawnVfxSettings spawnVfxSettings;
+        DiceVfxSettings vfxSettings;
+        VisualEffect fireVfxInstance;
+        VisualEffect fireVfxFadingInstance;
+        Coroutine fireFadeCoroutine;
 
         Transform meshInstance;
         Coroutine rollCoroutine;
@@ -108,10 +111,12 @@ namespace DiceGame.View
         const float MinPhaseDuration = 0.01f;
         const float MinFallGravityScale = 0.01f;
         const float MinSpawnAppearVfxFadeOutDuration = 0.01f;
+        const float MinFireVfxFadeOutDuration = 0.01f;
 
         static readonly int SpawnAppearVfxStartPositionId = Shader.PropertyToID("Start Position");
         static readonly int SpawnAppearVfxEndPositionId = Shader.PropertyToID("End Position");
         static readonly int SpawnAppearVfxStripSizeMaxId = Shader.PropertyToID("Strip Size Max");
+        static readonly int FireVfxRateId = Shader.PropertyToID("Rate");
 
         float oneVanishProgress;
 
@@ -119,11 +124,98 @@ namespace DiceGame.View
             PhysicsSettings physics,
             DiceAnimationSettings animation,
             DiceErasureSettings erasure,
-            DiceSpawnVfxSettings spawnVfx = null) {
+            DiceVfxSettings vfx = null) {
             physicsSettings = physics;
             animationSettings = animation;
             erasureSettings = erasure;
-            spawnVfxSettings = spawnVfx;
+            vfxSettings = vfx;
+        }
+
+        public void SetOnFire(bool onFire) {
+            if (onFire) {
+                EnsureFireVfx();
+                return;
+            }
+
+            ClearFireVfx();
+        }
+
+        void EnsureFireVfx() {
+            if (vfxSettings == null || vfxSettings.FirePrefab == null) {
+                return;
+            }
+
+            CancelFireVfxFade();
+            if (fireVfxInstance != null) {
+                return;
+            }
+
+            ResolveHierarchy();
+            var parent = positionRoot != null ? positionRoot : transform;
+            fireVfxInstance = Instantiate(vfxSettings.FirePrefab, parent);
+            fireVfxInstance.transform.localPosition = Vector3.up * vfxSettings.FireHeightOffset;
+            fireVfxInstance.transform.localRotation = Quaternion.identity;
+            fireVfxInstance.transform.localScale = Vector3.one;
+            fireVfxInstance.Play();
+        }
+
+        void ClearFireVfx() {
+            if (fireVfxInstance == null) {
+                return;
+            }
+
+            CancelFireVfxFade();
+            fireVfxFadingInstance = fireVfxInstance;
+            fireVfxInstance = null;
+            fireFadeCoroutine = StartCoroutine(FadeOutFireVfxCoroutine(fireVfxFadingInstance));
+        }
+
+        void CancelFireVfxFade() {
+            if (fireFadeCoroutine != null) {
+                StopCoroutine(fireFadeCoroutine);
+                fireFadeCoroutine = null;
+            }
+
+            if (fireVfxFadingInstance != null) {
+                Destroy(fireVfxFadingInstance.gameObject);
+                fireVfxFadingInstance = null;
+            }
+        }
+
+        IEnumerator FadeOutFireVfxCoroutine(VisualEffect visualEffect) {
+            if (visualEffect == null) {
+                fireFadeCoroutine = null;
+                fireVfxFadingInstance = null;
+                yield break;
+            }
+
+            var fadeDuration = vfxSettings != null
+                ? Mathf.Max(MinFireVfxFadeOutDuration, vfxSettings.FireFadeOutDuration)
+                : MinFireVfxFadeOutDuration;
+            // Fire.vfx exposes Rate as UInt32 (spawn count), not float.
+            var fromRate = visualEffect.HasUInt(FireVfxRateId)
+                ? visualEffect.GetUInt(FireVfxRateId)
+                : 0u;
+            var elapsed = 0f;
+            while (elapsed < fadeDuration && visualEffect != null) {
+                elapsed += Time.deltaTime;
+                var t = Mathf.Clamp01(elapsed / fadeDuration);
+                visualEffect.SetUInt(
+                    FireVfxRateId,
+                    (uint)Mathf.RoundToInt(Mathf.Lerp(fromRate, 0f, t)));
+                yield return null;
+            }
+
+            if (visualEffect != null) {
+                visualEffect.SetUInt(FireVfxRateId, 0u);
+                Destroy(visualEffect.gameObject);
+            }
+
+            if (fireVfxFadingInstance == visualEffect) {
+                fireVfxFadingInstance = null;
+            }
+
+            fireFadeCoroutine = null;
         }
 
         public void SetEmitVisualMotionEvents(bool enabled) {
@@ -748,17 +840,17 @@ namespace DiceGame.View
         }
 
         void PlaySpawnAppearVfx(DiceState state, Board board, DiceRegistry registry) {
-            if (spawnVfxSettings == null || spawnVfxSettings.Prefab == null || board == null) {
+            if (vfxSettings == null || vfxSettings.SpawnAppearPrefab == null || board == null) {
                 return;
             }
 
             var end = GetAnchoredWorldPosition(state, board, registry);
-            var instance = Instantiate(spawnVfxSettings.Prefab);
+            var instance = Instantiate(vfxSettings.SpawnAppearPrefab);
             instance.transform.position = end;
             // Lightning system is Local space: Start/End are relative to the VFX transform.
             instance.SetVector3(
                 SpawnAppearVfxStartPositionId,
-                Vector3.up * spawnVfxSettings.StartHeight);
+                Vector3.up * vfxSettings.SpawnAppearStartHeight);
             instance.SetVector3(SpawnAppearVfxEndPositionId, Vector3.zero);
             instance.Play();
             StartCoroutine(FadeOutSpawnAppearVfxCoroutine(instance));
@@ -769,8 +861,8 @@ namespace DiceGame.View
                 yield break;
             }
 
-            var fadeDuration = spawnVfxSettings != null
-                ? Mathf.Max(MinSpawnAppearVfxFadeOutDuration, spawnVfxSettings.FadeOutDuration)
+            var fadeDuration = vfxSettings != null
+                ? Mathf.Max(MinSpawnAppearVfxFadeOutDuration, vfxSettings.SpawnAppearFadeOutDuration)
                 : MinSpawnAppearVfxFadeOutDuration;
             var fromSize = visualEffect.HasFloat(SpawnAppearVfxStripSizeMaxId)
                 ? visualEffect.GetFloat(SpawnAppearVfxStripSizeMaxId)

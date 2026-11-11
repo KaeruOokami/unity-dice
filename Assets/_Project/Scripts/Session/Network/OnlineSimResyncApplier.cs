@@ -53,6 +53,7 @@ namespace DiceGame.Session.Network
                 }
 
                 ApplyDiceLogicalState(dice, entity.ToDiceState(), registry);
+                ApplyDiceFireState(dice, entity);
                 entityIds?.RegisterDice(dice, entity.Id);
                 if (ownershipContext != null) {
                     ownershipContext.SetOwner(dice, entity.CatalogPlayerSlot);
@@ -154,7 +155,24 @@ namespace DiceGame.Session.Network
                 entity.CatalogPlayerSlot,
                 spawnSettings,
                 useSpawnAppear: false,
-                forceFallFromAbove: false);
+                forceFallFromAbove: false,
+                isOnFire: entity.IsOnFire);
+        }
+
+        static void ApplyDiceFireState(DiceController dice, OnlineTransformSnapshot entity) {
+            if (dice == null) {
+                return;
+            }
+
+            if (!entity.IsOnFire) {
+                dice.ExtinguishFire();
+                return;
+            }
+
+            var remaining = entity.FireRemainingMs > 0
+                ? entity.FireRemainingMs / 1000f
+                : 0.01f;
+            dice.ApplyNetworkFireState(true, remaining);
         }
 
         static void ApplyDiceLogicalState(

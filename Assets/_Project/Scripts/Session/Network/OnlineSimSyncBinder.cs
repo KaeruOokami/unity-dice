@@ -411,7 +411,8 @@ namespace DiceGame.Session.Network
                 owner,
                 spawnSettings,
                 command.UseSpawnAppear != 0,
-                command.ForceFallFromAbove != 0);
+                command.ForceFallFromAbove != 0,
+                command.IsOnFire != 0);
         }
 
         void OnHostAttackQueueChanged() {

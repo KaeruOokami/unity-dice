@@ -21,7 +21,7 @@ namespace DiceGame.Gameplay
             PhysicsSettings physicsSettings,
             DiceAnimationSettings animationSettings,
             DiceErasureSettings erasureSettings,
-            DiceSpawnVfxSettings spawnVfxSettings) {
+            DiceVfxSettings vfxSettings = null) {
             if (prefab == null) {
                 return null;
             }
@@ -37,7 +37,11 @@ namespace DiceGame.Gameplay
                 return null;
             }
 
-            diceView.Configure(physicsSettings, animationSettings, erasureSettings, spawnVfxSettings);
+            diceView.Configure(
+                physicsSettings,
+                animationSettings,
+                erasureSettings,
+                vfxSettings);
             if (meshPrefab != null) {
                 diceView.SetMeshPrefab(meshPrefab);
             }
@@ -84,7 +88,8 @@ namespace DiceGame.Gameplay
         PhysicsSettings physicsSettings;
         DiceAnimationSettings diceAnimationSettings;
         DiceErasureSettings diceErasureSettings;
-        DiceSpawnVfxSettings diceSpawnVfxSettings;
+        DiceVfxSettings diceVfxSettings;
+        DiceFireSystem fireSystem;
         PlayerMatchActionContext matchActionContext;
         DiceMatchOwnershipContext ownershipContext;
         DiceMatchErasureSystem erasureSystem;
@@ -132,7 +137,7 @@ namespace DiceGame.Gameplay
             PhysicsSettings physics,
             DiceAnimationSettings animationSettings,
             DiceErasureSettings erasureSettings,
-            DiceSpawnVfxSettings spawnVfxSettings,
+            DiceVfxSettings vfxSettings,
             PlayerMatchActionContext actionContext,
             DiceSpawnSettings settings,
             System.Random spawnRandom) {
@@ -144,12 +149,16 @@ namespace DiceGame.Gameplay
             physicsSettings = physics;
             diceAnimationSettings = animationSettings;
             diceErasureSettings = erasureSettings;
-            diceSpawnVfxSettings = spawnVfxSettings;
+            diceVfxSettings = vfxSettings;
             matchActionContext = actionContext;
             spawnSettings = settings;
             random = spawnRandom;
             versusChannels.Clear();
             gameplayEnabled = true;
+        }
+
+        public void ConfigureFireSystem(DiceFireSystem targetFireSystem) {
+            fireSystem = targetFireSystem;
         }
 
         public void ConfigureOwnership(DiceMatchOwnershipContext matchOwnership) {
@@ -631,9 +640,11 @@ namespace DiceGame.Gameplay
             }
 
             DiceKind kind;
+            var igniteOnSpawn = false;
             if (fixedKind.HasValue) {
                 kind = fixedKind.Value;
-            } else if (!catalog.TryPickRandomKind(random, out kind)) {
+                catalog.TryGetIgniteOnSpawn(kind, out igniteOnSpawn);
+            } else if (!catalog.TryPickRandomKind(random, out kind, out igniteOnSpawn)) {
                 Debug.LogError("DiceSpawnSystem: Failed to pick dice kind. Check DiceCatalog spawn weights.");
                 return null;
             }
@@ -660,7 +671,7 @@ namespace DiceGame.Gameplay
                 physicsSettings,
                 diceAnimationSettings,
                 diceErasureSettings,
-                diceSpawnVfxSettings);
+                diceVfxSettings);
 
             if (diceController == null) {
                 return null;
@@ -690,6 +701,7 @@ namespace DiceGame.Gameplay
                 diceController.Configure(board, diceView, registry, gridPos, orientation, tier, kind);
             }
 
+            fireSystem?.ApplySpawnFire(diceController, igniteOnSpawn);
             erasureSystem?.EnsureDiceSubscribed(diceController);
             if (emitNetworkSpawns) {
                 NetworkSpawnEmitted?.Invoke(diceController, 1, useSpawnAppear, false);
@@ -724,7 +736,8 @@ namespace DiceGame.Gameplay
             PlayerSlot targetSlot,
             DiceKind kind,
             int pip,
-            DiceSpawnSettings spawnSettings) {
+            DiceSpawnSettings spawnSettings,
+            bool isOnFire = false) {
             if (kind == DiceKind.Jumbo) {
                 return SpawnJumboDice(
                     targetSlot,
@@ -765,7 +778,7 @@ namespace DiceGame.Gameplay
                 physicsSettings,
                 diceAnimationSettings,
                 diceErasureSettings,
-                diceSpawnVfxSettings);
+                diceVfxSettings);
 
             if (diceController == null) {
                 return null;
@@ -789,6 +802,7 @@ namespace DiceGame.Gameplay
                 kind,
                 forceFallFromAbove: true);
 
+            fireSystem?.ApplySpawnFire(diceController, isOnFire);
             erasureSystem?.EnsureDiceSubscribed(diceController);
             if (emitNetworkSpawns) {
                 NetworkSpawnEmitted?.Invoke(diceController, 2, true, true);
@@ -858,7 +872,7 @@ namespace DiceGame.Gameplay
                 physicsSettings,
                 diceAnimationSettings,
                 diceErasureSettings,
-                diceSpawnVfxSettings);
+                diceVfxSettings);
 
             if (diceController == null) {
                 return null;
@@ -901,7 +915,8 @@ namespace DiceGame.Gameplay
             PlayerSlot ownerSlot,
             DiceSpawnSettings activeSpawnSettings,
             bool useSpawnAppear,
-            bool forceFallFromAbove) {
+            bool forceFallFromAbove,
+            bool isOnFire = false) {
             var catalog = ResolveCatalog(ownerSlot);
             if (!gameplayEnabled
                 || activeSpawnSettings == null
@@ -934,7 +949,7 @@ namespace DiceGame.Gameplay
                 physicsSettings,
                 diceAnimationSettings,
                 diceErasureSettings,
-                diceSpawnVfxSettings);
+                diceVfxSettings);
 
             if (diceController == null) {
                 emitNetworkSpawns = previousEmit;
@@ -964,6 +979,7 @@ namespace DiceGame.Gameplay
                 diceController.Configure(board, diceView, registry, gridPos, orientation, tier, kind);
             }
 
+            fireSystem?.ApplySpawnFire(diceController, isOnFire);
             erasureSystem?.EnsureDiceSubscribed(diceController);
             emitNetworkSpawns = previousEmit;
             return diceController;

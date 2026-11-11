@@ -25,10 +25,12 @@ namespace DiceGame.Session.Network
     {
         public byte Kind;
         public float SpawnWeight;
+        public byte IgniteOnSpawn;
 
         public void NetworkSerialize<T>(BufferSerializer<T> serializer) where T : IReaderWriter {
             serializer.SerializeValue(ref Kind);
             serializer.SerializeValue(ref SpawnWeight);
+            serializer.SerializeValue(ref IgniteOnSpawn);
         }
     }
 
@@ -57,12 +59,14 @@ namespace DiceGame.Session.Network
         public int MaxCountPerVolley;
         public float MinimumPower;
         public float SelectionWeight;
+        public byte IgniteOnSpawn;
 
         public void NetworkSerialize<T>(BufferSerializer<T> serializer) where T : IReaderWriter {
             serializer.SerializeValue(ref Kind);
             serializer.SerializeValue(ref MaxCountPerVolley);
             serializer.SerializeValue(ref MinimumPower);
             serializer.SerializeValue(ref SelectionWeight);
+            serializer.SerializeValue(ref IgniteOnSpawn);
         }
     }
 
@@ -141,11 +145,13 @@ namespace DiceGame.Session.Network
         public byte Kind;
         public int MaxCountPerVolley;
         public float SelectionWeight;
+        public byte IgniteOnSpawn;
 
         public void NetworkSerialize<T>(BufferSerializer<T> serializer) where T : IReaderWriter {
             serializer.SerializeValue(ref Kind);
             serializer.SerializeValue(ref MaxCountPerVolley);
             serializer.SerializeValue(ref SelectionWeight);
+            serializer.SerializeValue(ref IgniteOnSpawn);
         }
     }
 

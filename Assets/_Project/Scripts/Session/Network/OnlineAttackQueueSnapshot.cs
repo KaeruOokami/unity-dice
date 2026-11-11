@@ -10,21 +10,24 @@ namespace DiceGame.Session.Network
     {
         public byte Kind;
         public byte Pip;
+        public byte IsOnFire;
 
         public AttackDieSpec ToSpec() {
-            return new AttackDieSpec((DiceKind)Kind, Pip);
+            return new AttackDieSpec((DiceKind)Kind, Pip, IsOnFire != 0);
         }
 
         public static OnlineAttackDiePayload FromSpec(AttackDieSpec spec) {
             return new OnlineAttackDiePayload {
                 Kind = (byte)spec.Kind,
-                Pip = (byte)Math.Clamp(spec.Pip, 1, 6)
+                Pip = (byte)Math.Clamp(spec.Pip, 1, 6),
+                IsOnFire = (byte)(spec.IsOnFire ? 1 : 0)
             };
         }
 
         public void NetworkSerialize<T>(BufferSerializer<T> serializer) where T : IReaderWriter {
             serializer.SerializeValue(ref Kind);
             serializer.SerializeValue(ref Pip);
+            serializer.SerializeValue(ref IsOnFire);
         }
     }
 

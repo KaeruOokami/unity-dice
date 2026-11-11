@@ -27,6 +27,8 @@ namespace DiceGame.Gameplay
         bool isRolling;
         bool isSpawning;
         ErasureKind erasureKind = ErasureKind.None;
+        bool isOnFire;
+        float fireRemaining;
         bool isVanishing;
         bool isCarried;
         bool wasSinkErasureGhost;
@@ -60,6 +62,8 @@ namespace DiceGame.Gameplay
         public bool IsSinkErasing => erasureKind == ErasureKind.Sink;
         public bool IsRadianceErasing => erasureKind == ErasureKind.Radiance;
         public ErasureKind ErasureKind => erasureKind;
+        public bool IsOnFire => isOnFire;
+        public float FireRemaining => fireRemaining;
         public bool IsVanishing => isVanishing;
         public Board Board => board;
         public bool IsErasureGhost =>
@@ -323,6 +327,7 @@ namespace DiceGame.Gameplay
         }
 
         public event Action<DiceState> StateChanged;
+        public event Action<bool> FireStateChanged;
         public event Action<DiceController> Erased;
         public event Action<DiceController> ErasureStarted;
 
@@ -1249,6 +1254,68 @@ namespace DiceGame.Gameplay
             IceElasticSlideExecutor.TryBeginTransfer(target, direction, registry, owner);
         }
 
+        public bool TryIgnite(float duration) {
+            if (!DiceFirePolicy.CanCarryFire(Behavior) || duration <= 0f) {
+                return false;
+            }
+
+            if (isOnFire) {
+                fireRemaining = Mathf.Max(fireRemaining, duration);
+                return true;
+            }
+
+            isOnFire = true;
+            fireRemaining = duration;
+            diceView?.SetOnFire(true);
+            FireStateChanged?.Invoke(true);
+            return true;
+        }
+
+        public void ExtinguishFire() {
+            if (!isOnFire) {
+                return;
+            }
+
+            isOnFire = false;
+            fireRemaining = 0f;
+            diceView?.SetOnFire(false);
+            FireStateChanged?.Invoke(false);
+        }
+
+        public void ApplyNetworkFireState(bool onFire, float remainingDuration) {
+            if (!onFire) {
+                ExtinguishFire();
+                return;
+            }
+
+            if (!DiceFirePolicy.CanCarryFire(Behavior)) {
+                ExtinguishFire();
+                return;
+            }
+
+            var duration = Mathf.Max(0.01f, remainingDuration);
+            if (isOnFire) {
+                fireRemaining = duration;
+                return;
+            }
+
+            isOnFire = true;
+            fireRemaining = duration;
+            diceView?.SetOnFire(true);
+            FireStateChanged?.Invoke(true);
+        }
+
+        public void TickFire(float deltaTime) {
+            if (!isOnFire || deltaTime <= 0f) {
+                return;
+            }
+
+            fireRemaining -= deltaTime;
+            if (fireRemaining <= 0f) {
+                ExtinguishFire();
+            }
+        }
+
         public void BeginErasure(ErasureKind kind, Action onComplete) {
             BeginErasure(kind, null, onComplete);
         }
@@ -1262,6 +1329,7 @@ namespace DiceGame.Gameplay
             isCarried = false;
             var sinkStartProgress = CommitSpawnIfNeededForErasure();
 
+            ExtinguishFire();
             erasureKind = kind;
             ErasureStarted?.Invoke(this);
             // Sink starts: Ghost becomes solid for the player again.
@@ -1567,6 +1635,7 @@ namespace DiceGame.Gameplay
         /// Immediately remove this die (including mid-erasure / vanish) for jumbo landing clears.
         /// </summary>
         public void ForceDestroyForOverride() {
+            ExtinguishFire();
             if (IsErasing) {
                 CompleteErasureFromOverride();
                 return;

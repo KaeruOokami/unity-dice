@@ -23,6 +23,7 @@ namespace DiceGame.Session
             public TMP_Dropdown KindDropdown;
             public TMP_InputField MaxCountPerVolley;
             public TMP_InputField SelectionWeight;
+            public Toggle IgniteOnSpawn;
         }
 
         public static Bindings Build(Transform parent, string sectionLabel, PlayerNaturalSendSettingsData template) {
@@ -134,6 +135,18 @@ namespace DiceGame.Session
                 SetInputText(maxField, kinds[i].MaxCountPerVolley.ToString());
                 var weightField = SessionUiFactory.CreateLabeledFloatInput(fieldsRow, "Weight");
                 SetInputText(weightField, kinds[i].SelectionWeight.ToString("0.###"));
+                var igniteRow = SessionUiFactory.CreateTwoColumnRow(kindSection, "KindIgniteRow");
+                var igniteToggle = SessionUiFactory.CreateLabeledToggle(igniteRow, "Ignite On Spawn");
+                var canIgnite = DiceFirePolicy.CanCarryFire(kinds[i].Kind);
+                igniteToggle.interactable = canIgnite;
+                igniteToggle.isOn = canIgnite && kinds[i].IgniteOnSpawn;
+                kindDropdown.onValueChanged.AddListener(value => {
+                    var allowed = DiceFirePolicy.CanCarryFire((DiceKind)value);
+                    igniteToggle.interactable = allowed;
+                    if (!allowed) {
+                        igniteToggle.isOn = false;
+                    }
+                });
 
                 SessionUiFactory.CreateLayoutButton(kindSection, "RemoveKindButton", "Remove Kind", 36f, () => {
                     RemoveKind(bindings, index);
@@ -142,7 +155,8 @@ namespace DiceGame.Session
                 bindings.KindRows.Add(new KindRow {
                     KindDropdown = kindDropdown,
                     MaxCountPerVolley = maxField,
-                    SelectionWeight = weightField
+                    SelectionWeight = weightField,
+                    IgniteOnSpawn = igniteToggle
                 });
             }
 
@@ -163,10 +177,14 @@ namespace DiceGame.Session
                     return false;
                 }
 
+                var kind = (DiceKind)rows[i].KindDropdown.value;
                 result[i] = new NaturalSendKindLimitData {
-                    Kind = (DiceKind)rows[i].KindDropdown.value,
+                    Kind = kind,
                     MaxCountPerVolley = maxCount,
-                    SelectionWeight = weight
+                    SelectionWeight = weight,
+                    IgniteOnSpawn = rows[i].IgniteOnSpawn != null
+                        && rows[i].IgniteOnSpawn.isOn
+                        && DiceFirePolicy.CanCarryFire(kind)
                 };
             }
 
@@ -193,10 +211,14 @@ namespace DiceGame.Session
                     weight = 1f;
                 }
 
+                var kind = row.KindDropdown != null ? (DiceKind)row.KindDropdown.value : DiceKind.Normal;
                 kinds.Add(new NaturalSendKindLimitData {
-                    Kind = row.KindDropdown != null ? (DiceKind)row.KindDropdown.value : DiceKind.Normal,
+                    Kind = kind,
                     MaxCountPerVolley = maxCount,
-                    SelectionWeight = weight
+                    SelectionWeight = weight,
+                    IgniteOnSpawn = row.IgniteOnSpawn != null
+                        && row.IgniteOnSpawn.isOn
+                        && DiceFirePolicy.CanCarryFire(kind)
                 });
             }
 

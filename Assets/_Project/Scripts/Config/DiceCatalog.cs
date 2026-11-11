@@ -13,6 +13,7 @@ namespace DiceGame.Config
             public DiceKind Kind;
             public GameObject MeshPrefab;
             [Min(0f)] public float SpawnWeight;
+            public bool IgniteOnSpawn;
         }
 
         [SerializeField] Entry[] entries = Array.Empty<Entry>();
@@ -20,7 +21,12 @@ namespace DiceGame.Config
         public Entry[] Entries => entries;
 
         public bool TryPickRandomKind(System.Random random, out DiceKind kind) {
+            return TryPickRandomKind(random, out kind, out _);
+        }
+
+        public bool TryPickRandomKind(System.Random random, out DiceKind kind, out bool igniteOnSpawn) {
             kind = default;
+            igniteOnSpawn = false;
             if (random == null || entries == null || entries.Length == 0) {
                 return false;
             }
@@ -47,11 +53,22 @@ namespace DiceGame.Config
                 cumulative += entry.SpawnWeight;
                 if (roll < cumulative) {
                     kind = entry.Kind;
+                    igniteOnSpawn = entry.IgniteOnSpawn && DiceFirePolicy.CanCarryFire(kind);
                     return true;
                 }
             }
 
             return false;
+        }
+
+        public bool TryGetIgniteOnSpawn(DiceKind kind, out bool igniteOnSpawn) {
+            igniteOnSpawn = false;
+            if (!TryGetEntry(kind, out var entry)) {
+                return false;
+            }
+
+            igniteOnSpawn = entry.IgniteOnSpawn && DiceFirePolicy.CanCarryFire(kind);
+            return true;
         }
 
         public bool TryGetMeshPrefab(DiceKind kind, out GameObject meshPrefab) {
@@ -103,7 +120,8 @@ namespace DiceGame.Config
                 entries[i] = new Entry {
                     Kind = data.Entries[i].Kind,
                     MeshPrefab = data.Entries[i].MeshPrefab,
-                    SpawnWeight = Mathf.Max(0f, data.Entries[i].SpawnWeight)
+                    SpawnWeight = Mathf.Max(0f, data.Entries[i].SpawnWeight),
+                    IgniteOnSpawn = data.Entries[i].IgniteOnSpawn
                 };
             }
         }

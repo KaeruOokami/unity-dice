@@ -2,6 +2,7 @@ using DiceGame.Config;
 using DiceGame.Core;
 using TMPro;
 using UnityEngine;
+using UnityEngine.UI;
 
 namespace DiceGame.Session
 {
@@ -11,6 +12,7 @@ namespace DiceGame.Session
         {
             public DiceCatalogEntryData[] BaseEntries;
             public TMP_InputField[] WeightFields;
+            public Toggle[] IgniteOnSpawnToggles;
         }
 
         public static Bindings Build(Transform parent, string sectionLabel, DiceCatalogData template) {
@@ -19,21 +21,23 @@ namespace DiceGame.Session
 
             var entries = template.Entries ?? System.Array.Empty<DiceCatalogEntryData>();
             var weightFields = new TMP_InputField[entries.Length];
-            RectTransform currentRow = null;
+            var igniteToggles = new Toggle[entries.Length];
             for (var i = 0; i < entries.Length; i++) {
-                if (i % 2 == 0) {
-                    currentRow = SessionUiFactory.CreateTwoColumnRow(section, $"CatalogRow_{i / 2}");
-                }
-
+                var row = SessionUiFactory.CreateTwoColumnRow(section, $"CatalogRow_{i}");
                 weightFields[i] = SessionUiFactory.CreateKindLabeledFloatInput(
-                    currentRow,
+                    row,
                     entries[i].Kind,
                     "Spawn Weight");
+                var canIgnite = DiceFirePolicy.CanCarryFire(entries[i].Kind);
+                igniteToggles[i] = SessionUiFactory.CreateLabeledToggle(row, "Ignite On Spawn");
+                igniteToggles[i].interactable = canIgnite;
+                igniteToggles[i].isOn = canIgnite && entries[i].IgniteOnSpawn;
             }
 
             return new Bindings {
                 BaseEntries = entries,
-                WeightFields = weightFields
+                WeightFields = weightFields,
+                IgniteOnSpawnToggles = igniteToggles
             };
         }
 
@@ -44,11 +48,17 @@ namespace DiceGame.Session
 
             for (var i = 0; i < bindings.WeightFields.Length; i++) {
                 var weight = 0f;
+                var ignite = false;
                 if (data.Entries != null) {
-                    weight = FindWeight(data.Entries, bindings.BaseEntries[i].Kind);
+                    FindEntry(data.Entries, bindings.BaseEntries[i].Kind, out weight, out ignite);
                 }
 
                 SetInputText(bindings.WeightFields[i], weight.ToString("0.###"));
+                if (bindings.IgniteOnSpawnToggles != null && i < bindings.IgniteOnSpawnToggles.Length) {
+                    var canIgnite = DiceFirePolicy.CanCarryFire(bindings.BaseEntries[i].Kind);
+                    bindings.IgniteOnSpawnToggles[i].interactable = canIgnite;
+                    bindings.IgniteOnSpawnToggles[i].isOn = canIgnite && ignite;
+                }
             }
         }
 
@@ -71,10 +81,17 @@ namespace DiceGame.Session
                     return false;
                 }
 
+                var ignite = bindings.IgniteOnSpawnToggles != null
+                    && i < bindings.IgniteOnSpawnToggles.Length
+                    && bindings.IgniteOnSpawnToggles[i] != null
+                    && bindings.IgniteOnSpawnToggles[i].isOn
+                    && DiceFirePolicy.CanCarryFire(bindings.BaseEntries[i].Kind);
+
                 entries[i] = new DiceCatalogEntryData {
                     Kind = bindings.BaseEntries[i].Kind,
                     MeshPrefab = bindings.BaseEntries[i].MeshPrefab,
-                    SpawnWeight = weight
+                    SpawnWeight = weight,
+                    IgniteOnSpawn = ignite
                 };
             }
 
@@ -88,14 +105,20 @@ namespace DiceGame.Session
             return true;
         }
 
-        static float FindWeight(DiceCatalogEntryData[] entries, DiceKind kind) {
+        static void FindEntry(
+            DiceCatalogEntryData[] entries,
+            DiceKind kind,
+            out float weight,
+            out bool igniteOnSpawn) {
+            weight = 0f;
+            igniteOnSpawn = false;
             for (var i = 0; i < entries.Length; i++) {
                 if (entries[i].Kind == kind) {
-                    return entries[i].SpawnWeight;
+                    weight = entries[i].SpawnWeight;
+                    igniteOnSpawn = entries[i].IgniteOnSpawn;
+                    return;
                 }
             }
-
-            return 0f;
         }
 
         static void SetInputText(TMP_InputField input, string value) {

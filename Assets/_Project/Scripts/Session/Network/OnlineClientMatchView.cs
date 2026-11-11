@@ -65,7 +65,7 @@ namespace DiceGame.Session.Network
         PhysicsSettings physicsSettings;
         DiceAnimationSettings animationSettings;
         DiceErasureSettings erasureSettings;
-        DiceSpawnVfxSettings spawnVfxSettings;
+        DiceVfxSettings vfxSettings;
         DiceOneVanishSettings oneVanishSettings;
         Transform proxyRoot;
         readonly Dictionary<uint, Transform> proxies = new();
@@ -99,7 +99,7 @@ namespace DiceGame.Session.Network
             PhysicsSettings matchPhysicsSettings,
             DiceAnimationSettings matchAnimationSettings,
             DiceErasureSettings diceErasureSettings,
-            DiceSpawnVfxSettings diceSpawnVfxSettings,
+            DiceVfxSettings diceVfxSettings,
             DiceOneVanishSettings diceOneVanishSettings,
             Board matchBoard,
             DiceCatalog catalog,
@@ -112,7 +112,7 @@ namespace DiceGame.Session.Network
             physicsSettings = matchPhysicsSettings;
             animationSettings = matchAnimationSettings;
             erasureSettings = diceErasureSettings;
-            spawnVfxSettings = diceSpawnVfxSettings;
+            vfxSettings = diceVfxSettings;
             oneVanishSettings = diceOneVanishSettings;
             board = matchBoard;
             primaryCatalog = catalog;
@@ -382,6 +382,7 @@ namespace DiceGame.Session.Network
                                 entity.Id,
                                 (DiceKind)entity.Kind,
                                 entity.CatalogPlayerSlot);
+                            diceView.SetOnFire(entity.IsOnFire);
                         }
                     } else if (IsLocalPlayerCharacter(entity)) {
                         ApplyLocalCharacterAuthority(entity);
@@ -662,10 +663,11 @@ namespace DiceGame.Session.Network
                         physicsSettings,
                         animationSettings,
                         erasureSettings,
-                        spawnVfxSettings);
+                        vfxSettings);
                     diceView.SetEmitVisualMotionEvents(false);
                     diceViews[entity.Id] = diceView;
                     ApplyKindMesh(diceView, entity.Id, (DiceKind)entity.Kind, entity.CatalogPlayerSlot);
+                    diceView.SetOnFire(entity.IsOnFire);
                 }
 
                 DisableGameplayBehaviours(instance);
@@ -738,7 +740,7 @@ namespace DiceGame.Session.Network
                     physicsSettings,
                     animationSettings,
                     erasureSettings,
-                    spawnVfxSettings);
+                    vfxSettings);
                 diceView.SetEmitVisualMotionEvents(false);
                 diceViews[entityId] = diceView;
             }

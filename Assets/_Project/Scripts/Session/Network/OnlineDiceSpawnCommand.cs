@@ -26,6 +26,7 @@ namespace DiceGame.Session.Network
         public byte EastFace;
         public byte UseSpawnAppear;
         public byte ForceFallFromAbove;
+        public byte IsOnFire;
 
         public PlayerSlot Owner => (PlayerSlot)OwnerSlot;
 
@@ -54,7 +55,8 @@ namespace DiceGame.Session.Network
                 NorthFace = (byte)state.Orientation.North,
                 EastFace = (byte)state.Orientation.East,
                 UseSpawnAppear = (byte)(useSpawnAppear ? 1 : 0),
-                ForceFallFromAbove = (byte)(forceFallFromAbove ? 1 : 0)
+                ForceFallFromAbove = (byte)(forceFallFromAbove ? 1 : 0),
+                IsOnFire = (byte)(dice.IsOnFire ? 1 : 0)
             };
         }
 
@@ -70,6 +72,7 @@ namespace DiceGame.Session.Network
             serializer.SerializeValue(ref EastFace);
             serializer.SerializeValue(ref UseSpawnAppear);
             serializer.SerializeValue(ref ForceFallFromAbove);
+            serializer.SerializeValue(ref IsOnFire);
         }
     }
 }

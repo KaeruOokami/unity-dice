@@ -11,6 +11,7 @@ namespace DiceGame.Config
         public int MaxCountPerVolley;
         public float MinimumPower;
         public float SelectionWeight;
+        public bool IgniteOnSpawn;
     }
 
     [Serializable]
@@ -55,7 +56,8 @@ namespace DiceGame.Config
                         Kind = kinds[j].Kind,
                         MaxCountPerVolley = kinds[j].MaxCountPerVolley,
                         MinimumPower = kinds[j].MinimumPower,
-                        SelectionWeight = kinds[j].SelectionWeight
+                        SelectionWeight = kinds[j].SelectionWeight,
+                        IgniteOnSpawn = kinds[j].IgniteOnSpawn
                     };
                 }
 

@@ -112,6 +112,10 @@ namespace DiceGame.Editor
             entry.FindPropertyRelative("MeshPrefab").objectReferenceValue =
                 AssetDatabase.LoadAssetAtPath<GameObject>(prefabPath);
             entry.FindPropertyRelative("SpawnWeight").floatValue = spawnWeight;
+            var igniteProperty = entry.FindPropertyRelative("IgniteOnSpawn");
+            if (igniteProperty != null) {
+                igniteProperty.boolValue = false;
+            }
         }
 
         [MenuItem("Dice/Setup Game Scene")]
