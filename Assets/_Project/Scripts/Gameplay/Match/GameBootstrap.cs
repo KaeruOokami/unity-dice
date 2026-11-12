@@ -41,7 +41,7 @@ namespace DiceGame.Gameplay
                 return;
             }
 
-            var center = board.GridToWorld(new Vector2Int(board.Width / 2, board.Height / 2));
+            var center = board.GetBoardCenterWorld();
             var distance = board.CellSize * Mathf.Max(board.Width, board.Height) * distanceScale;
             camera.transform.position = center + Vector3.Scale(offsetFactors, Vector3.one * distance);
 

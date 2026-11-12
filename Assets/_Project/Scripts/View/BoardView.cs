@@ -46,13 +46,12 @@ namespace DiceGame.View
 
             var boardWidth = board.Width * board.CellSize;
             var boardDepth = board.Height * board.CellSize;
-            var centerX = (board.Width - 1) * board.CellSize * 0.5f;
-            var centerZ = (board.Height - 1) * board.CellSize * 0.5f;
+            var center = board.BoardCenterWorldXZ;
 
-            floor.transform.localPosition = new Vector3(
-                centerX,
+            floor.transform.position = new Vector3(
+                center.x,
                 board.FloorSurfaceWorldY,
-                centerZ);
+                center.y);
             floor.transform.localScale = new Vector3(
                 boardWidth / 10f,
                 1f,

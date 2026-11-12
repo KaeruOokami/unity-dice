@@ -15,14 +15,11 @@ MonoBehaviour:
   faceSendProfiles:
   - triggerFaces: 010000000200000003000000040000000500000006000000
     sendableKinds:
-    - kind: 3
+    - kind: 0
       maxCountPerVolley: 3
       minimumPower: 0
       selectionWeight: 1
-    - kind: 2
-      maxCountPerVolley: 3
-      minimumPower: 0
-      selectionWeight: 1
+      igniteOnSpawn: 1
   attackMultiplier: 0.4
   faceGain: 0.4
   chainGain: 0.1
@@ -33,3 +30,4 @@ MonoBehaviour:
   face4Weight: 1
   face5Weight: 1
   face6Weight: 1
+  erasureEmissionColor: {r: 1, g: 1, b: 1, a: 1}

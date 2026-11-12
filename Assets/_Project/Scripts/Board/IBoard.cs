@@ -10,6 +10,8 @@ namespace DiceGame.Grid
         bool IsInside(Vector2Int gridPos);
         CellType GetCell(Vector2Int gridPos);
         float FloorSurfaceWorldY { get; }
+        Vector2 BoardCenterWorldXZ { get; }
+        Vector3 GetBoardCenterWorld();
         Vector3 GridToWorld(Vector2Int gridPos);
         Vector2Int WorldToGrid(Vector3 worldPosition);
     }

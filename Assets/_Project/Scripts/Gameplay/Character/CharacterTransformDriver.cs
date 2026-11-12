@@ -91,21 +91,17 @@ namespace DiceGame.Gameplay.Character
             if (supportState.Support.Kind == SupportKind.Floor) {
                 if (board != null && board.IsVersusArena && board.VersusLayout != null && movementOwner.HasValue) {
                     board.VersusLayout.GetPlayerGridBounds(movementOwner.Value, out var minCell, out var maxCell);
-                    var minX = minCell.x * board.CellSize;
-                    var minZ = minCell.y * board.CellSize;
-                    var maxX = maxCell.x * board.CellSize;
-                    var maxZ = maxCell.y * board.CellSize;
-                    worldPos.x = Mathf.Clamp(worldPos.x, minX, maxX);
-                    worldPos.z = Mathf.Clamp(worldPos.z, minZ, maxZ);
+                    var minWorld = board.GridToWorld(minCell);
+                    var maxWorld = board.GridToWorld(maxCell);
+                    worldPos.x = Mathf.Clamp(worldPos.x, minWorld.x, maxWorld.x);
+                    worldPos.z = Mathf.Clamp(worldPos.z, minWorld.z, maxWorld.z);
                     return worldPos;
                 }
 
-                var minXBoard = 0f;
-                var minZBoard = 0f;
-                var maxXBoard = (board.Width - 1) * board.CellSize;
-                var maxZBoard = (board.Height - 1) * board.CellSize;
-                worldPos.x = Mathf.Clamp(worldPos.x, minXBoard, maxXBoard);
-                worldPos.z = Mathf.Clamp(worldPos.z, minZBoard, maxZBoard);
+                var minBoard = board.GridToWorld(Vector2Int.zero);
+                var maxBoard = board.GridToWorld(new Vector2Int(board.Width - 1, board.Height - 1));
+                worldPos.x = Mathf.Clamp(worldPos.x, minBoard.x, maxBoard.x);
+                worldPos.z = Mathf.Clamp(worldPos.z, minBoard.z, maxBoard.z);
                 return worldPos;
             }
 

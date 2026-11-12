@@ -10,6 +10,9 @@ namespace DiceGame.Grid
 
         [SerializeField] float floorSurfaceWorldY;
 
+        [Tooltip("World XZ of the board geometric center (midpoint of cell centers).")]
+        [SerializeField] Vector2 boardCenterWorldXZ;
+
         int width = 1;
         int height = 1;
         CellType[,] cells;
@@ -19,6 +22,7 @@ namespace DiceGame.Grid
         public int Height => versusLayout != null ? versusLayout.GlobalHeight : height;
         public float CellSize => cellSize;
         public float FloorSurfaceWorldY => floorSurfaceWorldY;
+        public Vector2 BoardCenterWorldXZ => boardCenterWorldXZ;
         public VersusArenaLayout VersusLayout => versusLayout;
         public bool IsVersusArena => versusLayout != null;
 
@@ -78,15 +82,36 @@ namespace DiceGame.Grid
             return PartitionBoundaryPolicy.BlocksMovement(versusLayout, fromCell, toCell, movementOwner);
         }
 
+        /// <summary>
+        /// World position of the board geometric center at dice resting height.
+        /// </summary>
+        public Vector3 GetBoardCenterWorld() {
+            return new Vector3(boardCenterWorldXZ.x, cellSize * 0.5f, boardCenterWorldXZ.y);
+        }
+
+        /// <summary>
+        /// World XZ of cell (0, 0) center, derived from <see cref="BoardCenterWorldXZ"/>.
+        /// </summary>
+        public Vector2 GetGridOriginWorldXZ() {
+            return boardCenterWorldXZ - new Vector2(
+                (Width - 1) * cellSize * 0.5f,
+                (Height - 1) * cellSize * 0.5f);
+        }
+
         public Vector2Int WorldToGrid(Vector3 worldPosition) {
+            var origin = GetGridOriginWorldXZ();
             return new Vector2Int(
-                Mathf.RoundToInt(worldPosition.x / cellSize),
-                Mathf.RoundToInt(worldPosition.z / cellSize));
+                Mathf.RoundToInt((worldPosition.x - origin.x) / cellSize),
+                Mathf.RoundToInt((worldPosition.z - origin.y) / cellSize));
         }
 
         public Vector3 GridToWorld(Vector2Int gridPos) {
+            var origin = GetGridOriginWorldXZ();
             var halfHeight = cellSize * 0.5f;
-            return new Vector3(gridPos.x * cellSize, halfHeight, gridPos.y * cellSize);
+            return new Vector3(
+                origin.x + gridPos.x * cellSize,
+                halfHeight,
+                origin.y + gridPos.y * cellSize);
         }
     }
 }
