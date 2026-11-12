@@ -42,6 +42,11 @@ namespace DiceGame.Config
         [Min(1)]
         [SerializeField] int iconPrewarmPerFrame = 2;
         [SerializeField] string previewLayerName = "DiceIconPreview";
+        [Header("Fire Icon Pulse")]
+        [Min(0.05f)]
+        [SerializeField] float fireIconPulsePeriodSeconds = 0.85f;
+        [SerializeField] Color fireIconIdleColor = Color.white;
+        [SerializeField] Color fireIconGlowColor = new(1f, 0.28f, 0.08f, 1f);
         [SerializeField] AttackQueuePanelLayout player1PanelLayout = new(
             new Vector2(0.02f, 0.98f),
             new Vector2(0.02f, 0.98f),
@@ -60,6 +65,9 @@ namespace DiceGame.Config
         public float PreviewLightIntensity => previewLightIntensity;
         public int IconPrewarmPerFrame => Mathf.Max(1, iconPrewarmPerFrame);
         public string PreviewLayerName => previewLayerName;
+        public float FireIconPulsePeriodSeconds => Mathf.Max(0.05f, fireIconPulsePeriodSeconds);
+        public Color FireIconIdleColor => fireIconIdleColor;
+        public Color FireIconGlowColor => fireIconGlowColor;
         public AttackQueuePanelLayout Player1PanelLayout => player1PanelLayout;
         public AttackQueuePanelLayout Player2PanelLayout => player2PanelLayout;
 

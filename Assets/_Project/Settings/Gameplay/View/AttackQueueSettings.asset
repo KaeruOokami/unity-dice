@@ -21,6 +21,9 @@ MonoBehaviour:
   previewLightIntensity: 1.2
   iconPrewarmPerFrame: 2
   previewLayerName: DiceIconPreview
+  fireIconPulsePeriodSeconds: 0.85
+  fireIconIdleColor: {r: 1, g: 1, b: 1, a: 1}
+  fireIconGlowColor: {r: 1, g: 0.28, b: 0.08, a: 1}
   player1PanelLayout:
     anchorMin: {x: 0.02, y: 0.02}
     anchorMax: {x: 0.98, y: 0.98}

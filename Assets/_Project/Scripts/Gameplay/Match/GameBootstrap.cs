@@ -328,7 +328,7 @@ namespace DiceGame.Gameplay
                 Debug.LogWarning("GameBootstrap: DiceFireSettings is not assigned; fire overlay is disabled.");
             }
 
-            fireSystem.Configure(registry, diceFireSettings, spawnRandom);
+            fireSystem.Configure(board, registry, diceFireSettings, spawnRandom);
             spawnSystem.ConfigureFireSystem(fireSystem);
 
             var playerCount = resolvedSetup.RequiredPlayerCount;

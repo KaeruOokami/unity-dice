@@ -42,8 +42,8 @@ VisualEffect:
   m_GameObject: {fileID: 1201445259041016161}
   m_Enabled: 1
   m_Asset: {fileID: 8926484042661614526, guid: cb9ff6c918657b448803169a48ecd724, type: 3}
-  m_InitialEventName: OnPlay
-  m_InitialEventNameOverriden: 0
+  m_InitialEventName: 
+  m_InitialEventNameOverriden: 1
   m_StartSeed: 0
   m_ResetSeedOnPlay: 1
   m_AllowInstancing: 1
@@ -60,7 +60,13 @@ VisualEffect:
     m_Vector2f:
       m_Array: []
     m_Vector3f:
-      m_Array: []
+      m_Array:
+      - m_Value: {x: 0, y: 0, z: 0}
+        m_Name: Start Position
+        m_Overridden: 1
+      - m_Value: {x: 0, y: 0, z: 0}
+        m_Name: End Position
+        m_Overridden: 1
     m_Vector4f:
       m_Array: []
     m_Uint:

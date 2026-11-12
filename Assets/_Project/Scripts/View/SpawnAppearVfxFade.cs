@@ -8,7 +8,7 @@ namespace DiceGame.View
     /// Owns fade-out + destroy for spawn-appear Lightning so cleanup does not depend on
     /// the spawning <see cref="DiceView"/> remaining alive.
     /// </summary>
-    public sealed class SpawnAppearVfxLifetime : MonoBehaviour
+    public sealed class SpawnAppearVfxFade : MonoBehaviour
     {
         VisualEffect visualEffect;
         int stripSizeMaxId;

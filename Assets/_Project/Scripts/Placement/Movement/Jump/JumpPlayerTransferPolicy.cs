@@ -44,16 +44,26 @@ namespace DiceGame.Placement
         }
 
         /// <summary>
-        /// Sink-erasing dice, or player-only immovable dice (Iron / iron-adjacent Magnet).
-        /// Stone is excluded: it remains player-movable via CanGridRoll even though it cannot jump-couple.
+        /// Sink-erasing dice, or non-couple dice that cannot stand-roll/slide
+        /// (Iron, Charcoal, iron-adjacent Magnet, etc.).
+        /// Stone is excluded via CanGridRoll even though it cannot jump-couple.
+        /// Push-only mobility (Charcoal) does not count as stand-roll/slide.
         /// </summary>
         public static bool RequiresJumpForLowerLevelTransfer(DiceController standingDice) {
             if (standingDice == null) {
                 return false;
             }
 
-            return standingDice.IsSinkErasing
-                || (!standingDice.CanJumpCoupleWithPlayer && !standingDice.IsPlayerMovable);
+            if (standingDice.IsSinkErasing) {
+                return true;
+            }
+
+            if (standingDice.CanJumpCoupleWithPlayer) {
+                return false;
+            }
+
+            var caps = standingDice.Capabilities;
+            return !caps.CanGridRoll && !caps.SlideUntilBlocked;
         }
 
         public static bool BlocksGroundLowerLevelTransfer(
@@ -67,7 +77,7 @@ namespace DiceGame.Placement
         }
 
         /// <summary>
-        /// Jump may descend from sink-erasing / immovable player-only dice (Iron, etc.).
+        /// Jump may descend from sink-erasing / non-couple non-roll dice (Iron, Charcoal, etc.).
         /// Spawning dice stay locked for both walk and jump until appear completes.
         /// </summary>
         public static bool CanUsePlayerOnlyLowerLevelJump(bool isJumping, DiceController standingDice) {

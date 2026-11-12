@@ -851,20 +851,29 @@ namespace DiceGame.View
             ClearSpawnAppearVfx();
 
             var end = GetAnchoredWorldPosition(state, board, registry);
-            var instance = Instantiate(vfxSettings.SpawnAppearPrefab);
+            // Instantiate under an inactive host so VisualEffect does not send Initial OnPlay
+            // before Start/End and world position are set (default End is horizontal offset).
+            var inactiveHost = new GameObject(nameof(PlaySpawnAppearVfx));
+            inactiveHost.hideFlags = HideFlags.HideAndDontSave;
+            inactiveHost.SetActive(false);
+            var instance = Instantiate(vfxSettings.SpawnAppearPrefab, inactiveHost.transform);
+            instance.transform.SetParent(null, false);
+            Destroy(inactiveHost);
+
             instance.transform.position = end;
             // Lightning system is Local space: Start/End are relative to the VFX transform.
             instance.SetVector3(
                 SpawnAppearVfxStartPositionId,
                 Vector3.up * vfxSettings.SpawnAppearStartHeight);
             instance.SetVector3(SpawnAppearVfxEndPositionId, Vector3.zero);
+            instance.gameObject.SetActive(true);
             instance.Play();
 
             spawnAppearVfxInstance = instance;
             var fadeDuration = Mathf.Max(
                 MinSpawnAppearVfxFadeOutDuration,
                 vfxSettings.SpawnAppearFadeOutDuration);
-            var fade = instance.gameObject.AddComponent<SpawnAppearVfxLifetime>();
+            var fade = instance.gameObject.AddComponent<SpawnAppearVfxFade>();
             fade.Begin(instance, SpawnAppearVfxStripSizeMaxId, fadeDuration);
         }
 

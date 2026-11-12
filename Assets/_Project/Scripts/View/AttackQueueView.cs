@@ -304,6 +304,12 @@ namespace DiceGame.View
             var image = iconObject.AddComponent<Image>();
             image.sprite = sprite;
             image.preserveAspect = true;
+            image.color = settings.FireIconIdleColor;
+
+            if (spec.IsOnFire) {
+                var pulse = iconObject.AddComponent<AttackQueueFireIconPulse>();
+                pulse.Configure(settings);
+            }
 
             var iconSize = settings.IconSize;
             var layoutElement = iconObject.AddComponent<LayoutElement>();

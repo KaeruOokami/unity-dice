@@ -1,6 +1,7 @@
 using System.Collections.Generic;
 using DiceGame.Config;
 using DiceGame.Core;
+using DiceGame.Grid;
 using DiceGame.Placement;
 using UnityEngine;
 
@@ -8,6 +9,7 @@ namespace DiceGame.Gameplay
 {
     /// <summary>
     /// Fire lifetime, adjacent spread ticks, and stack extinguish (Bottom under Top).
+    /// Versus: spread stays inside the source die's field (does not cross the partition).
     /// </summary>
     public sealed class DiceFireSystem : MonoBehaviour
     {
@@ -15,6 +17,7 @@ namespace DiceGame.Gameplay
             Direction.East, Direction.West, Direction.North, Direction.South
         };
 
+        Board board;
         DiceRegistry registry;
         DiceFireSettings settings;
         System.Random random;
@@ -25,9 +28,11 @@ namespace DiceGame.Gameplay
         public DiceFireSettings Settings => settings;
 
         public void Configure(
+            Board targetBoard,
             DiceRegistry targetRegistry,
             DiceFireSettings fireSettings,
             System.Random spawnRandom) {
+            board = targetBoard;
             registry = targetRegistry;
             settings = fireSettings;
             random = spawnRandom ?? new System.Random();
@@ -149,6 +154,13 @@ namespace DiceGame.Gameplay
                 }
 
                 var neighborCell = cell + CardinalDirections[i].ToGridDelta();
+                if (board != null
+                    && board.IsVersusArena
+                    && board.VersusLayout != null
+                    && board.VersusLayout.CrossesPartition(cell, neighborCell)) {
+                    continue;
+                }
+
                 if (!registry.TryGetDiceAt(neighborCell, tier, out var neighbor)
                     || neighbor == null
                     || neighbor.IsOnFire

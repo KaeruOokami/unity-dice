@@ -1545,6 +1545,9 @@ namespace DiceGame.Gameplay
 
             isCarried = false;
 
+            // Same early clear as match erasure: fade fire VFX, no burn-aftermath Kind change.
+            ExtinguishFire(applyBurnAftermath: false);
+
             isVanishing = true;
             diceView.SetErasureEmissionColor(emissionColor);
             diceView.PlayOneVanish(settings, currentState, board, registry, () => {
