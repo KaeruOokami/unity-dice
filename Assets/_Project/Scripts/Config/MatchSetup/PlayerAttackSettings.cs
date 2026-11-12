@@ -123,12 +123,19 @@ namespace DiceGame.Config
         [Min(0f)]
         [SerializeField] float face6Weight = 1f;
 
+        [Header("Erasure Emission")]
+        [SerializeField] Color erasureEmissionColor = Color.white;
+
         public FaceAttackSendProfile[] FaceSendProfiles => faceSendProfiles ?? Array.Empty<FaceAttackSendProfile>();
         public float AttackMultiplier => Mathf.Max(0f, attackMultiplier);
         public float FaceGain => Mathf.Max(0f, faceGain);
         public float ChainGain => Mathf.Max(0f, chainGain);
         public float SizeGain => Mathf.Max(0f, sizeGain);
         public float SnatchMultiplier => Mathf.Max(0f, snatchMultiplier);
+        public Color ErasureEmissionColor =>
+            erasureEmissionColor.a <= 0f
+                ? Color.white
+                : WithOpaqueAlpha(erasureEmissionColor);
 
         public float GetFaceWeight(int face) {
             return face switch {
@@ -219,6 +226,10 @@ namespace DiceGame.Config
             return true;
         }
 
+        static Color WithOpaqueAlpha(Color color) {
+            return new Color(color.r, color.g, color.b, 1f);
+        }
+
         public static PlayerAttackSettings CreateRuntime(PlayerAttackSettingsData data) {
             var instance = CreateInstance<PlayerAttackSettings>();
             instance.Apply(data);
@@ -236,6 +247,7 @@ namespace DiceGame.Config
             face4Weight = Mathf.Max(0f, data.Face4Weight);
             face5Weight = Mathf.Max(0f, data.Face5Weight);
             face6Weight = Mathf.Max(0f, data.Face6Weight);
+            erasureEmissionColor = WithOpaqueAlpha(data.ErasureEmissionColor);
 
             var profiles = data.FaceSendProfiles ?? Array.Empty<FaceAttackSendProfileData>();
             faceSendProfiles = new FaceAttackSendProfile[profiles.Length];

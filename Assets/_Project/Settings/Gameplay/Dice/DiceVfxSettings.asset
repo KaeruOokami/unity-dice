@@ -27,3 +27,4 @@ MonoBehaviour:
   attackSendTier3Prefab: {fileID: 5794417840251941560, guid: 1e564f9ab50d2d5429a30943a3cefe60,
     type: 3}
   attackSendLifetime: 2
+  attackSendDestroyGrace: 4

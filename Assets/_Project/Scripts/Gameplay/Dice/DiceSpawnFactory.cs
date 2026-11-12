@@ -22,7 +22,8 @@ namespace DiceGame.Gameplay
             DiceAnimationSettings animationSettings,
             DiceErasureSettings erasureSettings,
             DiceEmissionPaletteSettings emissionPaletteSettings,
-            DiceVfxSettings vfxSettings = null) {
+            DiceVfxSettings vfxSettings = null,
+            DiceSfxSettings sfxSettings = null) {
             if (prefab == null) {
                 return null;
             }
@@ -43,7 +44,8 @@ namespace DiceGame.Gameplay
                 animationSettings,
                 erasureSettings,
                 emissionPaletteSettings,
-                vfxSettings);
+                vfxSettings,
+                sfxSettings);
             if (meshPrefab != null) {
                 diceView.SetMeshPrefab(meshPrefab);
             }
@@ -92,6 +94,7 @@ namespace DiceGame.Gameplay
         DiceErasureSettings diceErasureSettings;
         DiceEmissionPaletteSettings diceEmissionPaletteSettings;
         DiceVfxSettings diceVfxSettings;
+        DiceSfxSettings diceSfxSettings;
         DiceFireSystem fireSystem;
         PlayerMatchActionContext matchActionContext;
         DiceMatchOwnershipContext ownershipContext;
@@ -142,6 +145,7 @@ namespace DiceGame.Gameplay
             DiceErasureSettings erasureSettings,
             DiceEmissionPaletteSettings emissionPaletteSettings,
             DiceVfxSettings vfxSettings,
+            DiceSfxSettings sfxSettings,
             PlayerMatchActionContext actionContext,
             DiceSpawnSettings settings,
             System.Random spawnRandom) {
@@ -155,6 +159,7 @@ namespace DiceGame.Gameplay
             diceErasureSettings = erasureSettings;
             diceEmissionPaletteSettings = emissionPaletteSettings;
             diceVfxSettings = vfxSettings;
+            diceSfxSettings = sfxSettings;
             matchActionContext = actionContext;
             spawnSettings = settings;
             random = spawnRandom;
@@ -677,7 +682,8 @@ namespace DiceGame.Gameplay
                 diceAnimationSettings,
                 diceErasureSettings,
                 diceEmissionPaletteSettings,
-                diceVfxSettings);
+                diceVfxSettings,
+                diceSfxSettings);
 
             if (diceController == null) {
                 return null;
@@ -786,7 +792,8 @@ namespace DiceGame.Gameplay
                 diceAnimationSettings,
                 diceErasureSettings,
                 diceEmissionPaletteSettings,
-                diceVfxSettings);
+                diceVfxSettings,
+                diceSfxSettings);
 
             if (diceController == null) {
                 return null;
@@ -882,7 +889,8 @@ namespace DiceGame.Gameplay
                 diceAnimationSettings,
                 diceErasureSettings,
                 diceEmissionPaletteSettings,
-                diceVfxSettings);
+                diceVfxSettings,
+                diceSfxSettings);
 
             if (diceController == null) {
                 return null;
@@ -961,7 +969,8 @@ namespace DiceGame.Gameplay
                 diceAnimationSettings,
                 diceErasureSettings,
                 diceEmissionPaletteSettings,
-                diceVfxSettings);
+                diceVfxSettings,
+                diceSfxSettings);
 
             if (diceController == null) {
                 emitNetworkSpawns = previousEmit;

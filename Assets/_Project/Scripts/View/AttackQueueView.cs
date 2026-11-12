@@ -165,6 +165,44 @@ namespace DiceGame.View
             RenderForSlot(PlayerSlot.Player2, player2Volleys, player2Catalog, player2Panel);
         }
 
+        /// <summary>
+        /// Scales the home-column icons for the next-to-board volley from remaining delay.
+        /// Call every pacing tick so rebuilds stay aligned with spawn.
+        /// </summary>
+        public void ApplyHeadDropAnticipation(PlayerSlot defenderSlot, float remainingDelaySeconds) {
+            if (settings == null) {
+                return;
+            }
+
+            var panel = GetPanel(defenderSlot);
+            if (panel == null || panel.childCount == 0) {
+                return;
+            }
+
+            var scale = AttackQueueDropAnticipation.EvaluateScale(remainingDelaySeconds, settings);
+            ApplyColumnIconScale(panel.GetChild(0), scale);
+        }
+
+        public void ClearHeadDropAnticipation(PlayerSlot defenderSlot) {
+            var panel = GetPanel(defenderSlot);
+            if (panel == null || panel.childCount == 0) {
+                return;
+            }
+
+            ApplyColumnIconScale(panel.GetChild(0), 1f);
+        }
+
+        static void ApplyColumnIconScale(Transform column, float scale) {
+            if (column == null) {
+                return;
+            }
+
+            var scaleVector = Vector3.one * scale;
+            for (var i = 0; i < column.childCount; i++) {
+                column.GetChild(i).localScale = scaleVector;
+            }
+        }
+
         void OnDestroy() {
             if (prewarmRoutine != null) {
                 StopCoroutine(prewarmRoutine);

@@ -324,7 +324,8 @@ namespace DiceGame.Versus
                 volley,
                 minSendCount: 1,
                 maxSendCount,
-                e.OriginWorldPosition);
+                e.OriginWorldPosition,
+                attackSettings.ErasureEmissionColor);
         }
 
         void BeginAttackSend(
@@ -332,7 +333,8 @@ namespace DiceGame.Versus
             AttackVolley volley,
             int minSendCount,
             int maxSendCount,
-            Vector3 startWorldPosition) {
+            Vector3 startWorldPosition,
+            Color emissionColor) {
             if (volley == null || volley.Count == 0) {
                 return;
             }
@@ -343,6 +345,7 @@ namespace DiceGame.Versus
                     minSendCount,
                     maxSendCount,
                     startWorldPosition,
+                    emissionColor,
                     out var travelDuration)) {
                 incomingQueues[target].Enqueue(volley, queueToBoardDelay);
                 return;
@@ -361,6 +364,7 @@ namespace DiceGame.Versus
             int minSendCount,
             int maxSendCount,
             Vector3 startWorldPosition,
+            Color emissionColor,
             out float travelDuration) {
             travelDuration = 0f;
 
@@ -397,7 +401,8 @@ namespace DiceGame.Versus
                     minSendCount,
                     maxSendCount,
                     startWorldOnCameraPlane,
-                    endWorldOnCameraPlane)) {
+                    endWorldOnCameraPlane,
+                    emissionColor)) {
                 return false;
             }
 
@@ -483,7 +488,12 @@ namespace DiceGame.Versus
 
             while (queue.Count > 0) {
                 if (!queue.IsHeadReady(deltaTime)) {
+                    ApplyHeadDropAnticipation(defenderSlot, queue);
                     break;
+                }
+
+                if (queueView != null) {
+                    queueView.ClearHeadDropAnticipation(defenderSlot);
                 }
 
                 var volley = queue.PeekHead();
@@ -496,6 +506,23 @@ namespace DiceGame.Versus
                 queue.ReplaceHead(remaining);
                 break;
             }
+
+            if (queue.Count == 0 && queueView != null) {
+                queueView.ClearHeadDropAnticipation(defenderSlot);
+            }
+        }
+
+        void ApplyHeadDropAnticipation(PlayerSlot defenderSlot, AttackQueue queue) {
+            if (queueView == null || queue == null) {
+                return;
+            }
+
+            if (!queue.TryGetHeadRemainingDelay(out var remainingDelay)) {
+                queueView.ClearHeadDropAnticipation(defenderSlot);
+                return;
+            }
+
+            queueView.ApplyHeadDropAnticipation(defenderSlot, remainingDelay);
         }
 
         AttackVolley SpawnVolley(PlayerSlot defenderSlot, AttackVolley volley) {
@@ -526,9 +553,19 @@ namespace DiceGame.Versus
                 queueView.RenderAll(
                     incomingQueues[PlayerSlot.Player1].GetPendingVolleys(),
                     incomingQueues[PlayerSlot.Player2].GetPendingVolleys());
+                ReapplyHeadDropAnticipation(PlayerSlot.Player1);
+                ReapplyHeadDropAnticipation(PlayerSlot.Player2);
             }
 
             QueuePresentationChanged?.Invoke();
+        }
+
+        void ReapplyHeadDropAnticipation(PlayerSlot defenderSlot) {
+            if (!incomingQueues.TryGetValue(defenderSlot, out var queue)) {
+                return;
+            }
+
+            ApplyHeadDropAnticipation(defenderSlot, queue);
         }
 
         public event Action QueuePresentationChanged;

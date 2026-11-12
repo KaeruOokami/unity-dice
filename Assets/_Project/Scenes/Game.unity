@@ -363,7 +363,7 @@ GameObject:
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
-  m_IsActive: 1
+  m_IsActive: 0
 --- !u!108 &410087040
 Light:
   m_ObjectHideFlags: 0
@@ -722,6 +722,7 @@ MonoBehaviour:
   diceEmissionPaletteSettings: {fileID: 11400000, guid: a1b2c3d4e5f6478890abcdef50000004,
     type: 2}
   diceVfxSettings: {fileID: 11400000, guid: a1a2b3c4d5e6478899aabbccddeeff51, type: 2}
+  diceSfxSettings: {fileID: 11400000, guid: a1a2b3c4d5e6478899aabbccddeeff61, type: 2}
   diceFireSettings: {fileID: 11400000, guid: c8d9e0f1a2b34c5d8e9f0a1b2c3d4e70, type: 2}
   diceOneVanishSettings: {fileID: 11400000, guid: b1c2d3e4f5a6478899aabbccddeeff09,
     type: 2}

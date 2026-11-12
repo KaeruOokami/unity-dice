@@ -193,7 +193,10 @@ namespace DiceGame.Session
                 || !Mathf.Approximately(a.Face3Weight, b.Face3Weight)
                 || !Mathf.Approximately(a.Face4Weight, b.Face4Weight)
                 || !Mathf.Approximately(a.Face5Weight, b.Face5Weight)
-                || !Mathf.Approximately(a.Face6Weight, b.Face6Weight)) {
+                || !Mathf.Approximately(a.Face6Weight, b.Face6Weight)
+                || !Mathf.Approximately(a.ErasureEmissionColor.r, b.ErasureEmissionColor.r)
+                || !Mathf.Approximately(a.ErasureEmissionColor.g, b.ErasureEmissionColor.g)
+                || !Mathf.Approximately(a.ErasureEmissionColor.b, b.ErasureEmissionColor.b)) {
                 return false;
             }
 

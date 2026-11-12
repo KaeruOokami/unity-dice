@@ -24,7 +24,6 @@ namespace DiceGame.Gameplay
         readonly List<DiceController> pendingCarryTopMountMatches = new();
 
         IBoardSettings versusSettings;
-        DiceEmissionPaletteSettings emissionPaletteSettings;
         SinkingGroupTracker sinkingGroups;
         DiceMatchOwnershipContext ownershipContext;
         bool versusAttackEnabled;
@@ -37,14 +36,12 @@ namespace DiceGame.Gameplay
             IReadOnlyList<CharacterController> targetCharacters,
             PlayerMatchActionContext targetActionContext,
             DiceOneVanishSystem targetOneVanishSystem,
-            DiceMatchOwnershipContext targetOwnershipContext,
-            DiceEmissionPaletteSettings targetEmissionPaletteSettings) {
+            DiceMatchOwnershipContext targetOwnershipContext) {
             board = targetBoard;
             registry = targetRegistry;
             actionContext = targetActionContext;
             oneVanishSystem = targetOneVanishSystem;
             ownershipContext = targetOwnershipContext;
-            emissionPaletteSettings = targetEmissionPaletteSettings;
             characters.Clear();
             if (targetCharacters != null) {
                 characters.AddRange(targetCharacters);
@@ -525,30 +522,18 @@ namespace DiceGame.Gameplay
         }
 
         bool TryGetPlayerEmissionColor(PlayerSlot attacker, out Color emissionColor) {
-            emissionColor = default;
-            if (emissionPaletteSettings == null) {
-                Debug.LogError("DiceMatchErasureSystem: Emission palette settings are not configured.");
-                return false;
-            }
-
+            emissionColor = Color.white;
             if (versusSettings == null) {
-                emissionColor = emissionPaletteSettings.GetDefaultPlayerEmissionColor(attacker);
                 return true;
             }
 
-            var player1Attack = versusSettings.GetAttackSettings(PlayerSlot.Player1);
-            var player2Attack = versusSettings.GetAttackSettings(PlayerSlot.Player2);
-            if (player1Attack == null || player2Attack == null) {
-                Debug.LogError("DiceMatchErasureSystem: Attack settings are missing for one or both players.");
+            var attack = versusSettings.GetAttackSettings(attacker);
+            if (attack == null) {
+                Debug.LogError($"DiceMatchErasureSystem: Attack settings are missing for {attacker}.");
                 return false;
             }
 
-            emissionPaletteSettings.ResolveSeparatedVersusEmissionColors(
-                player1Attack,
-                player2Attack,
-                out var player1Color,
-                out var player2Color);
-            emissionColor = attacker == PlayerSlot.Player1 ? player1Color : player2Color;
+            emissionColor = attack.ErasureEmissionColor;
             return true;
         }
 

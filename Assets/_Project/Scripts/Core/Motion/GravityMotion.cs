@@ -138,7 +138,9 @@ namespace DiceGame.Core
             float restitution,
             int maxBounceCount,
             float minBounceVelocity,
-            ref int bounceCount) {
+            ref int bounceCount,
+            out bool groundContact) {
+            groundContact = false;
             if (state.IsGrounded || deltaTime <= 0f) {
                 return state;
             }
@@ -147,6 +149,7 @@ namespace DiceGame.Core
             state.Offset += state.VelocityY * deltaTime;
 
             if (state.Offset <= 0f) {
+                groundContact = true;
                 if (-state.VelocityY > minBounceVelocity && bounceCount < maxBounceCount) {
                     state.VelocityY = -state.VelocityY * restitution;
                     state.Offset = 0f;
@@ -211,7 +214,8 @@ namespace DiceGame.Core
             float minBounceVelocity,
             Func<float> getHorizontalX,
             Func<float> getHorizontalZ,
-            Action<float, float, float> setWorldPosition) {
+            Action<float, float, float> setWorldPosition,
+            Action onGroundContact = null) {
             if (session == null) {
                 yield break;
             }
@@ -225,7 +229,12 @@ namespace DiceGame.Core
                     restitution,
                     maxBounceCount,
                     minBounceVelocity,
-                    ref bounceCount);
+                    ref bounceCount,
+                    out var groundContact);
+                if (groundContact) {
+                    onGroundContact?.Invoke();
+                }
+
                 setWorldPosition(
                     getHorizontalX(),
                     session.GroundWorldY + session.Motion.Offset,

@@ -72,6 +72,7 @@ namespace DiceGame.Gameplay
         [SerializeField] DiceEmissionPaletteSettings diceEmissionPaletteSettings;
         [FormerlySerializedAs("diceSpawnVfxSettings")]
         [SerializeField] DiceVfxSettings diceVfxSettings;
+        [SerializeField] DiceSfxSettings diceSfxSettings;
         [SerializeField] DiceFireSettings diceFireSettings;
         [SerializeField] DiceOneVanishSettings diceOneVanishSettings;
         [SerializeField] DiceSpawnSettings diceSpawnSettings;
@@ -371,8 +372,7 @@ namespace DiceGame.Gameplay
                 board,
                 registry,
                 characters,
-                diceOneVanishSettings,
-                diceEmissionPaletteSettings);
+                diceOneVanishSettings);
 
             var erasureSystem = GetComponent<DiceMatchErasureSystem>();
             if (erasureSystem == null) {
@@ -385,8 +385,7 @@ namespace DiceGame.Gameplay
                 characters,
                 matchActionContext,
                 oneVanishSystem,
-                ownershipContext,
-                diceEmissionPaletteSettings);
+                ownershipContext);
             spawnSystem.ConfigureErasureSystem(erasureSystem);
 
             erasureSystem.ConfigureSinkingChain();
@@ -673,6 +672,7 @@ namespace DiceGame.Gameplay
                     diceErasureSettings,
                     diceEmissionPaletteSettings,
                     diceVfxSettings,
+                    diceSfxSettings,
                     matchActionContext,
                     activeCurriculumStage.SpawnSettings,
                     spawnRandom);
@@ -692,6 +692,7 @@ namespace DiceGame.Gameplay
                     diceErasureSettings,
                     diceEmissionPaletteSettings,
                     diceVfxSettings,
+                    diceSfxSettings,
                     matchActionContext,
                     versusSettings.Player1.SpawnSettings,
                     spawnRandom);
@@ -720,6 +721,7 @@ namespace DiceGame.Gameplay
                 diceErasureSettings,
                 diceEmissionPaletteSettings,
                 diceVfxSettings,
+                diceSfxSettings,
                 matchActionContext,
                 resolvedSetup.SharedSpawnSettings,
                 spawnRandom);

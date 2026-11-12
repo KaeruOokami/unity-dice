@@ -49,6 +49,16 @@ namespace DiceGame.Versus
             return pending[0].RemainingDelay <= 0f;
         }
 
+        public bool TryGetHeadRemainingDelay(out float remainingDelay) {
+            if (pending.Count == 0) {
+                remainingDelay = 0f;
+                return false;
+            }
+
+            remainingDelay = pending[0].RemainingDelay;
+            return true;
+        }
+
         public AttackVolley PeekHead() {
             return pending.Count == 0 ? null : pending[0].Volley;
         }

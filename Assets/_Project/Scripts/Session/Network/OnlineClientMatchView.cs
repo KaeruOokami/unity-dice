@@ -67,6 +67,7 @@ namespace DiceGame.Session.Network
         DiceErasureSettings erasureSettings;
         DiceEmissionPaletteSettings emissionPaletteSettings;
         DiceVfxSettings vfxSettings;
+        DiceSfxSettings sfxSettings;
         DiceOneVanishSettings oneVanishSettings;
         Transform proxyRoot;
         readonly Dictionary<uint, Transform> proxies = new();
@@ -107,7 +108,8 @@ namespace DiceGame.Session.Network
             DiceCatalog catalog,
             DiceCatalog alternateCatalog = null,
             AttackQueueSettings queueSettings = null,
-            CharacterMovementSettings characterMovement = null) {
+            CharacterMovementSettings characterMovement = null,
+            DiceSfxSettings diceSfxSettings = null) {
             messenger = netMessenger;
             dicePrefab = diceEntityPrefab;
             characterPrefab = characterEntityPrefab;
@@ -116,6 +118,7 @@ namespace DiceGame.Session.Network
             erasureSettings = diceErasureSettings;
             emissionPaletteSettings = diceEmissionPaletteSettings;
             vfxSettings = diceVfxSettings;
+            sfxSettings = diceSfxSettings;
             oneVanishSettings = diceOneVanishSettings;
             board = matchBoard;
             primaryCatalog = catalog;
@@ -667,7 +670,8 @@ namespace DiceGame.Session.Network
                         animationSettings,
                         erasureSettings,
                         emissionPaletteSettings,
-                        vfxSettings);
+                        vfxSettings,
+                        sfxSettings);
                     diceView.SetEmitVisualMotionEvents(false);
                     diceViews[entity.Id] = diceView;
                     ApplyKindMesh(diceView, entity.Id, (DiceKind)entity.Kind, entity.CatalogPlayerSlot);
@@ -745,7 +749,8 @@ namespace DiceGame.Session.Network
                     animationSettings,
                     erasureSettings,
                     emissionPaletteSettings,
-                    vfxSettings);
+                    vfxSettings,
+                    sfxSettings);
                 diceView.SetEmitVisualMotionEvents(false);
                 diceViews[entityId] = diceView;
             }

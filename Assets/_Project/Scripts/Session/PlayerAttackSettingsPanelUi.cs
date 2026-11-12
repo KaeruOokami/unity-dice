@@ -27,6 +27,7 @@ namespace DiceGame.Session
             public TMP_InputField Face4Weight;
             public TMP_InputField Face5Weight;
             public TMP_InputField Face6Weight;
+            public SessionUiFactory.ColorRgbBindings ErasureEmissionColor;
         }
 
         public sealed class ProfileRow
@@ -78,6 +79,11 @@ namespace DiceGame.Session
             var weightRow3 = SessionUiFactory.CreateTwoColumnRow(section, "FaceWeightRow3");
             bindings.Face6Weight = SessionUiFactory.CreateLabeledFloatInput(weightRow3, "Face 6 Weight");
 
+            SessionUiFactory.CreateLayoutLabel(section, "Erasure Emission", 20, 28f);
+            bindings.ErasureEmissionColor = SessionUiFactory.CreateLabeledColorRgbInputs(
+                section,
+                "Erasure Emission Color");
+
             RebuildProfiles(bindings, CloneProfiles(template.FaceSendProfiles));
             return bindings;
         }
@@ -97,6 +103,7 @@ namespace DiceGame.Session
             SetInputText(bindings.Face4Weight, data.Face4Weight.ToString("0.###"));
             SetInputText(bindings.Face5Weight, data.Face5Weight.ToString("0.###"));
             SetInputText(bindings.Face6Weight, data.Face6Weight.ToString("0.###"));
+            SetColorRgb(bindings.ErasureEmissionColor, data.ErasureEmissionColor);
             RebuildProfiles(bindings, CloneProfiles(data.FaceSendProfiles));
         }
 
@@ -116,7 +123,8 @@ namespace DiceGame.Session
                 || !TryParseFloat(bindings.Face3Weight, out var face3)
                 || !TryParseFloat(bindings.Face4Weight, out var face4)
                 || !TryParseFloat(bindings.Face5Weight, out var face5)
-                || !TryParseFloat(bindings.Face6Weight, out var face6)) {
+                || !TryParseFloat(bindings.Face6Weight, out var face6)
+                || !TryParseColorRgb(bindings.ErasureEmissionColor, out var erasureEmissionColor)) {
                 errorMessage = "Attack settings contain invalid numbers.";
                 return false;
             }
@@ -136,7 +144,8 @@ namespace DiceGame.Session
                 Face3Weight = face3,
                 Face4Weight = face4,
                 Face5Weight = face5,
-                Face6Weight = face6
+                Face6Weight = face6,
+                ErasureEmissionColor = erasureEmissionColor
             };
 
             if (!data.TryValidate(out errorMessage)) {
@@ -483,6 +492,32 @@ namespace DiceGame.Session
             }
 
             input.SetTextWithoutNotify(value);
+        }
+
+        static void SetColorRgb(SessionUiFactory.ColorRgbBindings bindings, Color color) {
+            if (bindings == null) {
+                return;
+            }
+
+            SetInputText(bindings.R, color.r.ToString("0.###"));
+            SetInputText(bindings.G, color.g.ToString("0.###"));
+            SetInputText(bindings.B, color.b.ToString("0.###"));
+            if (bindings.Preview != null) {
+                bindings.Preview.color = new Color(color.r, color.g, color.b, 1f);
+            }
+        }
+
+        static bool TryParseColorRgb(SessionUiFactory.ColorRgbBindings bindings, out Color color) {
+            color = Color.white;
+            if (bindings == null
+                || !TryParseFloat(bindings.R, out var r)
+                || !TryParseFloat(bindings.G, out var g)
+                || !TryParseFloat(bindings.B, out var b)) {
+                return false;
+            }
+
+            color = new Color(Mathf.Clamp01(r), Mathf.Clamp01(g), Mathf.Clamp01(b), 1f);
+            return true;
         }
 
         static bool TryParseInt(TMP_InputField input, out int value) {

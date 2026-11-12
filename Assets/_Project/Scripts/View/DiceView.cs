@@ -24,6 +24,8 @@ namespace DiceGame.View
         DiceErasureSettings erasureSettings;
         DiceEmissionPaletteSettings emissionPaletteSettings;
         DiceVfxSettings vfxSettings;
+        DiceSfxSettings sfxSettings;
+        AudioSource audioSource;
         VisualEffect fireVfxInstance;
         VisualEffect fireVfxFadingInstance;
         Coroutine fireFadeCoroutine;
@@ -128,12 +130,46 @@ namespace DiceGame.View
             DiceAnimationSettings animation,
             DiceErasureSettings erasure,
             DiceEmissionPaletteSettings emissionPalette,
-            DiceVfxSettings vfx = null) {
+            DiceVfxSettings vfx = null,
+            DiceSfxSettings sfx = null) {
             physicsSettings = physics;
             animationSettings = animation;
             erasureSettings = erasure;
             emissionPaletteSettings = emissionPalette;
             vfxSettings = vfx;
+            sfxSettings = sfx;
+        }
+
+        public void PlayErasedSfx() {
+            PlaySfx(sfxSettings != null ? sfxSettings.Erased : null);
+        }
+
+        void EnsureAudioSource() {
+            if (audioSource != null) {
+                return;
+            }
+
+            audioSource = GetComponent<AudioSource>();
+            if (audioSource != null) {
+                return;
+            }
+
+            audioSource = gameObject.AddComponent<AudioSource>();
+            audioSource.playOnAwake = false;
+            audioSource.spatialBlend = 0f;
+        }
+
+        void PlaySfx(AudioClip clip) {
+            if (clip == null) {
+                return;
+            }
+
+            EnsureAudioSource();
+            audioSource.PlayOneShot(clip);
+        }
+
+        void PlayGroundContactSfx() {
+            PlaySfx(sfxSettings != null ? sfxSettings.GroundContact : null);
         }
 
         public void SetOnFire(bool onFire) {
@@ -675,6 +711,7 @@ namespace DiceGame.View
                 StopCoroutine(rollCoroutine);
             }
 
+            var useArcJump = jumpMotionProvider != null;
             RaiseVisualMotion(new DiceVisualMotionRequest {
                 Kind = DiceVisualMotionKind.JumpRoll,
                 Direction = direction,
@@ -683,10 +720,14 @@ namespace DiceGame.View
                 JumpYOffset = jumpYOffset,
                 RollDistance = rollDistance,
                 FallBeforeSnap = fallBeforeSnap,
-                UseArcJump = jumpMotionProvider != null,
+                UseArcJump = useArcJump,
                 FromSurfaceWorldY = ResolveSurfaceBaseWorldY(fromState, board, registry),
                 ToSurfaceWorldY = ResolveSurfaceBaseWorldY(toState, board, registry)
             });
+
+            if (useArcJump || jumpYOffset > 0f) {
+                PlaySfx(sfxSettings != null ? sfxSettings.Jump : null);
+            }
 
             rollCoroutine = StartCoroutine(JumpRollCoroutine(
                 direction,
@@ -713,6 +754,12 @@ namespace DiceGame.View
 
             if (rollCoroutine != null) {
                 StopCoroutine(rollCoroutine);
+            }
+
+            if (transition.Path == DiceTransitionPath.FreeMove && !transition.SnapToGridOnComplete) {
+                PlaySfx(sfxSettings != null ? sfxSettings.Lift : null);
+            } else if (transition.Path == DiceTransitionPath.ThrowArc) {
+                PlaySfx(sfxSettings != null ? sfxSettings.ThrowDice : null);
             }
 
             RaiseVisualMotion(new DiceVisualMotionRequest {
@@ -824,6 +871,7 @@ namespace DiceGame.View
                 ToSurfaceWorldY = ResolveSurfaceBaseWorldY(state, board, registry)
             });
 
+            PlaySfx(sfxSettings != null ? sfxSettings.EmergeFromGround : null);
             PlaySpawnAppearVfx(state, board, registry);
 
             CacheSpawnFallParams(
@@ -869,6 +917,7 @@ namespace DiceGame.View
             instance.SetVector3(SpawnAppearVfxEndPositionId, Vector3.zero);
             instance.gameObject.SetActive(true);
             instance.Play();
+            PlaySfx(sfxSettings != null ? sfxSettings.LightningAppear : null);
 
             spawnAppearVfxInstance = instance;
             var fadeDuration = Mathf.Max(
@@ -1037,6 +1086,7 @@ namespace DiceGame.View
                 EmissionColor = emissionColorOverride ?? default
             });
 
+            PlayErasedSfx();
             activeErasureKind = kind;
             erasureEmissionColorOverride = emissionColorOverride;
             currentTopFace = state.Orientation.Top;
@@ -1182,6 +1232,7 @@ namespace DiceGame.View
                 ToState = state
             });
 
+            PlayErasedSfx();
             EnsureMesh();
             oneVanishCoroutine = StartCoroutine(OneVanishCoroutine(settings, onComplete));
         }
@@ -1818,6 +1869,7 @@ namespace DiceGame.View
                 gridWorldPosition = board.GridToWorld(toState.GridPos);
                 UpdateSurfaceBase(toState, board, registry);
                 positionRoot.position = endWorld;
+                PlayGroundContactSfx();
                 yield break;
             }
 
@@ -1846,6 +1898,7 @@ namespace DiceGame.View
             ApplyErasureVisual(board, erasureProgress);
 
             positionRoot.position = endWorld;
+            PlayGroundContactSfx();
         }
 
         IEnumerator CancelJumpParallelRollCoroutine(
@@ -2139,6 +2192,7 @@ namespace DiceGame.View
             positionRoot.localRotation = Quaternion.identity;
             positionRoot.localScale = Vector3.one;
             Destroy(pivotObject);
+            PlayGroundContactSfx();
         }
 
         void PrepareRollTransitionStart(DiceState fromState, Board board, DiceRegistry registry, Vector3? fromWorldOverride) {
@@ -2180,13 +2234,15 @@ namespace DiceGame.View
 
             var startOffset = positionRoot.position.y - targetWorld.y;
             var state = GravityMotion.CreateDrop(startOffset);
+            var playContactOnLand = startOffset > 0.0001f;
             yield return GravityMotion.AnimateVerticalDropCoroutine(
                 state,
                 ResolveFallGravity(ResolveVisualCapabilities().FallGravityScale),
                 targetWorld.y,
                 () => positionRoot.position.x,
                 () => positionRoot.position.z,
-                (x, y, z) => positionRoot.position = new Vector3(x, y, z));
+                (x, y, z) => positionRoot.position = new Vector3(x, y, z),
+                playContactOnLand ? PlayGroundContactSfx : null);
         }
 
         IEnumerator SpawnAppearCoroutine(
@@ -2237,7 +2293,8 @@ namespace DiceGame.View
                 minBounceVelocity,
                 () => positionRoot.position.x,
                 () => positionRoot.position.z,
-                (x, y, z) => positionRoot.position = new Vector3(x, y, z));
+                (x, y, z) => positionRoot.position = new Vector3(x, y, z),
+                PlayGroundContactSfx);
 
             SnapTo(activeSpawnState, board, registry);
             isAnimating = false;
@@ -2264,7 +2321,8 @@ namespace DiceGame.View
                 activeSpawnMinBounceVelocity,
                 () => positionRoot.position.x,
                 () => positionRoot.position.z,
-                (x, y, z) => positionRoot.position = new Vector3(x, y, z));
+                (x, y, z) => positionRoot.position = new Vector3(x, y, z),
+                PlayGroundContactSfx);
 
             SnapTo(activeSpawnState, activeSpawnBoard, activeSpawnRegistry);
             isAnimating = false;
@@ -2372,6 +2430,7 @@ namespace DiceGame.View
                 rotationRoot.rotation = orientTo;
                 positionRoot.position = toWorld;
                 currentTopFace = transition.To.Orientation.Top;
+                PlayGroundContactSfx();
                 yield break;
             }
 
@@ -2403,6 +2462,7 @@ namespace DiceGame.View
             rotationRoot.rotation = orientTo;
             currentTopFace = transition.To.Orientation.Top;
             positionRoot.position = toWorld;
+            PlayGroundContactSfx();
         }
 
         IEnumerator AnimatePositionLerp(Vector3 fromWorld, Vector3 toWorld, float duration) {
@@ -2663,7 +2723,11 @@ namespace DiceGame.View
                 return;
             }
 
-            var pulse = (Mathf.Sin(Time.time * emissionPaletteSettings.ErasureEmissionPulseSpeed) + 1f) * 0.5f;
+            // Shared wall-clock phase so cluster members blink in sync.
+            // Force peak at disappear so progress==1 always hits PulseMax.
+            var pulse = progress >= 1f
+                ? 1f
+                : (Mathf.Sin(Time.time * emissionPaletteSettings.ErasureEmissionPulseSpeed) + 1f) * 0.5f;
             var pulseMultiplier = Mathf.Lerp(
                 emissionPaletteSettings.ErasureEmissionPulseMin,
                 emissionPaletteSettings.ErasureEmissionPulseMax,

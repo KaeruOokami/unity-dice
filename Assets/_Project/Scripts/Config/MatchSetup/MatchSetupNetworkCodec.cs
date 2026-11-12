@@ -1,5 +1,6 @@
 using DiceGame.Core;
 using DiceGame.Session.Network;
+using UnityEngine;
 
 namespace DiceGame.Config
 {
@@ -193,7 +194,10 @@ namespace DiceGame.Config
                 Face3Weight = data.Face3Weight,
                 Face4Weight = data.Face4Weight,
                 Face5Weight = data.Face5Weight,
-                Face6Weight = data.Face6Weight
+                Face6Weight = data.Face6Weight,
+                ErasureEmissionR = data.ErasureEmissionColor.r,
+                ErasureEmissionG = data.ErasureEmissionColor.g,
+                ErasureEmissionB = data.ErasureEmissionColor.b
             };
         }
 
@@ -233,8 +237,21 @@ namespace DiceGame.Config
                 Face3Weight = payload.Face3Weight,
                 Face4Weight = payload.Face4Weight,
                 Face5Weight = payload.Face5Weight,
-                Face6Weight = payload.Face6Weight
+                Face6Weight = payload.Face6Weight,
+                ErasureEmissionColor = NormalizeErasureEmissionColor(
+                    payload.ErasureEmissionR,
+                    payload.ErasureEmissionG,
+                    payload.ErasureEmissionB)
             };
+        }
+
+        static Color NormalizeErasureEmissionColor(float r, float g, float b) {
+            // Legacy payloads / assets without this field deserialize as 0,0,0.
+            if (r == 0f && g == 0f && b == 0f) {
+                return Color.white;
+            }
+
+            return new Color(r, g, b, 1f);
         }
 
         static PlayerNaturalSendSettingsNetworkPayload ToNaturalSendPayload(PlayerNaturalSendSettingsData data) {

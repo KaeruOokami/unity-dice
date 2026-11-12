@@ -1752,6 +1752,7 @@ namespace DiceGame.Gameplay
             diceView?.InterruptRollAnimation();
             isSpawning = false;
             spawnAppearMode = DiceSpawnAppearMode.None;
+            diceView?.PlayErasedSfx();
             registry?.Unregister(this);
             Erased?.Invoke(this);
             Destroy(gameObject);
@@ -1773,6 +1774,7 @@ namespace DiceGame.Gameplay
             pendingSpawnComplete = null;
             ClearLogicalBusyWithoutComplete();
             diceView?.CancelErasure();
+            diceView?.PlayErasedSfx();
             registry?.Unregister(this);
             Erased?.Invoke(this);
             Destroy(gameObject);

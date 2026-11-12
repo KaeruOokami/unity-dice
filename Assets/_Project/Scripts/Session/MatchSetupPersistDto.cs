@@ -85,6 +85,9 @@ namespace DiceGame.Session
         public float Face4Weight;
         public float Face5Weight;
         public float Face6Weight;
+        public float ErasureEmissionR = 1f;
+        public float ErasureEmissionG = 1f;
+        public float ErasureEmissionB = 1f;
     }
 
     [Serializable]
@@ -292,7 +295,10 @@ namespace DiceGame.Session
                 Face3Weight = payload.Face3Weight,
                 Face4Weight = payload.Face4Weight,
                 Face5Weight = payload.Face5Weight,
-                Face6Weight = payload.Face6Weight
+                Face6Weight = payload.Face6Weight,
+                ErasureEmissionR = payload.ErasureEmissionR,
+                ErasureEmissionG = payload.ErasureEmissionG,
+                ErasureEmissionB = payload.ErasureEmissionB
             };
         }
 
@@ -333,7 +339,10 @@ namespace DiceGame.Session
                 Face3Weight = dto.Face3Weight,
                 Face4Weight = dto.Face4Weight,
                 Face5Weight = dto.Face5Weight,
-                Face6Weight = dto.Face6Weight
+                Face6Weight = dto.Face6Weight,
+                ErasureEmissionR = dto.ErasureEmissionR,
+                ErasureEmissionG = dto.ErasureEmissionG,
+                ErasureEmissionB = dto.ErasureEmissionB
             };
         }
 

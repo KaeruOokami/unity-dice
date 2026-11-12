@@ -19,6 +19,7 @@ MonoBehaviour:
       maxCountPerVolley: 3
       minimumPower: 0
       selectionWeight: 1
+      igniteOnSpawn: 0
   attackMultiplier: 0.1
   faceGain: 0.4
   chainGain: 0.1
@@ -29,3 +30,4 @@ MonoBehaviour:
   face4Weight: 1
   face5Weight: 1
   face6Weight: 1
+  erasureEmissionColor: {r: 0, g: 0, b: 1, a: 1}

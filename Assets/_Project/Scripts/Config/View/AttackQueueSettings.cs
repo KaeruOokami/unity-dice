@@ -47,6 +47,15 @@ namespace DiceGame.Config
         [SerializeField] float fireIconPulsePeriodSeconds = 0.85f;
         [SerializeField] Color fireIconIdleColor = Color.white;
         [SerializeField] Color fireIconGlowColor = new(1f, 0.28f, 0.08f, 1f);
+        [Header("Drop Anticipation")]
+        [Min(1f)]
+        [SerializeField] float dropAnticipationPeakScale = 1.35f;
+        [Min(0.01f)]
+        [SerializeField] float dropAnticipationPeakDurationSeconds = 0.12f;
+        [Min(0f)]
+        [SerializeField] float dropAnticipationGapSeconds = 0.06f;
+        [Min(1)]
+        [SerializeField] int dropAnticipationPeakCount = 2;
         [SerializeField] AttackQueuePanelLayout player1PanelLayout = new(
             new Vector2(0.02f, 0.98f),
             new Vector2(0.02f, 0.98f),
@@ -68,6 +77,14 @@ namespace DiceGame.Config
         public float FireIconPulsePeriodSeconds => Mathf.Max(0.05f, fireIconPulsePeriodSeconds);
         public Color FireIconIdleColor => fireIconIdleColor;
         public Color FireIconGlowColor => fireIconGlowColor;
+        public float DropAnticipationPeakScale => Mathf.Max(1f, dropAnticipationPeakScale);
+        public float DropAnticipationPeakDurationSeconds =>
+            Mathf.Max(0.01f, dropAnticipationPeakDurationSeconds);
+        public float DropAnticipationGapSeconds => Mathf.Max(0f, dropAnticipationGapSeconds);
+        public int DropAnticipationPeakCount => Mathf.Max(1, dropAnticipationPeakCount);
+        public float DropAnticipationDurationSeconds =>
+            DropAnticipationPeakDurationSeconds * DropAnticipationPeakCount
+            + DropAnticipationGapSeconds * Mathf.Max(0, DropAnticipationPeakCount - 1);
         public AttackQueuePanelLayout Player1PanelLayout => player1PanelLayout;
         public AttackQueuePanelLayout Player2PanelLayout => player2PanelLayout;
 

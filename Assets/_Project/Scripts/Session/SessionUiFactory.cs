@@ -699,6 +699,63 @@ namespace DiceGame.Session
             return CreateLayoutInputField(cell, $"{label}Input", 40f, TMP_InputField.ContentType.DecimalNumber);
         }
 
+        public sealed class ColorRgbBindings
+        {
+            public TMP_InputField R;
+            public TMP_InputField G;
+            public TMP_InputField B;
+            public Image Preview;
+        }
+
+        public static ColorRgbBindings CreateLabeledColorRgbInputs(Transform parent, string label) {
+            var section = CreateVerticalSection(parent, $"{label}Color");
+            CreateLayoutLabel(section, label, 18, 24f);
+
+            var previewRow = CreateLayoutRow(section, $"{label}Preview", 28f);
+            var previewGo = new GameObject($"{label}Swatch");
+            previewGo.transform.SetParent(previewRow.transform, false);
+            var previewLayout = previewGo.AddComponent<LayoutElement>();
+            previewLayout.minHeight = 24f;
+            previewLayout.preferredHeight = 24f;
+            previewLayout.flexibleWidth = 1f;
+            var preview = previewGo.AddComponent<Image>();
+            preview.color = Color.white;
+
+            var rgbRow = CreateTwoColumnRow(section, $"{label}RgbRow");
+            // Three fields: put R/G on first row cell pair via nested rows.
+            var rgbFields = CreateVerticalSection(rgbRow, $"{label}RgbFields");
+            var row1 = CreateTwoColumnRow(rgbFields, $"{label}Rgb1");
+            var r = CreateLabeledFloatInput(row1, "R");
+            var g = CreateLabeledFloatInput(row1, "G");
+            var row2 = CreateTwoColumnRow(rgbFields, $"{label}Rgb2");
+            var b = CreateLabeledFloatInput(row2, "B");
+
+            void RefreshPreview(string _) {
+                if (!float.TryParse(r.text, out var rv)
+                    || !float.TryParse(g.text, out var gv)
+                    || !float.TryParse(b.text, out var bv)) {
+                    return;
+                }
+
+                preview.color = new Color(
+                    Mathf.Clamp01(rv),
+                    Mathf.Clamp01(gv),
+                    Mathf.Clamp01(bv),
+                    1f);
+            }
+
+            r.onValueChanged.AddListener(RefreshPreview);
+            g.onValueChanged.AddListener(RefreshPreview);
+            b.onValueChanged.AddListener(RefreshPreview);
+
+            return new ColorRgbBindings {
+                R = r,
+                G = g,
+                B = b,
+                Preview = preview
+            };
+        }
+
         public static Toggle CreateLabeledToggle(Transform parent, string label) {
             var cell = CreateFieldCell(parent, label);
             CreateLayoutLabel(cell, label, 18, 24f);
