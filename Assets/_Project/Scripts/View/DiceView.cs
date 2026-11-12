@@ -118,6 +118,7 @@ namespace DiceGame.View
         static readonly int SpawnAppearVfxStartPositionId = Shader.PropertyToID("Start Position");
         static readonly int SpawnAppearVfxEndPositionId = Shader.PropertyToID("End Position");
         static readonly int SpawnAppearVfxStripSizeMaxId = Shader.PropertyToID("Strip Size Max");
+        static readonly int SpawnAppearVfxStripSizeMinId = Shader.PropertyToID("Strip Size Min");
         static readonly int FireVfxRateId = Shader.PropertyToID("Rate");
 
         float oneVanishProgress;
@@ -874,7 +875,11 @@ namespace DiceGame.View
                 MinSpawnAppearVfxFadeOutDuration,
                 vfxSettings.SpawnAppearFadeOutDuration);
             var fade = instance.gameObject.AddComponent<SpawnAppearVfxFade>();
-            fade.Begin(instance, SpawnAppearVfxStripSizeMaxId, fadeDuration);
+            fade.Begin(
+                instance,
+                SpawnAppearVfxStripSizeMaxId,
+                SpawnAppearVfxStripSizeMinId,
+                fadeDuration);
         }
 
         void ClearSpawnAppearVfx() {

@@ -12,6 +12,13 @@ using UnityEngine;
 
 namespace DiceGame.Versus
 {
+    sealed class PendingAttackSend
+    {
+        public PlayerSlot Target;
+        public AttackVolley Volley;
+        public float RemainingTravel;
+    }
+
     public sealed class VersusAttackController : MonoBehaviour
     {
         IBoardSettings versusSettings;
@@ -20,6 +27,7 @@ namespace DiceGame.Versus
         DiceSpawnSystem spawnSystem;
         DiceMatchErasureSystem erasureSystem;
         AttackQueueSettings attackQueueSettings;
+        DiceVfxSettings vfxSettings;
         float queueToBoardDelay;
         AttackQueueView queueView;
         System.Random random;
@@ -27,6 +35,7 @@ namespace DiceGame.Versus
 
         readonly Dictionary<PlayerSlot, AttackQueue> incomingQueues = new();
         readonly Dictionary<PlayerSlot, float> naturalSendCooldowns = new();
+        readonly List<PendingAttackSend> pendingAttackSends = new();
         bool gameplayEnabled = true;
         bool generateAttacks = true;
         bool applyQueuedSpawns = true;
@@ -43,13 +52,15 @@ namespace DiceGame.Versus
             System.Random attackRandom,
             Transform viewParent,
             AttackQueueSettings queueSettings,
-            float queueDelay) {
+            float queueDelay,
+            DiceVfxSettings diceVfxSettings = null) {
             versusSettings = settings;
             board = targetBoard;
             registry = targetRegistry;
             spawnSystem = targetSpawnSystem;
             erasureSystem = targetErasureSystem;
             attackQueueSettings = queueSettings;
+            vfxSettings = diceVfxSettings;
             queueToBoardDelay = Mathf.Max(0f, queueDelay);
             random = attackRandom ?? new System.Random();
             gameplayEnabled = true;
@@ -100,6 +111,7 @@ namespace DiceGame.Versus
             }
 
             StopNaturalSendLoops();
+            FlushPendingAttackSends();
 
             if (erasureSystem != null) {
                 erasureSystem.ErasureResolved -= OnErasureResolved;
@@ -126,6 +138,8 @@ namespace DiceGame.Versus
                 return;
             }
 
+            TickPendingAttackSends(deltaTime);
+
             if (generateAttacks && naturalSendActive) {
                 TickNaturalSend(PlayerSlot.Player1, deltaTime);
                 TickNaturalSend(PlayerSlot.Player2, deltaTime);
@@ -151,6 +165,7 @@ namespace DiceGame.Versus
                 }
             } else {
                 StopNaturalSendLoops();
+                FlushPendingAttackSends();
             }
         }
 
@@ -287,12 +302,143 @@ namespace DiceGame.Versus
                     e.IsSnatch,
                     random,
                     jumboRemaining,
-                    out var volley)) {
+                    out var volley,
+                    out _)) {
+                return;
+            }
+
+            var maxSendCount = 0;
+            if (attackSettings.TryGetSendableKindsForFace(e.Face, out var sendableKinds)) {
+                maxSendCount = AttackVolumeResolver.ResolveAbsoluteMaxVolleyCount(sendableKinds);
+            }
+
+            if (maxSendCount <= 0) {
+                Debug.LogError(
+                    "VersusAttackController: Attack send max count is 0; VFX tier falls back to sent count only.");
+                maxSendCount = Mathf.Max(1, volley.Count);
+            }
+
+            EnsureQueues();
+            BeginAttackSend(
+                e.Target,
+                volley,
+                minSendCount: 1,
+                maxSendCount,
+                e.OriginWorldPosition);
+        }
+
+        void BeginAttackSend(
+            PlayerSlot target,
+            AttackVolley volley,
+            int minSendCount,
+            int maxSendCount,
+            Vector3 startWorldPosition) {
+            if (volley == null || volley.Count == 0) {
+                return;
+            }
+
+            if (!TryPlayAttackSendVfx(
+                    target,
+                    volley.Count,
+                    minSendCount,
+                    maxSendCount,
+                    startWorldPosition,
+                    out var travelDuration)) {
+                incomingQueues[target].Enqueue(volley, queueToBoardDelay);
+                return;
+            }
+
+            pendingAttackSends.Add(new PendingAttackSend {
+                Target = target,
+                Volley = volley,
+                RemainingTravel = travelDuration
+            });
+        }
+
+        bool TryPlayAttackSendVfx(
+            PlayerSlot target,
+            int sentCount,
+            int minSendCount,
+            int maxSendCount,
+            Vector3 startWorldPosition,
+            out float travelDuration) {
+            travelDuration = 0f;
+
+            if (vfxSettings == null) {
+                Debug.LogError(
+                    "VersusAttackController: Attack send VFX skipped because DiceVfxSettings is not assigned.");
+                return false;
+            }
+
+            if (queueView == null) {
+                Debug.LogError(
+                    "VersusAttackController: Attack send VFX skipped because AttackQueueView is missing.");
+                return false;
+            }
+
+            if (!queueView.AreIconsReady) {
+                Debug.LogError(
+                    "VersusAttackController: Attack send VFX skipped because queue icons are not ready.");
+                return false;
+            }
+
+            if (!queueView.TryResolveAttackSendWorldPoints(
+                    target,
+                    startWorldPosition,
+                    Camera.main,
+                    out var startWorldOnCameraPlane,
+                    out var endWorldOnCameraPlane)) {
+                return false;
+            }
+
+            if (!AttackSendVfxPlayer.TryPlay(
+                    vfxSettings,
+                    sentCount,
+                    minSendCount,
+                    maxSendCount,
+                    startWorldOnCameraPlane,
+                    endWorldOnCameraPlane)) {
+                return false;
+            }
+
+            travelDuration = vfxSettings.AttackSendLifetime;
+            return true;
+        }
+
+        void TickPendingAttackSends(float deltaTime) {
+            if (pendingAttackSends.Count == 0) {
+                return;
+            }
+
+            for (var i = 0; i < pendingAttackSends.Count; i++) {
+                pendingAttackSends[i].RemainingTravel -= deltaTime;
+            }
+
+            for (var i = 0; i < pendingAttackSends.Count;) {
+                var pending = pendingAttackSends[i];
+                if (pending.RemainingTravel > 0f) {
+                    i++;
+                    continue;
+                }
+
+                EnsureQueues();
+                incomingQueues[pending.Target].Enqueue(pending.Volley, queueToBoardDelay);
+                pendingAttackSends.RemoveAt(i);
+            }
+        }
+
+        void FlushPendingAttackSends() {
+            if (pendingAttackSends.Count == 0) {
                 return;
             }
 
             EnsureQueues();
-            incomingQueues[e.Target].Enqueue(volley, queueToBoardDelay);
+            for (var i = 0; i < pendingAttackSends.Count; i++) {
+                var pending = pendingAttackSends[i];
+                incomingQueues[pending.Target].Enqueue(pending.Volley, queueToBoardDelay);
+            }
+
+            pendingAttackSends.Clear();
         }
 
         int ResolveJumboSendableRemaining(PlayerSlot targetBoard) {
@@ -302,15 +448,32 @@ namespace DiceGame.Versus
             }
 
             EnsureQueues();
-            var pending = incomingQueues.TryGetValue(targetBoard, out var queue)
-                ? queue.GetPendingVolleys()
-                : Array.Empty<AttackVolley>();
+            var pending = CollectPendingVolleysForOccupancy(targetBoard);
             var occupied = JumboBoardOccupancy.CountOccupied(
                 registry != null ? registry.AllDice : Array.Empty<DiceController>(),
                 board != null ? board.VersusLayout : null,
                 targetBoard,
                 pending);
             return jumboSettings.GetRemainingSendableSlots(occupied);
+        }
+
+        IReadOnlyList<AttackVolley> CollectPendingVolleysForOccupancy(PlayerSlot targetBoard) {
+            var combined = new List<AttackVolley>();
+            if (incomingQueues.TryGetValue(targetBoard, out var queue)) {
+                var queued = queue.GetPendingVolleys();
+                for (var i = 0; i < queued.Count; i++) {
+                    combined.Add(queued[i]);
+                }
+            }
+
+            for (var i = 0; i < pendingAttackSends.Count; i++) {
+                var pending = pendingAttackSends[i];
+                if (pending.Target == targetBoard && pending.Volley != null) {
+                    combined.Add(pending.Volley);
+                }
+            }
+
+            return combined;
         }
 
         void TickQueue(PlayerSlot defenderSlot, float deltaTime) {

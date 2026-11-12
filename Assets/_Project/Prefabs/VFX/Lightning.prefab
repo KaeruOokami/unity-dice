@@ -51,10 +51,10 @@ VisualEffect:
   m_PropertySheet:
     m_Float:
       m_Array:
-      - m_Value: 10
+      - m_Value: 30
         m_Name: Strip Size Max
         m_Overridden: 1
-      - m_Value: 0.1
+      - m_Value: 20
         m_Name: Strip Size Min
         m_Overridden: 1
     m_Vector2f:
@@ -64,7 +64,7 @@ VisualEffect:
       - m_Value: {x: 0, y: 0, z: 0}
         m_Name: Start Position
         m_Overridden: 1
-      - m_Value: {x: 0, y: 0, z: 0}
+      - m_Value: {x: 0, y: 20, z: 0}
         m_Name: End Position
         m_Overridden: 1
     m_Vector4f:

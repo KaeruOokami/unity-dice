@@ -13,12 +13,124 @@ namespace DiceGame.View
         DiceCatalog player2Catalog;
         AttackQueueSettings settings;
         DiceIconGenerator iconGenerator;
+        Canvas canvas;
+        RectTransform canvasRect;
         RectTransform player1Panel;
         RectTransform player2Panel;
         Coroutine prewarmRoutine;
         int prewarmGeneration;
 
         public bool AreIconsReady { get; private set; }
+
+        /// <summary>
+        /// Panel-local center of the queue home slot (oldest / next-to-board column).
+        /// P1: left edge. P2: right edge. Independent of whether icons currently exist.
+        /// </summary>
+        public bool TryGetQueueHomePanelLocal(PlayerSlot defenderSlot, out Vector2 panelLocal) {
+            panelLocal = default;
+            if (settings == null) {
+                Debug.LogError("AttackQueueView: Cannot resolve queue home because settings are null.");
+                return false;
+            }
+
+            if (GetPanel(defenderSlot) == null) {
+                Debug.LogError(
+                    $"AttackQueueView: Cannot resolve queue home because panel is missing for {defenderSlot}.");
+                return false;
+            }
+
+            panelLocal = ResolveQueueHomePanelLocal(defenderSlot);
+            return true;
+        }
+
+        /// <summary>
+        /// Panel-local center of the column whose oldest-first index is <paramref name="oldestFirstIndex"/>
+        /// (0 = home / next-to-board).
+        /// </summary>
+        public bool TryGetQueueColumnPanelLocal(
+            PlayerSlot defenderSlot,
+            int oldestFirstIndex,
+            out Vector2 panelLocal) {
+            panelLocal = default;
+            if (!TryGetQueueHomePanelLocal(defenderSlot, out var home)) {
+                return false;
+            }
+
+            var index = Mathf.Max(0, oldestFirstIndex);
+            var step = settings.IconSize + settings.ColumnSpacing;
+            var growRight = defenderSlot != PlayerSlot.Player2;
+            panelLocal = home + new Vector2(growRight ? index * step : -index * step, 0f);
+            return true;
+        }
+
+        /// <summary>
+        /// Projects match-origin dice and queue home onto one camera-depth plane for attack-send VFX.
+        /// </summary>
+        public bool TryResolveAttackSendWorldPoints(
+            PlayerSlot defenderSlot,
+            Vector3 matchOriginWorldPosition,
+            Camera worldCamera,
+            out Vector3 startWorldOnCameraPlane,
+            out Vector3 endWorldOnCameraPlane) {
+            startWorldOnCameraPlane = default;
+            endWorldOnCameraPlane = default;
+
+            if (worldCamera == null) {
+                Debug.LogError("AttackQueueView: Attack send VFX needs a world camera (Camera.main is null).");
+                return false;
+            }
+
+            var panel = GetPanel(defenderSlot);
+            if (panel == null) {
+                Debug.LogError(
+                    $"AttackQueueView: Attack send VFX failed because queue panel is missing for {defenderSlot}.");
+                return false;
+            }
+
+            if (!TryGetQueueHomePanelLocal(defenderSlot, out var homeLocal)) {
+                return false;
+            }
+
+            var startScreen = worldCamera.WorldToScreenPoint(matchOriginWorldPosition);
+            if (startScreen.z < 0f) {
+                Debug.LogError(
+                    "AttackQueueView: Match origin is behind the camera; cannot project attack-send VFX start.");
+                return false;
+            }
+
+            var endUiWorld = panel.TransformPoint(new Vector3(homeLocal.x, homeLocal.y, 0f));
+            var endScreen = RectTransformUtility.WorldToScreenPoint(
+                ResolveCanvasEventCamera(),
+                endUiWorld);
+
+            var planeDepth = startScreen.z;
+            startWorldOnCameraPlane = worldCamera.ScreenToWorldPoint(
+                new Vector3(startScreen.x, startScreen.y, planeDepth));
+            endWorldOnCameraPlane = worldCamera.ScreenToWorldPoint(
+                new Vector3(endScreen.x, endScreen.y, planeDepth));
+            return true;
+        }
+
+        Vector2 ResolveQueueHomePanelLocal(PlayerSlot defenderSlot) {
+            var iconHalf = settings.IconSize * 0.5f;
+            return defenderSlot == PlayerSlot.Player2
+                ? new Vector2(-iconHalf, -iconHalf)
+                : new Vector2(iconHalf, -iconHalf);
+        }
+
+        RectTransform GetPanel(PlayerSlot defenderSlot) {
+            return defenderSlot == PlayerSlot.Player1 ? player1Panel : player2Panel;
+        }
+
+        Camera ResolveCanvasEventCamera() {
+            if (canvas == null) {
+                return null;
+            }
+
+            return canvas.renderMode == RenderMode.ScreenSpaceOverlay
+                ? null
+                : canvas.worldCamera;
+        }
 
         public void Configure(
             DiceCatalog targetPlayer1Catalog,
@@ -130,13 +242,11 @@ namespace DiceGame.View
         }
 
         void EnsureUi() {
-            var canvas = GetComponentInChildren<Canvas>();
+            canvas = GetComponentInChildren<Canvas>();
             if (canvas == null) {
                 var canvasObject = new GameObject("AttackQueueCanvas");
                 canvasObject.transform.SetParent(transform, false);
                 canvas = canvasObject.AddComponent<Canvas>();
-                canvas.renderMode = RenderMode.ScreenSpaceOverlay;
-                canvas.sortingOrder = 100;
 
                 var scaler = canvasObject.AddComponent<CanvasScaler>();
                 scaler.uiScaleMode = CanvasScaler.ScaleMode.ScaleWithScreenSize;
@@ -144,6 +254,11 @@ namespace DiceGame.View
                 scaler.matchWidthOrHeight = 0.5f;
             }
 
+            canvas.renderMode = RenderMode.ScreenSpaceOverlay;
+            canvas.worldCamera = null;
+            canvas.sortingOrder = 100;
+
+            canvasRect = canvas.transform as RectTransform;
             player1Panel = EnsurePanel(
                 canvas.transform,
                 "Player1QueuePanel",
@@ -164,21 +279,24 @@ namespace DiceGame.View
                 return;
             }
 
-            var reverseColumns = defenderSlot == PlayerSlot.Player2;
-            for (var columnIndex = 0; columnIndex < volleys.Count; columnIndex++) {
-                var volleyIndex = reverseColumns ? volleys.Count - 1 - columnIndex : columnIndex;
-                var volley = volleys[volleyIndex];
+            // oldestFirstIndex 0 = home (next to board); higher = newer columns away from home.
+            for (var oldestFirstIndex = 0; oldestFirstIndex < volleys.Count; oldestFirstIndex++) {
+                var volley = volleys[oldestFirstIndex];
                 if (volley == null || volley.Count == 0) {
                     continue;
                 }
 
-                var columnRoot = CreateColumn(panel);
+                if (!TryGetQueueColumnPanelLocal(defenderSlot, oldestFirstIndex, out var columnLocal)) {
+                    continue;
+                }
+
+                var columnRoot = CreateColumn(panel, defenderSlot, columnLocal);
                 var iconCount = 0;
                 for (var row = 0; row < volley.Count; row++) {
                     var spec = volley.Dice[row];
                     if (!catalog.TryGetMeshPrefab(spec.Kind, out var meshPrefab) || meshPrefab == null) {
                         Debug.LogWarning(
-                            $"[QueueView] defender={defenderSlot} volley={volleyIndex} row={row} " +
+                            $"[QueueView] defender={defenderSlot} volley={oldestFirstIndex} row={row} " +
                             $"meshMissing kind={spec.Kind}");
                         continue;
                     }
@@ -186,12 +304,12 @@ namespace DiceGame.View
                     if (!iconGenerator.TryGetCachedSprite(meshPrefab, spec.Pip, out var sprite)
                         || sprite == null) {
                         Debug.LogError(
-                            $"[QueueView] defender={defenderSlot} volley={volleyIndex} row={row} " +
+                            $"[QueueView] defender={defenderSlot} volley={oldestFirstIndex} row={row} " +
                             $"cacheMiss kind={spec.Kind} pip={spec.Pip} mesh='{meshPrefab.name}'.");
                         continue;
                     }
 
-                    CreateIcon(columnRoot, sprite, defenderSlot, volleyIndex, row, spec);
+                    CreateIcon(columnRoot, sprite, defenderSlot, oldestFirstIndex, row, spec);
                     iconCount++;
                 }
 
@@ -200,7 +318,7 @@ namespace DiceGame.View
                     continue;
                 }
 
-                ApplyColumnLayoutElement(columnRoot, iconCount);
+                ApplyColumnSize(columnRoot, iconCount);
             }
         }
 
@@ -211,7 +329,7 @@ namespace DiceGame.View
             var existing = canvasTransform.Find(panelName) as RectTransform;
             if (existing != null) {
                 ApplyPanelLayout(existing, layout);
-                ApplyPanelLayoutGroup(existing, layout);
+                RemoveHorizontalLayoutGroup(existing);
                 return existing;
             }
 
@@ -219,14 +337,6 @@ namespace DiceGame.View
             panelObject.transform.SetParent(canvasTransform, false);
             var panel = panelObject.GetComponent<RectTransform>();
             ApplyPanelLayout(panel, layout);
-
-            var layoutGroup = panelObject.AddComponent<HorizontalLayoutGroup>();
-            ApplyPanelLayoutGroup(panel, layout, layoutGroup);
-            layoutGroup.childControlWidth = false;
-            layoutGroup.childControlHeight = false;
-            layoutGroup.childForceExpandWidth = false;
-            layoutGroup.childForceExpandHeight = false;
-
             return panel;
         }
 
@@ -235,35 +345,30 @@ namespace DiceGame.View
             panel.anchorMax = layout.AnchorMax;
             panel.pivot = layout.Pivot;
             panel.anchoredPosition = Vector2.zero;
+            panel.sizeDelta = Vector2.zero;
         }
 
-        void ApplyPanelLayoutGroup(
+        static void RemoveHorizontalLayoutGroup(RectTransform panel) {
+            var layoutGroup = panel.GetComponent<HorizontalLayoutGroup>();
+            if (layoutGroup != null) {
+                Destroy(layoutGroup);
+            }
+        }
+
+        RectTransform CreateColumn(
             RectTransform panel,
-            AttackQueuePanelLayout layout,
-            HorizontalLayoutGroup layoutGroup = null) {
-            layoutGroup ??= panel.GetComponent<HorizontalLayoutGroup>();
-            if (layoutGroup == null) {
-                return;
-            }
-
-            layoutGroup.spacing = settings.ColumnSpacing;
-            layoutGroup.childAlignment = ResolveChildAlignment(layout.Pivot);
-        }
-
-        static TextAnchor ResolveChildAlignment(Vector2 pivot) {
-            if (pivot.y >= 0.5f) {
-                return pivot.x >= 0.5f ? TextAnchor.UpperRight : TextAnchor.UpperLeft;
-            }
-
-            return pivot.x >= 0.5f ? TextAnchor.LowerRight : TextAnchor.LowerLeft;
-        }
-
-        RectTransform CreateColumn(RectTransform panel) {
+            PlayerSlot defenderSlot,
+            Vector2 panelLocal) {
             var columnObject = new GameObject("Column", typeof(RectTransform));
             columnObject.transform.SetParent(panel, false);
 
             var column = columnObject.GetComponent<RectTransform>();
-            columnObject.AddComponent<LayoutElement>();
+            var panelPivot = defenderSlot == PlayerSlot.Player2 ? Vector2.one : new Vector2(0f, 1f);
+            column.anchorMin = panelPivot;
+            column.anchorMax = panelPivot;
+            column.pivot = new Vector2(0.5f, 1f);
+            column.anchoredPosition = panelLocal;
+
             var layoutGroup = columnObject.AddComponent<VerticalLayoutGroup>();
             layoutGroup.spacing = settings.RowSpacing;
             layoutGroup.childAlignment = TextAnchor.UpperCenter;
@@ -274,18 +379,9 @@ namespace DiceGame.View
             return column;
         }
 
-        void ApplyColumnLayoutElement(RectTransform column, int iconCount) {
+        void ApplyColumnSize(RectTransform column, int iconCount) {
             var iconSize = settings.IconSize;
             var height = iconSize * iconCount + settings.RowSpacing * Mathf.Max(0, iconCount - 1);
-            var layoutElement = column.GetComponent<LayoutElement>();
-            if (layoutElement == null) {
-                layoutElement = column.gameObject.AddComponent<LayoutElement>();
-            }
-
-            layoutElement.minWidth = iconSize;
-            layoutElement.preferredWidth = iconSize;
-            layoutElement.minHeight = height;
-            layoutElement.preferredHeight = height;
             column.sizeDelta = new Vector2(iconSize, height);
         }
 

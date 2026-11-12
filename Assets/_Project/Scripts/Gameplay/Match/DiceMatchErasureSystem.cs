@@ -158,7 +158,7 @@ namespace DiceGame.Gameplay
                 }
 
                 deferredAttacker ??= attacker;
-                ProcessCluster(cluster, attacker);
+                ProcessCluster(cluster, attacker, fallenDice);
             }
 
             if (deferredAttacker == null
@@ -338,7 +338,7 @@ namespace DiceGame.Gameplay
                     continue;
                 }
 
-                ProcessCluster(cluster, attacker);
+                ProcessCluster(cluster, attacker, triggerDice);
             }
         }
 
@@ -356,16 +356,19 @@ namespace DiceGame.Gameplay
             return false;
         }
 
-        void ProcessCluster(DiceMatchCluster cluster, PlayerSlot attacker) {
+        void ProcessCluster(
+            DiceMatchCluster cluster,
+            PlayerSlot attacker,
+            DiceController triggerDice) {
             PartitionClusterMembers(cluster.Members, out var newMembers, out var erasingMembers);
 
             if (newMembers.Count > 0) {
-                ApplyClusterErasure(cluster, newMembers, erasingMembers, attacker);
+                ApplyClusterErasure(cluster, newMembers, erasingMembers, attacker, triggerDice);
                 return;
             }
 
             if (erasingMembers.Count > 0) {
-                ProcessSinkingFollowUp(cluster, attacker);
+                ProcessSinkingFollowUp(cluster, attacker, triggerDice);
             }
         }
 
@@ -397,7 +400,8 @@ namespace DiceGame.Gameplay
             DiceMatchCluster cluster,
             List<DiceController> newMembers,
             List<DiceController> erasingMembers,
-            PlayerSlot attacker) {
+            PlayerSlot attacker,
+            DiceController triggerDice) {
             if (!TryGetPlayerEmissionColor(attacker, out var emissionColor)) {
                 return;
             }
@@ -421,14 +425,22 @@ namespace DiceGame.Gameplay
                 AssignErasingOwners(erasingMembers, attacker);
             }
 
+            var hasOrigin = TryResolveTriggerOrigin(triggerDice, out var origin);
             foreach (var dice in newMembers) {
                 dice.BeginErasureForCurrentTier(emissionColor, null);
             }
 
-            TryEmitVersusAttack(attacker, face, chainResult, clusterSize);
+            if (!hasOrigin) {
+                return;
+            }
+
+            TryEmitVersusAttack(attacker, face, chainResult, clusterSize, origin);
         }
 
-        void ProcessSinkingFollowUp(DiceMatchCluster cluster, PlayerSlot attacker) {
+        void ProcessSinkingFollowUp(
+            DiceMatchCluster cluster,
+            PlayerSlot attacker,
+            DiceController triggerDice) {
             if (sinkingGroups == null) {
                 return;
             }
@@ -449,7 +461,11 @@ namespace DiceGame.Gameplay
                 }
             }
 
-            TryEmitVersusAttack(attacker, face, chainResult, cluster.Weight);
+            if (!TryResolveTriggerOrigin(triggerDice, out var origin)) {
+                return;
+            }
+
+            TryEmitVersusAttack(attacker, face, chainResult, cluster.Weight, origin);
         }
 
         SinkingChainResult RegisterSinkingCluster(
@@ -477,7 +493,8 @@ namespace DiceGame.Gameplay
             PlayerSlot attacker,
             int face,
             SinkingChainResult chainResult,
-            int clusterSize) {
+            int clusterSize,
+            Vector3 originWorldPosition) {
             var target = SinkingChainResolver.GetOpponent(attacker);
             ErasureResolved?.Invoke(new ErasureResolvedEvent(
                 attacker,
@@ -485,7 +502,26 @@ namespace DiceGame.Gameplay
                 face,
                 chainResult.ChainCount,
                 clusterSize,
-                chainResult.IsSnatch));
+                chainResult.IsSnatch,
+                originWorldPosition));
+        }
+
+        static bool TryResolveTriggerOrigin(
+            DiceController triggerDice,
+            out Vector3 originWorldPosition) {
+            originWorldPosition = default;
+            if (triggerDice == null) {
+                Debug.LogError(
+                    "DiceMatchErasureSystem: Match trigger dice is null; cannot resolve attack-send origin.");
+                return false;
+            }
+
+            if (triggerDice.TryGetVisualWorldPosition(out originWorldPosition)) {
+                return true;
+            }
+
+            originWorldPosition = triggerDice.transform.position;
+            return true;
         }
 
         bool TryGetPlayerEmissionColor(PlayerSlot attacker, out Color emissionColor) {

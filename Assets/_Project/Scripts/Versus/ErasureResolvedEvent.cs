@@ -1,4 +1,5 @@
 using DiceGame.Config;
+using UnityEngine;
 
 namespace DiceGame.Versus
 {
@@ -10,6 +11,7 @@ namespace DiceGame.Versus
         public int ChainCount { get; }
         public int ClusterSize { get; }
         public bool IsSnatch { get; }
+        public Vector3 OriginWorldPosition { get; }
 
         public ErasureResolvedEvent(
             PlayerSlot attacker,
@@ -17,13 +19,15 @@ namespace DiceGame.Versus
             int face,
             int chainCount,
             int clusterSize,
-            bool isSnatch) {
+            bool isSnatch,
+            Vector3 originWorldPosition) {
             Attacker = attacker;
             Target = target;
             Face = face;
             ChainCount = chainCount;
             ClusterSize = clusterSize;
             IsSnatch = isSnatch;
+            OriginWorldPosition = originWorldPosition;
         }
     }
 }

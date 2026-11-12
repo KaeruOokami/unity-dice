@@ -418,7 +418,8 @@ namespace DiceGame.Gameplay
                     spawnRandom,
                     transform,
                     attackQueueSettings,
-                    matchSeriesSettings.QueueToBoardDelay);
+                    matchSeriesSettings.QueueToBoardDelay,
+                    diceVfxSettings);
 
                 var jumboSequence = GetComponent<JumboDiceSequenceController>();
                 if (jumboSequence == null) {

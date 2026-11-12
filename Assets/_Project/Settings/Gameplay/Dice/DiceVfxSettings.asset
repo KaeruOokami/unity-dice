@@ -20,3 +20,10 @@ MonoBehaviour:
     type: 3}
   fireHeightOffset: 0
   fireFadeOutDuration: 2
+  attackSendTier1Prefab: {fileID: 1226173231469268727, guid: 8cf285b56b384d74c9715590e366e201,
+    type: 3}
+  attackSendTier2Prefab: {fileID: 5509780772130287166, guid: c52843b291b6e4748bad9ecef318e669,
+    type: 3}
+  attackSendTier3Prefab: {fileID: 5794417840251941560, guid: 1e564f9ab50d2d5429a30943a3cefe60,
+    type: 3}
+  attackSendLifetime: 2

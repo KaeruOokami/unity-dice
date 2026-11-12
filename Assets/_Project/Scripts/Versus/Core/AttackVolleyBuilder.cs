@@ -1,4 +1,3 @@
-using System.Collections.Generic;
 using DiceGame.Config;
 
 namespace DiceGame.Versus.Core
@@ -21,7 +20,8 @@ namespace DiceGame.Versus.Core
                 isSnatch,
                 random,
                 int.MaxValue,
-                out volley);
+                out volley,
+                out _);
         }
 
         public static bool TryBuild(
@@ -33,7 +33,30 @@ namespace DiceGame.Versus.Core
             System.Random random,
             int jumboSendableRemaining,
             out AttackVolley volley) {
+            return TryBuild(
+                settings,
+                face,
+                chainCount,
+                clusterSize,
+                isSnatch,
+                random,
+                jumboSendableRemaining,
+                out volley,
+                out _);
+        }
+
+        public static bool TryBuild(
+            PlayerAttackSettings settings,
+            int face,
+            int chainCount,
+            int clusterSize,
+            bool isSnatch,
+            System.Random random,
+            int jumboSendableRemaining,
+            out AttackVolley volley,
+            out float attackPower) {
             volley = null;
+            attackPower = 0f;
             if (settings == null || random == null) {
                 return false;
             }
@@ -42,8 +65,13 @@ namespace DiceGame.Versus.Core
                 return false;
             }
 
-            var power = AttackPowerCalculator.Calculate(settings, face, chainCount, clusterSize, isSnatch);
-            var diceCount = AttackVolumeResolver.ResolveDiceCount(sendableKinds, power);
+            attackPower = AttackPowerCalculator.Calculate(
+                settings,
+                face,
+                chainCount,
+                clusterSize,
+                isSnatch);
+            var diceCount = AttackVolumeResolver.ResolveDiceCount(sendableKinds, attackPower);
             if (diceCount <= 0) {
                 return false;
             }
@@ -51,7 +79,7 @@ namespace DiceGame.Versus.Core
             if (!AttackKindBreakdown.TryBuild(
                     sendableKinds,
                     diceCount,
-                    power,
+                    attackPower,
                     random,
                     jumboSendableRemaining,
                     out var breakdown)) {
