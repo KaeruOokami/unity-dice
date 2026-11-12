@@ -65,6 +65,7 @@ namespace DiceGame.Session.Network
         PhysicsSettings physicsSettings;
         DiceAnimationSettings animationSettings;
         DiceErasureSettings erasureSettings;
+        DiceEmissionPaletteSettings emissionPaletteSettings;
         DiceVfxSettings vfxSettings;
         DiceOneVanishSettings oneVanishSettings;
         Transform proxyRoot;
@@ -99,6 +100,7 @@ namespace DiceGame.Session.Network
             PhysicsSettings matchPhysicsSettings,
             DiceAnimationSettings matchAnimationSettings,
             DiceErasureSettings diceErasureSettings,
+            DiceEmissionPaletteSettings diceEmissionPaletteSettings,
             DiceVfxSettings diceVfxSettings,
             DiceOneVanishSettings diceOneVanishSettings,
             Board matchBoard,
@@ -112,6 +114,7 @@ namespace DiceGame.Session.Network
             physicsSettings = matchPhysicsSettings;
             animationSettings = matchAnimationSettings;
             erasureSettings = diceErasureSettings;
+            emissionPaletteSettings = diceEmissionPaletteSettings;
             vfxSettings = diceVfxSettings;
             oneVanishSettings = diceOneVanishSettings;
             board = matchBoard;
@@ -663,6 +666,7 @@ namespace DiceGame.Session.Network
                         physicsSettings,
                         animationSettings,
                         erasureSettings,
+                        emissionPaletteSettings,
                         vfxSettings);
                     diceView.SetEmitVisualMotionEvents(false);
                     diceViews[entity.Id] = diceView;
@@ -740,6 +744,7 @@ namespace DiceGame.Session.Network
                     physicsSettings,
                     animationSettings,
                     erasureSettings,
+                    emissionPaletteSettings,
                     vfxSettings);
                 diceView.SetEmitVisualMotionEvents(false);
                 diceViews[entityId] = diceView;

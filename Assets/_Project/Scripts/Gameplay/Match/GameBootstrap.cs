@@ -69,6 +69,7 @@ namespace DiceGame.Gameplay
         [SerializeField] DiceAnimationSettings diceAnimationSettings;
         [FormerlySerializedAs("diceDissolveSettings")]
         [SerializeField] DiceErasureSettings diceErasureSettings;
+        [SerializeField] DiceEmissionPaletteSettings diceEmissionPaletteSettings;
         [FormerlySerializedAs("diceSpawnVfxSettings")]
         [SerializeField] DiceVfxSettings diceVfxSettings;
         [SerializeField] DiceFireSettings diceFireSettings;
@@ -76,6 +77,7 @@ namespace DiceGame.Gameplay
         [SerializeField] DiceSpawnSettings diceSpawnSettings;
         [SerializeField] DiceCatalog diceCatalog;
         [SerializeField] AiPlayerSettings aiPlayerSettings;
+        [SerializeField] AttackQueueSettings attackQueueSettings;
         [SerializeField] MatchIntroSettings matchIntroSettings;
         [SerializeField] MatchSeriesHudSettings matchSeriesHudSettings;
         [SerializeField] CameraSetupSettings cameraSetup = new();
@@ -175,7 +177,9 @@ namespace DiceGame.Gameplay
                 || playerInputSettings == null
                 || diceAnimationSettings == null
                 || diceErasureSettings == null
-                || diceOneVanishSettings == null) {
+                || diceEmissionPaletteSettings == null
+                || diceOneVanishSettings == null
+                || attackQueueSettings == null) {
                 Debug.LogError("GameBootstrap: Gameplay settings assets are not assigned.");
                 AbortPendingSessionStart();
                 return;
@@ -363,7 +367,12 @@ namespace DiceGame.Gameplay
                 oneVanishSystem = gameObject.AddComponent<DiceOneVanishSystem>();
             }
 
-            oneVanishSystem.Configure(board, registry, characters, diceOneVanishSettings, diceErasureSettings);
+            oneVanishSystem.Configure(
+                board,
+                registry,
+                characters,
+                diceOneVanishSettings,
+                diceEmissionPaletteSettings);
 
             var erasureSystem = GetComponent<DiceMatchErasureSystem>();
             if (erasureSystem == null) {
@@ -377,7 +386,7 @@ namespace DiceGame.Gameplay
                 matchActionContext,
                 oneVanishSystem,
                 ownershipContext,
-                diceErasureSettings);
+                diceEmissionPaletteSettings);
             spawnSystem.ConfigureErasureSystem(erasureSystem);
 
             erasureSystem.ConfigureSinkingChain();
@@ -393,6 +402,13 @@ namespace DiceGame.Gameplay
                     attackController = gameObject.AddComponent<VersusAttackController>();
                 }
 
+                var matchSeriesSettings = ResolveMatchSeriesSettings();
+                if (matchSeriesSettings == null) {
+                    Debug.LogError("GameBootstrap: MatchSeriesSettings is not assigned.");
+                    AbortPendingSessionStart();
+                    return;
+                }
+
                 attackController.Configure(
                     versusSettings,
                     board,
@@ -400,7 +416,9 @@ namespace DiceGame.Gameplay
                     spawnSystem,
                     erasureSystem,
                     spawnRandom,
-                    transform);
+                    transform,
+                    attackQueueSettings,
+                    matchSeriesSettings.QueueToBoardDelay);
 
                 var jumboSequence = GetComponent<JumboDiceSequenceController>();
                 if (jumboSequence == null) {
@@ -652,6 +670,7 @@ namespace DiceGame.Gameplay
                     physicsSettings,
                     diceAnimationSettings,
                     diceErasureSettings,
+                    diceEmissionPaletteSettings,
                     diceVfxSettings,
                     matchActionContext,
                     activeCurriculumStage.SpawnSettings,
@@ -670,6 +689,7 @@ namespace DiceGame.Gameplay
                     physicsSettings,
                     diceAnimationSettings,
                     diceErasureSettings,
+                    diceEmissionPaletteSettings,
                     diceVfxSettings,
                     matchActionContext,
                     versusSettings.Player1.SpawnSettings,
@@ -697,11 +717,24 @@ namespace DiceGame.Gameplay
                 physicsSettings,
                 diceAnimationSettings,
                 diceErasureSettings,
+                diceEmissionPaletteSettings,
                 diceVfxSettings,
                 matchActionContext,
                 resolvedSetup.SharedSpawnSettings,
                 spawnRandom);
             return true;
+        }
+
+        MatchSeriesSettings ResolveMatchSeriesSettings() {
+            if (resolvedSetup != null
+                && resolvedSetup.GameMode == GameMode.Challenge) {
+                var challengeSettings = FindPresetRegistry()?.ChallengeModeSettings;
+                if (challengeSettings != null && challengeSettings.MatchSeriesSettings != null) {
+                    return challengeSettings.MatchSeriesSettings;
+                }
+            }
+
+            return gameSessionSettings != null ? gameSessionSettings.MatchSeriesSettings : null;
         }
 
         bool TrySpawnCurriculumStage(

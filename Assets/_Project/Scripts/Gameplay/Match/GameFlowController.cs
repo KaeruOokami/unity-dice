@@ -225,9 +225,10 @@ namespace DiceGame.Gameplay
                 return Mathf.Max(1, setup.WinsToWin);
             }
 
-            if (sessionSettings?.BoardSettings != null)
+            var seriesSettings = ResolveMatchSeriesSettings(sessionSettings);
+            if (seriesSettings != null)
             {
-                return sessionSettings.BoardSettings.WinsToWin;
+                return seriesSettings.WinsToWin;
             }
 
             return 1;
@@ -235,20 +236,24 @@ namespace DiceGame.Gameplay
 
         float ResolveRoundEndDelaySeconds(GameSessionSettings targetSessionSettings)
         {
+            var seriesSettings = ResolveMatchSeriesSettings(targetSessionSettings);
+            return seriesSettings != null ? seriesSettings.RoundEndDelaySeconds : 0f;
+        }
+
+        MatchSeriesSettings ResolveMatchSeriesSettings(GameSessionSettings targetSessionSettings)
+        {
             if (activeGameMode == GameMode.Challenge)
             {
                 var challengeSettings = sessionController != null
                     ? sessionController.MatchSetupPresetRegistry?.ChallengeModeSettings
                     : null;
-                if (challengeSettings != null && challengeSettings.BoardSettings != null)
+                if (challengeSettings != null && challengeSettings.MatchSeriesSettings != null)
                 {
-                    return challengeSettings.BoardSettings.RoundEndDelaySeconds;
+                    return challengeSettings.MatchSeriesSettings;
                 }
             }
 
-            return targetSessionSettings != null && targetSessionSettings.BoardSettings != null
-                ? targetSessionSettings.BoardSettings.RoundEndDelaySeconds
-                : 0f;
+            return targetSessionSettings != null ? targetSessionSettings.MatchSeriesSettings : null;
         }
 
         void OnDestroy()

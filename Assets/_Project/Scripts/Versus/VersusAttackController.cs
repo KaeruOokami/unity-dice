@@ -19,6 +19,8 @@ namespace DiceGame.Versus
         DiceRegistry registry;
         DiceSpawnSystem spawnSystem;
         DiceMatchErasureSystem erasureSystem;
+        AttackQueueSettings attackQueueSettings;
+        float queueToBoardDelay;
         AttackQueueView queueView;
         System.Random random;
         Coroutine iconWarmupRoutine;
@@ -39,12 +41,16 @@ namespace DiceGame.Versus
             DiceSpawnSystem targetSpawnSystem,
             DiceMatchErasureSystem targetErasureSystem,
             System.Random attackRandom,
-            Transform viewParent) {
+            Transform viewParent,
+            AttackQueueSettings queueSettings,
+            float queueDelay) {
             versusSettings = settings;
             board = targetBoard;
             registry = targetRegistry;
             spawnSystem = targetSpawnSystem;
             erasureSystem = targetErasureSystem;
+            attackQueueSettings = queueSettings;
+            queueToBoardDelay = Mathf.Max(0f, queueDelay);
             random = attackRandom ?? new System.Random();
             gameplayEnabled = true;
             generateAttacks = true;
@@ -189,7 +195,7 @@ namespace DiceGame.Versus
             queueView.Configure(
                 versusSettings.GetDiceCatalog(PlayerSlot.Player1),
                 versusSettings.GetDiceCatalog(PlayerSlot.Player2),
-                versusSettings.AttackQueueSettings);
+                attackQueueSettings);
             RefreshQueueView();
         }
 
@@ -252,11 +258,8 @@ namespace DiceGame.Versus
                         random,
                         jumboRemaining,
                         out var volley)) {
-                    var queueDelay = versusSettings.AttackQueueSettings != null
-                        ? versusSettings.AttackQueueSettings.QueueToBoardDelay
-                        : 0f;
                     EnsureQueues();
-                    incomingQueues[target].Enqueue(volley, queueDelay);
+                    incomingQueues[target].Enqueue(volley, queueToBoardDelay);
                 }
 
                 cooldown += SampleNaturalSendDelay(spawnSettings);
@@ -289,10 +292,7 @@ namespace DiceGame.Versus
             }
 
             EnsureQueues();
-            var queueDelay = versusSettings.AttackQueueSettings != null
-                ? versusSettings.AttackQueueSettings.QueueToBoardDelay
-                : 0f;
-            incomingQueues[e.Target].Enqueue(volley, queueDelay);
+            incomingQueues[e.Target].Enqueue(volley, queueToBoardDelay);
         }
 
         int ResolveJumboSendableRemaining(PlayerSlot targetBoard) {

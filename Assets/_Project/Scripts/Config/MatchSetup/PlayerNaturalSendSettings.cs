@@ -1,0 +1,103 @@
+using System;
+using DiceGame.Core;
+using UnityEngine;
+
+namespace DiceGame.Config
+{
+    [Serializable]
+    public struct NaturalSendKindLimit
+    {
+        [SerializeField] DiceKind kind;
+        [Min(0)]
+        [SerializeField] int maxCountPerVolley;
+        [Min(0f)]
+        [SerializeField] float selectionWeight;
+        [SerializeField] bool igniteOnSpawn;
+
+        public NaturalSendKindLimit(DiceKind diceKind, int maxCount, float weight) {
+            kind = diceKind;
+            maxCountPerVolley = maxCount;
+            selectionWeight = weight;
+            igniteOnSpawn = false;
+        }
+
+        public NaturalSendKindLimit(DiceKind diceKind, int maxCount, float weight, bool ignite) {
+            kind = diceKind;
+            maxCountPerVolley = maxCount;
+            selectionWeight = weight;
+            igniteOnSpawn = ignite;
+        }
+
+        public DiceKind Kind => kind;
+        public int MaxCountPerVolley => Mathf.Max(0, maxCountPerVolley);
+        public float SelectionWeight => Mathf.Max(0f, selectionWeight);
+        public bool IgniteOnSpawn => igniteOnSpawn && DiceFirePolicy.CanCarryFire(kind);
+
+        public bool IsEligible() {
+            return MaxCountPerVolley > 0 && SelectionWeight > 0f;
+        }
+    }
+
+    [CreateAssetMenu(fileName = "PlayerNaturalSendSettings", menuName = "Dice/Match Setup/Player Natural Send Settings")]
+    public sealed class PlayerNaturalSendSettings : ScriptableObject
+    {
+        [SerializeField] bool enabled = true;
+        [Min(1)]
+        [SerializeField] int diceCountPerVolley = 1;
+        [SerializeField] NaturalSendKindLimit[] sendableKinds = {
+            new(DiceKind.Normal, 1, 1f)
+        };
+
+        public bool Enabled => enabled;
+        public int DiceCountPerVolley => Mathf.Max(1, diceCountPerVolley);
+        public NaturalSendKindLimit[] SendableKinds => sendableKinds ?? Array.Empty<NaturalSendKindLimit>();
+
+        public bool TryValidate(out string errorMessage) {
+            if (!enabled) {
+                errorMessage = null;
+                return true;
+            }
+
+            if (sendableKinds == null || sendableKinds.Length == 0) {
+                errorMessage = "PlayerNaturalSendSettings: At least one sendable dice kind is required when enabled.";
+                return false;
+            }
+
+            var hasEligible = false;
+            for (var i = 0; i < sendableKinds.Length; i++) {
+                if (sendableKinds[i].IsEligible()) {
+                    hasEligible = true;
+                    break;
+                }
+            }
+
+            if (!hasEligible) {
+                errorMessage = "PlayerNaturalSendSettings: No eligible sendable dice kind configured.";
+                return false;
+            }
+
+            errorMessage = null;
+            return true;
+        }
+
+        public static PlayerNaturalSendSettings CreateRuntime(PlayerNaturalSendSettingsData data) {
+            var instance = CreateInstance<PlayerNaturalSendSettings>();
+            instance.Apply(data);
+            return instance;
+        }
+
+        public void Apply(PlayerNaturalSendSettingsData data) {
+            enabled = data.Enabled;
+            diceCountPerVolley = Mathf.Max(1, data.DiceCountPerVolley);
+            var kinds = data.SendableKinds ?? Array.Empty<NaturalSendKindLimitData>();
+            sendableKinds = new NaturalSendKindLimit[kinds.Length];
+            for (var i = 0; i < kinds.Length; i++) {
+                sendableKinds[i] = new NaturalSendKindLimit(
+                    kinds[i].Kind,
+                    kinds[i].MaxCountPerVolley,
+                    kinds[i].SelectionWeight,
+                    kinds[i].IgniteOnSpawn);
+            }
+        }
+    }
+}

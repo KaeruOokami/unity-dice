@@ -21,6 +21,7 @@ namespace DiceGame.Gameplay
             PhysicsSettings physicsSettings,
             DiceAnimationSettings animationSettings,
             DiceErasureSettings erasureSettings,
+            DiceEmissionPaletteSettings emissionPaletteSettings,
             DiceVfxSettings vfxSettings = null) {
             if (prefab == null) {
                 return null;
@@ -41,6 +42,7 @@ namespace DiceGame.Gameplay
                 physicsSettings,
                 animationSettings,
                 erasureSettings,
+                emissionPaletteSettings,
                 vfxSettings);
             if (meshPrefab != null) {
                 diceView.SetMeshPrefab(meshPrefab);
@@ -88,6 +90,7 @@ namespace DiceGame.Gameplay
         PhysicsSettings physicsSettings;
         DiceAnimationSettings diceAnimationSettings;
         DiceErasureSettings diceErasureSettings;
+        DiceEmissionPaletteSettings diceEmissionPaletteSettings;
         DiceVfxSettings diceVfxSettings;
         DiceFireSystem fireSystem;
         PlayerMatchActionContext matchActionContext;
@@ -137,6 +140,7 @@ namespace DiceGame.Gameplay
             PhysicsSettings physics,
             DiceAnimationSettings animationSettings,
             DiceErasureSettings erasureSettings,
+            DiceEmissionPaletteSettings emissionPaletteSettings,
             DiceVfxSettings vfxSettings,
             PlayerMatchActionContext actionContext,
             DiceSpawnSettings settings,
@@ -149,6 +153,7 @@ namespace DiceGame.Gameplay
             physicsSettings = physics;
             diceAnimationSettings = animationSettings;
             diceErasureSettings = erasureSettings;
+            diceEmissionPaletteSettings = emissionPaletteSettings;
             diceVfxSettings = vfxSettings;
             matchActionContext = actionContext;
             spawnSettings = settings;
@@ -671,6 +676,7 @@ namespace DiceGame.Gameplay
                 physicsSettings,
                 diceAnimationSettings,
                 diceErasureSettings,
+                diceEmissionPaletteSettings,
                 diceVfxSettings);
 
             if (diceController == null) {
@@ -779,6 +785,7 @@ namespace DiceGame.Gameplay
                 physicsSettings,
                 diceAnimationSettings,
                 diceErasureSettings,
+                diceEmissionPaletteSettings,
                 diceVfxSettings);
 
             if (diceController == null) {
@@ -874,6 +881,7 @@ namespace DiceGame.Gameplay
                 physicsSettings,
                 diceAnimationSettings,
                 diceErasureSettings,
+                diceEmissionPaletteSettings,
                 diceVfxSettings);
 
             if (diceController == null) {
@@ -952,6 +960,7 @@ namespace DiceGame.Gameplay
                 physicsSettings,
                 diceAnimationSettings,
                 diceErasureSettings,
+                diceEmissionPaletteSettings,
                 diceVfxSettings);
 
             if (diceController == null) {

@@ -42,7 +42,6 @@ namespace DiceGame.Config
         public PlayerBoardDefinition Player2 => player2;
         public VersusInitialDicePlacementMode InitialDicePlacementMode =>
             template.InitialDicePlacementMode;
-        public AttackQueueSettings AttackQueueSettings => template.AttackQueueSettings;
         public JumboDiceSettings JumboDiceSettings => jumboDiceSettings;
 
         public VersusArenaLayout CreateLayout() {

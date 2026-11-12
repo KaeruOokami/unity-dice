@@ -9,7 +9,6 @@ namespace DiceGame.Config
         PlayerBoardDefinition Player1 { get; }
         PlayerBoardDefinition Player2 { get; }
         VersusInitialDicePlacementMode InitialDicePlacementMode { get; }
-        AttackQueueSettings AttackQueueSettings { get; }
         JumboDiceSettings JumboDiceSettings { get; }
         VersusArenaLayout CreateLayout();
         DiceSpawnSettings GetSpawnSettings(PlayerSlot slot);

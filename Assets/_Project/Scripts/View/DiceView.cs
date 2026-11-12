@@ -22,6 +22,7 @@ namespace DiceGame.View
         PhysicsSettings physicsSettings;
         DiceAnimationSettings animationSettings;
         DiceErasureSettings erasureSettings;
+        DiceEmissionPaletteSettings emissionPaletteSettings;
         DiceVfxSettings vfxSettings;
         VisualEffect fireVfxInstance;
         VisualEffect fireVfxFadingInstance;
@@ -125,10 +126,12 @@ namespace DiceGame.View
             PhysicsSettings physics,
             DiceAnimationSettings animation,
             DiceErasureSettings erasure,
+            DiceEmissionPaletteSettings emissionPalette,
             DiceVfxSettings vfx = null) {
             physicsSettings = physics;
             animationSettings = animation;
             erasureSettings = erasure;
+            emissionPaletteSettings = emissionPalette;
             vfxSettings = vfx;
         }
 
@@ -2440,7 +2443,7 @@ namespace DiceGame.View
         }
 
         void ApplyOneVanishEmission(DiceOneVanishSettings settings, float factor) {
-            if (dissolveMaterials.Count == 0 || erasureSettings == null) {
+            if (dissolveMaterials.Count == 0 || emissionPaletteSettings == null) {
                 return;
             }
 
@@ -2449,14 +2452,14 @@ namespace DiceGame.View
                 return;
             }
 
-            var baseColor = erasureEmissionColorOverride ?? erasureSettings.NeutralEmissionColor;
+            var baseColor = erasureEmissionColorOverride ?? emissionPaletteSettings.NeutralEmissionColor;
             var emissionColor = baseColor * (settings.EmissionIntensity * factor);
 
             for (var i = 0; i < dissolveMaterials.Count; i++) {
                 var map = dissolveEmissionMapOverride != null
                     ? dissolveEmissionMapOverride
-                    : erasureSettings.ErasureEmissionMap != null
-                        ? erasureSettings.ErasureEmissionMap
+                    : emissionPaletteSettings.ErasureEmissionMap != null
+                        ? emissionPaletteSettings.ErasureEmissionMap
                         : dissolveMaterialBaseEmissionMaps[i];
                 SetMaterialEmission(dissolveMaterials[i], emissionColor, map, true);
             }
@@ -2630,7 +2633,7 @@ namespace DiceGame.View
         }
 
         void ApplyErasureEmission(float progress, bool useNeutralColor = false) {
-            if (dissolveMaterials.Count == 0 || erasureSettings == null) {
+            if (dissolveMaterials.Count == 0 || emissionPaletteSettings == null) {
                 return;
             }
 
@@ -2646,23 +2649,23 @@ namespace DiceGame.View
                 return;
             }
 
-            var pulse = (Mathf.Sin(Time.time * erasureSettings.ErasureEmissionPulseSpeed) + 1f) * 0.5f;
+            var pulse = (Mathf.Sin(Time.time * emissionPaletteSettings.ErasureEmissionPulseSpeed) + 1f) * 0.5f;
             var pulseMultiplier = Mathf.Lerp(
-                erasureSettings.ErasureEmissionPulseMin,
-                erasureSettings.ErasureEmissionPulseMax,
+                emissionPaletteSettings.ErasureEmissionPulseMin,
+                emissionPaletteSettings.ErasureEmissionPulseMax,
                 pulse);
             var baseColor = useNeutralColor
-                ? erasureSettings.NeutralEmissionColor
+                ? emissionPaletteSettings.NeutralEmissionColor
                 : erasureEmissionColorOverride
-                    ?? erasureSettings.NeutralEmissionColor;
+                    ?? emissionPaletteSettings.NeutralEmissionColor;
             var emissionColor = baseColor
-                * (erasureSettings.ErasureEmissionIntensity * pulseMultiplier);
+                * (emissionPaletteSettings.ErasureEmissionIntensity * pulseMultiplier);
 
             for (var i = 0; i < dissolveMaterials.Count; i++) {
                 var map = dissolveEmissionMapOverride != null
                     ? dissolveEmissionMapOverride
-                    : erasureSettings.ErasureEmissionMap != null
-                        ? erasureSettings.ErasureEmissionMap
+                    : emissionPaletteSettings.ErasureEmissionMap != null
+                        ? emissionPaletteSettings.ErasureEmissionMap
                         : dissolveMaterialBaseEmissionMaps[i];
                 SetMaterialEmission(dissolveMaterials[i], emissionColor, map, true);
             }

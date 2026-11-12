@@ -24,7 +24,7 @@ namespace DiceGame.Gameplay
         readonly List<DiceController> pendingCarryTopMountMatches = new();
 
         IBoardSettings versusSettings;
-        DiceErasureSettings erasureSettings;
+        DiceEmissionPaletteSettings emissionPaletteSettings;
         SinkingGroupTracker sinkingGroups;
         DiceMatchOwnershipContext ownershipContext;
         bool versusAttackEnabled;
@@ -38,13 +38,13 @@ namespace DiceGame.Gameplay
             PlayerMatchActionContext targetActionContext,
             DiceOneVanishSystem targetOneVanishSystem,
             DiceMatchOwnershipContext targetOwnershipContext,
-            DiceErasureSettings targetErasureSettings) {
+            DiceEmissionPaletteSettings targetEmissionPaletteSettings) {
             board = targetBoard;
             registry = targetRegistry;
             actionContext = targetActionContext;
             oneVanishSystem = targetOneVanishSystem;
             ownershipContext = targetOwnershipContext;
-            erasureSettings = targetErasureSettings;
+            emissionPaletteSettings = targetEmissionPaletteSettings;
             characters.Clear();
             if (targetCharacters != null) {
                 characters.AddRange(targetCharacters);
@@ -490,13 +490,13 @@ namespace DiceGame.Gameplay
 
         bool TryGetPlayerEmissionColor(PlayerSlot attacker, out Color emissionColor) {
             emissionColor = default;
-            if (erasureSettings == null) {
-                Debug.LogError("DiceMatchErasureSystem: Erasure settings are not configured.");
+            if (emissionPaletteSettings == null) {
+                Debug.LogError("DiceMatchErasureSystem: Emission palette settings are not configured.");
                 return false;
             }
 
             if (versusSettings == null) {
-                emissionColor = erasureSettings.GetDefaultPlayerEmissionColor(attacker);
+                emissionColor = emissionPaletteSettings.GetDefaultPlayerEmissionColor(attacker);
                 return true;
             }
 
@@ -507,7 +507,7 @@ namespace DiceGame.Gameplay
                 return false;
             }
 
-            erasureSettings.ResolveSeparatedVersusEmissionColors(
+            emissionPaletteSettings.ResolveSeparatedVersusEmissionColors(
                 player1Attack,
                 player2Attack,
                 out var player1Color,

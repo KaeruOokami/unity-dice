@@ -2,7 +2,7 @@ using UnityEngine;
 
 namespace DiceGame.Config
 {
-    [CreateAssetMenu(fileName = "MatchSetupPresetRegistry", menuName = "Dice/Match Setup Preset Registry")]
+    [CreateAssetMenu(fileName = "MatchSetupPresetRegistry", menuName = "Dice/Match Setup/Preset Registry")]
     public sealed class MatchSetupPresetRegistry : ScriptableObject
     {
         [SerializeField] DiceSpawnSettings[] spawnPresets = System.Array.Empty<DiceSpawnSettings>();
@@ -26,14 +26,14 @@ namespace DiceGame.Config
         [SerializeField] PlayerAttackSettings defaultPlayer2Attack;
         [SerializeField] PlayerNaturalSendSettings defaultPlayer2NaturalSend;
         [SerializeField] JumboDiceSettings defaultJumboDiceSettings;
-        [Min(1)]
-        [SerializeField] int defaultWinsToWin = 2;
+        [SerializeField] MatchSeriesSettings matchSeriesSettings;
 
         public DiceSpawnSettings[] SpawnPresets => spawnPresets;
         public DiceCatalog[] CatalogPresets => catalogPresets;
         public AttackDefaultPresetCatalog AttackDefaultPresetCatalog => attackDefaultPresetCatalog;
         public ChallengeModeSettings ChallengeModeSettings => challengeModeSettings;
         public MlCurriculumCatalog MlCurriculumCatalog => mlCurriculumCatalog;
+        public MatchSeriesSettings MatchSeriesSettings => matchSeriesSettings;
         public PlayerAttackSettings[] AttackPresets =>
             attackDefaultPresetCatalog != null
                 ? attackDefaultPresetCatalog.Presets
@@ -52,6 +52,11 @@ namespace DiceGame.Config
                 Debug.LogError("[MatchSetupPresetRegistry] defaultPlayerInputSettings is not assigned.");
             }
 
+            if (matchSeriesSettings == null) {
+                Debug.LogError("[MatchSetupPresetRegistry] matchSeriesSettings is not assigned.");
+            }
+
+            var defaultWinsToWin = matchSeriesSettings != null ? matchSeriesSettings.WinsToWin : 1;
             var snapshot = new MatchSetupSnapshot {
                 GameMode = mode,
                 WinsToWin = GameModeRules.IsVersusLike(mode) ? UnityEngine.Mathf.Max(1, defaultWinsToWin) : 1,

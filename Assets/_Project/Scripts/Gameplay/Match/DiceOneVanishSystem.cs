@@ -14,7 +14,7 @@ namespace DiceGame.Gameplay
         [SerializeField] Board board;
         [SerializeField] DiceRegistry registry;
         [SerializeField] DiceOneVanishSettings oneVanishSettings;
-        DiceErasureSettings erasureSettings;
+        DiceEmissionPaletteSettings emissionPaletteSettings;
         IBoardSettings versusSettings;
 
         readonly HashSet<DiceController> subscribedDice = new();
@@ -27,11 +27,11 @@ namespace DiceGame.Gameplay
             DiceRegistry targetRegistry,
             IReadOnlyList<CharacterController> targetCharacters,
             DiceOneVanishSettings settings,
-            DiceErasureSettings targetErasureSettings) {
+            DiceEmissionPaletteSettings targetEmissionPaletteSettings) {
             board = targetBoard;
             registry = targetRegistry;
             oneVanishSettings = settings;
-            erasureSettings = targetErasureSettings;
+            emissionPaletteSettings = targetEmissionPaletteSettings;
             characters.Clear();
             if (targetCharacters != null) {
                 characters.AddRange(targetCharacters);
@@ -74,7 +74,7 @@ namespace DiceGame.Gameplay
             if (board == null
                 || registry == null
                 || oneVanishSettings == null
-                || erasureSettings == null
+                || emissionPaletteSettings == null
                 || action == null) {
                 return;
             }
@@ -91,7 +91,7 @@ namespace DiceGame.Gameplay
             if (board == null
                 || registry == null
                 || oneVanishSettings == null
-                || erasureSettings == null
+                || emissionPaletteSettings == null
                 || snapshot == null
                 || snapshot.Participants == null
                 || snapshot.Participants.Count == 0) {
@@ -176,13 +176,13 @@ namespace DiceGame.Gameplay
 
         bool TryGetPlayerEmissionColor(PlayerSlot initiator, out Color emissionColor) {
             emissionColor = default;
-            if (erasureSettings == null) {
-                Debug.LogError("DiceOneVanishSystem: Erasure settings are not configured.");
+            if (emissionPaletteSettings == null) {
+                Debug.LogError("DiceOneVanishSystem: Emission palette settings are not configured.");
                 return false;
             }
 
             if (versusSettings == null) {
-                emissionColor = erasureSettings.GetDefaultPlayerEmissionColor(initiator);
+                emissionColor = emissionPaletteSettings.GetDefaultPlayerEmissionColor(initiator);
                 return true;
             }
 
@@ -193,7 +193,7 @@ namespace DiceGame.Gameplay
                 return false;
             }
 
-            erasureSettings.ResolveSeparatedVersusEmissionColors(
+            emissionPaletteSettings.ResolveSeparatedVersusEmissionColors(
                 player1Attack,
                 player2Attack,
                 out var player1Color,
