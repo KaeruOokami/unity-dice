@@ -4,7 +4,8 @@ namespace DiceGame.Placement
 {
     /// <summary>
     /// Decision table: <see cref="MoveFacts"/> → exactly one <see cref="MoveAction"/>.
-    /// Rows are exclusive within each partition; builders must not re-select on failure.
+    /// Player standing facts and dice-coupled facts are composed explicitly — neither gate
+    /// suppresses evaluation of the other; only the chosen action is exclusive.
     /// </summary>
     public static class MoveActionSelector
     {
@@ -19,15 +20,34 @@ namespace DiceGame.Placement
                 return SelectPlayerOnly(f);
             }
 
+            var coupled = MoveAction.ContinueToLanding;
             if ((f.Mode == DiceStandingMoveMode.Slide || f.Mode == DiceStandingMoveMode.Roll)
                 && !f.BlocksDiceCoupledStackEntry) {
-                var coupled = SelectCoupled(f);
-                if (coupled != MoveAction.ContinueToLanding) {
-                    return coupled;
-                }
+                coupled = SelectCoupled(f);
+            }
+
+            if (coupled != MoveAction.ContinueToLanding) {
+                return coupled;
+            }
+
+            // Dice-coupled partition did not claim the move (blocked from entering, or no
+            // coupled intent). Player standing on destination Top is an independent fact.
+            if (CanSelectPlayerTierLanding(f)) {
+                return MoveAction.TierLanding;
             }
 
             return SelectLanding(f);
+        }
+
+        /// <summary>
+        /// Player-only climb onto a solid Top while the standing dice stays behind.
+        /// Independent of <see cref="MoveFacts.BlocksDiceCoupledStackEntry"/>.
+        /// </summary>
+        static bool CanSelectPlayerTierLanding(in MoveFacts f) {
+            return f.CanTierLand
+                && f.IsJumping
+                && f.FromLevel == SurfaceHeightLevel.Bottom
+                && f.StandingDice != null;
         }
 
         static MoveAction SelectPlayerOnly(in MoveFacts f) {

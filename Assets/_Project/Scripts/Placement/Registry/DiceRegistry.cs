@@ -676,6 +676,10 @@ namespace DiceGame.Placement
                 return false;
             }
 
+            if (mode == GhostLandingMode.CellSwapWithInCellPromote) {
+                return TryApplyGhostStackTopEntry(mover, moverFrom, moverTo, ghostFrom, ghostTo);
+            }
+
             if (!TryDeferGhostOccupant(ghostFrom, ghostTo, out var ghost)) {
                 return false;
             }
@@ -689,6 +693,105 @@ namespace DiceGame.Placement
             TryResolveUnsupportedTopAt(moverFrom.GridPos, mover);
             TryResolveUnsupportedTopAt(ghostFrom.GridPos, ghost);
             return true;
+        }
+
+        /// <summary>
+        /// Final occupancy for Top entry into ghost Bottom + ghost Top:
+        /// mover → Bottom, bottom ghost → Top, exiting top ghost → <paramref name="ghostTo"/>.
+        /// </summary>
+        bool TryApplyGhostStackTopEntry(
+            DiceController mover,
+            DiceState moverFrom,
+            DiceState moverTo,
+            DiceState exitingTopFrom,
+            DiceState exitingTopTo) {
+            if (moverTo.Tier != DiceStackTier.Bottom
+                || !TryDeferGhostOccupant(exitingTopFrom, exitingTopTo, out var exitingTop)) {
+                return false;
+            }
+
+            if (!TryGetBottomAt(moverTo.GridPos, out var bottomGhost)
+                || bottomGhost == null
+                || !GhostPlacementRules.AllowsDiceSwapThrough(bottomGhost)) {
+                Debug.LogError(
+                    $"DiceRegistry: ghost stack entry missing Bottom ghost at ({moverTo.GridPos.x},{moverTo.GridPos.y})");
+                return false;
+            }
+
+            var bottomFrom = bottomGhost.CurrentState;
+            var bottomTo = new DiceState(
+                moverTo.GridPos,
+                bottomFrom.Orientation,
+                DiceStackTier.Top,
+                bottomFrom.Kind);
+            if (!TryDeferGhostOccupant(bottomFrom, bottomTo, out bottomGhost)) {
+                return false;
+            }
+
+            ClearDiceAt(moverFrom.GridPos, mover, moverFrom.Tier, notifySupportLoss: false);
+            SetDiceAt(moverTo.GridPos, mover, DiceStackTier.Bottom);
+            if (!TryCompleteDeferredGhostLanding(exitingTop, exitingTopFrom, exitingTopTo)) {
+                return false;
+            }
+
+            if (!TryCompleteDeferredGhostLanding(bottomGhost, bottomFrom, bottomTo)) {
+                return false;
+            }
+
+            TryResolveUnsupportedTopAt(moverFrom.GridPos, mover);
+            TryResolveUnsupportedTopAt(exitingTopFrom.GridPos, exitingTop);
+            return true;
+        }
+
+        /// <summary>
+        /// Defer both ghosts for <see cref="GhostLandingMode.CellSwapWithInCellPromote"/> visuals.
+        /// </summary>
+        public bool TryDeferGhostStackTopEntry(
+            DiceState moverTo,
+            DiceState exitingTopFrom,
+            DiceState exitingTopTo,
+            out DiceState bottomGhostFrom,
+            out DiceState bottomGhostTo) {
+            bottomGhostFrom = default;
+            bottomGhostTo = default;
+            if (!TryDeferGhostOccupant(exitingTopFrom, exitingTopTo, out _)) {
+                return false;
+            }
+
+            if (!TryGetBottomAt(moverTo.GridPos, out var bottomGhost)
+                || bottomGhost == null
+                || !GhostPlacementRules.AllowsDiceSwapThrough(bottomGhost)) {
+                return false;
+            }
+
+            bottomGhostFrom = bottomGhost.CurrentState;
+            bottomGhostTo = new DiceState(
+                moverTo.GridPos,
+                bottomGhostFrom.Orientation,
+                DiceStackTier.Top,
+                bottomGhostFrom.Kind);
+            return TryDeferGhostOccupant(bottomGhostFrom, bottomGhostTo, out _);
+        }
+
+        public void CompleteDeferredGhostStackTopEntry(
+            DiceState exitingTopFrom,
+            DiceState exitingTopTo,
+            DiceState bottomGhostFrom,
+            DiceState bottomGhostTo,
+            Action<DiceController, DiceController> onComplete = null) {
+            TryCompleteDeferredGhostLanding(exitingTopFrom, exitingTopTo, topGhost => {
+                TryCompleteDeferredGhostLanding(bottomGhostFrom, bottomGhostTo, bottomGhost => {
+                    if (topGhost != null) {
+                        ResolveUnsupportedTopAt(topGhost.CurrentState.GridPos);
+                    }
+
+                    if (bottomGhost != null) {
+                        ResolveUnsupportedTopAt(bottomGhost.CurrentState.GridPos);
+                    }
+
+                    onComplete?.Invoke(topGhost, bottomGhost);
+                });
+            });
         }
 
         /// <summary>

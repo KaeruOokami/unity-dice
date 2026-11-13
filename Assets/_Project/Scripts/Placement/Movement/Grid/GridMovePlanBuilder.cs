@@ -55,7 +55,8 @@ namespace DiceGame.Placement
                 plan.GhostLanding = ghostLanding;
                 plan.GhostFrom = ghostFrom;
                 plan.GhostTo = ghostTo;
-                if (ghostLanding == GhostLandingMode.InCellPromoteGhost) {
+                if (ghostLanding == GhostLandingMode.InCellPromoteGhost
+                    || ghostLanding == GhostLandingMode.CellSwapWithInCellPromote) {
                     plan.To = new DiceState(
                         plan.To.GridPos,
                         plan.To.Orientation,

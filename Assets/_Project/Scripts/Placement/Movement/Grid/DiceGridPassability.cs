@@ -66,6 +66,7 @@ namespace DiceGame.Placement
             }
 
             moveKind = ghostLanding == GhostLandingMode.InCellPromoteGhost
+                || ghostLanding == GhostLandingMode.CellSwapWithInCellPromote
                 ? GridTraversability.ResolveMoveKind(fromState.Tier, DiceStackTier.Bottom)
                 : GridTraversability.ResolveMoveKind(fromState.Tier, landingTier);
 

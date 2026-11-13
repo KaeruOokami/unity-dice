@@ -98,17 +98,20 @@ namespace DiceGame.Placement
             var canGridRoll = false;
             DiceGridMovePlan gridPlan = default;
 
+            // Dice-coupled probes are independent of player TierLanding.
             var needsCoupledProbes = !hasExpanded
                 && (mode == DiceStandingMoveMode.Slide || mode == DiceStandingMoveMode.Roll)
                 && !blocksCoupled;
-            var needsPlayerOnlyTier = !hasExpanded
-                && mode == DiceStandingMoveMode.PlayerOnly
-                && fromLevel != SurfaceHeightLevel.Floor
-                && standingDice != null
-                && relation == MoveLevelRelation.BottomToTop;
 
-            if (needsCoupledProbes || needsPlayerOnlyTier) {
-                if (needsCoupledProbes && mode == DiceStandingMoveMode.Slide && !isJumping) {
+            // Player standing on destination Top: independent of BlocksDiceCoupledStackEntry / Mode.
+            var needsTierLandProbe = !hasExpanded
+                && standingDice != null
+                && fromLevel == SurfaceHeightLevel.Bottom
+                && isJumping
+                && context.AllowJumpTierChange;
+
+            if (needsCoupledProbes) {
+                if (mode == DiceStandingMoveMode.Slide && !isJumping) {
                     hasIceSlide = coupledMoveEngine.TryProbeIceSlide(
                         standingDice,
                         fromLevel,
@@ -117,7 +120,7 @@ namespace DiceGame.Placement
                         out iceElastic);
                 }
 
-                if (needsCoupledProbes && isJumping) {
+                if (isJumping) {
                     canJumpGrid = JumpGridRollPolicy.TryCreateCoupledTransition(
                         fromCell,
                         toCell,
@@ -129,7 +132,7 @@ namespace DiceGame.Placement
                         out jumpGrid);
                 }
 
-                if (needsCoupledProbes && mode == DiceStandingMoveMode.Roll && canPlaceBottom) {
+                if (mode == DiceStandingMoveMode.Roll && canPlaceBottom) {
                     canTopFall = TopFallPolicy.TryEvaluate(
                         fromLevel,
                         fromSurface,
@@ -140,21 +143,7 @@ namespace DiceGame.Placement
                         out topFall);
                 }
 
-                // Tier landing: occupied coupled path, or player-only Bottom→Top.
-                if ((needsCoupledProbes && !canPlaceBottom) || needsPlayerOnlyTier) {
-                    canTierLand = TierLandingPolicy.TryEvaluate(
-                        fromCell,
-                        toCell,
-                        fromLevel,
-                        fromSurface,
-                        standingDice,
-                        context,
-                        registry,
-                        reach,
-                        out tierLand);
-                }
-
-                if (needsCoupledProbes && mode == DiceStandingMoveMode.Roll) {
+                if (mode == DiceStandingMoveMode.Roll) {
                     canGridRoll = coupledMoveEngine.TryEvaluateGridRoll(
                         fromCell,
                         toCell,
@@ -167,6 +156,19 @@ namespace DiceGame.Placement
                         out gridPlan,
                         out _);
                 }
+            }
+
+            if (needsTierLandProbe) {
+                canTierLand = TierLandingPolicy.TryEvaluate(
+                    fromCell,
+                    toCell,
+                    fromLevel,
+                    fromSurface,
+                    standingDice,
+                    context,
+                    registry,
+                    reach,
+                    out tierLand);
             }
 
             return new MoveFacts(

@@ -211,6 +211,56 @@ namespace DiceGame.Placement
         }
 
         /// <summary>
+        /// Top entry into a cell with swap-through Bottom and Top ghosts.
+        /// Final occupancy: mover Bottom at target, bottom ghost → Top, top ghost → mover previous cell.
+        /// </summary>
+        public static bool TryResolveGhostStackTopEntry(
+            DiceState moverFromTop,
+            DiceController topGhost,
+            DiceController bottomGhost,
+            out DiceState moverTo,
+            out DiceState exitingTopGhostFrom,
+            out DiceState exitingTopGhostTo) {
+            moverTo = default;
+            exitingTopGhostFrom = default;
+            exitingTopGhostTo = default;
+
+            if (moverFromTop.Tier != DiceStackTier.Top
+                || !AllowsDiceSwapThrough(topGhost)
+                || !AllowsDiceSwapThrough(bottomGhost)
+                || IsPassThroughKind(moverFromTop.Kind)) {
+                return false;
+            }
+
+            var topState = topGhost.CurrentState;
+            var bottomState = bottomGhost.CurrentState;
+            if (topState.Tier != DiceStackTier.Top
+                || bottomState.Tier != DiceStackTier.Bottom
+                || topState.GridPos != bottomState.GridPos) {
+                return false;
+            }
+
+            if (topGhost.IsBusy || topGhost.IsErasing || topGhost.IsVanishing || topGhost.IsCarried
+                || bottomGhost.IsBusy || bottomGhost.IsErasing || bottomGhost.IsVanishing
+                || bottomGhost.IsCarried) {
+                return false;
+            }
+
+            moverTo = new DiceState(
+                topState.GridPos,
+                moverFromTop.Orientation,
+                DiceStackTier.Bottom,
+                moverFromTop.Kind);
+            exitingTopGhostFrom = topState;
+            exitingTopGhostTo = new DiceState(
+                moverFromTop.GridPos,
+                topState.Orientation,
+                DiceStackTier.Top,
+                topState.Kind);
+            return true;
+        }
+
+        /// <summary>
         /// Non-ghost trying to stack on ghost bottom → same cell, mover Bottom, ghost Top.
         /// Pass-through stacking on ghost is a normal top placement (no swap).
         /// </summary>

@@ -47,6 +47,9 @@ namespace DiceGame.Gameplay
         Action pendingLogicalComplete;
         float logicalSpawnRemaining;
         Action pendingSpawnComplete;
+        bool deferredStackGhostActive;
+        DiceState deferredStackBottomFrom;
+        DiceState deferredStackBottomTo;
 
         public bool IsSpawning => isSpawning;
         public DiceSpawnAppearMode SpawnAppearMode => spawnAppearMode;
@@ -1060,6 +1063,21 @@ namespace DiceGame.Gameplay
                 return true;
             }
 
+            if (ghostLanding == GhostLandingMode.CellSwapWithInCellPromote) {
+                if (!registry.TryDeferGhostStackTopEntry(
+                        toState,
+                        ghostFrom,
+                        ghostTo,
+                        out deferredStackBottomFrom,
+                        out deferredStackBottomTo)) {
+                    return false;
+                }
+
+                deferredStackGhostActive = true;
+                ApplyLogicalMove(fromState, toState);
+                return true;
+            }
+
             if (!registry.TryDeferGhostOccupant(ghostFrom, ghostTo, out _)) {
                 return false;
             }
@@ -1075,6 +1093,21 @@ namespace DiceGame.Gameplay
             Action onComplete = null) {
             if (ghostLanding == GhostLandingMode.None || registry == null) {
                 onComplete?.Invoke();
+                return;
+            }
+
+            if (ghostLanding == GhostLandingMode.CellSwapWithInCellPromote && deferredStackGhostActive) {
+                deferredStackGhostActive = false;
+                registry.CompleteDeferredGhostStackTopEntry(
+                    ghostFrom,
+                    ghostTo,
+                    deferredStackBottomFrom,
+                    deferredStackBottomTo,
+                    (exitingTop, promotedBottom) => {
+                        RegisterDisplacedGhostForMatch(exitingTop);
+                        RegisterDisplacedGhostForMatch(promotedBottom);
+                        onComplete?.Invoke();
+                    });
                 return;
             }
 
