@@ -22,6 +22,7 @@ namespace DiceGame.Session.Network
         DiceMatchOwnershipContext ownershipContext;
         DiceSpawnSystem spawnSystem;
         VersusAttackController attackController;
+        ReverseModeController reverseModeController;
         JumboDiceSequenceController jumboSequenceController;
         DiceMatchErasureSystem erasureSystem;
         DiceFireSystem fireSystem;
@@ -48,6 +49,7 @@ namespace DiceGame.Session.Network
         float simulatorAccumulator;
         bool pendingLift;
         bool pendingJump;
+        bool pendingReverse;
         bool pendingHasDirection;
         Direction pendingDirection;
         float nextStallLogTime;
@@ -71,12 +73,14 @@ namespace DiceGame.Session.Network
             VersusAttackController versusAttackController = null,
             DiceMatchErasureSystem matchErasureSystem = null,
             JumboDiceSequenceController jumboSequence = null,
-            DiceFireSystem matchFireSystem = null) {
+            DiceFireSystem matchFireSystem = null,
+            ReverseModeController reverseMode = null) {
             messenger = netMessenger;
             registry = diceRegistry;
             ownershipContext = matchOwnership;
             spawnSystem = diceSpawnSystem;
             attackController = versusAttackController;
+            reverseModeController = reverseMode;
             erasureSystem = matchErasureSystem;
             jumboSequenceController = jumboSequence;
             fireSystem = matchFireSystem;
@@ -91,6 +95,7 @@ namespace DiceGame.Session.Network
             simulatorAccumulator = 0f;
             pendingLift = false;
             pendingJump = false;
+            pendingReverse = false;
             pendingHasDirection = false;
             pendingDirection = Direction.North;
             nextStallLogTime = 0f;
@@ -262,6 +267,7 @@ namespace DiceGame.Session.Network
             if (matchIntro != null && !matchIntro.IsComplete) {
                 pendingLift = false;
                 pendingJump = false;
+                pendingReverse = false;
                 pendingHasDirection = false;
                 return;
             }
@@ -333,6 +339,10 @@ namespace DiceGame.Session.Network
 
             if (localHardwareInput.WasJumpPressedThisFrame()) {
                 pendingJump = true;
+            }
+
+            if (localHardwareInput.WasReversePressedThisFrame()) {
+                pendingReverse = true;
             }
 
             if (localHardwareInput.TryGetDirectionPressedThisFrame(out var direction)) {
@@ -431,6 +441,7 @@ namespace DiceGame.Session.Network
                 player1Character.SimulateLockstepFrame(simDt);
                 player2Character.SimulateLockstepFrame(simDt);
 
+                reverseModeController?.SimulateLockstepTick(simDt);
                 spawnSystem?.SimulateLockstepTick(simDt);
                 attackController?.SimulateLockstepTick(simDt);
                 jumboSequenceController?.SimulateLockstepTick();
@@ -459,7 +470,8 @@ namespace DiceGame.Session.Network
                 currentTick,
                 characters,
                 registry,
-                ownershipContext);
+                ownershipContext,
+                reverseModeController);
             localHashes[currentTick] = hash;
             TrimHashMap(localHashes);
 
@@ -516,6 +528,10 @@ namespace DiceGame.Session.Network
             nextResyncAllowedTime = now + SessionConstants.LockstepResyncCooldownSeconds;
             var payload = new OnlineSimResyncPayload {
                 Tick = currentTick,
+                ReverseActive = reverseModeController != null && reverseModeController.IsActive,
+                ReverseRemaining = reverseModeController != null
+                    ? reverseModeController.RemainingSeconds
+                    : 0f,
                 Entities = OnlineSimBoardSnapshotBuilder.Build(
                     characters,
                     registry,
@@ -543,6 +559,9 @@ namespace DiceGame.Session.Network
                     ownershipContext,
                     spawnSystem,
                     entityIds);
+                reverseModeController?.ApplyNetworkState(
+                    payload.ReverseActive,
+                    payload.ReverseRemaining);
                 AlignAfterResync(payload.Tick);
                 Debug.Log(
                     $"OnlineLockstepController: applied resync tick={payload.Tick} " +
@@ -560,6 +579,7 @@ namespace DiceGame.Session.Network
             remoteHashes.Clear();
             pendingLift = false;
             pendingJump = false;
+            pendingReverse = false;
             pendingHasDirection = false;
             PrefillLocalDelayWindowFrom(tick);
             nextResendTime = 0f;
@@ -587,12 +607,14 @@ namespace DiceGame.Session.Network
                 move,
                 pendingLift,
                 pendingJump,
+                pendingReverse,
                 pendingHasDirection,
                 pendingHasDirection ? pendingDirection : Direction.North,
                 localInputSequence,
                 tick);
             pendingLift = false;
             pendingJump = false;
+            pendingReverse = false;
             pendingHasDirection = false;
 
             inputBuffer.Set(localSlot, tick, payload);

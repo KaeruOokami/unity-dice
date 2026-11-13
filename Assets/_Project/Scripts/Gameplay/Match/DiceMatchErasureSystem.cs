@@ -403,7 +403,7 @@ namespace DiceGame.Gameplay
                 return;
             }
 
-            var face = newMembers[0].CurrentState.Orientation.Top;
+            var face = newMembers[0].MatchFace;
             var chainResult = RegisterSinkingCluster(
                 erasingMembers,
                 newMembers,

@@ -169,6 +169,7 @@ namespace DiceGame.Session.Network
             var move = localInputReader.ReadMove();
             var lift = localInputReader.WasLiftPressedThisFrame();
             var jump = localInputReader.WasJumpPressedThisFrame();
+            var reverse = localInputReader.WasReversePressedThisFrame();
             var hasDirection = localInputReader.TryGetDirectionPressedThisFrame(out var direction);
             if (hasDirection) {
                 pendingDirection = direction;
@@ -177,6 +178,7 @@ namespace DiceGame.Session.Network
             if (inputTimer < SessionConstants.InputSendIntervalSeconds
                 && !lift
                 && !jump
+                && !reverse
                 && !hasDirection
                 && (move - lastSentMove).sqrMagnitude < 0.0001f) {
                 return;
@@ -188,6 +190,7 @@ namespace DiceGame.Session.Network
                 move,
                 lift,
                 jump,
+                reverse,
                 pendingDirection.HasValue,
                 pendingDirection ?? Direction.North);
             pendingDirection = null;

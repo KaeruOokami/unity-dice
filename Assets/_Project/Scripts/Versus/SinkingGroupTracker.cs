@@ -93,7 +93,7 @@ namespace DiceGame.Versus
                 return new SinkingChainResult(0, false);
             }
 
-            face = erasingMembers[0].CurrentState.Orientation.Top;
+            face = erasingMembers[0].MatchFace;
             clusterSize = matchWeight ?? CountActiveClusterDice(cluster);
 
             var touchedGroupIds = CollectTouchedGroupIds(erasingMembers);

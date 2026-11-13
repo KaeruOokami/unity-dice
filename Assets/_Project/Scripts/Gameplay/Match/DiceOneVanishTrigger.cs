@@ -17,7 +17,7 @@ namespace DiceGame.Gameplay
                     continue;
                 }
 
-                if (one.CurrentState.Orientation.Top != 1) {
+                if (one.MatchFace != 1) {
                     continue;
                 }
 

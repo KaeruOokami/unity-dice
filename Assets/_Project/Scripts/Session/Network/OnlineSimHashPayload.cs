@@ -20,10 +20,14 @@ namespace DiceGame.Session.Network
     public struct OnlineSimResyncPayload : INetworkSerializable
     {
         public uint Tick;
+        public bool ReverseActive;
+        public float ReverseRemaining;
         public OnlineTransformSnapshot[] Entities;
 
         public void NetworkSerialize<T>(BufferSerializer<T> serializer) where T : IReaderWriter {
             serializer.SerializeValue(ref Tick);
+            serializer.SerializeValue(ref ReverseActive);
+            serializer.SerializeValue(ref ReverseRemaining);
             var count = Entities?.Length ?? 0;
             serializer.SerializeValue(ref count);
             if (serializer.IsReader) {

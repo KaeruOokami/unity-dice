@@ -20,6 +20,7 @@ namespace DiceGame.Versus.Core
                 isSnatch,
                 random,
                 int.MaxValue,
+                reverseMode: false,
                 out volley,
                 out _);
         }
@@ -41,6 +42,7 @@ namespace DiceGame.Versus.Core
                 isSnatch,
                 random,
                 jumboSendableRemaining,
+                reverseMode: false,
                 out volley,
                 out _);
         }
@@ -55,19 +57,48 @@ namespace DiceGame.Versus.Core
             int jumboSendableRemaining,
             out AttackVolley volley,
             out float attackPower) {
+            return TryBuild(
+                settings,
+                face,
+                chainCount,
+                clusterSize,
+                isSnatch,
+                random,
+                jumboSendableRemaining,
+                reverseMode: false,
+                out volley,
+                out attackPower);
+        }
+
+        public static bool TryBuild(
+            PlayerAttackSettings settings,
+            int face,
+            int chainCount,
+            int clusterSize,
+            bool isSnatch,
+            System.Random random,
+            int jumboSendableRemaining,
+            bool reverseMode,
+            out AttackVolley volley,
+            out float attackPower) {
             volley = null;
             attackPower = 0f;
             if (settings == null || random == null) {
                 return false;
             }
 
-            if (!settings.TryGetSendableKindsForFace(face, out var sendableKinds)) {
+            var matchFace = face;
+            var effectFace = reverseMode ? AttackFaceReverse.ToEffectFace(matchFace) : matchFace;
+
+            if (!settings.TryGetSendableKindsForFace(effectFace, out var sendableKinds)) {
                 return false;
             }
 
+            // FaceGain / face weight stay on the cleared (visible) face; profile + pip range use effectFace.
             attackPower = AttackPowerCalculator.Calculate(
                 settings,
-                face,
+                matchFace,
+                matchFace,
                 chainCount,
                 clusterSize,
                 isSnatch);
@@ -86,9 +117,13 @@ namespace DiceGame.Versus.Core
                 return false;
             }
 
-            var specs = AttackFaceRoller.RollDice(breakdown, face, random);
+            var specs = AttackFaceRoller.RollDice(breakdown, effectFace, random);
             if (specs.Count == 0) {
                 return false;
+            }
+
+            if (reverseMode) {
+                AttackFaceReverse.FlipPipsInPlace(specs);
             }
 
             volley = new AttackVolley(specs);

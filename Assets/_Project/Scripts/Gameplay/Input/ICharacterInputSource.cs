@@ -8,6 +8,7 @@ namespace DiceGame.Gameplay.Input
         Vector2 ReadMove();
         bool WasLiftPressedThisFrame();
         bool WasJumpPressedThisFrame();
+        bool WasReversePressedThisFrame();
         bool TryGetDirectionPressedThisFrame(out Direction direction);
     }
 }

@@ -10,6 +10,7 @@ namespace DiceGame.Gameplay.AI.Application
         Vector2 move;
         bool liftPulse;
         bool jumpPulse;
+        bool reversePulse;
         Direction? directionPulse;
 
         public void SetMove(Vector2 value) {
@@ -24,6 +25,10 @@ namespace DiceGame.Gameplay.AI.Application
             jumpPulse = true;
         }
 
+        public void PulseReverse() {
+            reversePulse = true;
+        }
+
         public void PulseDirection(Direction direction) {
             directionPulse = direction;
         }
@@ -31,6 +36,7 @@ namespace DiceGame.Gameplay.AI.Application
         public void ClearFrameInputs() {
             liftPulse = false;
             jumpPulse = false;
+            reversePulse = false;
             directionPulse = null;
         }
 
@@ -44,6 +50,10 @@ namespace DiceGame.Gameplay.AI.Application
 
         public bool WasJumpPressedThisFrame() {
             return jumpPulse;
+        }
+
+        public bool WasReversePressedThisFrame() {
+            return reversePulse;
         }
 
         public bool TryGetDirectionPressedThisFrame(out Direction direction) {

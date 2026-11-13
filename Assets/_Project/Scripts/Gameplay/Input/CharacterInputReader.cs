@@ -16,6 +16,7 @@ namespace DiceGame.Gameplay.Input
         InputAction moveAction;
         InputAction liftAction;
         InputAction jumpAction;
+        InputAction reverseAction;
         bool isConfigured;
 
         public void Configure(PlayerSlot slot, PlayerInputSettings settings)
@@ -78,6 +79,7 @@ namespace DiceGame.Gameplay.Input
             moveAction = playerMap.FindAction("Move", throwIfNotFound: true);
             liftAction = playerMap.FindAction("Lift", throwIfNotFound: true);
             jumpAction = playerMap.FindAction("Jump", throwIfNotFound: true);
+            reverseAction = playerMap.FindAction("Reverse", throwIfNotFound: true);
         }
 
         void ApplySlotConfiguration()
@@ -133,6 +135,11 @@ namespace DiceGame.Gameplay.Input
         public bool WasJumpPressedThisFrame()
         {
             return jumpAction != null && jumpAction.WasPressedThisFrame();
+        }
+
+        public bool WasReversePressedThisFrame()
+        {
+            return reverseAction != null && reverseAction.WasPressedThisFrame();
         }
 
         public bool TryGetDirectionPressedThisFrame(out Direction direction)

@@ -21,7 +21,8 @@ namespace DiceGame.Session.Network
             uint tick,
             IReadOnlyList<GameCharacterController> characters,
             DiceRegistry registry,
-            DiceMatchOwnershipContext ownershipContext) {
+            DiceMatchOwnershipContext ownershipContext,
+            ReverseModeController reverseMode = null) {
             var hash = FnvOffset;
             hash = Mix(hash, tick);
 
@@ -29,6 +30,14 @@ namespace DiceGame.Session.Network
                 MixCharacter(ref hash, FindCharacter(characters, PlayerSlot.Player1));
                 MixCharacter(ref hash, FindCharacter(characters, PlayerSlot.Player2));
             }
+
+            hash = Mix(hash, reverseMode != null && reverseMode.IsActive ? 1u : 0u);
+            hash = Mix(
+                hash,
+                (uint)Mathf.Clamp(
+                    Mathf.CeilToInt((reverseMode != null ? reverseMode.RemainingSeconds : 0f) * 1000f),
+                    0,
+                    ushort.MaxValue));
 
             if (registry == null) {
                 return hash;

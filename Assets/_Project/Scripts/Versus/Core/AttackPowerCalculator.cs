@@ -14,14 +14,30 @@ namespace DiceGame.Versus.Core
             int chainCount,
             int clusterSize,
             bool isSnatch) {
-            if (settings == null || face < MinMatchFace || face > MaxMatchFace) {
+            return Calculate(settings, face, face, chainCount, clusterSize, isSnatch);
+        }
+
+        /// <param name="powerFace">Face used for FaceGain / face weight (cleared visible face).</param>
+        /// <param name="matchFace">Cleared match face used for size bonus (always 2–6).</param>
+        public static float Calculate(
+            PlayerAttackSettings settings,
+            int powerFace,
+            int matchFace,
+            int chainCount,
+            int clusterSize,
+            bool isSnatch) {
+            if (settings == null
+                || powerFace < MinMatchFace
+                || powerFace > MaxMatchFace
+                || matchFace < MinMatchFace
+                || matchFace > MaxMatchFace) {
                 return 0f;
             }
 
-            var faceFactor = 1f + (face - MinMatchFace) * settings.FaceGain;
-            var faceWeight = settings.GetFaceWeight(face);
+            var faceFactor = 1f + (powerFace - MinMatchFace) * settings.FaceGain;
+            var faceWeight = settings.GetFaceWeight(powerFace);
             var chainFactor = 1f + chainCount * settings.ChainGain;
-            var extraDice = Mathf.Max(0, clusterSize - face);
+            var extraDice = Mathf.Max(0, clusterSize - matchFace);
             var sizeFactor = 1f + extraDice * settings.SizeGain;
             var raw = faceFactor * faceWeight * chainFactor * sizeFactor * settings.AttackMultiplier;
 

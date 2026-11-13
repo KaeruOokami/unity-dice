@@ -105,6 +105,10 @@ namespace DiceGame.Gameplay
         public bool IsCarried => isCarried;
         public bool IsBusy => IsRolling || isSpawning || IsErasing || isVanishing || isCarried;
         public DiceState CurrentState => currentState;
+        /// <summary>
+        /// Top face for match / erasure / facing rules (respects global reverse labels).
+        /// </summary>
+        public int MatchFace => DiceFaceLabels.ResolveMatchFace(currentState.Orientation.Top);
         public DiceKind Kind => currentState.Kind;
         public IDiceBehavior Behavior => DiceBehaviorResolver.GetBehavior(Kind);
         public DiceCapabilities Capabilities => Behavior.Capabilities;
@@ -648,6 +652,18 @@ namespace DiceGame.Gameplay
             }
 
             StateChanged?.Invoke(currentState);
+        }
+
+        /// <summary>
+        /// Reverse Mode presentation: invert baked pip labels on the mesh without changing
+        /// logical orientation or interrupting sink / spawn progress.
+        /// </summary>
+        public void RefreshReversePresentation() {
+            if (diceView == null || board == null) {
+                return;
+            }
+
+            diceView.RefreshPipLabelScale(board);
         }
 
         /// <summary>

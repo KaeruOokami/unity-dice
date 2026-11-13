@@ -223,7 +223,7 @@ namespace DiceGame.Gameplay
 
                 var isJumbo = dice.Capabilities.HasExpandedFootprint;
                 if (consumedDice.Contains(dice)) {
-                    if (diagnose && isJumbo && dice.CurrentState.Orientation.Top == face) {
+                    if (diagnose && isJumbo && dice.MatchFace == face) {
                         Debug.Log(
                             $"{LogPrefix} bridged skip {FormatDice(dice)} face={face}: already consumed");
                     }
@@ -232,7 +232,7 @@ namespace DiceGame.Gameplay
                 }
 
                 if (!IsMatchEligible(dice)) {
-                    if (diagnose && isJumbo && dice.CurrentState.Orientation.Top == face) {
+                    if (diagnose && isJumbo && dice.MatchFace == face) {
                         Debug.Log(
                             $"{LogPrefix} bridged skip {FormatDice(dice)} face={face}: " +
                             $"ineligible IsSpawning={dice.IsSpawning} IsRolling={dice.IsRolling}");
@@ -241,7 +241,7 @@ namespace DiceGame.Gameplay
                     continue;
                 }
 
-                if (dice.CurrentState.Orientation.Top != face) {
+                if (dice.MatchFace != face) {
                     continue;
                 }
 
@@ -297,7 +297,7 @@ namespace DiceGame.Gameplay
             foreach (var dice in allDice) {
                 if (dice == null
                     || !IsMatchEligible(dice)
-                    || dice.CurrentState.Orientation.Top != face) {
+                    || dice.MatchFace != face) {
                     continue;
                 }
 
@@ -484,7 +484,7 @@ namespace DiceGame.Gameplay
                 sb.Append(" spawn=").Append(dice.IsSpawning);
                 sb.Append(" rolling=").Append(dice.IsRolling);
                 sb.Append(" sink=").Append(dice.IsSinkErasing);
-                sb.Append(" face=").Append(dice.CurrentState.Orientation.Top);
+                sb.Append(" face=").Append(dice.MatchFace);
                 sb.Append(" tier=").Append(dice.CurrentState.Tier);
                 sb.Append(" anchor=").Append(FormatCell(dice.CurrentState.GridPos));
                 sb.Append(" fp=").Append(FormatFootprint(dice.CurrentState.GridPos));
@@ -522,7 +522,7 @@ namespace DiceGame.Gameplay
 
                 Debug.LogWarning(
                     $"{LogPrefix} END no cluster included jumbo {FormatDice(jumbo)} " +
-                    $"(face={jumbo.CurrentState.Orientation.Top} eligible={IsMatchEligible(jumbo)} " +
+                    $"(face={jumbo.MatchFace} eligible={IsMatchEligible(jumbo)} " +
                     $"sink={jumbo.IsSinkErasing}). action={FormatActionDice(actionDice)}");
             }
         }
@@ -544,8 +544,7 @@ namespace DiceGame.Gameplay
                 }
 
                 any = true;
-                var sameFace = action.CurrentState.Orientation.Top
-                    == jumbo.CurrentState.Orientation.Top;
+                var sameFace = action.MatchFace == jumbo.MatchFace;
                 var ortho = IsOrthogonallyAdjacentToFootprint(
                     jumbo.CurrentState.GridPos,
                     action.CurrentState.GridPos);
@@ -594,7 +593,7 @@ namespace DiceGame.Gameplay
             }
 
             return $"{dice.name}({dice.Kind}@{FormatCell(dice.CurrentState.GridPos)}/" +
-                   $"{dice.CurrentState.Tier}/f{dice.CurrentState.Orientation.Top})";
+                   $"{dice.CurrentState.Tier}/f{dice.MatchFace})";
         }
 
         static string FormatMembers(IReadOnlyList<DiceController> members) {

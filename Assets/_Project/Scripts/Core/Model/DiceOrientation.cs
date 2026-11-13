@@ -52,6 +52,14 @@ namespace DiceGame.Core
 
         public static int OppositeFace(int face) => 7 - face;
 
+        /// <summary>
+        /// Label inversion on every axis (1↔6, 2↔5, 3↔4). Used by reverse presentation math;
+        /// not a rigid SO(3) roll of the mesh.
+        /// </summary>
+        public DiceOrientation Flipped() {
+            return new DiceOrientation(OppositeFace(Top), OppositeFace(North), OppositeFace(East));
+        }
+
         public bool IsValid() {
             if (Top is < 1 or > 6) return false;
             if (North is < 1 or > 6) return false;

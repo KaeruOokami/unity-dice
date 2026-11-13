@@ -74,6 +74,7 @@ namespace DiceGame.Gameplay
         [SerializeField] DiceVfxSettings diceVfxSettings;
         [SerializeField] DiceSfxSettings diceSfxSettings;
         [SerializeField] DiceFireSettings diceFireSettings;
+        [SerializeField] ReverseModeSettings reverseModeSettings;
         [SerializeField] DiceOneVanishSettings diceOneVanishSettings;
         [SerializeField] DiceSpawnSettings diceSpawnSettings;
         [SerializeField] DiceCatalog diceCatalog;
@@ -89,6 +90,7 @@ namespace DiceGame.Gameplay
         PlacementService placement;
         DiceSpawnSystem spawnSystem;
         VersusAttackController attackController;
+        ReverseModeController reverseModeController;
         System.Random spawnRandom;
         readonly List<CharacterController> characters = new();
         bool sessionStarted;
@@ -390,6 +392,18 @@ namespace DiceGame.Gameplay
 
             erasureSystem.ConfigureSinkingChain();
 
+            reverseModeController = GetComponent<ReverseModeController>();
+            if (reverseModeController == null) {
+                reverseModeController = gameObject.AddComponent<ReverseModeController>();
+            }
+
+            if (reverseModeSettings == null) {
+                Debug.LogWarning(
+                    "GameBootstrap: ReverseModeSettings is not assigned; Reverse Mode is disabled.");
+            }
+
+            reverseModeController.Configure(reverseModeSettings, registry, characters);
+
             attackController = null;
             if (GameModeRules.IsVersusLike(resolvedSetup.GameMode)) {
                 var versusSettings = resolvedSetup.BoardSettings;
@@ -418,7 +432,8 @@ namespace DiceGame.Gameplay
                     transform,
                     attackQueueSettings,
                     matchSeriesSettings.QueueToBoardDelay,
-                    diceVfxSettings);
+                    diceVfxSettings,
+                    reverseModeController);
 
                 var jumboSequence = GetComponent<JumboDiceSequenceController>();
                 if (jumboSequence == null) {
@@ -447,7 +462,8 @@ namespace DiceGame.Gameplay
                 gameSessionSettings,
                 playerInputSettings,
                 resolvedSetup,
-                matchSeriesHudSettings);
+                matchSeriesHudSettings,
+                reverseModeController);
 
             for (var i = 0; i < characters.Count; i++) {
                 characters[i].BindCrushOutcome(gameFlowController);
@@ -465,6 +481,7 @@ namespace DiceGame.Gameplay
             } else {
                 spawnSystem.SetGameplayEnabled(true);
                 attackController?.SetGameplayEnabled(true);
+                reverseModeController?.SetGameplayEnabled(true);
             }
         }
 
@@ -489,7 +506,8 @@ namespace DiceGame.Gameplay
                 flowInputReader,
                 spawnSystem,
                 attackController,
-                characters);
+                characters,
+                reverseModeController);
             return introController;
         }
 
@@ -570,7 +588,8 @@ namespace DiceGame.Gameplay
                 attackController,
                 erasureSystem,
                 GetComponent<JumboDiceSequenceController>(),
-                GetComponent<DiceFireSystem>());
+                GetComponent<DiceFireSystem>(),
+                reverseModeController);
         }
 
         void DestroyLegacyOnlineSyncComponents() {

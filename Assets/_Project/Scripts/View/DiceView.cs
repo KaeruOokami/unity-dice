@@ -96,6 +96,7 @@ namespace DiceGame.View
         float cachedMeshUnitMaxExtent = -1f;
         Vector3 cachedMeshLocalBoundsCenter;
         float appliedCellSize = float.NaN;
+        bool appliedLabelsReversed;
 
         public bool IsAnimating => isAnimating;
         public float ErasureProgress => erasureProgress;
@@ -418,7 +419,10 @@ namespace DiceGame.View
 
             footprintScale = Mathf.Max(1, footprintScale);
             var targetLogicalSize = board.CellSize * footprintScale;
-            if (!float.IsNaN(appliedCellSize) && Mathf.Abs(appliedCellSize - targetLogicalSize) < 0.0001f) {
+            var labelsReversed = DiceFaceLabels.Reversed;
+            if (!float.IsNaN(appliedCellSize)
+                && Mathf.Abs(appliedCellSize - targetLogicalSize) < 0.0001f
+                && appliedLabelsReversed == labelsReversed) {
                 return;
             }
 
@@ -432,10 +436,34 @@ namespace DiceGame.View
             }
 
             var scale = targetLogicalSize / cachedMeshUnitMaxExtent;
-            meshInstance.localScale = Vector3.one * scale;
+            // Uniform negative scale inverts all baked pip labels (1↔6, 2↔5, 3↔4)
+            // without changing rotationRoot / logical orientation.
+            var signedScale = labelsReversed ? -scale : scale;
+            meshInstance.localScale = Vector3.one * signedScale;
             // Center mesh geometry on the rotationRoot origin.
             meshInstance.localPosition = -cachedMeshLocalBoundsCenter * scale;
             appliedCellSize = targetLogicalSize;
+            appliedLabelsReversed = labelsReversed;
+        }
+
+        /// <summary>
+        /// Reapply mesh scale for reverse labels without SnapTo (keeps sink / spawn progress).
+        /// </summary>
+        public void RefreshPipLabelScale(Board board) {
+            appliedCellSize = float.NaN;
+            if (board == null || meshInstance == null) {
+                return;
+            }
+
+            ApplyMeshVisualScale(board);
+            if (activeErasureKind != ErasureKind.None && erasureBoard != null) {
+                ApplyErasureVisual(erasureBoard, erasureProgress);
+                return;
+            }
+
+            if (isEmergingVisual) {
+                ApplyEmergenceVisual(board, erasureProgress);
+            }
         }
 
         /// <summary>

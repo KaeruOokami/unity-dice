@@ -725,6 +725,7 @@ MonoBehaviour:
   diceVfxSettings: {fileID: 11400000, guid: a1a2b3c4d5e6478899aabbccddeeff51, type: 2}
   diceSfxSettings: {fileID: 11400000, guid: a1a2b3c4d5e6478899aabbccddeeff61, type: 2}
   diceFireSettings: {fileID: 11400000, guid: c8d9e0f1a2b34c5d8e9f0a1b2c3d4e70, type: 2}
+  reverseModeSettings: {fileID: 11400000, guid: d0e1f2a3b4c5568899abcdef04050607, type: 2}
   diceOneVanishSettings: {fileID: 11400000, guid: b1c2d3e4f5a6478899aabbccddeeff09,
     type: 2}
   diceSpawnSettings: {fileID: 11400000, guid: f6a7b8c9d0e14990aabbccddeeff3301, type: 2}

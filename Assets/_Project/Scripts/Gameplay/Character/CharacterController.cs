@@ -210,6 +210,11 @@ namespace DiceGame.Gameplay
             inputSource = source;
         }
 
+        public bool WasReversePressedThisFrame() {
+            var source = ActiveInputSource;
+            return source != null && source.WasReversePressedThisFrame();
+        }
+
         /// <summary>
         /// When true, this character will not mutate dice (push/roll/lift/coupled moves).
         /// Used by online clients so only host events change the board.

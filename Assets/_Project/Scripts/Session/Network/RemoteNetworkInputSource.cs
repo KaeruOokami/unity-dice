@@ -10,6 +10,7 @@ namespace DiceGame.Session.Network
         Vector2 move;
         bool liftPulse;
         bool jumpPulse;
+        bool reversePulse;
         Direction? directionPulse;
 
         public void ApplyPayload(OnlineInputPayload payload) {
@@ -20,6 +21,10 @@ namespace DiceGame.Session.Network
 
             if (payload.JumpPressed) {
                 jumpPulse = true;
+            }
+
+            if (payload.ReversePressed) {
+                reversePulse = true;
             }
 
             if (payload.TryGetDirection(out var direction)) {
@@ -39,6 +44,10 @@ namespace DiceGame.Session.Network
             return jumpPulse;
         }
 
+        public bool WasReversePressedThisFrame() {
+            return reversePulse;
+        }
+
         public bool TryGetDirectionPressedThisFrame(out Direction direction) {
             if (directionPulse.HasValue) {
                 direction = directionPulse.Value;
@@ -52,6 +61,7 @@ namespace DiceGame.Session.Network
         void LateUpdate() {
             liftPulse = false;
             jumpPulse = false;
+            reversePulse = false;
             directionPulse = null;
         }
     }

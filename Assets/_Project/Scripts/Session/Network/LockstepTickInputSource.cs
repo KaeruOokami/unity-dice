@@ -27,6 +27,10 @@ namespace DiceGame.Session.Network
             return current.JumpPressed;
         }
 
+        public bool WasReversePressedThisFrame() {
+            return current.ReversePressed;
+        }
+
         public bool TryGetDirectionPressedThisFrame(out Direction direction) {
             return current.TryGetDirection(out direction);
         }

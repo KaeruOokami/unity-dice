@@ -22,6 +22,7 @@ namespace DiceGame.Gameplay
         GameFlowInputReader inputReader;
         DiceSpawnSystem spawnSystem;
         VersusAttackController attackController;
+        ReverseModeController reverseModeController;
         readonly List<Behaviour> aiControllers = new();
         Coroutine introRoutine;
         bool gameplayReleased;
@@ -35,11 +36,13 @@ namespace DiceGame.Gameplay
             GameFlowInputReader flowInputReader,
             DiceSpawnSystem targetSpawnSystem,
             VersusAttackController targetAttackController,
-            IReadOnlyList<CharacterController> characters) {
+            IReadOnlyList<CharacterController> characters,
+            ReverseModeController targetReverseModeController = null) {
             settings = introSettings;
             inputReader = flowInputReader;
             spawnSystem = targetSpawnSystem;
             attackController = targetAttackController;
+            reverseModeController = targetReverseModeController;
 
             aiControllers.Clear();
             if (characters != null) {
@@ -137,6 +140,7 @@ namespace DiceGame.Gameplay
             inputReader?.SetGameplayInputEnabled(!gated);
             spawnSystem?.SetGameplayEnabled(!gated);
             attackController?.SetGameplayEnabled(!gated);
+            reverseModeController?.SetGameplayEnabled(!gated);
 
             for (var i = 0; i < aiControllers.Count; i++) {
                 if (aiControllers[i] != null) {

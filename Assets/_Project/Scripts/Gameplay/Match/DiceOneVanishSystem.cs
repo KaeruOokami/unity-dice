@@ -136,7 +136,7 @@ namespace DiceGame.Gameplay
                     || dice.IsSpawning
                     || dice.IsVanishing
                     || dice.IsErasing
-                    || dice.CurrentState.Orientation.Top != 1) {
+                    || dice.MatchFace != 1) {
                     continue;
                 }
 

@@ -33,6 +33,7 @@ namespace DiceGame.Gameplay
         DiceRegistry registry;
         DiceSpawnSystem spawnSystem;
         VersusAttackController versusAttackController;
+        ReverseModeController reverseModeController;
         GameSessionSettings sessionSettings;
         GameMode activeGameMode;
         int activeRequiredPlayerCount;
@@ -62,7 +63,8 @@ namespace DiceGame.Gameplay
             GameSessionSettings targetSessionSettings,
             PlayerInputSettings playerInputSettings,
             ResolvedSessionSetup resolvedSetup = null,
-            MatchSeriesHudSettings seriesHudSettings = null)
+            MatchSeriesHudSettings seriesHudSettings = null,
+            ReverseModeController targetReverseModeController = null)
         {
             if (targetBoard == null
                 || targetRegistry == null
@@ -84,6 +86,7 @@ namespace DiceGame.Gameplay
             registry = targetRegistry;
             spawnSystem = targetSpawnSystem;
             versusAttackController = targetVersusAttackController;
+            reverseModeController = targetReverseModeController;
             sessionSettings = targetSessionSettings;
             activeGameMode = resolvedSetup?.GameMode ?? targetSessionSettings.GameMode;
             activeRequiredPlayerCount = resolvedSetup?.RequiredPlayerCount ?? targetSessionSettings.RequiredPlayerCount;
@@ -468,6 +471,7 @@ namespace DiceGame.Gameplay
             ownsTimeScale = false;
             spawnSystem.SetGameplayEnabled(true);
             versusAttackController?.SetGameplayEnabled(true);
+            reverseModeController?.SetGameplayEnabled(true);
             versusAttackController?.SetNetworkFollowerMode(false);
             inputReader.SetGameplayInputEnabled(true);
             State = GameFlowState.Playing;
@@ -728,6 +732,7 @@ namespace DiceGame.Gameplay
             inputReader.SetGameplayInputEnabled(false);
             spawnSystem.SetGameplayEnabled(false);
             versusAttackController?.SetGameplayEnabled(false);
+            reverseModeController?.SetGameplayEnabled(false);
             Time.timeScale = 0f;
             ownsTimeScale = true;
         }

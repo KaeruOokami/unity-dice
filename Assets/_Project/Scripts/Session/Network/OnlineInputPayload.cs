@@ -11,6 +11,7 @@ namespace DiceGame.Session.Network
         public float MoveY;
         public bool LiftPressed;
         public bool JumpPressed;
+        public bool ReversePressed;
         public bool HasDirection;
         public byte DirectionValue;
         public uint Sequence;
@@ -28,6 +29,7 @@ namespace DiceGame.Session.Network
             serializer.SerializeValue(ref MoveY);
             serializer.SerializeValue(ref LiftPressed);
             serializer.SerializeValue(ref JumpPressed);
+            serializer.SerializeValue(ref ReversePressed);
             serializer.SerializeValue(ref HasDirection);
             serializer.SerializeValue(ref DirectionValue);
             serializer.SerializeValue(ref Sequence);
@@ -38,6 +40,7 @@ namespace DiceGame.Session.Network
             Vector2 move,
             bool lift,
             bool jump,
+            bool reverse,
             bool hasDirection,
             Direction direction,
             uint sequence = 0,
@@ -47,6 +50,7 @@ namespace DiceGame.Session.Network
                 MoveY = move.y,
                 LiftPressed = lift,
                 JumpPressed = jump,
+                ReversePressed = reverse,
                 HasDirection = hasDirection,
                 DirectionValue = (byte)direction,
                 Sequence = sequence,

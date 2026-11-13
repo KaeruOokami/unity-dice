@@ -26,6 +26,7 @@ namespace DiceGame.Versus
         DiceRegistry registry;
         DiceSpawnSystem spawnSystem;
         DiceMatchErasureSystem erasureSystem;
+        ReverseModeController reverseMode;
         AttackQueueSettings attackQueueSettings;
         DiceVfxSettings vfxSettings;
         float queueToBoardDelay;
@@ -53,12 +54,14 @@ namespace DiceGame.Versus
             Transform viewParent,
             AttackQueueSettings queueSettings,
             float queueDelay,
-            DiceVfxSettings diceVfxSettings = null) {
+            DiceVfxSettings diceVfxSettings = null,
+            ReverseModeController reverseModeController = null) {
             versusSettings = settings;
             board = targetBoard;
             registry = targetRegistry;
             spawnSystem = targetSpawnSystem;
             erasureSystem = targetErasureSystem;
+            reverseMode = reverseModeController;
             attackQueueSettings = queueSettings;
             vfxSettings = diceVfxSettings;
             queueToBoardDelay = Mathf.Max(0f, queueDelay);
@@ -272,6 +275,7 @@ namespace DiceGame.Versus
                         naturalSendSettings,
                         random,
                         jumboRemaining,
+                        IsReverseActive(),
                         out var volley)) {
                     EnsureQueues();
                     incomingQueues[target].Enqueue(volley, queueToBoardDelay);
@@ -293,6 +297,10 @@ namespace DiceGame.Versus
                 return;
             }
 
+            var reverseActive = IsReverseActive();
+            var effectFace = reverseActive
+                ? AttackFaceReverse.ToEffectFace(e.Face)
+                : e.Face;
             var jumboRemaining = ResolveJumboSendableRemaining(e.Target);
             if (!AttackVolleyBuilder.TryBuild(
                     attackSettings,
@@ -302,13 +310,14 @@ namespace DiceGame.Versus
                     e.IsSnatch,
                     random,
                     jumboRemaining,
+                    reverseActive,
                     out var volley,
                     out _)) {
                 return;
             }
 
             var maxSendCount = 0;
-            if (attackSettings.TryGetSendableKindsForFace(e.Face, out var sendableKinds)) {
+            if (attackSettings.TryGetSendableKindsForFace(effectFace, out var sendableKinds)) {
                 maxSendCount = AttackVolumeResolver.ResolveAbsoluteMaxVolleyCount(sendableKinds);
             }
 
@@ -574,6 +583,10 @@ namespace DiceGame.Versus
             return incomingQueues.TryGetValue(slot, out var queue)
                 ? queue.GetPendingVolleys()
                 : Array.Empty<AttackVolley>();
+        }
+
+        bool IsReverseActive() {
+            return reverseMode != null && reverseMode.IsActive;
         }
     }
 }
