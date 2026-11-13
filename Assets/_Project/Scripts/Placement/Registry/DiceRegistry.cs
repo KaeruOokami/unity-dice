@@ -15,10 +15,21 @@ namespace DiceGame.Placement
         }
 
         readonly Dictionary<Vector2Int, GridStack> byGrid = new();
-        readonly Dictionary<Vector2Int, GridStack> pendingSpawns = new();
+        /// <summary>
+        /// In-flight spawn intent (fall / appear). Counts as cell occupancy for spawn lottery
+        /// via <see cref="HasInFlightSpawnAt"/>; board updates reconcile tier via
+        /// <see cref="ReconcilePendingSpawnTierAt"/>.
+        /// </summary>
+        readonly Dictionary<Vector2Int, GridStack> pendingOccupancy = new();
+        /// <summary>
+        /// Cell-level spawn claim after lottery pick, before <see cref="RegisterPendingSpawn"/>.
+        /// Ensures one falling dice per cell within a multi-pick wave.
+        /// </summary>
+        readonly HashSet<Vector2Int> spawnCellReservations = new();
         readonly List<DiceController> allDice = new();
         readonly List<Vector2Int> footprintCells = new(JumboFootprint.CellCount);
         readonly List<DiceController> footprintClearBuffer = new();
+        readonly List<Vector2Int> pendingClearBuffer = new();
 
         Board board;
 
@@ -59,7 +70,8 @@ namespace DiceGame.Placement
                 return false;
             }
 
-            if (HasPendingBottomAt(gridPos)) {
+            // Pending spawn already claims this cell — no second Bottom while falling.
+            if (HasPendingSpawnAt(gridPos)) {
                 return false;
             }
 
@@ -68,6 +80,8 @@ namespace DiceGame.Placement
             }
 
             // Sink erasure ghost: player-solid, crushable by dice Place/Move (EvictErasingDiceAt).
+            // Occupied solid Bottom is not "empty Bottom" — Top stacking uses CanPlaceTopDiceAt.
+            // Interrupt promote is decided only at write time (TryPromoteCommittedBottomToTop).
             return GhostPlacementRules.IsCrushableByDicePlacement(bottom);
         }
 
@@ -76,7 +90,13 @@ namespace DiceGame.Placement
                 return false;
             }
 
-            if (!HasBottomAt(gridPos) || HasTopAt(gridPos) || HasPendingTopAt(gridPos)) {
+            // Pending spawn claims the whole cell (no Top onto a still-falling Bottom).
+            if (HasPendingSpawnAt(gridPos)) {
+                return false;
+            }
+
+            // Spawn / write capacity: any Top slot claim (including pass-through) blocks.
+            if (!HasBottomAt(gridPos) || HasTopSlotClaimAt(gridPos)) {
                 return false;
             }
 
@@ -93,6 +113,100 @@ namespace DiceGame.Placement
             }
 
             return true;
+        }
+
+        /// <summary>
+        /// Pending fall/appear intent on this cell (dice already registered as spawning).
+        /// </summary>
+        public bool HasPendingSpawnAt(Vector2Int gridPos) {
+            return HasPendingBottomAt(gridPos) || HasPendingTopAt(gridPos);
+        }
+
+        /// <summary>
+        /// Lottery reservation or pending spawn — cell is claimed for an in-flight dice.
+        /// </summary>
+        public bool HasInFlightSpawnAt(Vector2Int gridPos) {
+            return spawnCellReservations.Contains(gridPos) || HasPendingSpawnAt(gridPos);
+        }
+
+        /// <summary>
+        /// Lottery pick claims the cell until <see cref="RegisterPendingSpawn"/> or release.
+        /// </summary>
+        public bool TryReserveSpawnCell(Vector2Int gridPos) {
+            if (board == null || !board.IsInside(gridPos) || board.GetCell(gridPos) != CellType.Floor) {
+                return false;
+            }
+
+            if (HasInFlightSpawnAt(gridPos) || HasErasingDiceAt(gridPos)) {
+                return false;
+            }
+
+            spawnCellReservations.Add(gridPos);
+            return true;
+        }
+
+        public void ReleaseSpawnCellReservation(Vector2Int gridPos) {
+            spawnCellReservations.Remove(gridPos);
+        }
+
+        /// <summary>
+        /// Top slot occupancy for writes / spawn / solid place capacity:
+        /// committed Top, pending Top, or soft Top intent — including Kind Ghost.
+        /// </summary>
+        public bool HasTopSlotClaimAt(Vector2Int gridPos) {
+            return HasTopClaimAt(gridPos, solidOnly: false);
+        }
+
+        /// <summary>
+        /// Player-solid Top surface claim (standing / coupled interrupt).
+        /// Pass-through Top still occupies via <see cref="HasTopSlotClaimAt"/>.
+        /// </summary>
+        public bool HasSolidTopClaimAt(Vector2Int gridPos) {
+            return HasTopClaimAt(gridPos, solidOnly: true);
+        }
+
+        bool HasTopClaimAt(Vector2Int gridPos, bool solidOnly) {
+            if (TryGetTopAt(gridPos, out var top)
+                && top != null
+                && (!solidOnly || GhostPlacementRules.CountsAsSolidTopClaim(top))) {
+                return true;
+            }
+
+            if (TryGetPendingTopAt(gridPos, out var pendingTop)
+                && pendingTop != null
+                && (!solidOnly || GhostPlacementRules.CountsAsSolidTopClaim(pendingTop))) {
+                return true;
+            }
+
+            for (var i = 0; i < allDice.Count; i++) {
+                var dice = allDice[i];
+                if (dice == null) {
+                    continue;
+                }
+
+                var state = dice.CurrentState;
+                if (state.GridPos != gridPos || state.Tier != DiceStackTier.Top) {
+                    continue;
+                }
+
+                if (solidOnly && !GhostPlacementRules.CountsAsSolidTopClaim(dice)) {
+                    continue;
+                }
+
+                // Soft claim: logical Top but not this cell's committed Top slot.
+                if (!TryGetTopAt(gridPos, out var committedTop) || committedTop != dice) {
+                    return true;
+                }
+            }
+
+            return false;
+        }
+
+        /// <summary>
+        /// True when an existing Bottom can be moved to Top to free the Bottom slot.
+        /// </summary>
+        public bool CanPromoteBottomOccupantAt(Vector2Int gridPos) {
+            return !HasTopSlotClaimAt(gridPos);
         }
 
         public bool CanAcceptTopDiceAt(Vector2Int gridPos) {
@@ -175,7 +289,7 @@ namespace DiceGame.Placement
                 return;
             }
 
-            ClearPendingSpawn(dice);
+            ClearPendingOccupancy(dice);
 
             if (!allDice.Contains(dice)) {
                 allDice.Add(dice);
@@ -185,18 +299,24 @@ namespace DiceGame.Placement
                 footprintCells.Clear();
                 JumboFootprint.AppendCells(gridPos, footprintCells);
                 for (var i = 0; i < footprintCells.Count; i++) {
-                    RegisterPendingSpawnAtCell(dice, footprintCells[i], DiceStackTier.Bottom);
-                    RegisterPendingSpawnAtCell(dice, footprintCells[i], DiceStackTier.Top);
+                    ReleaseSpawnCellReservation(footprintCells[i]);
+                    RegisterPendingAtCell(dice, footprintCells[i], DiceStackTier.Bottom);
+                    RegisterPendingAtCell(dice, footprintCells[i], DiceStackTier.Top);
                 }
 
                 return;
             }
 
-            RegisterPendingSpawnAtCell(dice, gridPos, tier);
+            ReleaseSpawnCellReservation(gridPos);
+            RegisterPendingAtCell(dice, gridPos, tier);
         }
 
-        void RegisterPendingSpawnAtCell(DiceController dice, Vector2Int gridPos, DiceStackTier tier) {
-            if (!pendingSpawns.TryGetValue(gridPos, out var stack)) {
+        public void ReleaseOccupancyReservation(DiceController dice) {
+            ClearPendingOccupancy(dice);
+        }
+
+        void RegisterPendingAtCell(DiceController dice, Vector2Int gridPos, DiceStackTier tier) {
+            if (!pendingOccupancy.TryGetValue(gridPos, out var stack)) {
                 stack = default;
             }
 
@@ -206,7 +326,75 @@ namespace DiceGame.Placement
                 stack.Bottom = dice;
             }
 
-            pendingSpawns[gridPos] = stack;
+            pendingOccupancy[gridPos] = stack;
+
+            if (tier == DiceStackTier.Bottom) {
+                ReconcilePendingSpawnTierAt(gridPos, excluding: dice);
+            }
+        }
+
+        /// <summary>
+        /// Committed Bottom support for spawn retarget / stack (excludes <paramref name="self"/>).
+        /// </summary>
+        bool HasCommittedBottomSupport(Vector2Int gridPos, DiceController self) {
+            return TryGetBottomAt(gridPos, out var bottom)
+                && bottom != null
+                && bottom != self;
+        }
+
+        /// <summary>
+        /// Move a spawning pending Bottom to Top when committed Bottom support appears.
+        /// </summary>
+        bool TryLiftSpawningPendingBottomToTop(Vector2Int gridPos) {
+            if (!TryGetPendingBottomAt(gridPos, out var pending)
+                || pending == null
+                || !pending.IsSpawning) {
+                return false;
+            }
+
+            if (HasTopSlotClaimAt(gridPos)) {
+                return false;
+            }
+
+            if (!pendingOccupancy.TryGetValue(gridPos, out var pendingStack)) {
+                return false;
+            }
+
+            pendingStack.Bottom = null;
+            pendingStack.Top = pending;
+            pendingOccupancy[gridPos] = pendingStack;
+            pending.NotifyPendingSpawnRetargetedToTop();
+            return true;
+        }
+
+        /// <summary>
+        /// Incoming Bottom claims the slot: promote the existing committed Bottom to Top when free.
+        /// </summary>
+        bool TryPromoteCommittedBottomToTop(Vector2Int gridPos, DiceController incoming) {
+            if (!TryGetBottomAt(gridPos, out var existing)
+                || existing == null
+                || existing == incoming) {
+                return true;
+            }
+
+            if (!CanPromoteBottomOccupantAt(gridPos)) {
+                return false;
+            }
+
+            ClearDiceAt(gridPos, existing, DiceStackTier.Bottom, notifySupportLoss: false);
+            if (!byGrid.TryGetValue(gridPos, out var stack)) {
+                stack = default;
+            }
+
+            stack.Top = existing;
+            byGrid[gridPos] = stack;
+            existing.BeginVerticalRestToState(
+                new DiceState(
+                    gridPos,
+                    existing.CurrentState.Orientation,
+                    DiceStackTier.Top,
+                    existing.Kind));
+            return true;
         }
 
         public void CommitPendingSpawn(DiceController dice, Vector2Int gridPos, DiceStackTier tier) {
@@ -214,7 +402,7 @@ namespace DiceGame.Placement
                 return;
             }
 
-            ClearPendingSpawn(dice);
+            ClearPendingOccupancy(dice);
 
             if (dice.Capabilities.HasExpandedFootprint) {
                 PlaceJumbo(dice, gridPos);
@@ -236,16 +424,17 @@ namespace DiceGame.Placement
         }
 
         /// <summary>
-        /// Resolve final tier at spawn commit. Mid-flight retarget should already have aligned
-        /// pending reservation + die state; this is the last consistency check before Place.
+        /// Resolve final tier at spawn commit from committed occupancy only.
         /// </summary>
         DiceStackTier ResolveSpawnCommitTier(Vector2Int gridPos, DiceStackTier requestedTier) {
+            var hasSupport = HasCommittedBottomSupport(gridPos, self: null);
+
             if (requestedTier == DiceStackTier.Bottom) {
-                if (!HasBottomAt(gridPos)) {
+                if (!hasSupport) {
                     return DiceStackTier.Bottom;
                 }
 
-                if (!HasTopAt(gridPos) && !HasPendingTopAt(gridPos)) {
+                if (!HasTopAt(gridPos)) {
                     return DiceStackTier.Top;
                 }
 
@@ -255,24 +444,23 @@ namespace DiceGame.Placement
                 return DiceStackTier.Top;
             }
 
-            // Top requested but support gone — demote (mid-flight retarget should have done this).
-            if (!HasBottomAt(gridPos)) {
+            if (hasSupport) {
                 if (HasTopAt(gridPos)) {
                     Debug.LogError(
-                        $"DiceRegistry: spawn commit Top demote blocked at ({gridPos.x},{gridPos.y}); " +
-                        "Top already occupied.");
-                    return DiceStackTier.Top;
+                        $"DiceRegistry: spawn commit Top unavailable at ({gridPos.x},{gridPos.y}).");
                 }
 
-                return DiceStackTier.Bottom;
+                return DiceStackTier.Top;
             }
 
-            if (HasTopAt(gridPos) || HasPendingTopAt(gridPos)) {
+            if (HasTopAt(gridPos)) {
                 Debug.LogError(
-                    $"DiceRegistry: spawn commit Top unavailable at ({gridPos.x},{gridPos.y}).");
+                    $"DiceRegistry: spawn commit Top demote blocked at ({gridPos.x},{gridPos.y}); " +
+                    "Top already occupied.");
+                return DiceStackTier.Top;
             }
 
-            return DiceStackTier.Top;
+            return DiceStackTier.Bottom;
         }
 
         public void Place(DiceController dice, Vector2Int gridPos, DiceStackTier tier) {
@@ -284,6 +472,8 @@ namespace DiceGame.Placement
                 PlaceJumbo(dice, gridPos);
                 return;
             }
+
+            ReleaseSpawnCellReservation(gridPos);
 
             if (!allDice.Contains(dice)) {
                 allDice.Add(dice);
@@ -328,6 +518,7 @@ namespace DiceGame.Placement
             JumboFootprint.AppendCells(anchor, footprintCells);
             for (var i = 0; i < footprintCells.Count; i++) {
                 var cell = footprintCells[i];
+                ReleaseSpawnCellReservation(cell);
                 SetDiceAt(cell, dice, DiceStackTier.Bottom);
                 SetDiceAt(cell, dice, DiceStackTier.Top);
             }
@@ -485,7 +676,7 @@ namespace DiceGame.Placement
                 return false;
             }
 
-            if (!TryDeferGhostOccupant(ghostFrom, out var ghost)) {
+            if (!TryDeferGhostOccupant(ghostFrom, ghostTo, out var ghost)) {
                 return false;
             }
 
@@ -501,10 +692,14 @@ namespace DiceGame.Placement
         }
 
         /// <summary>
-        /// Remove ghost from the grid slot but leave its <see cref="DiceController.CurrentState"/> unchanged
-        /// so displace can run after the mover animation completes.
+        /// Remove ghost from the grid slot and leave <see cref="DiceController.CurrentState"/>
+        /// unchanged until displace completes. Destination is not hard-reserved — occupants
+        /// that arrive first are stacked up on complete via Bottom→Top promote.
         /// </summary>
-        public bool TryDeferGhostOccupant(DiceState ghostFrom, out DiceController ghost) {
+        public bool TryDeferGhostOccupant(
+            DiceState ghostFrom,
+            DiceState ghostTo,
+            out DiceController ghost) {
             ghost = null;
             if (!TryGetDiceAt(ghostFrom.GridPos, ghostFrom.Tier, out ghost) || ghost == null) {
                 Debug.LogError(
@@ -519,6 +714,7 @@ namespace DiceGame.Placement
             }
 
             ClearDiceAt(ghostFrom.GridPos, ghost, ghostFrom.Tier, notifySupportLoss: false);
+            _ = ghostTo;
             return true;
         }
 
@@ -535,7 +731,11 @@ namespace DiceGame.Placement
                 return false;
             }
 
-            SetDiceAt(ghostTo.GridPos, ghost, ghostTo.Tier);
+            if (!TryWriteDiceAt(ghostTo.GridPos, ghost, ghostTo.Tier)) {
+                onComplete?.Invoke(null);
+                return false;
+            }
+
             ghost.ApplyExternalState(ghostTo, snapVisual: false);
             ghost.PlayGhostDisplaceVisual(ghostFrom, ghostTo, () => onComplete?.Invoke(ghost));
             return true;
@@ -593,12 +793,13 @@ namespace DiceGame.Placement
                 return;
             }
 
-            ClearPendingSpawn(dice);
+            ClearPendingOccupancy(dice);
             Remove(dice, dice.CurrentState.GridPos, dice.CurrentState.Tier);
             allDice.Remove(dice);
         }
 
-        public void MoveDice(
+        /// <returns>False when the destination write was refused (die restored to <paramref name="from"/>).</returns>
+        public bool MoveDice(
             DiceController dice,
             Vector2Int from,
             Vector2Int to,
@@ -606,8 +807,22 @@ namespace DiceGame.Placement
             DiceStackTier toTier) {
             EvictErasingDiceAt(to);
             ClearDiceAt(from, dice, fromTier, notifySupportLoss: false);
-            SetDiceAt(to, dice, toTier);
+            if (!TryWriteDiceAt(to, dice, toTier)) {
+                // Keep the die on the board; planning should have refused this target.
+                TryWriteDiceAt(from, dice, fromTier);
+                return false;
+            }
+
             TryResolveUnsupportedTopAt(from, dice);
+            return true;
+        }
+
+        /// <summary>
+        /// Stack support for a Top die: committed Bottom of any kind (including Kind Ghost).
+        /// Distinct from player-solid checks (<see cref="GhostPlacementRules.HasSolidBottomAt"/>).
+        /// </summary>
+        public bool HasStackBottomSupportAt(Vector2Int gridPos) {
+            return HasBottomAt(gridPos);
         }
 
         public bool TryGetDiceAt(Vector2Int gridPos, DiceStackTier tier, out DiceController dice) {
@@ -619,16 +834,6 @@ namespace DiceGame.Placement
         public bool TryGetBottomAt(Vector2Int gridPos, out DiceController dice) {
             dice = null;
             if (!byGrid.TryGetValue(gridPos, out var stack) || stack.Bottom == null) {
-                return false;
-            }
-
-            dice = stack.Bottom;
-            return true;
-        }
-
-        public bool TryGetPendingBottomAt(Vector2Int gridPos, out DiceController dice) {
-            dice = null;
-            if (!pendingSpawns.TryGetValue(gridPos, out var stack) || stack.Bottom == null) {
                 return false;
             }
 
@@ -687,16 +892,16 @@ namespace DiceGame.Placement
         }
 
         public bool HasPendingBottomAt(Vector2Int gridPos) {
-            return pendingSpawns.TryGetValue(gridPos, out var stack) && stack.Bottom != null;
+            return pendingOccupancy.TryGetValue(gridPos, out var stack) && stack.Bottom != null;
         }
 
         public bool HasPendingTopAt(Vector2Int gridPos) {
-            return pendingSpawns.TryGetValue(gridPos, out var stack) && stack.Top != null;
+            return pendingOccupancy.TryGetValue(gridPos, out var stack) && stack.Top != null;
         }
 
         public bool TryGetPendingTopAt(Vector2Int gridPos, out DiceController dice) {
             dice = null;
-            if (!pendingSpawns.TryGetValue(gridPos, out var stack) || stack.Top == null) {
+            if (!pendingOccupancy.TryGetValue(gridPos, out var stack) || stack.Top == null) {
                 return false;
             }
 
@@ -704,13 +909,23 @@ namespace DiceGame.Placement
             return true;
         }
 
-        void ClearPendingSpawn(DiceController dice) {
-            if (dice == null || pendingSpawns.Count == 0) {
+        public bool TryGetPendingBottomAt(Vector2Int gridPos, out DiceController dice) {
+            dice = null;
+            if (!pendingOccupancy.TryGetValue(gridPos, out var stack) || stack.Bottom == null) {
+                return false;
+            }
+
+            dice = stack.Bottom;
+            return true;
+        }
+
+        void ClearPendingOccupancy(DiceController dice) {
+            if (dice == null || pendingOccupancy.Count == 0) {
                 return;
             }
 
-            var emptyCells = new List<Vector2Int>();
-            foreach (var pair in pendingSpawns) {
+            pendingClearBuffer.Clear();
+            foreach (var pair in pendingOccupancy) {
                 var stack = pair.Value;
                 var changed = false;
 
@@ -729,15 +944,17 @@ namespace DiceGame.Placement
                 }
 
                 if (stack.Bottom == null && stack.Top == null) {
-                    emptyCells.Add(pair.Key);
+                    pendingClearBuffer.Add(pair.Key);
                 } else {
-                    pendingSpawns[pair.Key] = stack;
+                    pendingOccupancy[pair.Key] = stack;
                 }
             }
 
-            for (var i = 0; i < emptyCells.Count; i++) {
-                pendingSpawns.Remove(emptyCells[i]);
+            for (var i = 0; i < pendingClearBuffer.Count; i++) {
+                pendingOccupancy.Remove(pendingClearBuffer[i]);
             }
+
+            pendingClearBuffer.Clear();
         }
 
         public bool BlocksTraversalBetween(Vector2Int fromCell, Vector2Int toCell) {
@@ -854,88 +1071,108 @@ namespace DiceGame.Placement
         }
 
         void SetDiceAt(Vector2Int gridPos, DiceController dice, DiceStackTier tier) {
+            TryWriteDiceAt(gridPos, dice, tier);
+        }
+
+        /// <summary>
+        /// Commit a die into a grid slot. Occupied Bottom is promoted to Top when free so
+        /// in-flight dice can interrupt without hard cell locks.
+        /// </summary>
+        bool TryWriteDiceAt(Vector2Int gridPos, DiceController dice, DiceStackTier tier) {
+            if (tier == DiceStackTier.Bottom) {
+                TryLiftSpawningPendingBottomToTop(gridPos);
+                if (!TryPromoteCommittedBottomToTop(gridPos, dice)) {
+                    Debug.LogError(
+                        $"DiceRegistry: cannot claim Bottom at ({gridPos.x},{gridPos.y}); " +
+                        $"stack full for incoming={dice?.name}");
+                    return false;
+                }
+            }
+
             if (!byGrid.TryGetValue(gridPos, out var stack)) {
                 stack = default;
             }
 
-            if (tier == DiceStackTier.Bottom
-                && stack.Bottom != null
-                && stack.Bottom != dice) {
+            if (tier == DiceStackTier.Bottom) {
+                if (stack.Bottom != null && stack.Bottom != dice) {
+                    Debug.LogError(
+                        $"DiceRegistry: refusing bottom overwrite at ({gridPos.x},{gridPos.y}) " +
+                        $"existing={stack.Bottom.name} incoming={dice?.name}");
+                    return false;
+                }
+            } else if (stack.Top != null && stack.Top != dice) {
                 Debug.LogError(
-                    $"DiceRegistry: overwriting bottom at ({gridPos.x},{gridPos.y}) " +
-                    $"existing={stack.Bottom.name} incoming={dice?.name}");
+                    $"DiceRegistry: refusing top overwrite at ({gridPos.x},{gridPos.y}) " +
+                    $"existing={stack.Top.name} incoming={dice?.name}");
+                return false;
             }
 
             if (tier == DiceStackTier.Top) {
+                // Spawning Top intent yields when a committed Top arrives and Bottom is free.
+                if (TryGetPendingTopAt(gridPos, out var pendingTop)
+                    && pendingTop != null
+                    && pendingTop != dice
+                    && pendingTop.IsSpawning
+                    && !HasBottomAt(gridPos)
+                    && pendingOccupancy.TryGetValue(gridPos, out var pendingStack)) {
+                    pendingStack.Top = null;
+                    pendingStack.Bottom = pendingTop;
+                    pendingOccupancy[gridPos] = pendingStack;
+                    pendingTop.NotifyPendingSpawnRetargetedToBottom();
+                }
+
                 stack.Top = dice;
             } else {
                 stack.Bottom = dice;
             }
 
             byGrid[gridPos] = stack;
-
-            if (tier == DiceStackTier.Bottom) {
-                TryRetargetPendingBottomSpawnAt(gridPos, excluding: dice);
-            }
+            ReconcilePendingSpawnTierAt(gridPos, excluding: dice);
+            return true;
         }
 
         /// <summary>
-        /// When a committed Bottom claims a cell that still has a pending Bottom spawn,
-        /// retarget that spawn to Top immediately (reservation + spawning die state/visual).
-        /// Pending Top is never interrupted this way — coupled entry is blocked while Top is reserved.
+        /// On board occupancy change: align spawning pending intent to committed Bottom support.
         /// </summary>
-        void TryRetargetPendingBottomSpawnAt(Vector2Int gridPos, DiceController excluding) {
-            if (!TryGetPendingBottomAt(gridPos, out var pending) || pending == null || pending == excluding) {
-                return;
+        void ReconcilePendingSpawnTierAt(Vector2Int gridPos, DiceController excluding = null) {
+            if (TryGetPendingBottomAt(gridPos, out var pendingBottom)
+                && pendingBottom != null
+                && pendingBottom != excluding
+                && pendingBottom.IsSpawning
+                && HasCommittedBottomSupport(gridPos, pendingBottom)) {
+                if (HasTopSlotClaimAt(gridPos)) {
+                    Debug.LogError(
+                        $"DiceRegistry: cannot promote pending Bottom spawn at ({gridPos.x},{gridPos.y}); " +
+                        "Top already occupied.");
+                } else if (pendingOccupancy.TryGetValue(gridPos, out var promoteStack)) {
+                    promoteStack.Bottom = null;
+                    promoteStack.Top = pendingBottom;
+                    pendingOccupancy[gridPos] = promoteStack;
+                    pendingBottom.NotifyPendingSpawnRetargetedToTop();
+                }
             }
 
-            if (HasTopAt(gridPos) || HasPendingTopAt(gridPos)) {
-                Debug.LogError(
-                    $"DiceRegistry: cannot retarget pending Bottom spawn at ({gridPos.x},{gridPos.y}); " +
-                    "Top already occupied.");
-                return;
+            if (TryGetPendingTopAt(gridPos, out var pendingTop)
+                && pendingTop != null
+                && pendingTop != excluding
+                && pendingTop.IsSpawning
+                && !HasCommittedBottomSupport(gridPos, pendingTop)) {
+                if (HasBottomAt(gridPos)) {
+                    Debug.LogError(
+                        $"DiceRegistry: cannot demote pending Top spawn at ({gridPos.x},{gridPos.y}); " +
+                        "Bottom slot occupied.");
+                    return;
+                }
+
+                if (!pendingOccupancy.TryGetValue(gridPos, out var demoteStack)) {
+                    return;
+                }
+
+                demoteStack.Top = null;
+                demoteStack.Bottom = pendingTop;
+                pendingOccupancy[gridPos] = demoteStack;
+                pendingTop.NotifyPendingSpawnRetargetedToBottom();
             }
-
-            if (!pendingSpawns.TryGetValue(gridPos, out var pendingStack)) {
-                return;
-            }
-
-            pendingStack.Bottom = null;
-            pendingStack.Top = pending;
-            pendingSpawns[gridPos] = pendingStack;
-            pending.NotifyPendingSpawnRetargetedToTop();
-        }
-
-        /// <summary>
-        /// When committed Bottom leaves a cell that still has a pending Top spawn,
-        /// demote that spawn to Bottom immediately (reservation + spawning die state/visual).
-        /// Skips when Bottom support remains (batched replace) or pending Bottom already exists
-        /// (e.g. jumbo registers both tiers).
-        /// </summary>
-        void TryRetargetPendingTopSpawnWhenBottomVacated(Vector2Int gridPos, DiceController excluding) {
-            if (!TryGetPendingTopAt(gridPos, out var pending) || pending == null || pending == excluding) {
-                return;
-            }
-
-            if (HasBottomAt(gridPos) || HasPendingBottomAt(gridPos)) {
-                return;
-            }
-
-            if (HasTopAt(gridPos)) {
-                Debug.LogError(
-                    $"DiceRegistry: cannot retarget pending Top spawn at ({gridPos.x},{gridPos.y}); " +
-                    "committed Top already occupied.");
-                return;
-            }
-
-            if (!pendingSpawns.TryGetValue(gridPos, out var pendingStack)) {
-                return;
-            }
-
-            pendingStack.Top = null;
-            pendingStack.Bottom = pending;
-            pendingSpawns[gridPos] = pendingStack;
-            pending.NotifyPendingSpawnRetargetedToBottom();
         }
 
         void ClearDiceAt(
@@ -967,16 +1204,16 @@ namespace DiceGame.Placement
             }
 
             if (removedBottom != null) {
-                TryRetargetPendingTopSpawnWhenBottomVacated(gridPos, excluding: removedBottom);
-                if (notifySupportLoss) {
+                ReconcilePendingSpawnTierAt(gridPos, excluding: removedBottom);
+                if (notifySupportLoss && !HasStackBottomSupportAt(gridPos)) {
                     NotifyTopAfterBottomRemoved(gridPos, removedBottom, topAfterBottomRemoved);
                 }
             }
         }
 
         /// <summary>
-        /// After a batched clear/place, demote Top only if Bottom is still without solid support.
-        /// Ghost Bottom does not count as support (same as empty for collision).
+        /// After a batched clear/place, demote Top only if the Bottom stack slot has no support.
+        /// Kind-Ghost Bottom still counts as stack support (player pass-through does not).
         /// </summary>
         public void ResolveUnsupportedTopAt(Vector2Int gridPos) {
             TryResolveUnsupportedTopAt(gridPos, removedBottom: null);
@@ -987,7 +1224,7 @@ namespace DiceGame.Placement
                 return;
             }
 
-            if (GhostPlacementRules.HasSolidBottomAt(this, gridPos)) {
+            if (HasStackBottomSupportAt(gridPos)) {
                 return;
             }
 

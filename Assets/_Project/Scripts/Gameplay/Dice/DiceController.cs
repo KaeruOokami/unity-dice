@@ -224,6 +224,7 @@ namespace DiceGame.Gameplay
             logicalBusyRemaining = 0f;
             logicalBusyDuration = 0f;
             pendingLogicalComplete = null;
+            registry?.ReleaseOccupancyReservation(this);
         }
 
         void FinishLogicalBusy() {
@@ -646,6 +647,65 @@ namespace DiceGame.Gameplay
             StateChanged?.Invoke(currentState);
         }
 
+        /// <summary>
+        /// Stack interrupt / tier change: update logical state and move visually from the current
+        /// transform to the new rest height (fall or rise). Cancels in-flight busy/anim; no Snap.
+        /// </summary>
+        public void BeginVerticalRestToState(DiceState newState) {
+            if (board == null || registry == null) {
+                currentState = newState;
+                StateChanged?.Invoke(currentState);
+                return;
+            }
+
+            if (isSpawning) {
+                currentState = newState;
+                diceView?.RetargetActiveSpawnLanding(currentState);
+                StateChanged?.Invoke(currentState);
+                return;
+            }
+
+            ClearLogicalBusyWithoutComplete();
+            diceView?.InterruptRollAnimation();
+
+            var kindChanged = currentState.Kind != newState.Kind;
+            currentState = newState;
+            if (kindChanged) {
+                RemeshForCurrentKind();
+            }
+
+            StateChanged?.Invoke(currentState);
+
+            if (diceView == null) {
+                return;
+            }
+
+            var duration = diceView.PlayOrRetargetVerticalToRest(
+                currentState,
+                board,
+                registry,
+                Capabilities.FallGravityScale,
+                onComplete: () => {
+                    if (isRolling) {
+                        FinishLogicalBusy();
+                    }
+                });
+            if (duration <= 0f) {
+                // Already at rest height — settle pose without a motion.
+                diceView.SnapTo(currentState, board, registry);
+                return;
+            }
+
+            // Safety timer if the view callback is delayed; no-ops when view already finished.
+            StartLogicalBusy(
+                duration + 0.05f,
+                () => {
+                    if (isRolling) {
+                        FinishLogicalBusy();
+                    }
+                });
+        }
+
         public void PlayGhostDisplaceVisual(DiceState fromState, DiceState toState, Action onComplete = null) {
             if (diceView == null || board == null || registry == null) {
                 onComplete?.Invoke();
@@ -952,12 +1012,18 @@ namespace DiceGame.Gameplay
 
         void ApplyLogicalMove(DiceState fromState, DiceState toState) {
             currentState = toState;
-            registry.MoveDice(
+            if (!registry.MoveDice(
                 this,
                 fromState.GridPos,
                 toState.GridPos,
                 fromState.Tier,
-                toState.Tier);
+                toState.Tier)) {
+                currentState = fromState;
+                Debug.LogError(
+                    $"DiceController: MoveDice refused {name} " +
+                    $"({fromState.GridPos.x},{fromState.GridPos.y})/{fromState.Tier} → " +
+                    $"({toState.GridPos.x},{toState.GridPos.y})/{toState.Tier}; state restored.");
+            }
         }
 
         bool ApplyLogicalMoveWithGhost(
@@ -981,19 +1047,20 @@ namespace DiceGame.Gameplay
         }
 
         /// <summary>
-        /// Move the mover now; ghost slot is vacated but displace waits for animation complete.
+        /// Move the mover now; ghost slot is vacated and ghostTo is reserved until displace completes.
         /// </summary>
         bool BeginLogicalMoveDeferringGhost(
             DiceState fromState,
             DiceState toState,
             GhostLandingMode ghostLanding,
-            DiceState ghostFrom) {
+            DiceState ghostFrom,
+            DiceState ghostTo) {
             if (ghostLanding == GhostLandingMode.None) {
                 ApplyLogicalMove(fromState, toState);
                 return true;
             }
 
-            if (!registry.TryDeferGhostOccupant(ghostFrom, out _)) {
+            if (!registry.TryDeferGhostOccupant(ghostFrom, ghostTo, out _)) {
                 return false;
             }
 
@@ -1076,7 +1143,8 @@ namespace DiceGame.Gameplay
                 plan.From,
                 plan.To,
                 plan.GhostLanding,
-                plan.GhostFrom)) {
+                plan.GhostFrom,
+                plan.GhostTo)) {
                 return false;
             }
 
@@ -1205,7 +1273,8 @@ namespace DiceGame.Gameplay
                 plan.From,
                 plan.To,
                 plan.GhostLanding,
-                plan.GhostFrom)) {
+                plan.GhostFrom,
+                plan.GhostTo)) {
                 return false;
             }
 
@@ -1600,7 +1669,7 @@ namespace DiceGame.Gameplay
             var deferredGhostFrom = default(DiceState);
             var deferredGhostTo = default(DiceState);
 
-            // Vacate ghost Bottom for the fall; promote after fall animation completes.
+            // Vacate ghost Bottom for the fall; reserve Top and promote after fall animation.
             if (registry.TryGetBottomAt(fromState.GridPos, out var ghostBottom)
                 && GhostPlacementRules.TryResolveInCellPromote(
                     fromState,
@@ -1608,11 +1677,15 @@ namespace DiceGame.Gameplay
                     out _,
                     out deferredGhostFrom,
                     out deferredGhostTo)) {
-                if (!registry.TryDeferGhostOccupant(deferredGhostFrom, out _)) {
+                if (!registry.TryDeferGhostOccupant(deferredGhostFrom, deferredGhostTo, out _)) {
                     return;
                 }
 
                 deferredGhostLanding = GhostLandingMode.InCellPromoteGhost;
+            } else if (registry.HasStackBottomSupportAt(fromState.GridPos)) {
+                // Bottom slot occupied (e.g. Kind Ghost after CellSwap) and promote unavailable —
+                // Top stays stacked; do not demote into an occupied Bottom.
+                return;
             }
 
             var transition = DiceTransition.CrushDemote(fromState, toState, fromWorld);
@@ -1837,7 +1910,7 @@ namespace DiceGame.Gameplay
             StartLogicalBusy(
                 diceView.GetTransitionLogicalDuration(transition, board, registry),
                 () => {
-                    // Clear prior lift-mount occupancy before placing at the drop cell.
+                    // Clear prior lift-mount occupancy; landing resolves against committed board state.
                     registry.RemoveFromGrid(this);
                     currentState = toState;
                     isCarried = false;
@@ -1894,7 +1967,7 @@ namespace DiceGame.Gameplay
             var transition = DiceTransition.ThrowArc(fromState, toState, fromWorld, toWorld);
             var throwDistance = Mathf.Max(0, cellDistance);
 
-            // Vacate lift-mount occupancy for the flight; Place happens on land.
+            // Vacate lift-mount occupancy for the flight; landing resolves against committed board state.
             registry.RemoveFromGrid(this);
 
             StartLogicalBusy(

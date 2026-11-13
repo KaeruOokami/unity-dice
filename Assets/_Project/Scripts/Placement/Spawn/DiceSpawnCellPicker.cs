@@ -62,8 +62,14 @@ namespace DiceGame.Placement
                     break;
                 }
 
+                if (!registry.TryReserveSpawnCell(slot.Cell)) {
+                    RemoveCellFromBuckets(ref buckets, slot.Cell);
+                    i--;
+                    continue;
+                }
+
                 results.Add(slot);
-                RemoveSlot(ref buckets, slot);
+                RemoveCellFromBuckets(ref buckets, slot.Cell);
             }
 
             return results;
@@ -119,19 +125,21 @@ namespace DiceGame.Placement
                 var y = maxCell.y - index / width;
                 var cell = new Vector2Int(x, y);
 
-                if (registry.HasErasingDiceAt(cell)) {
+                DiceStackTier tier;
+                if (SpawnCellAvailability.CanSpawnBottomAt(registry, cell)) {
+                    tier = DiceStackTier.Bottom;
+                } else if (SpawnCellAvailability.CanSpawnTopAt(registry, cell)) {
+                    tier = DiceStackTier.Top;
+                } else {
                     continue;
                 }
 
-                if (registry.CanPlaceBottomDiceAt(cell)) {
-                    slot = new DiceSpawnSlot(cell, DiceStackTier.Bottom);
-                    return true;
+                if (!registry.TryReserveSpawnCell(cell)) {
+                    continue;
                 }
 
-                if (registry.CanPlaceTopDiceAt(cell)) {
-                    slot = new DiceSpawnSlot(cell, DiceStackTier.Top);
-                    return true;
-                }
+                slot = new DiceSpawnSlot(cell, tier);
+                return true;
             }
 
             return false;
@@ -156,15 +164,11 @@ namespace DiceGame.Placement
                         continue;
                     }
 
-                    if (registry.HasErasingDiceAt(cell)) {
-                        continue;
-                    }
-
-                    if (registry.CanPlaceBottomDiceAt(cell)) {
+                    if (SpawnCellAvailability.CanSpawnBottomAt(registry, cell)) {
                         buckets.BottomCells.Add(cell);
                     }
 
-                    if (registry.CanPlaceTopDiceAt(cell)) {
+                    if (SpawnCellAvailability.CanSpawnTopAt(registry, cell)) {
                         buckets.TopCells.Add(cell);
                     }
                 }
@@ -203,10 +207,18 @@ namespace DiceGame.Placement
             return true;
         }
 
-        static void RemoveSlot(ref SpawnSlotBuckets buckets, DiceSpawnSlot slot) {
-            var cells = slot.Tier == DiceStackTier.Top ? buckets.TopCells : buckets.BottomCells;
+        static void RemoveCellFromBuckets(ref SpawnSlotBuckets buckets, Vector2Int cell) {
+            RemoveCell(buckets.BottomCells, cell);
+            RemoveCell(buckets.TopCells, cell);
+        }
+
+        static void RemoveCell(List<Vector2Int> cells, Vector2Int cell) {
+            if (cells == null) {
+                return;
+            }
+
             for (var i = 0; i < cells.Count; i++) {
-                if (cells[i] != slot.Cell) {
+                if (cells[i] != cell) {
                     continue;
                 }
 
@@ -218,8 +230,7 @@ namespace DiceGame.Placement
         /// <summary>
         /// Picks a random 2x2 anchor in the player region that stays on floor cells,
         /// fits entirely inside the owner region, and does not overlap blocked player cells.
-        /// Only pending spawns and jumbo occupants (including mid-erasure) block a cell; other dice are
-        /// treated as free space and cleared on landing.
+        /// In-flight spawn and jumbo occupants block; other dice are cleared on landing.
         /// </summary>
         public static bool TryPickJumboSpawnAnchor(
             Board board,
@@ -259,6 +270,25 @@ namespace DiceGame.Placement
             }
 
             anchor = candidates[random.Next(candidates.Count)];
+            if (registry == null) {
+                return true;
+            }
+
+            // Reserve footprint cells so concurrent picks cannot share them.
+            var footprint = new List<Vector2Int>(JumboFootprint.CellCount);
+            JumboFootprint.AppendCells(anchor, footprint);
+            for (var i = 0; i < footprint.Count; i++) {
+                if (registry.TryReserveSpawnCell(footprint[i])) {
+                    continue;
+                }
+
+                for (var j = 0; j < i; j++) {
+                    registry.ReleaseSpawnCellReservation(footprint[j]);
+                }
+
+                return false;
+            }
+
             return true;
         }
 
@@ -297,19 +327,14 @@ namespace DiceGame.Placement
         }
 
         /// <summary>
-        /// Pending reservations always block. Solid cells block when occupied by any jumbo
-        /// (including mid-erasure); Normal/Ghost/Iron/etc. remain ignorable free space.
+        /// Jumbo spawn blocked by in-flight spawn, erasure, or another jumbo occupant.
         /// </summary>
         static bool CanJumboSpawnOccupyCell(DiceRegistry registry, Vector2Int cell) {
-            if (registry.HasPendingBottomAt(cell) || registry.HasPendingTopAt(cell)) {
+            if (SpawnCellAvailability.HasSpawnBlockerAt(registry, cell)) {
                 return false;
             }
 
-            if (IsJumboOccupantAt(registry, cell)) {
-                return false;
-            }
-
-            return true;
+            return !IsJumboOccupantAt(registry, cell);
         }
 
         static bool IsJumboOccupantAt(DiceRegistry registry, Vector2Int cell) {

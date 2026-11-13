@@ -36,9 +36,9 @@ namespace DiceGame.Placement
         }
 
         /// <summary>
-        /// Occupancy for roll path ranks: pass-through dice do not count as solid.
-        /// Sink erasure ghosts are player-solid but crushable — treat as Floor for dice landing.
-        /// Pending Top spawn reserves Top for dice landing (same as occupied Top).
+        /// Slot occupancy for roll path ranks (Kind Ghost included — pass-through is interaction only).
+        /// Top uses slot capacity (<see cref="DiceRegistry.HasTopSlotClaimAt"/>) including in-flight claims.
+        /// Sink erasure / emerging crushables are Floor for dice overwrite.
         /// </summary>
         public bool TryGetOccupancyTier(Vector2Int cell, out CellOccupancyTier tier) {
             tier = CellOccupancyTier.Invalid;
@@ -46,8 +46,7 @@ namespace DiceGame.Placement
                 return false;
             }
 
-            if (GhostPlacementRules.HasSolidTopAt(registry, cell)
-                || (registry != null && registry.HasPendingTopAt(cell))) {
+            if (registry != null && registry.HasTopSlotClaimAt(cell)) {
                 tier = CellOccupancyTier.Top;
                 return true;
             }
@@ -55,8 +54,12 @@ namespace DiceGame.Placement
             if (registry != null
                 && registry.TryGetBottomAt(cell, out var bottom)
                 && bottom != null
-                && !GhostPlacementRules.IsPlayerPassThrough(bottom)
                 && !GhostPlacementRules.IsCrushableByDicePlacement(bottom)) {
+                tier = CellOccupancyTier.Bottom;
+                return true;
+            }
+
+            if (registry != null && registry.HasPendingBottomAt(cell)) {
                 tier = CellOccupancyTier.Bottom;
                 return true;
             }
@@ -66,10 +69,6 @@ namespace DiceGame.Placement
         }
 
         public bool CanOverwriteTopAt(Vector2Int cell) {
-            if (registry != null && registry.HasPendingTopAt(cell)) {
-                return false;
-            }
-
             return IsPassableCell(cell)
                 && placement.CanAcceptTopDiceAt(cell)
                 && !GhostPlacementRules.CanPlaceSolidTopAt(registry, cell);

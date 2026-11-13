@@ -39,13 +39,8 @@ namespace DiceGame.Placement
                 return false;
             }
 
-            if (GhostPlacementRules.HasSolidBottomAt(registry, cell)) {
-                return false;
-            }
-
-            return !(registry.TryGetPendingBottomAt(cell, out var pending)
-                && pending != null
-                && !GhostPlacementRules.IsPlayerPassThrough(pending));
+            // Committed solid Bottom only — in-flight pending does not block floor entry.
+            return !GhostPlacementRules.HasSolidBottomAt(registry, cell);
         }
     }
 }

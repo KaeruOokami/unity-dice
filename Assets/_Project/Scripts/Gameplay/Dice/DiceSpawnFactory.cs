@@ -646,6 +646,7 @@ namespace DiceGame.Gameplay
             PlayerSlot? catalogOwner = null) {
             if (catalog == null) {
                 Debug.LogError("DiceSpawnSystem: DiceCatalog is not assigned.");
+                registry?.ReleaseSpawnCellReservation(gridPos);
                 return null;
             }
 
@@ -656,6 +657,7 @@ namespace DiceGame.Gameplay
                 catalog.TryGetIgniteOnSpawn(kind, out igniteOnSpawn);
             } else if (!catalog.TryPickRandomKind(random, out kind, out igniteOnSpawn)) {
                 Debug.LogError("DiceSpawnSystem: Failed to pick dice kind. Check DiceCatalog spawn weights.");
+                registry?.ReleaseSpawnCellReservation(gridPos);
                 return null;
             }
 
@@ -663,6 +665,7 @@ namespace DiceGame.Gameplay
             if (!catalog.TryGetMeshPrefab(kind, out meshPrefab)) {
                 if (!fixedKind.HasValue) {
                     Debug.LogError($"DiceSpawnSystem: Mesh prefab not found for kind={kind}.");
+                    registry?.ReleaseSpawnCellReservation(gridPos);
                     return null;
                 }
 
@@ -686,6 +689,7 @@ namespace DiceGame.Gameplay
                 diceSfxSettings);
 
             if (diceController == null) {
+                registry?.ReleaseSpawnCellReservation(gridPos);
                 return null;
             }
 
@@ -777,6 +781,7 @@ namespace DiceGame.Gameplay
 
             if (!catalog.TryGetMeshPrefab(kind, out var meshPrefab)) {
                 Debug.LogError($"DiceSpawnSystem: Mesh prefab not found for attack kind={kind}.");
+                registry.ReleaseSpawnCellReservation(slot.Cell);
                 return null;
             }
 
@@ -796,6 +801,7 @@ namespace DiceGame.Gameplay
                 diceSfxSettings);
 
             if (diceController == null) {
+                registry.ReleaseSpawnCellReservation(slot.Cell);
                 return null;
             }
 
@@ -893,6 +899,7 @@ namespace DiceGame.Gameplay
                 diceSfxSettings);
 
             if (diceController == null) {
+                ReleaseJumboSpawnReservations(anchor);
                 return null;
             }
 
@@ -1023,6 +1030,18 @@ namespace DiceGame.Gameplay
                 0.5f,
                 random,
                 out slot);
+        }
+
+        void ReleaseJumboSpawnReservations(Vector2Int anchor) {
+            if (registry == null) {
+                return;
+            }
+
+            var footprint = new List<Vector2Int>(JumboFootprint.CellCount);
+            JumboFootprint.AppendCells(anchor, footprint);
+            for (var i = 0; i < footprint.Count; i++) {
+                registry.ReleaseSpawnCellReservation(footprint[i]);
+            }
         }
 
         void OnDisable() {

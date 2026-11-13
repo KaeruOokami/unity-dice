@@ -76,6 +76,21 @@ namespace DiceGame.View
         float activeSpawnFallGravityScale;
         Action activeSpawnOnComplete;
 
+        /// <summary>
+        /// Gameplay vertical rest motion (stack promote / demote retarget). Mutable ground Y;
+        /// distinct from spawn bounce fall so interrupt paths do not fight spawn appear.
+        /// </summary>
+        GravityMotion.SpawnFallSession activeVerticalRestSession;
+        DiceState activeVerticalRestState;
+        Board activeVerticalRestBoard;
+        DiceRegistry activeVerticalRestRegistry;
+        float activeVerticalRestGravityScale;
+        Action activeVerticalRestOnComplete;
+        bool activeVerticalRestIsRise;
+        float activeVerticalRestRiseFromY;
+        float activeVerticalRestRiseDuration;
+        float activeVerticalRestRiseElapsed;
+
         // Dice mesh is visual-only. Gameplay uses `Board.CellSize` as the "logical dice cube" size.
         // So we measure the mesh's local bounds once, then scale/center it to match `Board.CellSize`.
         float cachedMeshUnitMaxExtent = -1f;
@@ -988,6 +1003,228 @@ namespace DiceGame.View
             rollCoroutine = StartCoroutine(SpawnFallFromSessionCoroutine());
         }
 
+        /// <summary>
+        /// From the current visual position, move vertically to <paramref name="toState"/> rest.
+        /// Retargets an in-flight vertical-rest motion. No instant Snap — fall or rise from here.
+        /// </summary>
+        /// <returns>Logical duration until rest.</returns>
+        public float PlayOrRetargetVerticalToRest(
+            DiceState toState,
+            Board board,
+            DiceRegistry registry,
+            float fallGravityScale,
+            Action onComplete) {
+            if (positionRoot == null || board == null || !HasGameplaySettings()) {
+                onComplete?.Invoke();
+                return 0f;
+            }
+
+            const float yEpsilon = 0.001f;
+            var targetWorld = GetAnchoredWorldPosition(toState, board, registry);
+            var pos = positionRoot.position;
+            var targetY = targetWorld.y;
+            var gravity = ResolveFallGravity(fallGravityScale);
+            var delta = pos.y - targetY;
+
+            activeVerticalRestState = toState;
+            activeVerticalRestBoard = board;
+            activeVerticalRestRegistry = registry;
+            activeVerticalRestGravityScale = fallGravityScale;
+            activeVerticalRestOnComplete = onComplete;
+
+            // Already in vertical-rest fall: retarget ground Y.
+            if (activeVerticalRestSession != null && !activeVerticalRestIsRise && rollCoroutine != null) {
+                activeVerticalRestSession.GroundWorldY = targetY;
+                var motion = activeVerticalRestSession.Motion;
+                motion.Offset = pos.y - targetY;
+                if (motion.Offset <= yEpsilon) {
+                    ClearVerticalRestMotion(stopCoroutine: true);
+                    if (pos.y < targetY - yEpsilon) {
+                        return BeginVerticalRise(pos, targetWorld, onComplete);
+                    }
+
+                    positionRoot.position = new Vector3(targetWorld.x, targetY, targetWorld.z);
+                    onComplete?.Invoke();
+                    return 0f;
+                }
+
+                activeVerticalRestSession.Motion = motion;
+                return GravityMotion.ComputeRemainingAirtime(motion, gravity);
+            }
+
+            // Already rising: retarget end Y.
+            if (activeVerticalRestIsRise && rollCoroutine != null) {
+                if (delta > yEpsilon) {
+                    ClearVerticalRestMotion(stopCoroutine: true);
+                    return BeginVerticalFall(pos, targetWorld, gravity, onComplete);
+                }
+
+                activeVerticalRestRiseFromY = pos.y;
+                activeVerticalRestRiseElapsed = 0f;
+                activeVerticalRestRiseDuration = Mathf.Max(
+                    MinPhaseDuration,
+                    animationSettings.LiftDuration);
+                return activeVerticalRestRiseDuration;
+            }
+
+            // Spawn fall in progress: reuse spawn retarget (same vertical-to-rest idea).
+            if (activeSpawnFallSession != null) {
+                RetargetActiveSpawnLanding(toState);
+                var spawnMotion = activeSpawnFallSession.Motion;
+                return spawnMotion.IsGrounded
+                    ? 0f
+                    : GravityMotion.ComputeRemainingAirtime(
+                        spawnMotion,
+                        ResolveFallGravity(activeSpawnFallGravityScale));
+            }
+
+            if (rollCoroutine != null) {
+                StopCoroutine(rollCoroutine);
+                rollCoroutine = null;
+            }
+
+            isAnimating = false;
+            ClearVerticalRestMotion(stopCoroutine: false);
+
+            if (delta > yEpsilon) {
+                return BeginVerticalFall(pos, targetWorld, gravity, onComplete);
+            }
+
+            if (delta < -yEpsilon) {
+                return BeginVerticalRise(pos, targetWorld, onComplete);
+            }
+
+            positionRoot.position = targetWorld;
+            onComplete?.Invoke();
+            return 0f;
+        }
+
+        float BeginVerticalFall(
+            Vector3 fromWorld,
+            Vector3 targetWorld,
+            float gravity,
+            Action onComplete) {
+            var offset = Mathf.Max(0f, fromWorld.y - targetWorld.y);
+            activeVerticalRestIsRise = false;
+            activeVerticalRestSession = new GravityMotion.SpawnFallSession {
+                Motion = GravityMotion.CreateDrop(offset),
+                GroundWorldY = targetWorld.y
+            };
+            activeVerticalRestOnComplete = onComplete;
+            positionRoot.position = new Vector3(targetWorld.x, fromWorld.y, targetWorld.z);
+            isAnimating = true;
+            rollCoroutine = StartCoroutine(VerticalRestFallCoroutine());
+            return GravityMotion.ComputeDropDuration(offset, gravity);
+        }
+
+        float BeginVerticalRise(Vector3 fromWorld, Vector3 targetWorld, Action onComplete) {
+            activeVerticalRestIsRise = true;
+            activeVerticalRestSession = null;
+            activeVerticalRestRiseFromY = fromWorld.y;
+            activeVerticalRestRiseElapsed = 0f;
+            activeVerticalRestRiseDuration = Mathf.Max(
+                MinPhaseDuration,
+                animationSettings != null ? animationSettings.LiftDuration : 0.2f);
+            activeVerticalRestOnComplete = onComplete;
+            positionRoot.position = new Vector3(targetWorld.x, fromWorld.y, targetWorld.z);
+            isAnimating = true;
+            rollCoroutine = StartCoroutine(VerticalRestRiseCoroutine(targetWorld));
+            return activeVerticalRestRiseDuration;
+        }
+
+        IEnumerator VerticalRestFallCoroutine() {
+            if (activeVerticalRestSession == null || positionRoot == null) {
+                FinishVerticalRestMotion();
+                yield break;
+            }
+
+            var gravity = ResolveFallGravity(activeVerticalRestGravityScale);
+            while (activeVerticalRestSession != null && !activeVerticalRestSession.Motion.IsGrounded) {
+                var session = activeVerticalRestSession;
+                var motion = GravityMotion.Step(
+                    session.Motion,
+                    gravity,
+                    GameplaySimClock.DeltaTime);
+                session.Motion = motion;
+                activeVerticalRestSession = session;
+                var groundY = session.GroundWorldY;
+                var x = positionRoot.position.x;
+                var z = positionRoot.position.z;
+                positionRoot.position = new Vector3(x, groundY + motion.Offset, z);
+                yield return null;
+            }
+
+            if (positionRoot != null && activeVerticalRestSession != null) {
+                var p = positionRoot.position;
+                positionRoot.position = new Vector3(p.x, activeVerticalRestSession.GroundWorldY, p.z);
+            }
+
+            FinishVerticalRestMotion();
+        }
+
+        IEnumerator VerticalRestRiseCoroutine(Vector3 targetWorld) {
+            if (positionRoot == null) {
+                FinishVerticalRestMotion();
+                yield break;
+            }
+
+            var duration = Mathf.Max(MinPhaseDuration, activeVerticalRestRiseDuration);
+            while (activeVerticalRestIsRise && activeVerticalRestRiseElapsed < duration) {
+                activeVerticalRestRiseElapsed += GameplaySimClock.DeltaTime;
+                var u = Mathf.Clamp01(activeVerticalRestRiseElapsed / duration);
+                var y = Mathf.Lerp(activeVerticalRestRiseFromY, targetWorld.y, u);
+                // Allow retarget of end height mid-rise.
+                var endY = GetAnchoredWorldPosition(
+                    activeVerticalRestState,
+                    activeVerticalRestBoard,
+                    activeVerticalRestRegistry).y;
+                y = Mathf.Lerp(activeVerticalRestRiseFromY, endY, u);
+                positionRoot.position = new Vector3(targetWorld.x, y, targetWorld.z);
+                yield return null;
+            }
+
+            if (positionRoot != null) {
+                var end = GetAnchoredWorldPosition(
+                    activeVerticalRestState,
+                    activeVerticalRestBoard,
+                    activeVerticalRestRegistry);
+                positionRoot.position = end;
+            }
+
+            FinishVerticalRestMotion();
+        }
+
+        void FinishVerticalRestMotion() {
+            var complete = activeVerticalRestOnComplete;
+            var state = activeVerticalRestState;
+            var board = activeVerticalRestBoard;
+            var registry = activeVerticalRestRegistry;
+            isAnimating = false;
+            rollCoroutine = null;
+            ClearVerticalRestMotion(stopCoroutine: false);
+            if (board != null && positionRoot != null) {
+                SnapTo(state, board, registry);
+            }
+
+            complete?.Invoke();
+        }
+
+        void ClearVerticalRestMotion(bool stopCoroutine) {
+            if (stopCoroutine && rollCoroutine != null) {
+                StopCoroutine(rollCoroutine);
+                rollCoroutine = null;
+                isAnimating = false;
+            }
+
+            activeVerticalRestSession = null;
+            activeVerticalRestIsRise = false;
+            activeVerticalRestOnComplete = null;
+            activeVerticalRestBoard = null;
+            activeVerticalRestRegistry = null;
+            activeVerticalRestRiseElapsed = 0f;
+            activeVerticalRestRiseDuration = 0f;
+        }
+
         void CacheSpawnFallParams(
             DiceState state,
             Board board,
@@ -1264,6 +1501,8 @@ namespace DiceGame.View
             isAnimating = false;
             isEmergingVisual = false;
             visualYOffset = 0f;
+            // Drop vertical-rest / spawn-fall session bookkeeping; caller may start a new motion.
+            ClearVerticalRestMotion(stopCoroutine: false);
             return snapshot.IsValid;
         }
 

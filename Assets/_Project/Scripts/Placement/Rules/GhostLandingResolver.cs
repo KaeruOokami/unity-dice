@@ -46,6 +46,37 @@ namespace DiceGame.Placement
                 return true;
             }
 
+            // Ghost occupies slots: resolve swap/promote before solid empty-slot checks.
+            // Ascent Bottom → Top ghost.
+            if (fromTier == DiceStackTier.Bottom
+                && stackPolicy == SolidLandingStackPolicy.GridRoll
+                && registry.TryGetTopAt(targetCell, out var ascentTopGhost)
+                && GhostPlacementRules.TryResolveAscentGhostSwap(
+                    moverFrom,
+                    ascentTopGhost,
+                    out moverTo,
+                    out ghostFrom,
+                    out ghostTo)) {
+                landingTier = DiceStackTier.Top;
+                ghostLanding = GhostLandingMode.CellSwap;
+                return true;
+            }
+
+            // Top demoting onto ghost Bottom → same-cell promote (Top slot must be free).
+            if (fromTier == DiceStackTier.Top
+                && !registry.HasTopSlotClaimAt(targetCell)
+                && registry.TryGetBottomAt(targetCell, out var promoteGhostBottom)
+                && GhostPlacementRules.TryResolveInCellPromote(
+                    moverFrom,
+                    promoteGhostBottom,
+                    out moverTo,
+                    out ghostFrom,
+                    out ghostTo)) {
+                landingTier = DiceStackTier.Bottom;
+                ghostLanding = GhostLandingMode.InCellPromoteGhost;
+                return true;
+            }
+
             if (!SolidLandingTierResolver.TryResolve(
                 registry,
                 fromTier,
@@ -86,7 +117,7 @@ namespace DiceGame.Placement
                 return true;
             }
 
-            // Ascent Bottom → Top ghost: diagonal swap.
+            // Ascent Bottom → Top ghost (after solid Top slot selection).
             if (fromTier == DiceStackTier.Bottom
                 && landingTier == DiceStackTier.Top
                 && GhostPlacementRules.TryResolveAscentGhostSwap(

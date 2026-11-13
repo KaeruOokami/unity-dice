@@ -21,6 +21,15 @@ namespace DiceGame.Placement
             return dice != null && (dice.IsErasureGhost || dice.IsEmergingGhost);
         }
 
+        /// <summary>
+        /// Occupant is a player-solid Top surface (standing / coupled interrupt).
+        /// Pass-through Kind Ghost still occupies the slot
+        /// (<see cref="DiceRegistry.HasTopSlotClaimAt"/>); it only fails this interaction test.
+        /// </summary>
+        public static bool CountsAsSolidTopClaim(DiceController dice) {
+            return dice != null && !IsPlayerPassThrough(dice);
+        }
+
         public static bool AllowsDiceSwapThrough(DiceController dice) {
             return dice != null && dice.Capabilities.AllowsDiceSwapThrough;
         }
@@ -36,8 +45,7 @@ namespace DiceGame.Placement
         public static bool HasSolidTopAt(DiceRegistry registry, Vector2Int cell) {
             return registry != null
                 && registry.TryGetTopAt(cell, out var top)
-                && top != null
-                && !IsPlayerPassThrough(top);
+                && CountsAsSolidTopClaim(top);
         }
 
         public static bool HasSolidBottomAt(DiceRegistry registry, Vector2Int cell) {
@@ -48,9 +56,10 @@ namespace DiceGame.Placement
         }
 
         /// <summary>
-        /// Bottom slot is free for solid dice landing.
-        /// Kind-ghost pass-through and sink erasure ghosts (crushable) do not block.
-        /// Player occupancy still uses <see cref="HasSolidBottomAt"/> (sink ghost remains solid).
+        /// Bottom slot is free for solid dice landing (empty or crushable overwrite).
+        /// Kind Ghost occupies the slot — swap via <see cref="GhostLandingResolver"/>, not "empty".
+        /// Occupied solid Bottom is not placeable here — ascent uses <see cref="CanPlaceSolidTopAt"/>.
+        /// Interrupt promote is only at write time, not in this empty-slot check.
         /// </summary>
         public static bool CanPlaceSolidBottomAt(DiceRegistry registry, Vector2Int cell) {
             if (registry == null || registry.Board == null
@@ -61,14 +70,7 @@ namespace DiceGame.Placement
 
             if (registry.TryGetBottomAt(cell, out var bottom)
                 && bottom != null
-                && !IsPlayerPassThrough(bottom)
                 && !IsCrushableByDicePlacement(bottom)) {
-                return false;
-            }
-
-            if (registry.TryGetPendingBottomAt(cell, out var pending)
-                && pending != null
-                && !IsPlayerPassThrough(pending)) {
                 return false;
             }
 
@@ -76,16 +78,15 @@ namespace DiceGame.Placement
         }
 
         /// <summary>
-        /// Top slot is free for solid dice landing: solid Bottom present, no solid Top,
-        /// and no pending Top spawn (falling spawn reserves the slot for dice moves).
+        /// Top slot is free for solid dice landing: solid Bottom present, Top slot unclaimed.
+        /// Kind Ghost Top occupies the slot — ascent swap via <see cref="GhostLandingResolver"/>.
         /// Jumbo only accepts Top dice in Bottom-only sink stage (≤ half height).
         /// Sink erasure ghost Bottom is crushable Bottom-land only — not a stack base.
         /// </summary>
         public static bool CanPlaceSolidTopAt(DiceRegistry registry, Vector2Int cell) {
             if (registry == null
                 || !HasSolidBottomAt(registry, cell)
-                || HasSolidTopAt(registry, cell)
-                || registry.HasPendingTopAt(cell)) {
+                || registry.HasTopSlotClaimAt(cell)) {
                 return false;
             }
 
@@ -105,14 +106,14 @@ namespace DiceGame.Placement
         }
 
         /// <summary>
-        /// Bottom is present and Top is reserved by a pending spawn.
-        /// Dice-coupled entry must not claim that Top; player-only transfer to Bottom remains allowed.
-        /// Committed Top (including Ghost) is not blocked here — landing / ghost-swap rules handle that.
+        /// Coupled stack entry onto Top is blocked when a player-solid Top surface is claimed.
+        /// Pass-through Top still occupies the slot but is not a standing surface — grid swap
+        /// remains available through <see cref="GhostLandingResolver"/>.
         /// </summary>
         public static bool BlocksDiceCoupledStackEntry(DiceRegistry registry, Vector2Int cell) {
             return registry != null
                 && registry.HasBottomAt(cell)
-                && registry.HasPendingTopAt(cell);
+                && registry.HasSolidTopClaimAt(cell);
         }
 
         /// <summary>
