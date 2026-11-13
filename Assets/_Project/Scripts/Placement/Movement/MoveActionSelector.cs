@@ -3,9 +3,9 @@ using DiceGame.Core;
 namespace DiceGame.Placement
 {
     /// <summary>
-    /// Decision table: <see cref="MoveFacts"/> → exactly one <see cref="MoveAction"/>.
-    /// Player standing facts and dice-coupled facts are composed explicitly — neither gate
-    /// suppresses evaluation of the other; only the chosen action is exclusive.
+    /// Composes dice-entry and player-entry facts into one <see cref="MoveAction"/>.
+    /// Dice coupled intent and player standing transfer are evaluated as separate axes;
+    /// Mode only describes how dice probes were filled, not which axis may run.
     /// </summary>
     public static class MoveActionSelector
     {
@@ -14,35 +14,29 @@ namespace DiceGame.Placement
                 return MoveAction.ExpandedFootprintWalk;
             }
 
-            if (f.Mode == DiceStandingMoveMode.PlayerOnly
-                && f.FromLevel != SurfaceHeightLevel.Floor
-                && f.StandingDice != null) {
-                return SelectPlayerOnly(f);
-            }
-
-            var coupled = MoveAction.ContinueToLanding;
-            if ((f.Mode == DiceStandingMoveMode.Slide || f.Mode == DiceStandingMoveMode.Roll)
+            // --- Dice axis ---
+            var diceAction = MoveAction.ContinueToLanding;
+            if (JumpPlayerTransferPolicy.ShouldEvaluateDiceCoupledMovement(f.IsJumping, f.StandingDice)
                 && !f.BlocksDiceCoupledStackEntry) {
-                coupled = SelectCoupled(f);
+                diceAction = SelectCoupled(f);
             }
 
-            if (coupled != MoveAction.ContinueToLanding) {
-                return coupled;
+            if (diceAction != MoveAction.ContinueToLanding) {
+                return diceAction;
             }
 
-            // Dice-coupled partition did not claim the move (blocked from entering, or no
-            // coupled intent). Player standing on destination Top is an independent fact.
+            // --- Player axis (independent of dice stack-entry block) ---
             if (CanSelectPlayerTierLanding(f)) {
                 return MoveAction.TierLanding;
             }
 
-            return SelectLanding(f);
+            if (f.FromLevel != SurfaceHeightLevel.Floor && f.StandingDice != null) {
+                return SelectPlayerStanding(f);
+            }
+
+            return SelectFloorOrigin(f);
         }
 
-        /// <summary>
-        /// Player-only climb onto a solid Top while the standing dice stays behind.
-        /// Independent of <see cref="MoveFacts.BlocksDiceCoupledStackEntry"/>.
-        /// </summary>
         static bool CanSelectPlayerTierLanding(in MoveFacts f) {
             return f.CanTierLand
                 && f.IsJumping
@@ -50,12 +44,16 @@ namespace DiceGame.Placement
                 && f.StandingDice != null;
         }
 
-        static MoveAction SelectPlayerOnly(in MoveFacts f) {
+        /// <summary>
+        /// Player leaving a standing die: walk / jump descent / same-level move / height transfer.
+        /// Solo-leave surfaces (Iron, stuck Magnet, sink) use the shared descent fact.
+        /// </summary>
+        static MoveAction SelectPlayerStanding(in MoveFacts f) {
             if (f.Relation == MoveLevelRelation.BottomToTop) {
                 return f.CanTierLand ? MoveAction.TierLanding : MoveAction.Blocked;
             }
 
-            if (JumpPlayerTransferPolicy.BlocksGroundLowerLevelTransfer(
+            if (JumpPlayerTransferPolicy.BlocksPlayerDescentFromStanding(
                 f.IsJumping,
                 f.FromLevel,
                 f.TargetLevel,
@@ -70,28 +68,45 @@ namespace DiceGame.Placement
                         : MoveAction.PlayerWalk;
                 }
 
-                if (JumpPlayerTransferPolicy.BlocksPlayerOnlyJumpLowerLevelTransfer(
-                    f.IsJumping,
-                    f.FromLevel,
-                    f.TargetLevel,
-                    f.StandingDice)) {
-                    return MoveAction.Blocked;
+                if (f.IsPlayerFloorPassable) {
+                    return MoveAction.PlayerWalkFloor;
                 }
 
                 if (f.TargetLevel == SurfaceHeightLevel.Floor) {
-                    return MoveAction.PlayerWalkFloor;
+                    return f.WithinReachDescentOnly || f.IsJumping
+                        ? MoveAction.PlayerWalkFloor
+                        : MoveAction.Blocked;
+                }
+
+                // Coupleable / movable standing: height transfer owns same-stack ride and steps.
+                if (JumpPlayerTransferPolicy.ShouldEvaluateDiceCoupledMovement(f.IsJumping, f.StandingDice)
+                    || f.Mode == DiceStandingMoveMode.None) {
+                    return MoveAction.HeightTransfer;
                 }
 
                 return f.WithinReachDescentOnly ? MoveAction.PlayerWalk : MoveAction.Blocked;
             }
 
+            if (f.IsPlayerFloorPassable) {
+                if (f.IsJumping
+                    && f.StandingDice.CanJumpCoupleWithPlayer
+                    && !JumpPlayerTransferPolicy.IsSoloLeaveStandingSurface(f.StandingDice)) {
+                    return MoveAction.Blocked;
+                }
+
+                return MoveAction.PlayerWalkFloor;
+            }
+
+            // Same / ascent while dice did not claim a coupled move.
+            if (JumpPlayerTransferPolicy.ShouldEvaluateDiceCoupledMovement(f.IsJumping, f.StandingDice)
+                || f.Mode == DiceStandingMoveMode.Slide
+                || f.Mode == DiceStandingMoveMode.Roll) {
+                return MoveAction.HeightTransfer;
+            }
+
             return f.WithinReachFull ? MoveAction.PlayerWalk : MoveAction.Blocked;
         }
 
-        /// <summary>
-        /// L2 table. Exclusive rows by mode; missing coupled intent → landing table.
-        /// Ice with no displacement selects ContinueToLanding so HeightTransfer owns same-tier ride.
-        /// </summary>
         static MoveAction SelectCoupled(in MoveFacts f) {
             return f.Mode switch {
                 DiceStandingMoveMode.Slide => SelectSlide(f),
@@ -140,25 +155,14 @@ namespace DiceGame.Placement
             return MoveAction.ContinueToLanding;
         }
 
-        static MoveAction SelectLanding(in MoveFacts f) {
+        static MoveAction SelectFloorOrigin(in MoveFacts f) {
             if (f.IsPlayerFloorPassable) {
-                if (f.IsJumping
-                    && f.FromLevel != SurfaceHeightLevel.Floor
-                    && f.StandingDice != null
-                    && f.StandingDice.CanJumpCoupleWithPlayer) {
-                    return MoveAction.Blocked;
-                }
-
                 return MoveAction.PlayerWalkFloor;
             }
 
-            if (f.FromLevel == SurfaceHeightLevel.Floor) {
-                return f.FloorMountBottomDice != null
-                    ? MoveAction.FloorToBottomMount
-                    : MoveAction.Blocked;
-            }
-
-            return MoveAction.HeightTransfer;
+            return f.FloorMountBottomDice != null
+                ? MoveAction.FloorToBottomMount
+                : MoveAction.Blocked;
         }
     }
 }

@@ -26,11 +26,13 @@ namespace DiceGame.Placement
                 ? registry.GetTransferTargetAt(standingDice, fromCell, direction, fromLevel)
                 : null;
 
+            // Dice axis: effective couple + movable, not static CanGridRoll (stuck Magnet).
             var preferCoupledGridRoll = isJumping
                 && allowJumpGridMove
                 && standingDice != null
-                && standingDice.Capabilities.CanGridRoll
-                && standingDice.CanJumpCoupleWithPlayer;
+                && standingDice.IsPlayerMovable
+                && standingDice.CanJumpCoupleWithPlayer
+                && !JumpPlayerTransferPolicy.IsSoloLeaveStandingSurface(standingDice);
 
             var canSameTier = false;
             MovementTransition sameTierTransition = default;
