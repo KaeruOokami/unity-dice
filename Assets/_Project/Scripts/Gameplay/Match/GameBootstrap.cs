@@ -78,6 +78,7 @@ namespace DiceGame.Gameplay
         [SerializeField] DiceOneVanishSettings diceOneVanishSettings;
         [SerializeField] DiceSpawnSettings diceSpawnSettings;
         [SerializeField] DiceCatalog diceCatalog;
+        [SerializeField] DiceMeshCatalog diceMeshCatalog;
         [SerializeField] AiPlayerSettings aiPlayerSettings;
         [SerializeField] AttackQueueSettings attackQueueSettings;
         [SerializeField] MatchIntroSettings matchIntroSettings;
@@ -431,6 +432,7 @@ namespace DiceGame.Gameplay
                     spawnRandom,
                     transform,
                     attackQueueSettings,
+                    ResolveDiceMeshCatalog(),
                     matchSeriesSettings.QueueToBoardDelay,
                     diceVfxSettings,
                     reverseModeController);
@@ -685,6 +687,7 @@ namespace DiceGame.Gameplay
                     registry,
                     diceEntityPrefab,
                     plumbingCatalog,
+                    ResolveDiceMeshCatalog(),
                     transform,
                     physicsSettings,
                     diceAnimationSettings,
@@ -705,6 +708,7 @@ namespace DiceGame.Gameplay
                     registry,
                     diceEntityPrefab,
                     versusSettings.Player1.DiceCatalog,
+                    ResolveDiceMeshCatalog(),
                     transform,
                     physicsSettings,
                     diceAnimationSettings,
@@ -734,6 +738,7 @@ namespace DiceGame.Gameplay
                 registry,
                 diceEntityPrefab,
                 resolvedSetup.SharedDiceCatalog,
+                ResolveDiceMeshCatalog(),
                 transform,
                 physicsSettings,
                 diceAnimationSettings,
@@ -745,6 +750,20 @@ namespace DiceGame.Gameplay
                 resolvedSetup.SharedSpawnSettings,
                 spawnRandom);
             return true;
+        }
+
+        DiceMeshCatalog ResolveDiceMeshCatalog() {
+            if (diceMeshCatalog != null) {
+                return diceMeshCatalog;
+            }
+
+            var fromRegistry = FindPresetRegistry()?.DiceMeshCatalog;
+            if (fromRegistry != null) {
+                return fromRegistry;
+            }
+
+            Debug.LogError("GameBootstrap: DiceMeshCatalog is not assigned.");
+            return null;
         }
 
         MatchSeriesSettings ResolveMatchSeriesSettings() {

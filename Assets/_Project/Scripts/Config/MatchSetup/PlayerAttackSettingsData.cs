@@ -36,7 +36,9 @@ namespace DiceGame.Config
         public float Face6Weight;
         public Color ErasureEmissionColor;
 
-        public static PlayerAttackSettingsData FromTemplate(PlayerAttackSettings template) {
+        public static PlayerAttackSettingsData FromTemplate(
+            PlayerAttackSettings template,
+            PlayerAttackPresentationSettings presentation = null) {
             if (template == null) {
                 return Default();
             }
@@ -80,8 +82,14 @@ namespace DiceGame.Config
                 Face4Weight = template.GetFaceWeight(4),
                 Face5Weight = template.GetFaceWeight(5),
                 Face6Weight = template.GetFaceWeight(6),
-                ErasureEmissionColor = template.ErasureEmissionColor
+                ErasureEmissionColor = presentation != null
+                    ? presentation.ErasureEmissionColor
+                    : Color.white
             };
+        }
+
+        public PlayerAttackPresentationSettings ToRuntimePresentation() {
+            return PlayerAttackPresentationSettings.CreateRuntime(ErasureEmissionColor);
         }
 
         public static PlayerAttackSettingsData Default() {

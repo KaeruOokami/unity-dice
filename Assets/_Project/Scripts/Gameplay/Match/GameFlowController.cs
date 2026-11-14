@@ -203,8 +203,11 @@ namespace DiceGame.Gameplay
             return true;
         }
 
-        static PlayerAttackSettingsData[] BuildChallengeOpponentAttacks(ChallengeModeSettings challengeSettings)
+        PlayerAttackSettingsData[] BuildChallengeOpponentAttacks(ChallengeModeSettings challengeSettings)
         {
+            var catalog = sessionController != null
+                ? sessionController.MatchSetupPresetRegistry?.AttackDefaultPresetCatalog
+                : null;
             var source = challengeSettings.OpponentAttacksByMatch;
             var list = new List<PlayerAttackSettingsData>();
             for (var i = 0; i < source.Length; i++)
@@ -214,7 +217,10 @@ namespace DiceGame.Gameplay
                     continue;
                 }
 
-                list.Add(PlayerAttackSettingsData.FromTemplate(source[i]));
+                list.Add(
+                    catalog != null
+                        ? catalog.ToData(source[i])
+                        : PlayerAttackSettingsData.FromTemplate(source[i]));
             }
 
             return list.ToArray();

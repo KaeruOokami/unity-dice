@@ -175,13 +175,14 @@ namespace DiceGame.Gameplay
                 return true;
             }
 
-            var attack = versusSettings.GetAttackSettings(initiator);
-            if (attack == null) {
-                Debug.LogError($"DiceOneVanishSystem: Attack settings are missing for {initiator}.");
+            var presentation = versusSettings.GetAttackPresentation(initiator);
+            if (presentation == null) {
+                Debug.LogError(
+                    $"DiceOneVanishSystem: Attack presentation is missing for {initiator}.");
                 return false;
             }
 
-            emissionColor = attack.ErasureEmissionColor;
+            emissionColor = presentation.ErasureEmissionColor;
             return true;
         }
 

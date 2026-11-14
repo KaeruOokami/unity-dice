@@ -169,7 +169,7 @@ namespace DiceGame.Config
                     spawn: DiceSpawnSettingsData.FromTemplate(board.Player1.SpawnSettings)
                         .WithInitialDiceCount(sharedInitialDiceCount),
                     catalog: DiceCatalogData.FromTemplate(board.Player1.DiceCatalog),
-                    attack: PlayerAttackSettingsData.FromTemplate(playerAttack),
+                    attack: ResolveAttackData(registry, playerAttack),
                     naturalSend: PlayerNaturalSendSettingsData.FromTemplate(board.Player1.NaturalSendSettings)),
                 Player2 = PlayerSlotSetup.CreateDefault(
                     isAi: true,
@@ -177,7 +177,7 @@ namespace DiceGame.Config
                     spawn: DiceSpawnSettingsData.FromTemplate(board.Player2.SpawnSettings)
                         .WithInitialDiceCount(sharedInitialDiceCount),
                     catalog: DiceCatalogData.FromTemplate(board.Player2.DiceCatalog),
-                    attack: PlayerAttackSettingsData.FromTemplate(opponentAttack),
+                    attack: ResolveAttackData(registry, opponentAttack),
                     naturalSend: PlayerNaturalSendSettingsData.FromTemplate(board.Player2.NaturalSendSettings))
             };
             snapshot.NormalizeVersusSharedInitialDiceCount();
@@ -190,6 +190,17 @@ namespace DiceGame.Config
 
             errorMessage = null;
             return true;
+        }
+
+        static PlayerAttackSettingsData ResolveAttackData(
+            MatchSetupPresetRegistry registry,
+            PlayerAttackSettings attack) {
+            var catalog = registry != null ? registry.AttackDefaultPresetCatalog : null;
+            if (catalog != null) {
+                return catalog.ToData(attack);
+            }
+
+            return PlayerAttackSettingsData.FromTemplate(attack);
         }
     }
 }

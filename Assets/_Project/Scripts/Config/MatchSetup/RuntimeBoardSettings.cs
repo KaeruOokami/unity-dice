@@ -25,6 +25,7 @@ namespace DiceGame.Config
                 player1Spawn.ToRuntimeAsset(),
                 player1Setup.Catalog.ToRuntimeAsset(),
                 player1Setup.Attack.ToRuntimeAsset(),
+                player1Setup.Attack.ToRuntimePresentation(),
                 player1Setup.NaturalSend.ToRuntimeAsset());
             player2 = new PlayerBoardDefinition(
                 template.Player2.Width,
@@ -32,6 +33,7 @@ namespace DiceGame.Config
                 player2Spawn.ToRuntimeAsset(),
                 player2Setup.Catalog.ToRuntimeAsset(),
                 player2Setup.Attack.ToRuntimeAsset(),
+                player2Setup.Attack.ToRuntimePresentation(),
                 player2Setup.NaturalSend.ToRuntimeAsset());
             jumboDiceSettings = jumboSetup.ToRuntimeAsset();
         }
@@ -54,6 +56,10 @@ namespace DiceGame.Config
 
         public PlayerAttackSettings GetAttackSettings(PlayerSlot slot) {
             return slot == PlayerSlot.Player1 ? player1.AttackSettings : player2.AttackSettings;
+        }
+
+        public PlayerAttackPresentationSettings GetAttackPresentation(PlayerSlot slot) {
+            return slot == PlayerSlot.Player1 ? player1.AttackPresentation : player2.AttackPresentation;
         }
 
         public DiceCatalog GetDiceCatalog(PlayerSlot slot) {
@@ -91,6 +97,12 @@ namespace DiceGame.Config
 
             if (player1.AttackSettings == null || player2.AttackSettings == null) {
                 errorMessage = "RuntimeBoardSettings: Each player requires PlayerAttackSettings.";
+                return false;
+            }
+
+            if (player1.AttackPresentation == null || player2.AttackPresentation == null) {
+                errorMessage =
+                    "RuntimeBoardSettings: Each player requires PlayerAttackPresentationSettings.";
                 return false;
             }
 

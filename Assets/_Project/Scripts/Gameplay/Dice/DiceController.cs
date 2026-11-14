@@ -21,7 +21,7 @@ namespace DiceGame.Gameplay
         DiceRegistry registry;
         PlayerMatchActionContext matchActionContext;
         DiceMatchOwnershipContext ownershipContext;
-        DiceCatalog kindMeshCatalog;
+        DiceMeshCatalog kindMeshCatalog;
         ITierFallMatchNotifier tierFallMatchNotifier;
         ICarryTopMountMatchNotifier carryTopMountMatchNotifier;
         DiceState currentState;
@@ -106,9 +106,11 @@ namespace DiceGame.Gameplay
         public bool IsBusy => IsRolling || isSpawning || IsErasing || isVanishing || isCarried;
         public DiceState CurrentState => currentState;
         /// <summary>
-        /// Top face for match / erasure / facing rules (respects global reverse labels).
+        /// Match / erasure / one-vanish face.
+        /// Order: physical Top → Kind policy → reverse-mode session modifier.
         /// </summary>
-        public int MatchFace => DiceFaceLabels.ResolveMatchFace(currentState.Orientation.Top);
+        public int MatchFace =>
+            DiceFaceLabels.ResolveMatchFace(Behavior.ResolveMatchFace(currentState.Orientation.Top));
         public DiceKind Kind => currentState.Kind;
         public IDiceBehavior Behavior => DiceBehaviorResolver.GetBehavior(Kind);
         public DiceCapabilities Capabilities => Behavior.Capabilities;
@@ -381,7 +383,7 @@ namespace DiceGame.Gameplay
             ownershipContext = targetOwnershipContext;
         }
 
-        public void ConfigureKindMeshCatalog(DiceCatalog catalog) {
+        public void ConfigureKindMeshCatalog(DiceMeshCatalog catalog) {
             kindMeshCatalog = catalog;
         }
 

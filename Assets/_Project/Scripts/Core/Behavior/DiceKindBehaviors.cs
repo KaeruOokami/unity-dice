@@ -24,6 +24,34 @@ namespace DiceGame.Core
             rollDurationMultiplier: DiceBehaviorConstants.DefaultRollDurationMultiplier);
     }
 
+    /// <summary>
+    /// Same movement/capabilities as Normal; match face is the opposite of the physical top.
+    /// </summary>
+    public sealed class ReverseDiceBehavior : DiceBehaviorBase
+    {
+        public static readonly ReverseDiceBehavior Instance = new();
+
+        ReverseDiceBehavior() {
+        }
+
+        public override DiceKind Kind => DiceKind.Reverse;
+
+        public override DiceCapabilities Capabilities { get; } = new(
+            canBePushedByPlayer: true,
+            canBeLiftedByPlayer: true,
+            canJumpCoupleWithPlayer: true,
+            pushUsesRoll: false,
+            canGridRoll: true,
+            slideUntilBlocked: false,
+            hasMagnetCoupling: false,
+            hasSpawnBounce: true,
+            rollDurationMultiplier: DiceBehaviorConstants.DefaultRollDurationMultiplier);
+
+        public override int ResolveMatchFace(int topFace) {
+            return DiceOrientation.OppositeFace(topFace);
+        }
+    }
+
     public sealed class WoodDiceBehavior : DiceBehaviorBase
     {
         public static readonly WoodDiceBehavior Instance = new();

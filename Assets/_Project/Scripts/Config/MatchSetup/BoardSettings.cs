@@ -19,6 +19,7 @@ namespace DiceGame.Config
         [SerializeField] DiceSpawnSettings spawnSettings;
         [SerializeField] DiceCatalog diceCatalog;
         [SerializeField] PlayerAttackSettings attackSettings;
+        [SerializeField] PlayerAttackPresentationSettings attackPresentation;
         [SerializeField] PlayerNaturalSendSettings naturalSendSettings;
 
         public PlayerBoardDefinition(
@@ -27,12 +28,14 @@ namespace DiceGame.Config
             DiceSpawnSettings spawn,
             DiceCatalog catalog,
             PlayerAttackSettings attack,
+            PlayerAttackPresentationSettings presentation,
             PlayerNaturalSendSettings naturalSend) {
             width = boardWidth;
             height = boardHeight;
             spawnSettings = spawn;
             diceCatalog = catalog;
             attackSettings = attack;
+            attackPresentation = presentation;
             naturalSendSettings = naturalSend;
         }
 
@@ -41,6 +44,7 @@ namespace DiceGame.Config
         public DiceSpawnSettings SpawnSettings => spawnSettings;
         public DiceCatalog DiceCatalog => diceCatalog;
         public PlayerAttackSettings AttackSettings => attackSettings;
+        public PlayerAttackPresentationSettings AttackPresentation => attackPresentation;
         public PlayerNaturalSendSettings NaturalSendSettings => naturalSendSettings;
     }
 
@@ -58,8 +62,8 @@ namespace DiceGame.Config
         [SerializeField] int sharedInitialDiceCount = 15;
 
         [Header("Versus")]
-        [SerializeField] PlayerBoardDefinition player1 = new(4, 6, null, null, null, null);
-        [SerializeField] PlayerBoardDefinition player2 = new(4, 6, null, null, null, null);
+        [SerializeField] PlayerBoardDefinition player1 = new(4, 6, null, null, null, null, null);
+        [SerializeField] PlayerBoardDefinition player2 = new(4, 6, null, null, null, null, null);
         [SerializeField] VersusInitialDicePlacementMode initialDicePlacementMode =
             VersusInitialDicePlacementMode.Mirrored;
         [SerializeField] JumboDiceSettings jumboDiceSettings;
@@ -115,6 +119,12 @@ namespace DiceGame.Config
             return definition.AttackSettings;
         }
 
+        public PlayerAttackPresentationSettings GetAttackPresentation(PlayerSlot slot)
+        {
+            var definition = slot == PlayerSlot.Player1 ? player1 : player2;
+            return definition.AttackPresentation;
+        }
+
         public DiceCatalog GetDiceCatalog(PlayerSlot slot)
         {
             var definition = slot == PlayerSlot.Player1 ? player1 : player2;
@@ -163,6 +173,13 @@ namespace DiceGame.Config
             if (player1.AttackSettings == null || player2.AttackSettings == null)
             {
                 errorMessage = "BoardSettings: Each player requires PlayerAttackSettings.";
+                return false;
+            }
+
+            if (player1.AttackPresentation == null || player2.AttackPresentation == null)
+            {
+                errorMessage =
+                    "BoardSettings: Each player requires PlayerAttackPresentationSettings.";
                 return false;
             }
 

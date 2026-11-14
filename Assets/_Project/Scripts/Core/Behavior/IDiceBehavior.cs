@@ -9,6 +9,12 @@ namespace DiceGame.Core
         DiceKind Kind { get; }
         DiceCapabilities Capabilities { get; }
 
+        /// <summary>
+        /// Maps physical top face to the face used for match / erasure / one-vanish.
+        /// Default is identity; Reverse uses opposite faces.
+        /// </summary>
+        int ResolveMatchFace(int topFace);
+
         DiceStandingMoveMode ResolveStandingMoveMode(
             bool isJumping,
             bool isPlayerMovable,

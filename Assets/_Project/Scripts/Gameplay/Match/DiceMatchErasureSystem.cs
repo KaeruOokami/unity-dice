@@ -527,13 +527,14 @@ namespace DiceGame.Gameplay
                 return true;
             }
 
-            var attack = versusSettings.GetAttackSettings(attacker);
-            if (attack == null) {
-                Debug.LogError($"DiceMatchErasureSystem: Attack settings are missing for {attacker}.");
+            var presentation = versusSettings.GetAttackPresentation(attacker);
+            if (presentation == null) {
+                Debug.LogError(
+                    $"DiceMatchErasureSystem: Attack presentation is missing for {attacker}.");
                 return false;
             }
 
-            emissionColor = attack.ErasureEmissionColor;
+            emissionColor = presentation.ErasureEmissionColor;
             return true;
         }
 

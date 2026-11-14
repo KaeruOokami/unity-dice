@@ -9,8 +9,7 @@ namespace DiceGame.View
 {
     public class AttackQueueView : MonoBehaviour
     {
-        DiceCatalog player1Catalog;
-        DiceCatalog player2Catalog;
+        DiceMeshCatalog meshCatalog;
         AttackQueueSettings settings;
         DiceIconGenerator iconGenerator;
         Canvas canvas;
@@ -133,11 +132,9 @@ namespace DiceGame.View
         }
 
         public void Configure(
-            DiceCatalog targetPlayer1Catalog,
-            DiceCatalog targetPlayer2Catalog,
+            DiceMeshCatalog targetMeshCatalog,
             AttackQueueSettings targetSettings) {
-            player1Catalog = targetPlayer1Catalog;
-            player2Catalog = targetPlayer2Catalog;
+            meshCatalog = targetMeshCatalog;
             settings = targetSettings != null
                 ? targetSettings
                 : AttackQueueSettings.CreateRuntimeFallback();
@@ -161,8 +158,8 @@ namespace DiceGame.View
                 return;
             }
 
-            RenderForSlot(PlayerSlot.Player1, player1Volleys, player1Catalog, player1Panel);
-            RenderForSlot(PlayerSlot.Player2, player2Volleys, player2Catalog, player2Panel);
+            RenderForSlot(PlayerSlot.Player1, player1Volleys, player1Panel);
+            RenderForSlot(PlayerSlot.Player2, player2Volleys, player2Panel);
         }
 
         /// <summary>
@@ -214,7 +211,7 @@ namespace DiceGame.View
         }
 
         IEnumerator PrewarmIconsRoutine(int generation) {
-            var meshes = CollectUniqueMeshPrefabs(player1Catalog, player2Catalog);
+            var meshes = CollectUniqueMeshPrefabs(meshCatalog);
             var perFrame = settings.IconPrewarmPerFrame;
             var warmedThisFrame = 0;
 
@@ -248,20 +245,11 @@ namespace DiceGame.View
             prewarmRoutine = null;
         }
 
-        static List<GameObject> CollectUniqueMeshPrefabs(DiceCatalog catalogA, DiceCatalog catalogB) {
+        static List<GameObject> CollectUniqueMeshPrefabs(DiceMeshCatalog catalog) {
             var meshes = new List<GameObject>();
             var seenIds = new HashSet<int>();
-            AppendCatalogMeshes(catalogA, meshes, seenIds);
-            AppendCatalogMeshes(catalogB, meshes, seenIds);
-            return meshes;
-        }
-
-        static void AppendCatalogMeshes(
-            DiceCatalog catalog,
-            List<GameObject> meshes,
-            HashSet<int> seenIds) {
             if (catalog?.Entries == null) {
-                return;
+                return meshes;
             }
 
             for (var i = 0; i < catalog.Entries.Length; i++) {
@@ -277,6 +265,8 @@ namespace DiceGame.View
 
                 meshes.Add(meshPrefab);
             }
+
+            return meshes;
         }
 
         void EnsureUi() {
@@ -310,10 +300,9 @@ namespace DiceGame.View
         void RenderForSlot(
             PlayerSlot defenderSlot,
             IReadOnlyList<AttackVolley> volleys,
-            DiceCatalog catalog,
             RectTransform panel) {
             ClearPanel(panel);
-            if (catalog == null || panel == null || volleys == null || volleys.Count == 0) {
+            if (meshCatalog == null || panel == null || volleys == null || volleys.Count == 0) {
                 return;
             }
 
@@ -332,7 +321,7 @@ namespace DiceGame.View
                 var iconCount = 0;
                 for (var row = 0; row < volley.Count; row++) {
                     var spec = volley.Dice[row];
-                    if (!catalog.TryGetMeshPrefab(spec.Kind, out var meshPrefab) || meshPrefab == null) {
+                    if (!meshCatalog.TryGetMeshPrefab(spec.Kind, out var meshPrefab) || meshPrefab == null) {
                         Debug.LogWarning(
                             $"[QueueView] defender={defenderSlot} volley={oldestFirstIndex} row={row} " +
                             $"meshMissing kind={spec.Kind}");

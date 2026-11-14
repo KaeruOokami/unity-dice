@@ -89,7 +89,6 @@ namespace DiceGame.Session
 
                 entries[i] = new DiceCatalogEntryData {
                     Kind = bindings.BaseEntries[i].Kind,
-                    MeshPrefab = bindings.BaseEntries[i].MeshPrefab,
                     SpawnWeight = weight,
                     IgniteOnSpawn = ignite
                 };

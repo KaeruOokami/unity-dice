@@ -13,15 +13,18 @@ namespace DiceGame.Session
         public AttackPresetListEntry(
             AttackPresetKind kind,
             string name,
-            PlayerAttackSettings defaultSource = null) {
+            PlayerAttackSettings defaultSource = null,
+            PlayerAttackPresentationSettings defaultPresentation = null) {
             Kind = kind;
             Name = name;
             DefaultSource = defaultSource;
+            DefaultPresentation = defaultPresentation;
         }
 
         public AttackPresetKind Kind { get; }
         public string Name { get; }
         public PlayerAttackSettings DefaultSource { get; }
+        public PlayerAttackPresentationSettings DefaultPresentation { get; }
 
         public string DropdownLabel =>
             Kind == AttackPresetKind.Default

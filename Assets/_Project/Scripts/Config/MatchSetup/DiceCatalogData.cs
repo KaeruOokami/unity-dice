@@ -1,6 +1,5 @@
 using System;
 using DiceGame.Core;
-using UnityEngine;
 
 namespace DiceGame.Config
 {
@@ -8,7 +7,6 @@ namespace DiceGame.Config
     public struct DiceCatalogEntryData
     {
         public DiceKind Kind;
-        public GameObject MeshPrefab;
         public float SpawnWeight;
         public bool IgniteOnSpawn;
     }
@@ -27,7 +25,6 @@ namespace DiceGame.Config
             for (var i = 0; i < source.Length; i++) {
                 entries[i] = new DiceCatalogEntryData {
                     Kind = source[i].Kind,
-                    MeshPrefab = source[i].MeshPrefab,
                     SpawnWeight = source[i].SpawnWeight,
                     IgniteOnSpawn = source[i].IgniteOnSpawn
                 };
@@ -38,30 +35,6 @@ namespace DiceGame.Config
 
         public static DiceCatalogData Empty() {
             return new DiceCatalogData { Entries = Array.Empty<DiceCatalogEntryData>() };
-        }
-
-        public DiceCatalogData WithMeshesFrom(DiceCatalog meshSource) {
-            if (Entries == null || Entries.Length == 0) {
-                return Empty();
-            }
-
-            var result = new DiceCatalogEntryData[Entries.Length];
-            for (var i = 0; i < Entries.Length; i++) {
-                var entry = Entries[i];
-                GameObject mesh = null;
-                if (meshSource != null) {
-                    meshSource.TryGetMeshPrefab(entry.Kind, out mesh);
-                }
-
-                result[i] = new DiceCatalogEntryData {
-                    Kind = entry.Kind,
-                    MeshPrefab = mesh ?? entry.MeshPrefab,
-                    SpawnWeight = entry.SpawnWeight,
-                    IgniteOnSpawn = entry.IgniteOnSpawn
-                };
-            }
-
-            return new DiceCatalogData { Entries = result };
         }
 
         public DiceCatalog ToRuntimeAsset() {
@@ -82,13 +55,13 @@ namespace DiceGame.Config
                     return false;
                 }
 
-                if (entry.SpawnWeight > 0f && entry.MeshPrefab != null) {
+                if (entry.SpawnWeight > 0f) {
                     hasEligible = true;
                 }
             }
 
             if (!hasEligible) {
-                errorMessage = "DiceCatalog: At least one entry with SpawnWeight > 0 and a MeshPrefab is required.";
+                errorMessage = "DiceCatalog: At least one entry with SpawnWeight > 0 is required.";
                 return false;
             }
 

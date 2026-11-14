@@ -37,5 +37,9 @@ namespace DiceGame.Core
         public DicePushMoveStyle ResolvePushStyle() {
             return Base.ResolvePushStyle();
         }
+
+        public int ResolveMatchFace(int topFace) {
+            return Base.ResolveMatchFace(topFace);
+        }
     }
 }

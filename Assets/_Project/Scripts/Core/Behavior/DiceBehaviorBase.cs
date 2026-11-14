@@ -5,6 +5,10 @@ namespace DiceGame.Core
         public abstract DiceKind Kind { get; }
         public abstract DiceCapabilities Capabilities { get; }
 
+        public virtual int ResolveMatchFace(int topFace) {
+            return topFace;
+        }
+
         public virtual DiceStandingMoveMode ResolveStandingMoveMode(
             bool isJumping,
             bool isPlayerMovable,

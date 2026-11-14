@@ -11,6 +11,7 @@ namespace DiceGame.Core
         Ghost,
         Jumbo,
         Charcoal,
-        RedHot
+        RedHot,
+        Reverse
     }
 }

@@ -18,6 +18,8 @@ namespace DiceGame.Editor
             "Assets/_Project/Settings/Gameplay/MatchSetup/Spawn/SharedDiceSpawnSettings.asset";
         const string DiceCatalogPath =
             "Assets/_Project/Settings/Gameplay/MatchSetup/Catalog/SharedDiceCatalog.asset";
+        const string DiceMeshCatalogPath =
+            "Assets/_Project/Settings/Gameplay/Dice/DiceMeshCatalog.asset";
 
         const string WoodDicePrefabPath = "Assets/_Project/Prefabs/Dice/Wood Dice.prefab";
         const string IronDicePrefabPath = "Assets/_Project/Prefabs/Dice/Iron Dice.prefab";
@@ -27,6 +29,7 @@ namespace DiceGame.Editor
         const string GhostDicePrefabPath = "Assets/_Project/Prefabs/Dice/Ghost Dice.prefab";
         const string CharcoalDicePrefabPath = "Assets/_Project/Prefabs/Dice/Coal Dice.prefab";
         const string RedHotDicePrefabPath = "Assets/_Project/Prefabs/Dice/Red Hot Dice.prefab";
+        const string ReverseDicePrefabPath = "Assets/_Project/Prefabs/Dice/Reverse Dice.prefab";
 
         [MenuItem("Dice/Create DiceEntity Prefab")]
         public static void CreateDiceEntityPrefab() {
@@ -88,17 +91,18 @@ namespace DiceGame.Editor
             var catalog = ScriptableObject.CreateInstance<DiceCatalog>();
             var serialized = new SerializedObject(catalog);
             var entries = serialized.FindProperty("entries");
-            entries.arraySize = 10;
-            SetCatalogEntry(entries, 0, DiceKind.Normal, NormalDicePrefabPath, 5f);
-            SetCatalogEntry(entries, 1, DiceKind.Wood, WoodDicePrefabPath, 2f);
-            SetCatalogEntry(entries, 2, DiceKind.Iron, IronDicePrefabPath, 1f);
-            SetCatalogEntry(entries, 3, DiceKind.Magnet, MagnetDicePrefabPath, 1f);
-            SetCatalogEntry(entries, 4, DiceKind.Ice, IceDicePrefabPath, 1.5f);
-            SetCatalogEntry(entries, 5, DiceKind.Stone, StoneDicePrefabPath, 1.5f);
-            SetCatalogEntry(entries, 6, DiceKind.Ghost, GhostDicePrefabPath, 1f);
-            SetCatalogEntry(entries, 7, DiceKind.Jumbo, NormalDicePrefabPath, 0f);
-            SetCatalogEntry(entries, 8, DiceKind.Charcoal, CharcoalDicePrefabPath, 0f);
-            SetCatalogEntry(entries, 9, DiceKind.RedHot, RedHotDicePrefabPath, 0f);
+            entries.arraySize = 11;
+            SetCatalogEntry(entries, 0, DiceKind.Normal, 5f);
+            SetCatalogEntry(entries, 1, DiceKind.Wood, 2f);
+            SetCatalogEntry(entries, 2, DiceKind.Iron, 1f);
+            SetCatalogEntry(entries, 3, DiceKind.Magnet, 1f);
+            SetCatalogEntry(entries, 4, DiceKind.Ice, 1.5f);
+            SetCatalogEntry(entries, 5, DiceKind.Stone, 1.5f);
+            SetCatalogEntry(entries, 6, DiceKind.Ghost, 1f);
+            SetCatalogEntry(entries, 7, DiceKind.Jumbo, 0f);
+            SetCatalogEntry(entries, 8, DiceKind.Charcoal, 0f);
+            SetCatalogEntry(entries, 9, DiceKind.RedHot, 0f);
+            SetCatalogEntry(entries, 10, DiceKind.Reverse, 0f);
             serialized.ApplyModifiedPropertiesWithoutUndo();
 
             AssetDatabase.CreateAsset(catalog, DiceCatalogPath);
@@ -107,16 +111,46 @@ namespace DiceGame.Editor
             Debug.Log($"Created {DiceCatalogPath}");
         }
 
+        [MenuItem("Dice/Create Dice Mesh Catalog Asset")]
+        public static void CreateDiceMeshCatalogAsset() {
+            EnsureMeshCatalogFolder();
+            var existing = AssetDatabase.LoadAssetAtPath<DiceMeshCatalog>(DiceMeshCatalogPath);
+            if (existing != null) {
+                Selection.activeObject = existing;
+                Debug.Log($"DiceMeshCatalog already exists at {DiceMeshCatalogPath}");
+                return;
+            }
+
+            var catalog = ScriptableObject.CreateInstance<DiceMeshCatalog>();
+            var serialized = new SerializedObject(catalog);
+            var entries = serialized.FindProperty("entries");
+            entries.arraySize = 11;
+            SetMeshCatalogEntry(entries, 0, DiceKind.Normal, NormalDicePrefabPath);
+            SetMeshCatalogEntry(entries, 1, DiceKind.Wood, WoodDicePrefabPath);
+            SetMeshCatalogEntry(entries, 2, DiceKind.Iron, IronDicePrefabPath);
+            SetMeshCatalogEntry(entries, 3, DiceKind.Magnet, MagnetDicePrefabPath);
+            SetMeshCatalogEntry(entries, 4, DiceKind.Ice, IceDicePrefabPath);
+            SetMeshCatalogEntry(entries, 5, DiceKind.Stone, StoneDicePrefabPath);
+            SetMeshCatalogEntry(entries, 6, DiceKind.Ghost, GhostDicePrefabPath);
+            SetMeshCatalogEntry(entries, 7, DiceKind.Jumbo, NormalDicePrefabPath);
+            SetMeshCatalogEntry(entries, 8, DiceKind.Charcoal, CharcoalDicePrefabPath);
+            SetMeshCatalogEntry(entries, 9, DiceKind.RedHot, RedHotDicePrefabPath);
+            SetMeshCatalogEntry(entries, 10, DiceKind.Reverse, ReverseDicePrefabPath);
+            serialized.ApplyModifiedPropertiesWithoutUndo();
+
+            AssetDatabase.CreateAsset(catalog, DiceMeshCatalogPath);
+            AssetDatabase.SaveAssets();
+            Selection.activeObject = catalog;
+            Debug.Log($"Created {DiceMeshCatalogPath}");
+        }
+
         static void SetCatalogEntry(
             SerializedProperty entries,
             int index,
             DiceKind kind,
-            string prefabPath,
             float spawnWeight) {
             var entry = entries.GetArrayElementAtIndex(index);
             entry.FindPropertyRelative("Kind").enumValueIndex = (int)kind;
-            entry.FindPropertyRelative("MeshPrefab").objectReferenceValue =
-                AssetDatabase.LoadAssetAtPath<GameObject>(prefabPath);
             entry.FindPropertyRelative("SpawnWeight").floatValue = spawnWeight;
             var igniteProperty = entry.FindPropertyRelative("IgniteOnSpawn");
             if (igniteProperty != null) {
@@ -124,10 +158,22 @@ namespace DiceGame.Editor
             }
         }
 
+        static void SetMeshCatalogEntry(
+            SerializedProperty entries,
+            int index,
+            DiceKind kind,
+            string prefabPath) {
+            var entry = entries.GetArrayElementAtIndex(index);
+            entry.FindPropertyRelative("Kind").enumValueIndex = (int)kind;
+            entry.FindPropertyRelative("MeshPrefab").objectReferenceValue =
+                AssetDatabase.LoadAssetAtPath<GameObject>(prefabPath);
+        }
+
         [MenuItem("Dice/Setup Game Scene")]
         public static void SetupGameScene() {
             CreateDiceEntityPrefab();
             CreateDiceCatalogAsset();
+            CreateDiceMeshCatalogAsset();
 
             var diceEntityPrefab = AssetDatabase.LoadAssetAtPath<GameObject>(DiceEntityPrefabPath);
             var characterPrefab = AssetDatabase.LoadAssetAtPath<GameObject>(CharacterPrefabPath);
@@ -174,6 +220,8 @@ namespace DiceGame.Editor
                 AssetDatabase.LoadAssetAtPath<DiceGame.Config.DiceSpawnSettings>(DiceSpawnSettingsPath);
             serializedBootstrap.FindProperty("diceCatalog").objectReferenceValue =
                 AssetDatabase.LoadAssetAtPath<DiceCatalog>(DiceCatalogPath);
+            serializedBootstrap.FindProperty("diceMeshCatalog").objectReferenceValue =
+                AssetDatabase.LoadAssetAtPath<DiceMeshCatalog>(DiceMeshCatalogPath);
             serializedBootstrap.ApplyModifiedPropertiesWithoutUndo();
 
             bootstrap.ApplyCameraSetup();
@@ -239,6 +287,28 @@ namespace DiceGame.Editor
 
             if (!AssetDatabase.IsValidFolder("Assets/_Project/Settings/Gameplay")) {
                 AssetDatabase.CreateFolder("Assets/_Project/Settings", "Gameplay");
+            }
+
+            if (!AssetDatabase.IsValidFolder("Assets/_Project/Settings/Gameplay/MatchSetup")) {
+                AssetDatabase.CreateFolder("Assets/_Project/Settings/Gameplay", "MatchSetup");
+            }
+
+            if (!AssetDatabase.IsValidFolder("Assets/_Project/Settings/Gameplay/MatchSetup/Catalog")) {
+                AssetDatabase.CreateFolder("Assets/_Project/Settings/Gameplay/MatchSetup", "Catalog");
+            }
+        }
+
+        static void EnsureMeshCatalogFolder() {
+            if (!AssetDatabase.IsValidFolder("Assets/_Project/Settings")) {
+                AssetDatabase.CreateFolder("Assets/_Project", "Settings");
+            }
+
+            if (!AssetDatabase.IsValidFolder("Assets/_Project/Settings/Gameplay")) {
+                AssetDatabase.CreateFolder("Assets/_Project/Settings", "Gameplay");
+            }
+
+            if (!AssetDatabase.IsValidFolder("Assets/_Project/Settings/Gameplay/Dice")) {
+                AssetDatabase.CreateFolder("Assets/_Project/Settings/Gameplay", "Dice");
             }
         }
 

@@ -11,7 +11,7 @@ using UnityEngine.UI;
 namespace DiceGame.Session
 {
     /// <summary>
-    /// Title/settings UI: Kind 表示用に DiceCatalog mesh からアイコンを生成・保持する。
+    /// Title/settings UI: Kind 表示用に DiceMeshCatalog mesh からアイコンを生成・保持する。
     /// 出目 1〜6 を一定間隔で切り替えて表示する。
     /// </summary>
     public sealed class DiceKindIconCatalog : IDisposable
@@ -233,31 +233,11 @@ namespace DiceGame.Session
             DiceKind kind,
             out GameObject meshPrefab) {
             meshPrefab = null;
-            if (registry == null) {
+            if (registry?.DiceMeshCatalog == null) {
                 return false;
             }
 
-            if (TryGetFromCatalog(registry.DefaultSharedCatalog, kind, out meshPrefab)) {
-                return true;
-            }
-
-            var presets = registry.CatalogPresets;
-            if (presets == null) {
-                return false;
-            }
-
-            for (var i = 0; i < presets.Length; i++) {
-                if (TryGetFromCatalog(presets[i], kind, out meshPrefab)) {
-                    return true;
-                }
-            }
-
-            return false;
-        }
-
-        static bool TryGetFromCatalog(DiceCatalog catalog, DiceKind kind, out GameObject meshPrefab) {
-            meshPrefab = null;
-            return catalog != null && catalog.TryGetMeshPrefab(kind, out meshPrefab);
+            return registry.DiceMeshCatalog.TryGetMeshPrefab(kind, out meshPrefab);
         }
     }
 }

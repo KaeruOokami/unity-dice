@@ -13,6 +13,7 @@ namespace DiceGame.Config
         VersusArenaLayout CreateLayout();
         DiceSpawnSettings GetSpawnSettings(PlayerSlot slot);
         PlayerAttackSettings GetAttackSettings(PlayerSlot slot);
+        PlayerAttackPresentationSettings GetAttackPresentation(PlayerSlot slot);
         DiceCatalog GetDiceCatalog(PlayerSlot slot);
         PlayerNaturalSendSettings GetNaturalSendSettings(PlayerSlot slot);
         bool TryValidate(out string errorMessage);

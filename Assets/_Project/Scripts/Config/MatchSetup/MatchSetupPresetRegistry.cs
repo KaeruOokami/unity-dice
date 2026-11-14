@@ -7,6 +7,7 @@ namespace DiceGame.Config
     {
         [SerializeField] DiceSpawnSettings[] spawnPresets = System.Array.Empty<DiceSpawnSettings>();
         [SerializeField] DiceCatalog[] catalogPresets = System.Array.Empty<DiceCatalog>();
+        [SerializeField] DiceMeshCatalog diceMeshCatalog;
         [SerializeField] AttackDefaultPresetCatalog attackDefaultPresetCatalog;
         [SerializeField] ChallengeModeSettings challengeModeSettings;
         [SerializeField] MlCurriculumCatalog mlCurriculumCatalog;
@@ -20,16 +21,19 @@ namespace DiceGame.Config
         [SerializeField] DiceSpawnSettings defaultPlayer1Spawn;
         [SerializeField] DiceCatalog defaultPlayer1Catalog;
         [SerializeField] PlayerAttackSettings defaultPlayer1Attack;
+        [SerializeField] PlayerAttackPresentationSettings defaultPlayer1AttackPresentation;
         [SerializeField] PlayerNaturalSendSettings defaultPlayer1NaturalSend;
         [SerializeField] DiceSpawnSettings defaultPlayer2Spawn;
         [SerializeField] DiceCatalog defaultPlayer2Catalog;
         [SerializeField] PlayerAttackSettings defaultPlayer2Attack;
+        [SerializeField] PlayerAttackPresentationSettings defaultPlayer2AttackPresentation;
         [SerializeField] PlayerNaturalSendSettings defaultPlayer2NaturalSend;
         [SerializeField] JumboDiceSettings defaultJumboDiceSettings;
         [SerializeField] MatchSeriesSettings matchSeriesSettings;
 
         public DiceSpawnSettings[] SpawnPresets => spawnPresets;
         public DiceCatalog[] CatalogPresets => catalogPresets;
+        public DiceMeshCatalog DiceMeshCatalog => diceMeshCatalog;
         public AttackDefaultPresetCatalog AttackDefaultPresetCatalog => attackDefaultPresetCatalog;
         public ChallengeModeSettings ChallengeModeSettings => challengeModeSettings;
         public MlCurriculumCatalog MlCurriculumCatalog => mlCurriculumCatalog;
@@ -68,12 +72,14 @@ namespace DiceGame.Config
                     defaultPlayer1Spawn,
                     defaultPlayer1Catalog,
                     defaultPlayer1Attack,
+                    defaultPlayer1AttackPresentation,
                     defaultPlayer1NaturalSend),
                 Player2 = CreateDefaultPlayerSetup(
                     GetControlDefaults(PlayerSlot.Player2),
                     defaultPlayer2Spawn,
                     defaultPlayer2Catalog,
                     defaultPlayer2Attack,
+                    defaultPlayer2AttackPresentation,
                     defaultPlayer2NaturalSend)
             };
             snapshot.NormalizeVersusSharedInitialDiceCount();
@@ -141,13 +147,14 @@ namespace DiceGame.Config
             DiceSpawnSettings spawn,
             DiceCatalog catalog,
             PlayerAttackSettings attack,
+            PlayerAttackPresentationSettings attackPresentation,
             PlayerNaturalSendSettings naturalSend) {
             return PlayerSlotSetup.CreateDefault(
                 control.IsAi,
                 control.InputConfig,
                 DiceSpawnSettingsData.FromTemplate(spawn),
                 DiceCatalogData.FromTemplate(catalog),
-                PlayerAttackSettingsData.FromTemplate(attack),
+                PlayerAttackSettingsData.FromTemplate(attack, attackPresentation),
                 PlayerNaturalSendSettingsData.FromTemplate(naturalSend));
         }
 

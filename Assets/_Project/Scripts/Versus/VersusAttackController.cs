@@ -28,6 +28,7 @@ namespace DiceGame.Versus
         DiceMatchErasureSystem erasureSystem;
         ReverseModeController reverseMode;
         AttackQueueSettings attackQueueSettings;
+        DiceMeshCatalog diceMeshCatalog;
         DiceVfxSettings vfxSettings;
         float queueToBoardDelay;
         AttackQueueView queueView;
@@ -53,6 +54,7 @@ namespace DiceGame.Versus
             System.Random attackRandom,
             Transform viewParent,
             AttackQueueSettings queueSettings,
+            DiceMeshCatalog meshCatalog,
             float queueDelay,
             DiceVfxSettings diceVfxSettings = null,
             ReverseModeController reverseModeController = null) {
@@ -63,6 +65,7 @@ namespace DiceGame.Versus
             erasureSystem = targetErasureSystem;
             reverseMode = reverseModeController;
             attackQueueSettings = queueSettings;
+            diceMeshCatalog = meshCatalog;
             vfxSettings = diceVfxSettings;
             queueToBoardDelay = Mathf.Max(0f, queueDelay);
             random = attackRandom ?? new System.Random();
@@ -210,10 +213,7 @@ namespace DiceGame.Versus
                 return;
             }
 
-            queueView.Configure(
-                versusSettings.GetDiceCatalog(PlayerSlot.Player1),
-                versusSettings.GetDiceCatalog(PlayerSlot.Player2),
-                attackQueueSettings);
+            queueView.Configure(diceMeshCatalog, attackQueueSettings);
             RefreshQueueView();
         }
 
@@ -327,6 +327,13 @@ namespace DiceGame.Versus
                 maxSendCount = Mathf.Max(1, volley.Count);
             }
 
+            var presentation = versusSettings.GetAttackPresentation(e.Attacker);
+            if (presentation == null) {
+                Debug.LogError(
+                    $"VersusAttackController: Attack presentation is missing for {e.Attacker}.");
+                return;
+            }
+
             EnsureQueues();
             BeginAttackSend(
                 e.Target,
@@ -334,7 +341,7 @@ namespace DiceGame.Versus
                 minSendCount: 1,
                 maxSendCount,
                 e.OriginWorldPosition,
-                attackSettings.ErasureEmissionColor);
+                presentation.ErasureEmissionColor);
         }
 
         void BeginAttackSend(

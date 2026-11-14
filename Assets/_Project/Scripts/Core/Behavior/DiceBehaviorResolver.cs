@@ -13,6 +13,7 @@ namespace DiceGame.Core
                 DiceKind.Jumbo => JumboDiceBehavior.Instance,
                 DiceKind.Charcoal => CharcoalDiceBehavior.Instance,
                 DiceKind.RedHot => RedHotDiceBehavior.Instance,
+                DiceKind.Reverse => ReverseDiceBehavior.Instance,
                 _ => NormalDiceBehavior.Instance
             };
         }

@@ -88,6 +88,7 @@ namespace DiceGame.Gameplay
         DiceRegistry registry;
         GameObject diceEntityPrefab;
         DiceCatalog diceCatalog;
+        DiceMeshCatalog diceMeshCatalog;
         Transform spawnParent;
         PhysicsSettings physicsSettings;
         DiceAnimationSettings diceAnimationSettings;
@@ -139,6 +140,7 @@ namespace DiceGame.Gameplay
             DiceRegistry targetRegistry,
             GameObject prefab,
             DiceCatalog catalog,
+            DiceMeshCatalog meshCatalog,
             Transform parent,
             PhysicsSettings physics,
             DiceAnimationSettings animationSettings,
@@ -153,6 +155,7 @@ namespace DiceGame.Gameplay
             registry = targetRegistry;
             diceEntityPrefab = prefab;
             diceCatalog = catalog;
+            diceMeshCatalog = meshCatalog;
             spawnParent = parent;
             physicsSettings = physics;
             diceAnimationSettings = animationSettings;
@@ -497,9 +500,9 @@ namespace DiceGame.Gameplay
                     return results;
                 }
 
-                if (!player2Channel.Catalog.TryGetMeshPrefab(spec.Kind, out _)) {
+                if (!TryResolveMeshPrefab(spec.Kind, out _)) {
                     Debug.LogError(
-                        $"DiceSpawnSystem: Player2 catalog has no mesh for mirrored kind={spec.Kind}.");
+                        $"DiceSpawnSystem: Mesh catalog has no mesh for mirrored kind={spec.Kind}.");
                     results.Clear();
                     return results;
                 }
@@ -608,6 +611,11 @@ namespace DiceGame.Gameplay
             return true;
         }
 
+        bool TryResolveMeshPrefab(DiceKind kind, out GameObject meshPrefab) {
+            meshPrefab = null;
+            return diceMeshCatalog != null && diceMeshCatalog.TryGetMeshPrefab(kind, out meshPrefab);
+        }
+
         DiceCatalog ResolveCatalog(PlayerSlot? ownerSlot) {
             if (ownerSlot.HasValue) {
                 for (var i = 0; i < versusChannels.Count; i++) {
@@ -662,7 +670,7 @@ namespace DiceGame.Gameplay
             }
 
             GameObject meshPrefab = null;
-            if (!catalog.TryGetMeshPrefab(kind, out meshPrefab)) {
+            if (!TryResolveMeshPrefab(kind, out meshPrefab)) {
                 if (!fixedKind.HasValue) {
                     Debug.LogError($"DiceSpawnSystem: Mesh prefab not found for kind={kind}.");
                     registry?.ReleaseSpawnCellReservation(gridPos);
@@ -694,7 +702,7 @@ namespace DiceGame.Gameplay
             }
 
             diceController.ConfigureMatchActionContext(matchActionContext);
-            diceController.ConfigureKindMeshCatalog(catalog);
+            diceController.ConfigureKindMeshCatalog(diceMeshCatalog);
             if (ownershipContext != null) {
                 diceController.ConfigureOwnershipContext(ownershipContext);
                 if (catalogOwner.HasValue) {
@@ -779,7 +787,7 @@ namespace DiceGame.Gameplay
                 return null;
             }
 
-            if (!catalog.TryGetMeshPrefab(kind, out var meshPrefab)) {
+            if (!TryResolveMeshPrefab(kind, out var meshPrefab)) {
                 Debug.LogError($"DiceSpawnSystem: Mesh prefab not found for attack kind={kind}.");
                 registry.ReleaseSpawnCellReservation(slot.Cell);
                 return null;
@@ -806,7 +814,7 @@ namespace DiceGame.Gameplay
             }
 
             diceController.ConfigureMatchActionContext(matchActionContext);
-            diceController.ConfigureKindMeshCatalog(catalog);
+            diceController.ConfigureKindMeshCatalog(diceMeshCatalog);
             if (ownershipContext != null) {
                 diceController.ConfigureOwnershipContext(ownershipContext);
                 ownershipContext.SetOwner(diceController, targetSlot);
@@ -864,12 +872,10 @@ namespace DiceGame.Gameplay
                 return null;
             }
 
-            if (!catalog.TryGetMeshPrefab(DiceKind.Jumbo, out var meshPrefab)) {
-                // Fallback to Normal mesh so jumbo remains playable before catalog assets are filled.
-                if (!catalog.TryGetMeshPrefab(DiceKind.Normal, out meshPrefab)) {
-                    Debug.LogError("DiceSpawnSystem: Mesh prefab not found for Jumbo (or Normal fallback).");
-                    return null;
-                }
+            if (!TryResolveMeshPrefab(DiceKind.Jumbo, out var meshPrefab)
+                && !TryResolveMeshPrefab(DiceKind.Normal, out meshPrefab)) {
+                Debug.LogError("DiceSpawnSystem: Mesh prefab not found for Jumbo (or Normal fallback).");
+                return null;
             }
 
             if (!DiceSpawnCellPicker.TryPickJumboSpawnAnchor(
@@ -904,7 +910,7 @@ namespace DiceGame.Gameplay
             }
 
             diceController.ConfigureMatchActionContext(matchActionContext);
-            diceController.ConfigureKindMeshCatalog(catalog);
+            diceController.ConfigureKindMeshCatalog(diceMeshCatalog);
             if (assignOwner && ownershipContext != null) {
                 diceController.ConfigureOwnershipContext(ownershipContext);
                 ownershipContext.SetOwner(diceController, targetSlot);
@@ -952,11 +958,8 @@ namespace DiceGame.Gameplay
                 return null;
             }
 
-            if (!catalog.TryGetMeshPrefab(kind, out var meshPrefab)) {
-                if (kind == DiceKind.Jumbo
-                    && catalog.TryGetMeshPrefab(DiceKind.Normal, out meshPrefab)) {
-                    // Jumbo mesh fallback
-                } else {
+            if (!TryResolveMeshPrefab(kind, out var meshPrefab)) {
+                if (kind != DiceKind.Jumbo || !TryResolveMeshPrefab(DiceKind.Normal, out meshPrefab)) {
                     Debug.LogError($"DiceSpawnSystem.ApplyNetworkSpawn: mesh missing for kind={kind}.");
                     return null;
                 }
@@ -985,7 +988,7 @@ namespace DiceGame.Gameplay
             }
 
             diceController.ConfigureMatchActionContext(matchActionContext);
-            diceController.ConfigureKindMeshCatalog(catalog);
+            diceController.ConfigureKindMeshCatalog(diceMeshCatalog);
             if (ownershipContext != null) {
                 diceController.ConfigureOwnershipContext(ownershipContext);
                 ownershipContext.SetOwner(diceController, ownerSlot);

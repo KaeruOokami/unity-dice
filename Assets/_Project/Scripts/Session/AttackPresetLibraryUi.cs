@@ -97,19 +97,23 @@ namespace DiceGame.Session
         AttackPresetListEntry[] BuildEntries() {
             var list = new List<AttackPresetListEntry>();
             if (defaultCatalog != null) {
-                var defaults = defaultCatalog.Presets;
+                var defaults = defaultCatalog.Entries;
                 for (var i = 0; i < defaults.Length; i++) {
-                    var preset = defaults[i];
-                    if (preset == null) {
+                    var entry = defaults[i];
+                    if (entry.Attack == null) {
                         continue;
                     }
 
-                    var name = AttackDefaultPresetCatalog.GetDisplayName(preset);
+                    var name = AttackDefaultPresetCatalog.GetDisplayName(entry.Attack);
                     if (string.IsNullOrWhiteSpace(name)) {
                         continue;
                     }
 
-                    list.Add(new AttackPresetListEntry(AttackPresetKind.Default, name, preset));
+                    list.Add(new AttackPresetListEntry(
+                        AttackPresetKind.Default,
+                        name,
+                        entry.Attack,
+                        entry.Presentation));
                 }
             }
 
@@ -140,7 +144,9 @@ namespace DiceGame.Session
                     return;
                 }
 
-                data = PlayerAttackSettingsData.FromTemplate(entry.DefaultSource);
+                data = PlayerAttackSettingsData.FromTemplate(
+                    entry.DefaultSource,
+                    entry.DefaultPresentation);
                 if (!data.TryValidate(out var validateError)) {
                     SetStatus(validateError ?? "Default preset is invalid.");
                     return;

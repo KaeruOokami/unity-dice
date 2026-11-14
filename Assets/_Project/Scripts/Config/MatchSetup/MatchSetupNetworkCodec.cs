@@ -57,7 +57,7 @@ namespace DiceGame.Config
                     ? System.Math.Max(1, payload.WinsToWin > 0 ? payload.WinsToWin : defaults.WinsToWin)
                     : 1,
                 SharedSpawn = FromSpawnPayload(payload.SharedSpawn),
-                SharedCatalog = FromCatalogPayload(payload.SharedCatalog, defaults.SharedCatalog),
+                SharedCatalog = FromCatalogPayload(payload.SharedCatalog),
                 Jumbo = ResolveJumbo(payload.Jumbo, defaults.Jumbo),
                 Player1 = BuildPlayerSetup(
                     payload.Player1IsAi,
@@ -66,8 +66,7 @@ namespace DiceGame.Config
                     payload.Player1Spawn,
                     payload.Player1Catalog,
                     payload.Player1Attack,
-                    payload.Player1NaturalSend,
-                    defaults.Player1.Catalog),
+                    payload.Player1NaturalSend),
                 Player2 = BuildPlayerSetup(
                     payload.Player2IsAi,
                     payload.Player2DeviceKind,
@@ -75,8 +74,7 @@ namespace DiceGame.Config
                     payload.Player2Spawn,
                     payload.Player2Catalog,
                     payload.Player2Attack,
-                    payload.Player2NaturalSend,
-                    defaults.Player2.Catalog)
+                    payload.Player2NaturalSend)
             };
 
             if (!snapshot.TryValidate(registry, out errorMessage)) {
@@ -95,13 +93,12 @@ namespace DiceGame.Config
             DiceSpawnSettingsNetworkPayload spawnPayload,
             DiceCatalogNetworkPayload catalogPayload,
             PlayerAttackSettingsNetworkPayload attackPayload,
-            PlayerNaturalSendSettingsNetworkPayload naturalSendPayload,
-            DiceCatalogData meshSource) {
+            PlayerNaturalSendSettingsNetworkPayload naturalSendPayload) {
             return PlayerSlotSetup.CreateDefault(
                 isAi != 0,
                 new PlayerSlotInputConfig((PlayerInputDeviceKind)deviceKind, gamepadIndex),
                 FromSpawnPayload(spawnPayload),
-                FromCatalogPayload(catalogPayload, meshSource),
+                FromCatalogPayload(catalogPayload),
                 FromAttackPayload(attackPayload),
                 FromNaturalSendPayload(naturalSendPayload));
         }
@@ -142,14 +139,12 @@ namespace DiceGame.Config
             return new DiceCatalogNetworkPayload { Entries = entries };
         }
 
-        static DiceCatalogData FromCatalogPayload(DiceCatalogNetworkPayload payload, DiceCatalogData meshSource) {
+        static DiceCatalogData FromCatalogPayload(DiceCatalogNetworkPayload payload) {
             var source = payload.Entries ?? System.Array.Empty<DiceCatalogEntryNetworkPayload>();
             var entries = new DiceCatalogEntryData[source.Length];
             for (var i = 0; i < source.Length; i++) {
-                var kind = (DiceKind)source[i].Kind;
                 entries[i] = new DiceCatalogEntryData {
-                    Kind = kind,
-                    MeshPrefab = FindMesh(meshSource, kind),
+                    Kind = (DiceKind)source[i].Kind,
                     SpawnWeight = source[i].SpawnWeight,
                     IgniteOnSpawn = source[i].IgniteOnSpawn != 0
                 };
@@ -320,18 +315,5 @@ namespace DiceGame.Config
             return FromJumboPayload(payload);
         }
 
-        static UnityEngine.GameObject FindMesh(DiceCatalogData meshSource, DiceKind kind) {
-            if (meshSource.Entries == null) {
-                return null;
-            }
-
-            for (var i = 0; i < meshSource.Entries.Length; i++) {
-                if (meshSource.Entries[i].Kind == kind) {
-                    return meshSource.Entries[i].MeshPrefab;
-                }
-            }
-
-            return null;
-        }
     }
 }

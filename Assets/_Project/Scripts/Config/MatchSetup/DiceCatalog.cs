@@ -4,6 +4,9 @@ using UnityEngine;
 
 namespace DiceGame.Config
 {
+    /// <summary>
+    /// Per-mode / per-player spawn rules (Kind weights). Meshes are in <see cref="DiceMeshCatalog"/>.
+    /// </summary>
     [CreateAssetMenu(fileName = "DiceCatalog", menuName = "Dice/Match Setup/Dice Catalog")]
     public class DiceCatalog : ScriptableObject
     {
@@ -11,7 +14,6 @@ namespace DiceGame.Config
         public struct Entry
         {
             public DiceKind Kind;
-            public GameObject MeshPrefab;
             [Min(0f)] public float SpawnWeight;
             public bool IgniteOnSpawn;
         }
@@ -33,7 +35,7 @@ namespace DiceGame.Config
 
             var totalWeight = 0f;
             for (var i = 0; i < entries.Length; i++) {
-                if (entries[i].SpawnWeight > 0f && entries[i].MeshPrefab != null) {
+                if (entries[i].SpawnWeight > 0f) {
                     totalWeight += entries[i].SpawnWeight;
                 }
             }
@@ -46,7 +48,7 @@ namespace DiceGame.Config
             var cumulative = 0f;
             for (var i = 0; i < entries.Length; i++) {
                 var entry = entries[i];
-                if (entry.SpawnWeight <= 0f || entry.MeshPrefab == null) {
+                if (entry.SpawnWeight <= 0f) {
                     continue;
                 }
 
@@ -69,24 +71,6 @@ namespace DiceGame.Config
 
             igniteOnSpawn = entry.IgniteOnSpawn && DiceFirePolicy.CanCarryFire(kind);
             return true;
-        }
-
-        public bool TryGetMeshPrefab(DiceKind kind, out GameObject meshPrefab) {
-            meshPrefab = null;
-            if (entries == null) {
-                return false;
-            }
-
-            for (var i = 0; i < entries.Length; i++) {
-                if (entries[i].Kind != kind) {
-                    continue;
-                }
-
-                meshPrefab = entries[i].MeshPrefab;
-                return meshPrefab != null;
-            }
-
-            return false;
         }
 
         public bool TryGetEntry(DiceKind kind, out Entry entry) {
@@ -119,7 +103,6 @@ namespace DiceGame.Config
             for (var i = 0; i < data.Entries.Length; i++) {
                 entries[i] = new Entry {
                     Kind = data.Entries[i].Kind,
-                    MeshPrefab = data.Entries[i].MeshPrefab,
                     SpawnWeight = Mathf.Max(0f, data.Entries[i].SpawnWeight),
                     IgniteOnSpawn = data.Entries[i].IgniteOnSpawn
                 };

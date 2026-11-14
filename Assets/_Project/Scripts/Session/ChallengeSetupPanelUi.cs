@@ -117,7 +117,9 @@ namespace DiceGame.Session
             }
 
             for (var i = 0; i < presetOptions.Count; i++) {
-                var presetData = PlayerAttackSettingsData.FromTemplate(presetOptions[i]);
+                var presetData = catalog != null
+                    ? catalog.ToData(presetOptions[i])
+                    : PlayerAttackSettingsData.FromTemplate(presetOptions[i]);
                 if (!AttackDataEquals(presetData, attack)) {
                     continue;
                 }

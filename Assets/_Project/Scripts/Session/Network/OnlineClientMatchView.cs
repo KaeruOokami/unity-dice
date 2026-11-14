@@ -59,8 +59,7 @@ namespace DiceGame.Session.Network
         OnlineNetMessenger messenger;
         GameObject dicePrefab;
         GameObject characterPrefab;
-        DiceCatalog primaryCatalog;
-        DiceCatalog secondaryCatalog;
+        DiceMeshCatalog meshCatalog;
         Board board;
         PhysicsSettings physicsSettings;
         DiceAnimationSettings animationSettings;
@@ -105,8 +104,7 @@ namespace DiceGame.Session.Network
             DiceVfxSettings diceVfxSettings,
             DiceOneVanishSettings diceOneVanishSettings,
             Board matchBoard,
-            DiceCatalog catalog,
-            DiceCatalog alternateCatalog = null,
+            DiceMeshCatalog diceMeshCatalog,
             AttackQueueSettings queueSettings = null,
             CharacterMovementSettings characterMovement = null,
             DiceSfxSettings diceSfxSettings = null) {
@@ -121,8 +119,7 @@ namespace DiceGame.Session.Network
             sfxSettings = diceSfxSettings;
             oneVanishSettings = diceOneVanishSettings;
             board = matchBoard;
-            primaryCatalog = catalog;
-            secondaryCatalog = alternateCatalog;
+            meshCatalog = diceMeshCatalog;
             attackQueueSettings = queueSettings;
             movementSettings = characterMovement;
 
@@ -148,8 +145,8 @@ namespace DiceGame.Session.Network
                     "OnlineClientMatchView.Configure: physics/animation settings missing; dice motion events cannot play.");
             }
 
-            if (primaryCatalog == null && secondaryCatalog == null) {
-                Debug.LogError("OnlineClientMatchView.Configure: no DiceCatalog assigned; kind meshes will be wrong.");
+            if (meshCatalog == null) {
+                Debug.LogError("OnlineClientMatchView.Configure: no DiceMeshCatalog assigned; kind meshes will be wrong.");
             }
 
             if (board == null) {
@@ -444,10 +441,7 @@ namespace DiceGame.Session.Network
             var viewObject = new GameObject("OnlineClientAttackQueueView");
             viewObject.transform.SetParent(transform, false);
             attackQueueView = viewObject.AddComponent<AttackQueueView>();
-            attackQueueView.Configure(
-                primaryCatalog,
-                secondaryCatalog,
-                attackQueueSettings);
+            attackQueueView.Configure(meshCatalog, attackQueueSettings);
         }
 
         static List<AttackVolley> ToVolleys(OnlineAttackVolleyPayload[] payloads) {
@@ -851,26 +845,14 @@ namespace DiceGame.Session.Network
                 return;
             }
 
-            TryResolveMeshPrefab(kind, catalogSide, out var meshPrefab);
+            _ = catalogSide;
+            if (meshCatalog == null || !meshCatalog.TryGetMeshPrefab(kind, out var meshPrefab)) {
+                meshPrefab = null;
+            }
+
             diceView.ApplyNetworkKindPresentation(board, kind, meshPrefab);
             lastMeshKinds[entityId] = (byte)kind;
             lastCatalogSides[entityId] = sideByte;
-        }
-
-        bool TryResolveMeshPrefab(DiceKind kind, PlayerSlot catalogSide, out GameObject meshPrefab) {
-            var preferred = catalogSide == PlayerSlot.Player2 ? secondaryCatalog : primaryCatalog;
-            var fallback = catalogSide == PlayerSlot.Player2 ? primaryCatalog : secondaryCatalog;
-
-            if (preferred != null && preferred.TryGetMeshPrefab(kind, out meshPrefab)) {
-                return true;
-            }
-
-            if (fallback != null && fallback.TryGetMeshPrefab(kind, out meshPrefab)) {
-                return true;
-            }
-
-            meshPrefab = null;
-            return false;
         }
 
         static void DisableGameplayBehaviours(GameObject instance) {
