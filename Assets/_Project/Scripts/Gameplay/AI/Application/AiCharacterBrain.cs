@@ -419,30 +419,7 @@ namespace DiceGame.Gameplay.AI.Application
                 MatchGoalProgressSync.Sync(activeGoal, snapshot);
 
                 if (!activeGoal.IsStale(snapshot, settings, registry) && !activeGoal.AreAllSubGoalsComplete()) {
-                    // Join in progress (or still extendable): keep Face. Switch only when
-                    // cluster join is no longer possible (blocked destinations, etc.).
-                    if (activeGoal.AllowsPriorityGoalSwitch(snapshot, registry)) {
-                        var candidate = MatchGoalSelector.SelectBest(
-                            snapshot,
-                            character,
-                            registry,
-                            settings,
-                            failureMemory);
-                        if (candidate != null
-                            && activeGoal.ShouldSwitchTo(candidate, settings.GoalSwitchMargin)
-                            && activeGoal.AllowsWorkDieSwitch(candidate, snapshot, registry)) {
-                            if (candidate.Face != activeGoal.Face) {
-                                AiDebugLog.Log(
-                                    $"SwitchGoal face={activeGoal.Face}->{candidate.Face} " +
-                                    $"reason=join-impossible " +
-                                    $"score={activeGoal.PriorityScore:F1}->{candidate.PriorityScore:F1}");
-                            }
-
-                            activeGoal = candidate;
-                            stuckActionCount = 0;
-                        }
-                    }
-
+                    TrySwitchActiveGoal(snapshot);
                     return activeGoal;
                 }
 
@@ -455,7 +432,9 @@ namespace DiceGame.Gameplay.AI.Application
             }
 
             stuckActionCount = 0;
-            AiDebugLog.Log($"NewGoal face={activeGoal.Face} score={activeGoal.PriorityScore:F1} immediate={activeGoal.IsImmediateMatch}");
+            AiDebugLog.Log(
+                $"NewGoal face={activeGoal.Face} score={activeGoal.PriorityScore:F1} " +
+                $"immediate={activeGoal.IsImmediateMatch} chain={activeGoal.IsChainGoal}");
             foreach (var subGoal in activeGoal.SubGoals) {
                 AiDebugLog.Log(
                     $"  SubGoal kind={subGoal.Kind} face={subGoal.TargetFace} " +
@@ -464,6 +443,111 @@ namespace DiceGame.Gameplay.AI.Application
             }
 
             return activeGoal;
+        }
+
+        void TrySwitchActiveGoal(GameStateSnapshot snapshot) {
+            if (activeGoal == null || !activeGoal.AllowsPriorityGoalSwitch(snapshot, registry)) {
+                return;
+            }
+
+            var canExtend = activeGoal.CanStillExtend(snapshot, registry);
+            if (!TryResolveSwitchMargin(activeGoal, snapshot, canExtend, out var margin, out var reason)) {
+                return;
+            }
+
+            // Opportunistic look compares chain goals only; extend-impossible may retarget anything.
+            var candidate = canExtend
+                ? MatchGoalSelector.SelectBestChain(
+                    snapshot,
+                    character,
+                    registry,
+                    settings,
+                    failureMemory)
+                : MatchGoalSelector.SelectBest(
+                    snapshot,
+                    character,
+                    registry,
+                    settings,
+                    failureMemory);
+            if (candidate == null
+                || !IsAcceptableSwitchCandidate(activeGoal, candidate, canExtend)
+                || !activeGoal.ShouldSwitchTo(candidate, margin)
+                || !activeGoal.AllowsWorkDieSwitch(
+                    candidate,
+                    snapshot,
+                    registry,
+                    allowOpportunisticFaceSwitch: canExtend)) {
+                return;
+            }
+
+            if (candidate.Face != activeGoal.Face || candidate.IsChainGoal != activeGoal.IsChainGoal) {
+                AiDebugLog.Log(
+                    $"SwitchGoal face={activeGoal.Face}->{candidate.Face} " +
+                    $"reason={reason} " +
+                    $"score={activeGoal.PriorityScore:F1}->{candidate.PriorityScore:F1} " +
+                    $"margin={margin:F1}");
+            }
+
+            activeGoal = candidate;
+            stuckActionCount = 0;
+        }
+
+        bool TryResolveSwitchMargin(
+            MatchGoal current,
+            GameStateSnapshot snapshot,
+            bool canExtend,
+            out float margin,
+            out string reason) {
+            margin = settings.GoalSwitchMargin;
+            reason = "extend-impossible";
+
+            if (!canExtend) {
+                return true;
+            }
+
+            var chainFaceCount = SinkingChainEvaluator.CountChainPossibleFaces(snapshot.PlanningDice);
+
+            // Multi-sink arbitration: only among chain goals when 2+ chain faces exist.
+            if (current.IsChainGoal) {
+                if (chainFaceCount < 2) {
+                    return false;
+                }
+
+                margin = settings.SinkChainSwitchMargin;
+                reason = "multi-sink";
+                return true;
+            }
+
+            // Pre-sink gather interrupted by a time-critical chain (checked against candidate later).
+            if (chainFaceCount < 1) {
+                return false;
+            }
+
+            margin = settings.ChainInterruptMargin;
+            reason = "chain-interrupt";
+            return true;
+        }
+
+        bool IsAcceptableSwitchCandidate(MatchGoal current, MatchGoal candidate, bool canExtend) {
+            if (candidate == null) {
+                return false;
+            }
+
+            if (!canExtend) {
+                return true;
+            }
+
+            if (!candidate.IsChainGoal) {
+                return false;
+            }
+
+            if (current.IsChainGoal) {
+                // Opportunistic multi-sink: only switch to a different chain face.
+                return candidate.Face != current.Face;
+            }
+
+            // Opportunistic gather interrupt: only by a chain goal.
+            return true;
         }
 
         void OnDisable() {

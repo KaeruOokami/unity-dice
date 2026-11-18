@@ -61,13 +61,40 @@ namespace DiceGame.Gameplay.AI.Domain
         }
 
         public static bool HasAnyChainPossibleFace(IReadOnlyList<DiceSnapshot> allDice) {
+            return CountChainPossibleFaces(allDice) > 0;
+        }
+
+        public static int CountChainPossibleFaces(IReadOnlyList<DiceSnapshot> allDice) {
+            var count = 0;
             for (var face = 2; face <= 6; face++) {
                 if (IsChainPossible(face, allDice)) {
-                    return true;
+                    count++;
                 }
             }
 
-            return false;
+            return count;
+        }
+
+        public static bool CanWorkDieExtendChain(
+            int face,
+            DiceSnapshot workDie,
+            IReadOnlyList<DiceSnapshot> allDice,
+            DiceRegistry registry,
+            VersusArenaLayout versusLayout,
+            PlayerSlot playerSlot) {
+            if (!IsChainPossible(face, allDice)) {
+                return false;
+            }
+
+            return TrySelectChainJoinTargetCell(
+                face,
+                allDice,
+                workDie,
+                registry,
+                versusLayout,
+                playerSlot,
+                out _,
+                out _);
         }
 
         public static int GetMinDistanceToSinkingSameFace(

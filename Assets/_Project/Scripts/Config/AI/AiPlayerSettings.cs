@@ -34,6 +34,10 @@ namespace DiceGame.Config
         [SerializeField] float playerDistancePenalty = 1.5f;
         [SerializeField] float immovableClusterPenalty = 20f;
         [SerializeField] float immediateMatchBonus = 25f;
+        [Tooltip("Pre-sink only. Extra per-face priority so higher faces win with fewer dice.")]
+        [SerializeField] float preSinkFacePriorityWeight = 25f;
+        [Tooltip("Pre-sink only. progress^2 bonus so near-complete clusters stay competitive.")]
+        [SerializeField] float nearCompleteBonus = 80f;
 
         [Header("Sinking Chain Scoring")]
         [SerializeField] float sinkingChainBonus = 200f;
@@ -42,6 +46,10 @@ namespace DiceGame.Config
 
         [Header("Goal Persistence")]
         [SerializeField] float goalSwitchMargin = 8f;
+        [Tooltip("While a chain goal is still extendable, require this margin to switch to another chain face.")]
+        [SerializeField] float sinkChainSwitchMargin = 25f;
+        [Tooltip("While a pre-sink gather is still extendable, require this margin for a chain goal to interrupt it.")]
+        [SerializeField] float chainInterruptMargin = 30f;
         [SerializeField] int stuckAttemptsBeforeGoalReset = 3;
         [SerializeField] float goalFailureBlacklistSeconds = 12f;
 
@@ -70,7 +78,11 @@ namespace DiceGame.Config
         public float SinkingChainBonus => sinkingChainBonus;
         public float SinkingChainImmediateBonus => sinkingChainImmediateBonus;
         public float SinkingChainWorkDieWeight => sinkingChainWorkDieWeight;
+        public float PreSinkFacePriorityWeight => preSinkFacePriorityWeight;
+        public float NearCompleteBonus => nearCompleteBonus;
         public float GoalSwitchMargin => goalSwitchMargin;
+        public float SinkChainSwitchMargin => sinkChainSwitchMargin;
+        public float ChainInterruptMargin => chainInterruptMargin;
         public int PathSearchMaxSteps => pathSearchMaxSteps;
         public float CellCenterTolerance => cellCenterTolerance;
         public int RollStepMaxFrames => rollStepMaxFrames;

@@ -319,30 +319,55 @@ namespace DiceGame.Gameplay.AI.Domain
         }
 
         /// <summary>
-        /// Priority/score goal switches (including Face changes) are locked while Join is still
-        /// in progress, while Lift→Place join is underway, or while the work die can still
-        /// roll-join the cluster. Face may switch only after cluster join is no longer possible.
+        /// True while the next incomplete step is Join (roll-join already underway as the active step).
+        /// Reach/Orient may still have a pending Join later in the list; that is pre-join, not in-progress.
         /// </summary>
-        public bool AllowsPriorityGoalSwitch(GameStateSnapshot snapshot, DiceRegistry registry) {
-            if (snapshot == null) {
-                return false;
-            }
+        public bool IsJoinInProgress() {
+            var next = GetNextIncompleteSubGoal();
+            return next != null && next.Kind == AiSubGoalKind.JoinCluster;
+        }
 
-            if (HasIncompleteSubGoalOfKind(AiSubGoalKind.JoinCluster)) {
-                return false;
-            }
-
+        /// <summary>
+        /// Reach / Orient phase: Join exists later but has not started yet.
+        /// </summary>
+        public bool IsInPreJoinPhase() {
             if (IsOnLiftJoinPath()) {
                 return false;
             }
 
-            if (Face < 2 || ParticipantTarget == null || ClusterDice == null || ClusterDice.Count == 0) {
-                return true;
+            var next = GetNextIncompleteSubGoal();
+            if (next == null) {
+                return false;
             }
 
-            return !WorkDieSlidePlanner.CanWorkDieExtendCluster(
+            return next.Kind == AiSubGoalKind.ReachParticipant
+                || next.Kind == AiSubGoalKind.ReachWorkDie
+                || next.Kind == AiSubGoalKind.OrientDie;
+        }
+
+        public bool CanStillExtend(GameStateSnapshot snapshot, DiceRegistry registry) {
+            if (snapshot == null
+                || Face < 2
+                || ParticipantTarget == null
+                || ClusterDice == null
+                || ClusterDice.Count == 0) {
+                return false;
+            }
+
+            var workDie = new DiceSnapshot(ParticipantTarget);
+            if (IsChainGoal) {
+                return SinkingChainEvaluator.CanWorkDieExtendChain(
+                    Face,
+                    workDie,
+                    snapshot.PlanningDice,
+                    registry,
+                    snapshot.VersusLayout,
+                    snapshot.PlayerSlot);
+            }
+
+            return WorkDieSlidePlanner.CanWorkDieExtendCluster(
                 ClusterDice,
-                new DiceSnapshot(ParticipantTarget),
+                workDie,
                 snapshot.PlanningDice,
                 registry,
                 snapshot.VersusLayout,
@@ -350,13 +375,44 @@ namespace DiceGame.Gameplay.AI.Domain
         }
 
         /// <summary>
-        /// Different work-die switches are allowed only when this work die can no longer extend the cluster.
-        /// Same work die (or non-join goals) may switch on score alone when <see cref="AllowsPriorityGoalSwitch"/> permits.
+        /// Whether ResolveGoal may compare SelectBest against this goal.
+        /// Join / Lift→Place stay locked. Otherwise: extend-impossible, or pre-join opportunistic look.
+        /// </summary>
+        public bool AllowsPriorityGoalSwitch(GameStateSnapshot snapshot, DiceRegistry registry) {
+            if (snapshot == null) {
+                return false;
+            }
+
+            if (IsJoinInProgress() || IsOnLiftJoinPath()) {
+                return false;
+            }
+
+            if (!CanStillExtend(snapshot, registry)) {
+                return true;
+            }
+
+            if (!IsInPreJoinPhase()) {
+                return false;
+            }
+
+            var chainFaceCount = SinkingChainEvaluator.CountChainPossibleFaces(snapshot.PlanningDice);
+            if (IsChainGoal) {
+                return chainFaceCount >= 2;
+            }
+
+            // Pre-sink gather may look for a time-critical chain interrupt.
+            return chainFaceCount >= 1;
+        }
+
+        /// <summary>
+        /// Different work-die switches: allowed when extend is impossible, or when opportunistic
+        /// face arbitration explicitly permits (multi-sink / chain interrupt).
         /// </summary>
         public bool AllowsWorkDieSwitch(
             MatchGoal candidate,
             GameStateSnapshot snapshot,
-            DiceRegistry registry) {
+            DiceRegistry registry,
+            bool allowOpportunisticFaceSwitch = false) {
             if (candidate == null || snapshot == null) {
                 return false;
             }
@@ -369,17 +425,15 @@ namespace DiceGame.Gameplay.AI.Domain
                 return true;
             }
 
+            if (allowOpportunisticFaceSwitch) {
+                return true;
+            }
+
             if (Face < 2 || ClusterDice == null || ClusterDice.Count == 0) {
                 return true;
             }
 
-            return !WorkDieSlidePlanner.CanWorkDieExtendCluster(
-                ClusterDice,
-                new DiceSnapshot(ParticipantTarget),
-                snapshot.PlanningDice,
-                registry,
-                snapshot.VersusLayout,
-                snapshot.PlayerSlot);
+            return !CanStillExtend(snapshot, registry);
         }
 
         public AiSubGoal FindIncompleteSubGoalOfKind(AiSubGoalKind kind) {

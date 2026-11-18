@@ -40,6 +40,25 @@ namespace DiceGame.Gameplay.AI.Domain
             return bestGoal;
         }
 
+        /// <summary>
+        /// Best sinking-chain goal only. Used for multi-sink / chain-interrupt arbitration
+        /// so a high-scoring pre-sink gather cannot hide a better chain face.
+        /// </summary>
+        public static MatchGoal SelectBestChain(
+            GameStateSnapshot snapshot,
+            CharacterController character,
+            DiceRegistry registry,
+            AiPlayerSettings settings,
+            MatchGoalFailureMemory failureMemory = null) {
+            if (snapshot == null || character == null || settings == null) {
+                return null;
+            }
+
+            return TrySelectBestChainGoal(snapshot, character, registry, settings, failureMemory, out var chainGoal)
+                ? chainGoal
+                : null;
+        }
+
         static bool TrySelectBestChainGoal(
             GameStateSnapshot snapshot,
             CharacterController character,

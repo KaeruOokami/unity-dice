@@ -67,6 +67,13 @@ namespace DiceGame.Gameplay.AI.Domain
                 + proximity * settings.SameFaceProximityWeight
                 - distanceToWorkDie * settings.PlayerDistancePenalty;
 
+            // Pre-sink gather: prefer higher faces even with few dice, but keep near-complete
+            // clusters competitive so small faces that are almost matched are not abandoned.
+            if (!isChainGoal && !isImmediateMatch && face >= 2) {
+                score += face * settings.PreSinkFacePriorityWeight;
+                score += progress * progress * settings.NearCompleteBonus;
+            }
+
             if (HasImmovableDice(cluster)) {
                 score -= settings.ImmovableClusterPenalty;
             }
