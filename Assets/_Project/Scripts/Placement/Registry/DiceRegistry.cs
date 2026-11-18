@@ -26,6 +26,11 @@ namespace DiceGame.Placement
         /// Ensures one falling dice per cell within a multi-pick wave.
         /// </summary>
         readonly HashSet<Vector2Int> spawnCellReservations = new();
+        /// <summary>
+        /// Lift carry occupancy above the player's standing surface when not mounted as match Top.
+        /// Floor lift mounts as committed <see cref="DiceStackTier.Top"/> instead of this map.
+        /// </summary>
+        readonly Dictionary<Vector2Int, DiceController> carryOccupancy = new();
         readonly List<DiceController> allDice = new();
         readonly List<Vector2Int> footprintCells = new(JumboFootprint.CellCount);
         readonly List<DiceController> footprintClearBuffer = new();
@@ -199,7 +204,8 @@ namespace DiceGame.Placement
 
             for (var i = 0; i < allDice.Count; i++) {
                 var dice = allDice[i];
-                if (dice == null) {
+                // Carried occupancy is only committed Top (floor lift) or carryOccupancy.
+                if (dice == null || dice.IsCarried) {
                     continue;
                 }
 
@@ -219,6 +225,58 @@ namespace DiceGame.Placement
             }
 
             return false;
+        }
+
+        /// <summary>
+        /// Elevated carry slot (standing above Bottom/Top). Not a normal Top stack claim.
+        /// </summary>
+        public bool TryGetCarryAt(Vector2Int gridPos, out DiceController dice) {
+            return carryOccupancy.TryGetValue(gridPos, out dice) && dice != null;
+        }
+
+        public bool HasCarryAt(Vector2Int gridPos) {
+            return TryGetCarryAt(gridPos, out _);
+        }
+
+        /// <summary>
+        /// Register lift carry above the standing surface without claiming Bottom/Top.
+        /// </summary>
+        public void SetCarryOccupancy(DiceController dice, Vector2Int gridPos) {
+            if (dice == null) {
+                return;
+            }
+
+            ClearCarryOccupancy(dice);
+            if (carryOccupancy.TryGetValue(gridPos, out var existing)
+                && existing != null
+                && existing != dice) {
+                Debug.LogError(
+                    $"DiceRegistry: carry slot occupied at ({gridPos.x},{gridPos.y}) " +
+                    $"by {existing.name}; rejecting {dice.name}.");
+                return;
+            }
+
+            carryOccupancy[gridPos] = dice;
+        }
+
+        public void ClearCarryOccupancy(DiceController dice) {
+            if (dice == null || carryOccupancy.Count == 0) {
+                return;
+            }
+
+            Vector2Int? clearKey = null;
+            foreach (var pair in carryOccupancy) {
+                if (pair.Value != dice) {
+                    continue;
+                }
+
+                clearKey = pair.Key;
+                break;
+            }
+
+            if (clearKey.HasValue) {
+                carryOccupancy.Remove(clearKey.Value);
+            }
         }
 
         /// <summary>
@@ -253,6 +311,7 @@ namespace DiceGame.Placement
                 return;
             }
 
+            ClearCarryOccupancy(dice);
             Remove(dice, dice.CurrentState.GridPos, dice.CurrentState.Tier);
         }
 
@@ -916,6 +975,7 @@ namespace DiceGame.Placement
             }
 
             ClearPendingOccupancy(dice);
+            ClearCarryOccupancy(dice);
             Remove(dice, dice.CurrentState.GridPos, dice.CurrentState.Tier);
             allDice.Remove(dice);
         }

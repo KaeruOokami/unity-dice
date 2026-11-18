@@ -2094,17 +2094,18 @@ namespace DiceGame.Gameplay
             }
 
             liftPhase = LiftPhase.Carrying;
-            if (carriedDice == null) {
+            if (carriedDice == null || standingController == null) {
                 return;
             }
 
-            // Floor lift apex == Top height: occupy the player cell as real Top for match.
-            if (!IsOnFloor) {
-                return;
+            // Lift apex: always claim the player cell one level above standing.
+            // Floor → committed Top (match). On-dice → elevated carry slot only.
+            var matchAsTop = IsOnFloor;
+            if (matchAsTop) {
+                matchActionContext?.AssignOwner(carriedDice, PlayerSlot);
             }
 
-            matchActionContext?.AssignOwner(carriedDice, PlayerSlot);
-            carriedDice.TryMountCarryAsTop(standingController.GridCell);
+            carriedDice.TryMountCarryAtPlayerCell(standingController.GridCell, matchAsTop);
         }
 
         bool TryPlaceCarriedDice(Direction direction) {

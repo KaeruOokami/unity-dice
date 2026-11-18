@@ -340,6 +340,11 @@ namespace DiceGame.Gameplay
                 return false;
             }
 
+            // Elevated carry is not a stack Top; only floor-lift match Top participates.
+            if (dice.IsCarried && !dice.IsCarryMatchTop) {
+                return false;
+            }
+
             // Bottom emergence may match mid-appear; fall-from-above stays ineligible.
             if (dice.IsSpawning && !dice.AllowsUnconditionalMount) {
                 return false;

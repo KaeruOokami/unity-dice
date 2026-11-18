@@ -1576,6 +1576,7 @@ namespace DiceGame.Gameplay
 
             // Lift-mounted Top may still be flagged carried; clear so match erasure can proceed.
             isCarried = false;
+            registry?.ClearCarryOccupancy(this);
             var sinkStartProgress = CommitSpawnIfNeededForErasure();
 
             ExtinguishFire();
@@ -1670,6 +1671,7 @@ namespace DiceGame.Gameplay
             }
 
             isCarried = false;
+            registry?.ClearCarryOccupancy(this);
 
             // Same early clear as match erasure: fade fire VFX, no burn-aftermath Kind change.
             ExtinguishFire(applyBurnAftermath: false);
@@ -1935,24 +1937,55 @@ namespace DiceGame.Gameplay
         }
 
         /// <summary>
-        /// Floor-lift apex: occupy the player cell as real Top (match adjacency uses that slot).
+        /// True when this carried die is committed as Top for match (floor-lift mount).
+        /// Elevated carry uses <see cref="DiceRegistry"/> carry occupancy only.
+        /// </summary>
+        public bool IsCarryMatchTop =>
+            isCarried
+            && currentState.Tier == DiceStackTier.Top
+            && registry != null
+            && registry.TryGetTopAt(currentState.GridPos, out var top)
+            && top == this;
+
+        /// <summary>
+        /// Lift apex: move logical occupancy to the player cell, one level above standing.
+        /// Floor (<paramref name="matchAsTop"/>): committed Top for match adjacency.
+        /// On-dice: elevated carry slot only (not a normal Top stack claim).
         /// Visual stay is still driven by carry follow; do not snap.
         /// </summary>
-        public bool TryMountCarryAsTop(Vector2Int cell) {
+        public bool TryMountCarryAtPlayerCell(Vector2Int cell, bool matchAsTop) {
             if (!isCarried || registry == null || board == null || Capabilities.HasExpandedFootprint) {
                 return false;
             }
 
             registry.RemoveFromGrid(this);
+            if (matchAsTop) {
+                currentState = new DiceState(
+                    cell,
+                    currentState.Orientation,
+                    DiceStackTier.Top,
+                    currentState.Kind);
+                registry.Place(this, cell, DiceStackTier.Top);
+                StateChanged?.Invoke(currentState);
+                carryTopMountMatchNotifier?.NotifyCarryTopMountCompleted(this);
+                return true;
+            }
+
             currentState = new DiceState(
                 cell,
                 currentState.Orientation,
-                DiceStackTier.Top,
+                currentState.Tier,
                 currentState.Kind);
-            registry.Place(this, cell, DiceStackTier.Top);
+            registry.SetCarryOccupancy(this, cell);
             StateChanged?.Invoke(currentState);
-            carryTopMountMatchNotifier?.NotifyCarryTopMountCompleted(this);
             return true;
+        }
+
+        /// <summary>
+        /// Floor-lift apex: occupy the player cell as real Top (match adjacency uses that slot).
+        /// </summary>
+        public bool TryMountCarryAsTop(Vector2Int cell) {
+            return TryMountCarryAtPlayerCell(cell, matchAsTop: true);
         }
 
         public bool TryPlaceAt(Vector2Int targetGrid, DiceStackTier targetTier, Vector3 fromWorld, Action onComplete) {
