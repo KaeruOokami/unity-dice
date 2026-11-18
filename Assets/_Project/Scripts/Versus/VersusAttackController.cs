@@ -298,9 +298,6 @@ namespace DiceGame.Versus
             }
 
             var reverseActive = IsReverseActive();
-            var effectFace = reverseActive
-                ? AttackFaceReverse.ToEffectFace(e.Face)
-                : e.Face;
             var jumboRemaining = ResolveJumboSendableRemaining(e.Target);
             if (!AttackVolleyBuilder.TryBuild(
                     attackSettings,
@@ -316,11 +313,8 @@ namespace DiceGame.Versus
                 return;
             }
 
-            var maxSendCount = 0;
-            if (attackSettings.TryGetSendableKindsForFace(effectFace, out var sendableKinds)) {
-                maxSendCount = AttackVolumeResolver.ResolveAbsoluteMaxVolleyCount(sendableKinds);
-            }
-
+            var maxSendCount = AttackVolumeResolver.ResolveAbsoluteMaxVolleyCount(
+                attackSettings.FaceSendProfiles);
             if (maxSendCount <= 0) {
                 Debug.LogError(
                     "VersusAttackController: Attack send max count is 0; VFX tier falls back to sent count only.");

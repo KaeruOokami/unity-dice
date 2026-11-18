@@ -44,6 +44,24 @@ namespace DiceGame.Versus.Core
             return maxVolley;
         }
 
+        /// <summary>
+        /// Theoretical max dice per volley across all face send profiles (ignores power gates).
+        /// </summary>
+        public static int ResolveAbsoluteMaxVolleyCount(FaceAttackSendProfile[] profiles) {
+            if (profiles == null || profiles.Length == 0) {
+                return 0;
+            }
+
+            var maxVolley = 0;
+            for (var i = 0; i < profiles.Length; i++) {
+                maxVolley = Mathf.Max(
+                    maxVolley,
+                    ResolveAbsoluteMaxVolleyCount(profiles[i].SendableKinds));
+            }
+
+            return maxVolley;
+        }
+
         public static int ResolveDiceCount(SendableKindLimit[] sendableKinds, float power) {
             var maxVolley = ResolveMaxVolleyCount(sendableKinds, power);
             if (maxVolley <= 0) {
