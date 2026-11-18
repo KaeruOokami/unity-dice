@@ -3202,10 +3202,19 @@ namespace DiceGame.View
                 Mathf.Abs(axis.z) > 0.5f ? squash : 1f);
         }
 
+        /// <summary>
+        /// Sink squash and BottomEmergence reverse-squash share <see cref="erasureProgress"/>.
+        /// </summary>
         float ResolvePresentationSquash() {
-            return activeErasureKind == ErasureKind.Sink && erasureProgress > 0f
-                ? 1f - erasureProgress
-                : 1f;
+            if (erasureProgress <= 0f) {
+                return 1f;
+            }
+
+            if (activeErasureKind == ErasureKind.Sink || isEmergingVisual) {
+                return 1f - erasureProgress;
+            }
+
+            return 1f;
         }
 
         void ResolvePresentationExtents(Board board, out float minY, out float maxY) {
