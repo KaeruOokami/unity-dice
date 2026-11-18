@@ -38,7 +38,7 @@ namespace DiceGame.Placement
         /// <summary>
         /// Slot occupancy for roll path ranks (Kind Ghost included — pass-through is interaction only).
         /// Top uses slot capacity (<see cref="DiceRegistry.HasTopSlotClaimAt"/>) including in-flight claims.
-        /// Sink erasure / emerging crushables are Floor for dice overwrite.
+        /// Crushables (sink ghost Bottom, Radiance Top, emerging) are skipped so dice can overwrite.
         /// </summary>
         public bool TryGetOccupancyTier(Vector2Int cell, out CellOccupancyTier tier) {
             tier = CellOccupancyTier.Invalid;
@@ -46,7 +46,10 @@ namespace DiceGame.Placement
                 return false;
             }
 
-            if (registry != null && registry.HasTopSlotClaimAt(cell)) {
+            if (registry != null
+                && registry.HasTopSlotClaimAt(cell)
+                && !(registry.TryGetTopAt(cell, out var top)
+                    && GhostPlacementRules.IsCrushableByDicePlacement(top))) {
                 tier = CellOccupancyTier.Top;
                 return true;
             }

@@ -1466,7 +1466,7 @@ namespace DiceGame.Gameplay
                 return true;
             }
 
-            return standingDice.IsSinkErasing;
+            return standingDice.IsErasingStandingSurface;
         }
 
         float GetDiceJumpHeight() {
@@ -1822,8 +1822,8 @@ namespace DiceGame.Gameplay
                     return;
                 }
 
-                if (dice.IsSinkErasing) {
-                    overlapSummary.Append($" [{diceLabel}:sink-erasing]");
+                if (dice.IsErasingStandingSurface) {
+                    overlapSummary.Append($" [{diceLabel}:erasing-standing]");
                     return;
                 }
 

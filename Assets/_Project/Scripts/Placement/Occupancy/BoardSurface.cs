@@ -25,6 +25,15 @@ namespace DiceGame.Placement
         }
 
         public bool IsErasing => State == SurfaceState.Erasing;
+
+        /// <summary>
+        /// Erasing standing surface (Sink or Radiance). Prefer this over Sink-only checks
+        /// for player leave / dissolve / non-couple standing rules.
+        /// </summary>
+        public bool IsErasingStandingSurface =>
+            IsErasing && Dice != null && Dice.IsErasingStandingSurface;
+
+        /// <summary>Legacy alias — Sink-only visual/progress paths should use Dice.IsSinkErasing.</summary>
         public bool IsSinkErasing => IsErasing && Dice != null && Dice.IsSinkErasing;
 
         public bool AllowsRoll => Dice != null && State == SurfaceState.Normal;
@@ -39,7 +48,7 @@ namespace DiceGame.Placement
         }
 
         public static BoardSurface FromDice(Vector2Int gridCell, int level, DiceController dice) {
-            var state = dice != null && dice.IsSinkErasing
+            var state = dice != null && dice.IsErasingStandingSurface
                 ? SurfaceState.Erasing
                 : SurfaceState.Normal;
             var surfaceY = dice != null
@@ -58,7 +67,7 @@ namespace DiceGame.Placement
             return new BoardSurface(
                 gridCell,
                 SurfaceHeightLevel.Top,
-                bottomDice != null && bottomDice.IsSinkErasing
+                bottomDice != null && bottomDice.IsErasingStandingSurface
                     ? SurfaceState.Erasing
                     : SurfaceState.Normal,
                 bottomDice,

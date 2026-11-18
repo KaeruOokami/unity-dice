@@ -5,13 +5,6 @@ namespace DiceGame.Placement
 {
     public static class WalkTransferPolicy
     {
-        const float SurfaceYEpsilon = 0.001f;
-
-        static bool IsSinkErasingDescentTransfer(BoardSurface fromSurface, float targetSurfaceWorldY) {
-            return fromSurface.IsSinkErasing
-                && targetSurfaceWorldY < fromSurface.SurfaceWorldY - SurfaceYEpsilon;
-        }
-
         static bool IsLandingTierAtOrBelowStandingTier(
             DiceStackTier standingTier,
             DiceStackTier landingTier) {
@@ -28,6 +21,15 @@ namespace DiceGame.Placement
             DiceRegistry registry,
             HeightReachEvaluation reach,
             bool allowDescentOnly = false) {
+            // Erasing standing: same rule as Bottom — real surface gap over walk max → dissolve.
+            // Jump descent bypasses via CanUsePlayerOnlyLowerLevelJump → Walkable.
+            if (HeightReachPolicy.NeedsErasingDissolveDescent(
+                fromSurface,
+                reach.FloorWorldY,
+                reach)) {
+                return MovementTransition.BlockedStepOnly(null, SurfaceHeightLevel.Floor);
+            }
+
             if (HeightReachPolicy.CanTransfer(
                 fromSurface,
                 reach.FloorWorldY,
@@ -39,10 +41,6 @@ namespace DiceGame.Placement
                     null,
                     SurfaceHeightLevel.Floor,
                     MovementTransitionRoute.FloorTransfer);
-            }
-
-            if (fromSurface.IsSinkErasing && fromSurface.Level == SurfaceHeightLevel.Bottom) {
-                return MovementTransition.BlockedStepOnly(null, SurfaceHeightLevel.Floor);
             }
 
             return MovementTransition.Blocked();
@@ -108,14 +106,23 @@ namespace DiceGame.Placement
                 return false;
             }
 
-            if (HeightReachPolicy.CanTransfer(
-                fromSurface,
-                targetSurface.SurfaceWorldY,
-                standingDice,
-                registry,
-                reach,
-                allowDescentOnly,
-                target)) {
+            // Erasing leave: do not walk when real surface gap exceeds walk max
+            // (ignore footing collapse / unconditional mount for this gate).
+            var erasingDissolve = !isJumping
+                && HeightReachPolicy.NeedsErasingDissolveDescent(
+                    fromSurface,
+                    targetSurface.SurfaceWorldY,
+                    reach);
+
+            if (!erasingDissolve
+                && HeightReachPolicy.CanTransfer(
+                    fromSurface,
+                    targetSurface.SurfaceWorldY,
+                    standingDice,
+                    registry,
+                    reach,
+                    allowDescentOnly,
+                    target)) {
                 transition = CreateWalkableTransfer(targetSurface);
                 return true;
             }
@@ -126,18 +133,14 @@ namespace DiceGame.Placement
                 standingTier,
                 fromSurface,
                 targetSurface,
-                standingDice,
-                registry,
                 reach,
                 out transition)) {
                 return true;
             }
 
-            var deltaNorm = HeightReachPolicy.GetTransferDeltaNorm(
-                fromSurface,
+            var deltaNorm = HeightReachPolicy.GetSurfaceDeltaNorm(
+                fromSurface.SurfaceWorldY,
                 targetSurface.SurfaceWorldY,
-                standingDice,
-                registry,
                 reach);
             rejectReason =
                 $"step-height targetY={targetSurface.SurfaceWorldY:F3} " +
@@ -175,8 +178,6 @@ namespace DiceGame.Placement
                 standingTier,
                 fromSurface,
                 targetSurface,
-                standingDice,
-                registry,
                 reach,
                 out transition)) {
                 return true;
@@ -206,9 +207,10 @@ namespace DiceGame.Placement
                 return false;
             }
 
-            if (target.IsRadianceErasing
-                && (standingDice == null || !standingDice.IsRadianceErasing)) {
-                rejectReason = "radiance-top-transfer-blocked";
+            // Crushable by dice Place/Move (sink ghost / Radiance Top): player does not mount —
+            // leave the cell for grid-roll overwrite (same as TierLandingPolicy).
+            if (GhostPlacementRules.IsCrushableByDicePlacement(target)) {
+                rejectReason = "crushable-not-player-mount";
                 return false;
             }
 
@@ -237,31 +239,18 @@ namespace DiceGame.Placement
             DiceStackTier standingTier,
             BoardSurface fromSurface,
             BoardSurface targetSurface,
-            DiceController standingDice,
-            DiceRegistry registry,
             HeightReachEvaluation reach,
             out MovementTransition transition) {
             transition = default;
-            if (!fromSurface.IsSinkErasing) {
-                return false;
-            }
-
-            if (!IsSinkErasingDescentTransfer(fromSurface, targetSurface.SurfaceWorldY)) {
+            if (!HeightReachPolicy.NeedsErasingDissolveDescent(
+                fromSurface,
+                targetSurface.SurfaceWorldY,
+                reach)) {
                 return false;
             }
 
             var landingTier = SurfaceHeightLevel.ToDiceStackTier(targetSurface.Level);
             if (!IsLandingTierAtOrBelowStandingTier(standingTier, landingTier)) {
-                return false;
-            }
-
-            if (HeightReachPolicy.CanTransfer(
-                fromSurface,
-                targetSurface.SurfaceWorldY,
-                standingDice,
-                registry,
-                reach,
-                allowDescentOnly: false)) {
                 return false;
             }
 

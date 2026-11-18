@@ -14,10 +14,9 @@ namespace DiceGame.Placement
                 return MoveAction.ExpandedFootprintWalk;
             }
 
-            // --- Dice axis ---
+            // --- Dice axis (landing resolution decides success; no early stack-entry gate) ---
             var diceAction = MoveAction.ContinueToLanding;
-            if (JumpPlayerTransferPolicy.ShouldEvaluateDiceCoupledMovement(f.IsJumping, f.StandingDice)
-                && !f.BlocksDiceCoupledStackEntry) {
+            if (JumpPlayerTransferPolicy.ShouldEvaluateDiceCoupledMovement(f.IsJumping, f.StandingDice)) {
                 diceAction = SelectCoupled(f);
             }
 
@@ -25,7 +24,7 @@ namespace DiceGame.Placement
                 return diceAction;
             }
 
-            // --- Player axis (independent of dice stack-entry block) ---
+            // --- Player axis ---
             if (CanSelectPlayerTierLanding(f)) {
                 return MoveAction.TierLanding;
             }
@@ -46,7 +45,7 @@ namespace DiceGame.Placement
 
         /// <summary>
         /// Player leaving a standing die: walk / jump descent / same-level move / height transfer.
-        /// Solo-leave surfaces (Iron, stuck Magnet, sink) use the shared descent fact.
+        /// Hard solo-leave (Iron): walk descent blocked. Erasing standing: walk → dissolve hold.
         /// </summary>
         static MoveAction SelectPlayerStanding(in MoveFacts f) {
             if (f.Relation == MoveLevelRelation.BottomToTop) {
@@ -66,6 +65,18 @@ namespace DiceGame.Placement
                     return f.TargetLevel == SurfaceHeightLevel.Floor
                         ? MoveAction.PlayerWalkFloor
                         : MoveAction.PlayerWalk;
+                }
+
+                // Erasing standing walk: edge blocks then long-press dissolve (not hard Iron block).
+                if (!f.IsJumping
+                    && f.StandingDice != null
+                    && f.StandingDice.IsErasingStandingSurface) {
+                    if (f.TargetLevel == SurfaceHeightLevel.Floor || f.IsPlayerFloorPassable) {
+                        // EvaluateFloor → BlockedStepOnly dissolve-to-floor.
+                        return MoveAction.PlayerWalkFloor;
+                    }
+
+                    return MoveAction.HeightTransfer;
                 }
 
                 if (f.IsPlayerFloorPassable) {

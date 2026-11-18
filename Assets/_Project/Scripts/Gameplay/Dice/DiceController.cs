@@ -67,6 +67,11 @@ namespace DiceGame.Gameplay
         public bool IsErasing => erasureKind != ErasureKind.None;
         public bool IsSinkErasing => erasureKind == ErasureKind.Sink;
         public bool IsRadianceErasing => erasureKind == ErasureKind.Radiance;
+        /// <summary>
+        /// Sink or Radiance: still a standing surface for the player, but solo-leave /
+        /// dissolve-descent / non-couple (shared erasing-standing rules).
+        /// </summary>
+        public bool IsErasingStandingSurface => IsErasing;
         public ErasureKind ErasureKind => erasureKind;
         public bool IsOnFire => isOnFire;
         public float FireRemaining => fireRemaining;
@@ -765,8 +770,8 @@ namespace DiceGame.Gameplay
 
         /// <summary>
         /// Standing / stack surface Y for a height level. Jumbo is 2× tall: Top = 2 cells, Bottom = 1.
-        /// While sink-erasing, height follows visual squash (same as normal dice) so floor mounts
-        /// become reachable once the step limit is met.
+        /// While sink-erasing, height follows visual squash so floor mounts become reachable
+        /// once the step limit is met. Radiance keeps full logical height (no squash).
         /// </summary>
         public float GetLogicalStandingSurfaceWorldY(int surfaceLevel) {
             if (board == null) {

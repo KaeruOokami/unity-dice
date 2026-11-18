@@ -12,13 +12,22 @@ namespace DiceGame.Placement
         }
 
         /// <summary>
-        /// Sink erasure ghost stays player-solid but may be overwritten by dice Place/Move
-        /// (<see cref="DiceRegistry.EvictErasingDiceAt"/>).
-        /// Emerging bottoms use the same crush rule while still underground
-        /// (progress ≥ ghost threshold — reverse of sink).
+        /// Player-solid erasing standing that dice Place/Move may overwrite
+        /// (<see cref="DiceRegistry.EvictErasingDiceAt"/>):
+        /// sink ghost phase, emerging bottoms, and Top-tier erasing standing (Radiance).
         /// </summary>
         public static bool IsCrushableByDicePlacement(DiceController dice) {
-            return dice != null && (dice.IsErasureGhost || dice.IsEmergingGhost);
+            if (dice == null) {
+                return false;
+            }
+
+            if (dice.IsErasureGhost || dice.IsEmergingGhost) {
+                return true;
+            }
+
+            // Top erasure standing: overwrite / cover crush like sink ghost (no squash phase).
+            return dice.IsErasingStandingSurface
+                && dice.CurrentState.Tier == DiceStackTier.Top;
         }
 
         /// <summary>
@@ -103,17 +112,6 @@ namespace DiceGame.Placement
             }
 
             return true;
-        }
-
-        /// <summary>
-        /// Coupled stack entry onto Top is blocked when a player-solid Top surface is claimed.
-        /// Pass-through Top still occupies the slot but is not a standing surface — grid swap
-        /// remains available through <see cref="GhostLandingResolver"/>.
-        /// </summary>
-        public static bool BlocksDiceCoupledStackEntry(DiceRegistry registry, Vector2Int cell) {
-            return registry != null
-                && registry.HasBottomAt(cell)
-                && registry.HasSolidTopClaimAt(cell);
         }
 
         /// <summary>

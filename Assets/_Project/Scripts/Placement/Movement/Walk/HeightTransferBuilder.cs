@@ -18,6 +18,11 @@ namespace DiceGame.Placement
                         ? LogAndReturn(f, f.SameTierTransition, "ok")
                         : MovementTransition.Blocked();
 
+                case HeightTransferAction.LowerLevelWalk:
+                    return f.CanLowerLevelWalk
+                        ? LogAndReturn(f, f.LowerLevelWalkTransition, "lower-walk")
+                        : MovementTransition.Blocked();
+
                 case HeightTransferAction.DissolveDescentHold:
                     return f.CanDissolveDescentHold
                         ? LogAndReturn(f, f.DissolveDescentTransition, "dissolve-hold")

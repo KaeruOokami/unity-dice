@@ -13,9 +13,11 @@ namespace DiceGame.Core
             }
 
             var caps = baseBehavior.Capabilities;
-            var isPlayerPassThrough = caps.IsPlayerPassThrough && !state.IsSinkErasing;
+            var isErasingStanding = state.IsSinkErasing || state.IsRadianceErasing;
+            var isPlayerPassThrough = caps.IsPlayerPassThrough && !isErasingStanding;
 
-            if (state.IsRadianceErasing || state.IsSpawning) {
+            // Erasing standing (Sink/Radiance) and spawning: solo-leave / non-couple.
+            if (isErasingStanding || state.IsSpawning) {
                 return new EffectiveDiceBehavior(
                     baseBehavior,
                     state.IsSinkErasing,

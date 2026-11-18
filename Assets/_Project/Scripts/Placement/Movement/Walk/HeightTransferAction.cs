@@ -7,6 +7,8 @@ namespace DiceGame.Placement
     {
         Blocked = 0,
         SameTierTransfer,
+        /// <summary>Walk onto a lower-tier die when step height allows (same as Sink when gap is small).</summary>
+        LowerLevelWalk,
         DissolveDescentHold,
         LowerLevelPlayerOnlyJump,
     }

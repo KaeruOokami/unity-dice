@@ -45,6 +45,20 @@ namespace DiceGame.Tests.EditMode
         }
 
         [Test]
+        public void Select_LowerLevelWalk_BeforeDissolve_WhenBothAvailable() {
+            var facts = CreateFacts(
+                canSameTierTransfer: false,
+                sameTierRejectReason: "step-height-exceeded",
+                canLowerLevelWalk: true,
+                canDissolveDescentHold: true,
+                hasLowerLevelFallback: true);
+
+            Assert.AreEqual(
+                HeightTransferAction.LowerLevelWalk,
+                HeightTransferActionSelector.Select(facts));
+        }
+
+        [Test]
         public void Select_DissolveHold_WhenSameTierStepHeightRejected() {
             var facts = CreateFacts(
                 canSameTierTransfer: false,
@@ -71,6 +85,7 @@ namespace DiceGame.Tests.EditMode
             bool preferCoupledGridRoll = false,
             bool canSameTierTransfer = false,
             string sameTierRejectReason = null,
+            bool canLowerLevelWalk = false,
             bool canDissolveDescentHold = false,
             bool canLowerLevelPlayerOnlyJump = false,
             bool hasLowerLevelFallback = false,
@@ -79,13 +94,16 @@ namespace DiceGame.Tests.EditMode
             var sameTierTarget = hasLowerLevelFallback && sameTierTargetPresent
                 ? CreateDiceStub("Same")
                 : null;
+            var standingDice = fromLevel == SurfaceHeightLevel.Floor
+                ? null
+                : CreateDiceStub("Standing");
 
             return new HeightTransferFacts(
                 fromCell: Vector2Int.zero,
                 toCell: Vector2Int.right,
                 fromLevel: fromLevel,
                 fromSurface: default,
-                standingDice: null,
+                standingDice: standingDice,
                 direction: Direction.East,
                 isJumping: false,
                 allowJumpGridMove: false,
@@ -97,6 +115,8 @@ namespace DiceGame.Tests.EditMode
                 canSameTierTransfer: canSameTierTransfer,
                 sameTierTransition: default,
                 sameTierRejectReason: sameTierRejectReason,
+                canLowerLevelWalk: canLowerLevelWalk,
+                lowerLevelWalkTransition: default,
                 canDissolveDescentHold: canDissolveDescentHold,
                 dissolveDescentTransition: default,
                 canLowerLevelPlayerOnlyJump: canLowerLevelPlayerOnlyJump);

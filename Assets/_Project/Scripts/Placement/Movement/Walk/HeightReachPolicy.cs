@@ -16,6 +16,62 @@ namespace DiceGame.Placement
                 && footingNorm - targetNorm <= maxStepNorm;
         }
 
+        /// <summary>
+        /// Standing surface Y → landing Y step (no footing substitution).
+        /// Used for erasing-standing leave so Top→Bottom is not collapsed to Bottom→Bottom.
+        /// </summary>
+        public static bool CanWalkBySurfaceDelta(
+            float fromSurfaceWorldY,
+            float targetSurfaceWorldY,
+            HeightReachEvaluation reach) {
+            var fromNorm = NormalizedHeight.ToNormalized(
+                fromSurfaceWorldY,
+                reach.FloorWorldY,
+                reach.CellSize);
+            var targetNorm = NormalizedHeight.ToNormalized(
+                targetSurfaceWorldY,
+                reach.FloorWorldY,
+                reach.CellSize);
+            return CanStepBetweenNorm(fromNorm, targetNorm, reach.GetMaxStepNorm());
+        }
+
+        public static float GetSurfaceDeltaNorm(
+            float fromSurfaceWorldY,
+            float targetSurfaceWorldY,
+            HeightReachEvaluation reach) {
+            var fromNorm = NormalizedHeight.ToNormalized(
+                fromSurfaceWorldY,
+                reach.FloorWorldY,
+                reach.CellSize);
+            var targetNorm = NormalizedHeight.ToNormalized(
+                targetSurfaceWorldY,
+                reach.FloorWorldY,
+                reach.CellSize);
+            return Mathf.Abs(fromNorm - targetNorm);
+        }
+
+        /// <summary>
+        /// Erasing standing descent whose real surface gap exceeds walk max → dissolve hold
+        /// (Floor and Bottom use the same predicate).
+        /// </summary>
+        public static bool NeedsErasingDissolveDescent(
+            BoardSurface fromSurface,
+            float targetSurfaceWorldY,
+            HeightReachEvaluation reach) {
+            if (!fromSurface.IsErasingStandingSurface) {
+                return false;
+            }
+
+            if (targetSurfaceWorldY >= fromSurface.SurfaceWorldY - SurfaceYEpsilon) {
+                return false;
+            }
+
+            return !CanWalkBySurfaceDelta(
+                fromSurface.SurfaceWorldY,
+                targetSurfaceWorldY,
+                reach);
+        }
+
         public static bool CanTransfer(
             BoardSurface fromSurface,
             float targetSurfaceWorldY,

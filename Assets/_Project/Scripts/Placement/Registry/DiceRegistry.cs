@@ -233,9 +233,9 @@ namespace DiceGame.Placement
                 return true;
             }
 
+            // Crushable Top (Radiance / equivalent): dice Place/Move may overwrite.
             return TryGetTopAt(gridPos, out var top)
-                && top != null
-                && top.IsRadianceErasing;
+                && GhostPlacementRules.IsCrushableByDicePlacement(top);
         }
 
         public bool HasErasingDiceAt(Vector2Int gridPos) {

@@ -2,6 +2,7 @@ namespace DiceGame.Placement
 {
     /// <summary>
     /// Decision table: <see cref="HeightTransferFacts"/> → one <see cref="HeightTransferAction"/>.
+    /// Lower walk (surface gap within walk max) before dissolve (surface gap over walk max).
     /// </summary>
     public static class HeightTransferActionSelector
     {
@@ -16,6 +17,10 @@ namespace DiceGame.Placement
 
             if (!f.HasLowerLevelFallbackTarget) {
                 return HeightTransferAction.Blocked;
+            }
+
+            if (f.CanLowerLevelWalk) {
+                return HeightTransferAction.LowerLevelWalk;
             }
 
             if (f.CanDissolveDescentHold) {

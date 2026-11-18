@@ -5,8 +5,10 @@ namespace DiceGame.Placement
 {
     /// <summary>
     /// Player vs dice standing-transfer facts.
-    /// Descent from a non-coupleable standing surface is a player-entry rule
-    /// (walk blocked, jump allowed) — not a Mode-specific special API.
+    /// Hard solo-leave (Iron / stuck Magnet): walk descent blocked, jump allowed.
+    /// Jump solo-leave (!couple and no roll/slide accompany): jump descends without the die
+    /// (Charcoal, Iron). Stone keeps CanGridRoll so it is not jump-solo.
+    /// Erasing standing (Sink / Radiance): walk edge uses dissolve hold; jump descends immediately.
     /// </summary>
     public static class JumpPlayerTransferPolicy
     {
@@ -40,17 +42,12 @@ namespace DiceGame.Placement
         }
 
         /// <summary>
-        /// Standing surface the player cannot leave together with the die:
-        /// Iron, iron-stuck Magnet, sink-erasing, and other effectively immovable non-couple dice.
-        /// Stone (roll-capable, non-couple) is not this class — jump descent stays blocked separately.
+        /// Iron / stuck Magnet etc.: cannot leave with the die; walk descent hard-blocked.
+        /// Erasing standing is not this class (uses dissolve hold on walk).
         /// </summary>
-        public static bool IsSoloLeaveStandingSurface(DiceController standingDice) {
-            if (standingDice == null) {
+        public static bool IsHardSoloLeaveStandingSurface(DiceController standingDice) {
+            if (standingDice == null || standingDice.IsErasingStandingSurface) {
                 return false;
-            }
-
-            if (standingDice.IsSinkErasing) {
-                return true;
             }
 
             if (standingDice.CanJumpCoupleWithPlayer) {
@@ -61,9 +58,35 @@ namespace DiceGame.Placement
         }
 
         /// <summary>
-        /// Player may descend from the current standing die for this input.
-        /// Solo-leave surfaces: jump only. Couple-denied but movable (Stone) on jump: never.
-        /// Spawning: never.
+        /// Jump cannot bring the die: no jump couple and no roll/slide accompany path.
+        /// Charcoal and Iron match; Stone (CanGridRoll) does not.
+        /// </summary>
+        public static bool IsJumpSoloLeaveStandingSurface(DiceController standingDice) {
+            if (standingDice == null || standingDice.IsErasingStandingSurface) {
+                return false;
+            }
+
+            if (standingDice.CanJumpCoupleWithPlayer) {
+                return false;
+            }
+
+            var caps = standingDice.Capabilities;
+            return !caps.CanGridRoll && !caps.SlideUntilBlocked;
+        }
+
+        /// <summary>
+        /// Player leaves without bringing the die: erasing, hard solo-leave, or jump solo-leave.
+        /// </summary>
+        public static bool IsSoloLeaveStandingSurface(DiceController standingDice) {
+            return standingDice != null
+                && (standingDice.IsErasingStandingSurface
+                    || IsHardSoloLeaveStandingSurface(standingDice)
+                    || IsJumpSoloLeaveStandingSurface(standingDice));
+        }
+
+        /// <summary>
+        /// Player may start a descent for this input.
+        /// Decision by input mode, then capability facts (not Kind branches).
         /// </summary>
         public static bool CanPlayerDescendFromStanding(bool isJumping, DiceController standingDice) {
             if (standingDice == null) {
@@ -74,16 +97,20 @@ namespace DiceGame.Placement
                 return false;
             }
 
-            if (IsSoloLeaveStandingSurface(standingDice)) {
-                return isJumping;
+            if (standingDice.IsErasingStandingSurface) {
+                return true;
             }
 
-            // Jump while non-couple but still player-movable (Stone): no solo jump descent.
-            if (isJumping && !standingDice.CanJumpCoupleWithPlayer) {
-                return false;
+            if (isJumping) {
+                if (standingDice.CanJumpCoupleWithPlayer) {
+                    return true;
+                }
+
+                return IsJumpSoloLeaveStandingSurface(standingDice)
+                    || IsHardSoloLeaveStandingSurface(standingDice);
             }
 
-            return true;
+            return !IsHardSoloLeaveStandingSurface(standingDice);
         }
 
         public static bool BlocksPlayerDescentFromStanding(
@@ -96,7 +123,7 @@ namespace DiceGame.Placement
         }
 
         /// <summary>
-        /// True when jump descent from a solo-leave standing surface is allowed.
+        /// Immediate jump descent from solo-leave surfaces (hard, jump-solo, or erasing).
         /// </summary>
         public static bool CanUsePlayerOnlyLowerLevelJump(bool isJumping, DiceController standingDice) {
             return isJumping
@@ -112,7 +139,7 @@ namespace DiceGame.Placement
             DiceController standingDice) {
             return !isJumping
                 && IsLowerLevelTransfer(fromLevel, targetLevel)
-                && IsSoloLeaveStandingSurface(standingDice);
+                && IsHardSoloLeaveStandingSurface(standingDice);
         }
 
         public static bool BlocksPlayerOnlyJumpLowerLevelTransfer(
@@ -136,7 +163,7 @@ namespace DiceGame.Placement
 
             return standingDice != null
                 && standingDice.CanJumpCoupleWithPlayer
-                && !standingDice.IsSinkErasing;
+                && !standingDice.IsErasingStandingSurface;
         }
 
         public static bool UsesPlayerOnlyJumpStep(bool isJumping, int fromLevel, DiceController standingDice) {

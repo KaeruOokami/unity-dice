@@ -106,7 +106,6 @@ namespace DiceGame.Tests.EditMode
                 withinReachDescentOnly: true,
                 hasExpandedFootprintWalk: hasExpandedFootprintWalk,
                 expandedFootprintTransition: default,
-                blocksDiceCoupledStackEntry: false,
                 isPlayerFloorPassable: isPlayerFloorPassable,
                 canPlaceBottomAtToCell: canPlaceBottomAtToCell,
                 floorMountBottomDice: null,

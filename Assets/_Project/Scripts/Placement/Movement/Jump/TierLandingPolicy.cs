@@ -36,7 +36,7 @@ namespace DiceGame.Placement
             if (!registry.TryGetTopAt(toCell, out var topDice)
                 || topDice == null
                 || GhostPlacementRules.IsPlayerPassThrough(topDice)
-                || (topDice.IsRadianceErasing && !standingDice.IsRadianceErasing)
+                || GhostPlacementRules.IsCrushableByDicePlacement(topDice)
                 || !HeightReachPolicy.CanTransfer(
                     fromSurface,
                     topDice.GetLogicalTopSurfaceWorldY(),

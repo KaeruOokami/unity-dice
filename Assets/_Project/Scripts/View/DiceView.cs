@@ -634,8 +634,13 @@ namespace DiceGame.View
                 return 0f;
             }
 
-            var squash = 1f - erasureProgress;
-            ComputeVerticalExtents(board, currentTopFace, squash, out var minY, out var maxY);
+            // Sink: follow squash. Radiance: keep full height (emission-only erase).
+            ComputeVerticalExtents(
+                board,
+                currentTopFace,
+                ResolvePresentationSquash(),
+                out var minY,
+                out var maxY);
             return surfaceBaseWorldY - minY + maxY;
         }
 
@@ -647,8 +652,12 @@ namespace DiceGame.View
                 return board != null ? board.FloorSurfaceWorldY : 0f;
             }
 
-            var squash = 1f - erasureProgress;
-            ComputeVerticalExtents(board, currentTopFace, squash, out var minY, out var maxY);
+            ComputeVerticalExtents(
+                board,
+                currentTopFace,
+                ResolvePresentationSquash(),
+                out var minY,
+                out var maxY);
             return board.FloorSurfaceWorldY - minY + maxY;
         }
 
@@ -701,7 +710,12 @@ namespace DiceGame.View
             var savedFace = currentTopFace;
             rotationRoot.rotation = DiceOrientationMapper.ToRotation(state.Orientation);
             currentTopFace = state.Orientation.Top;
-            ComputeVerticalExtents(board, state.Orientation.Top, 1f - erasureProgress, out var minY, out _);
+            ComputeVerticalExtents(
+                board,
+                state.Orientation.Top,
+                ResolvePresentationSquash(),
+                out var minY,
+                out _);
             rotationRoot.rotation = savedRotation;
             currentTopFace = savedFace;
 

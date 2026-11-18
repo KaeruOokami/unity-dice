@@ -33,7 +33,6 @@ namespace DiceGame.Placement
         public bool HasExpandedFootprintWalk { get; }
         public MovementTransition ExpandedFootprintTransition { get; }
 
-        public bool BlocksDiceCoupledStackEntry { get; }
         public bool IsPlayerFloorPassable { get; }
         public bool CanPlaceBottomAtToCell { get; }
         public bool ToCellIsOccupiedForCoupled => !CanPlaceBottomAtToCell;
@@ -76,7 +75,6 @@ namespace DiceGame.Placement
             bool withinReachDescentOnly,
             bool hasExpandedFootprintWalk,
             MovementTransition expandedFootprintTransition,
-            bool blocksDiceCoupledStackEntry,
             bool isPlayerFloorPassable,
             bool canPlaceBottomAtToCell,
             DiceController floorMountBottomDice,
@@ -109,7 +107,6 @@ namespace DiceGame.Placement
             WithinReachDescentOnly = withinReachDescentOnly;
             HasExpandedFootprintWalk = hasExpandedFootprintWalk;
             ExpandedFootprintTransition = expandedFootprintTransition;
-            BlocksDiceCoupledStackEntry = blocksDiceCoupledStackEntry;
             IsPlayerFloorPassable = isPlayerFloorPassable;
             CanPlaceBottomAtToCell = canPlaceBottomAtToCell;
             FloorMountBottomDice = floorMountBottomDice;

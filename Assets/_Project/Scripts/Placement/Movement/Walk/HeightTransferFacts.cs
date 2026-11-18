@@ -25,6 +25,9 @@ namespace DiceGame.Placement
         public MovementTransition SameTierTransition { get; }
         public string SameTierRejectReason { get; }
 
+        public bool CanLowerLevelWalk { get; }
+        public MovementTransition LowerLevelWalkTransition { get; }
+
         public bool CanDissolveDescentHold { get; }
         public MovementTransition DissolveDescentTransition { get; }
 
@@ -47,6 +50,8 @@ namespace DiceGame.Placement
             bool canSameTierTransfer,
             MovementTransition sameTierTransition,
             string sameTierRejectReason,
+            bool canLowerLevelWalk,
+            MovementTransition lowerLevelWalkTransition,
             bool canDissolveDescentHold,
             MovementTransition dissolveDescentTransition,
             bool canLowerLevelPlayerOnlyJump) {
@@ -66,6 +71,8 @@ namespace DiceGame.Placement
             CanSameTierTransfer = canSameTierTransfer;
             SameTierTransition = sameTierTransition;
             SameTierRejectReason = sameTierRejectReason;
+            CanLowerLevelWalk = canLowerLevelWalk;
+            LowerLevelWalkTransition = lowerLevelWalkTransition;
             CanDissolveDescentHold = canDissolveDescentHold;
             DissolveDescentTransition = dissolveDescentTransition;
             CanLowerLevelPlayerOnlyJump = canLowerLevelPlayerOnlyJump;

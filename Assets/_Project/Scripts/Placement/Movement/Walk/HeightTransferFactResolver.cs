@@ -62,14 +62,37 @@ namespace DiceGame.Placement
                 // resolved
             }
 
-            var canDissolve = false;
-            MovementTransition dissolveTransition = default;
-            if (fromSurface.IsSinkErasing
-                && !isJumping
-                && lowerLevelTarget != null
+            var hasLowerFallback = lowerLevelTarget != null
                 && lowerLevelTarget != sameTierTarget
                 && (sameTierTarget == null
-                    || HeightTransferActionSelector.IsStepHeightRejectReason(sameTierRejectReason))
+                    || HeightTransferActionSelector.IsStepHeightRejectReason(sameTierRejectReason));
+
+            var canLowerLevelWalk = false;
+            MovementTransition lowerLevelWalkTransition = default;
+            if (hasLowerFallback
+                && HeightTransferTargetEvaluator.TryEvaluateToTarget(
+                    toCell,
+                    fromLevel,
+                    fromSurface,
+                    standingDice,
+                    isJumping,
+                    reach,
+                    registry,
+                    lowerLevelTarget,
+                    dissolveDescentHoldOnly: false,
+                    out var evaluatedLower,
+                    out _)
+                && evaluatedLower.Kind == MovementTransitionKind.Walkable) {
+                canLowerLevelWalk = true;
+                lowerLevelWalkTransition = evaluatedLower;
+            }
+
+            var canDissolve = false;
+            MovementTransition dissolveTransition = default;
+            if (fromSurface.IsErasingStandingSurface
+                && !isJumping
+                && hasLowerFallback
+                && !canLowerLevelWalk
                 && HeightTransferTargetEvaluator.TryEvaluateToTarget(
                     toCell,
                     fromLevel,
@@ -106,6 +129,8 @@ namespace DiceGame.Placement
                 canSameTier,
                 sameTierTransition,
                 sameTierRejectReason,
+                canLowerLevelWalk,
+                lowerLevelWalkTransition,
                 canDissolve,
                 dissolveTransition,
                 canLowerLevelJump);

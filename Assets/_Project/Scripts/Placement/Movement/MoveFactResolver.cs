@@ -77,7 +77,6 @@ namespace DiceGame.Placement
                 allowDescentOnly: true,
                 targetDice);
 
-            var blocksCoupled = GhostPlacementRules.BlocksDiceCoupledStackEntry(registry, toCell);
             var floorPassable = GhostPlacementRules.IsPlayerFloorPassable(registry, toCell);
             var canPlaceBottom = registry.CanPlaceBottomDiceAt(toCell);
 
@@ -98,12 +97,10 @@ namespace DiceGame.Placement
             var canGridRoll = false;
             DiceGridMovePlan gridPlan = default;
 
-            // Dice-coupled probes are independent of player TierLanding.
+            // Dice-coupled probes: landing resolution decides success (no early stack-entry gate).
             var needsCoupledProbes = !hasExpanded
-                && (mode == DiceStandingMoveMode.Slide || mode == DiceStandingMoveMode.Roll)
-                && !blocksCoupled;
+                && (mode == DiceStandingMoveMode.Slide || mode == DiceStandingMoveMode.Roll);
 
-            // Player standing on destination Top: independent of BlocksDiceCoupledStackEntry / Mode.
             var needsTierLandProbe = !hasExpanded
                 && standingDice != null
                 && fromLevel == SurfaceHeightLevel.Bottom
@@ -190,7 +187,6 @@ namespace DiceGame.Placement
                 withinReachDescentOnly,
                 hasExpanded,
                 expandedTransition,
-                blocksCoupled,
                 floorPassable,
                 canPlaceBottom,
                 floorMountBottom,
