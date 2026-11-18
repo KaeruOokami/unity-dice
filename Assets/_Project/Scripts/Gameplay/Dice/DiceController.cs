@@ -522,8 +522,9 @@ namespace DiceGame.Gameplay
                 : DiceSpawnAppearMode.FallFromAbove;
             currentState = new DiceState(gridPos, orientation, tier, kind);
 
-            // Emergence commits Bottom immediately so Tops can stack after the ghost phase.
-            // Fall-from-above stays pending until land.
+            // Emergence commits Bottom immediately (mount / post-ghost stack via Place/Move).
+            // Spawn lottery still treats IsSpawning as an in-flight cell claim
+            // (<see cref="DiceRegistry.HasInFlightSpawnAt"/>). Fall-from-above stays pending until land.
             if (spawnAppearMode == DiceSpawnAppearMode.BottomEmergence) {
                 registry?.Place(this, gridPos, tier);
             } else {

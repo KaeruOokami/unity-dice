@@ -16,9 +16,9 @@ namespace DiceGame.Placement
 
         readonly Dictionary<Vector2Int, GridStack> byGrid = new();
         /// <summary>
-        /// In-flight spawn intent (fall / appear). Counts as cell occupancy for spawn lottery
-        /// via <see cref="HasInFlightSpawnAt"/>; board updates reconcile tier via
-        /// <see cref="ReconcilePendingSpawnTierAt"/>.
+        /// Pending fall/appear intent (not yet committed). Counts as cell occupancy for spawn
+        /// lottery via <see cref="HasInFlightSpawnAt"/> together with still-IsSpawning committed
+        /// dice; board updates reconcile tier via <see cref="ReconcilePendingSpawnTierAt"/>.
         /// </summary>
         readonly Dictionary<Vector2Int, GridStack> pendingOccupancy = new();
         /// <summary>
@@ -123,10 +123,29 @@ namespace DiceGame.Placement
         }
 
         /// <summary>
-        /// Lottery reservation or pending spawn — cell is claimed for an in-flight dice.
+        /// Cell claimed for an unfinished spawn: lottery reservation, pending fall/appear,
+        /// or committed occupancy that is still <see cref="DiceController.IsSpawning"/>
+        /// (e.g. BottomEmergence Place before appear completes).
         /// </summary>
         public bool HasInFlightSpawnAt(Vector2Int gridPos) {
-            return spawnCellReservations.Contains(gridPos) || HasPendingSpawnAt(gridPos);
+            return spawnCellReservations.Contains(gridPos)
+                || HasPendingSpawnAt(gridPos)
+                || HasSpawningCommittedOccupantAt(gridPos);
+        }
+
+        /// <summary>
+        /// Committed Bottom/Top still in spawn appear — blocks new spawn lottery on the cell.
+        /// </summary>
+        bool HasSpawningCommittedOccupantAt(Vector2Int gridPos) {
+            if (TryGetBottomAt(gridPos, out var bottom)
+                && bottom != null
+                && bottom.IsSpawning) {
+                return true;
+            }
+
+            return TryGetTopAt(gridPos, out var top)
+                && top != null
+                && top.IsSpawning;
         }
 
         /// <summary>

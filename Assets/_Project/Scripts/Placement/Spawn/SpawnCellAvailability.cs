@@ -5,7 +5,8 @@ namespace DiceGame.Placement
 {
     /// <summary>
     /// Spawn lottery reads board occupancy only through this view:
-    /// committed slots, in-flight spawn claims, and erasure blockers.
+    /// committed slots, in-flight spawn claims (pending or still-IsSpawning committed),
+    /// and erasure blockers.
     /// One in-flight spawn claims the whole cell (no second dice onto the same cell).
     /// </summary>
     public static class SpawnCellAvailability
