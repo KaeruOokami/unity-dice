@@ -215,10 +215,7 @@ namespace DiceGame.Gameplay.AI.Domain
                     subGoals.Add(AiSubGoal.ReachWorkDie(workDie.Controller));
                 }
 
-                if (workDie.TopFace != face) {
-                    subGoals.Add(AiSubGoal.OrientDie(workDie.Controller, face));
-                }
-
+                // Join path BFS orients and relocates in one plan; no separate OrientDie.
                 subGoals.Add(AiSubGoal.JoinCluster(workDie.Controller, face, joinCell, joinTier));
 
                 var score = ScoreChainGoal(
@@ -412,10 +409,7 @@ namespace DiceGame.Gameplay.AI.Domain
                     subGoals.Add(AiSubGoal.ReachWorkDie(workDie.Controller));
                 }
 
-                if (workDie.TopFace != face) {
-                    subGoals.Add(AiSubGoal.OrientDie(workDie.Controller, face));
-                }
-
+                // Join path BFS orients and relocates in one plan; no separate OrientDie.
                 subGoals.Add(AiSubGoal.JoinCluster(workDie.Controller, face, joinCell, joinTier));
 
                 var score = ClusterSelectionEvaluator.ScoreCluster(

@@ -212,24 +212,29 @@ namespace DiceGame.Gameplay.AI.Domain
             float footingWorldY,
             PlayerSlot movementOwner,
             DiceState startState,
+            int targetFace,
             Vector2Int targetCell,
             DiceStackTier targetTier,
+            IReadOnlyList<DiceSnapshot> cluster,
             bool allowJump,
             out WorkDieSlidePlan plan,
             WorkDieRollCrushAvoidance crushAvoidance = default) {
             plan = default;
-            if (!TryBuildSlideDirections(
+            if (!WorkDieRollPathPlanner.TryFindJoinPath(
                 passability,
                 workDie,
                 fromLevel,
                 footingWorldY,
                 movementOwner,
                 startState,
+                targetFace,
                 targetCell,
                 targetTier,
+                cluster,
                 allowJump,
                 out var directions,
-                crushAvoidance)) {
+                crushAvoidance)
+                || directions == null) {
                 return false;
             }
 
@@ -339,329 +344,6 @@ namespace DiceGame.Gameplay.AI.Domain
             }
 
             return adjacent;
-        }
-
-        static bool TryBuildSlideDirections(
-            MovementTransitionEvaluator passability,
-            DiceController workDie,
-            int fromLevel,
-            float footingWorldY,
-            PlayerSlot movementOwner,
-            DiceState startState,
-            Vector2Int targetCell,
-            DiceStackTier targetTier,
-            bool allowJump,
-            out List<Direction> directions,
-            WorkDieRollCrushAvoidance crushAvoidance = default) {
-            directions = null;
-            if (startState.GridPos == targetCell) {
-                if (startState.Tier != targetTier) {
-                    return false;
-                }
-
-                directions = new List<Direction>();
-                return true;
-            }
-
-            var delta = targetCell - startState.GridPos;
-            if (delta.x != 0 && delta.y != 0) {
-                if (TryBuildSlideDirectionsAxisOrder(
-                    passability,
-                    workDie,
-                    fromLevel,
-                    footingWorldY,
-                    movementOwner,
-                    startState,
-                    targetCell,
-                    targetTier,
-                    axisXFirst: true,
-                    allowJump,
-                    out directions,
-                    crushAvoidance)) {
-                    return true;
-                }
-
-                return TryBuildSlideDirectionsAxisOrder(
-                    passability,
-                    workDie,
-                    fromLevel,
-                    footingWorldY,
-                    movementOwner,
-                    startState,
-                    targetCell,
-                    targetTier,
-                    axisXFirst: false,
-                    allowJump,
-                    out directions,
-                    crushAvoidance);
-            }
-
-            return TryBuildSlideDirectionsAxisOrder(
-                passability,
-                workDie,
-                fromLevel,
-                footingWorldY,
-                movementOwner,
-                startState,
-                targetCell,
-                targetTier,
-                axisXFirst: delta.x != 0,
-                allowJump,
-                out directions,
-                crushAvoidance);
-        }
-
-        static bool TryBuildSlideDirectionsAxisOrder(
-            MovementTransitionEvaluator passability,
-            DiceController workDie,
-            int fromLevel,
-            float footingWorldY,
-            PlayerSlot movementOwner,
-            DiceState startState,
-            Vector2Int targetCell,
-            DiceStackTier targetTier,
-            bool axisXFirst,
-            bool allowJump,
-            out List<Direction> directions,
-            WorkDieRollCrushAvoidance crushAvoidance = default) {
-            directions = new List<Direction>();
-            var delta = targetCell - startState.GridPos;
-            var currentState = startState;
-            var currentLevel = fromLevel;
-
-            if (axisXFirst) {
-                if (!TryAppendAxisSlide(
-                    passability,
-                    workDie,
-                    currentLevel,
-                    footingWorldY,
-                    movementOwner,
-                    delta.x,
-                    true,
-                    currentState,
-                    directions,
-                    allowJump,
-                    out currentState,
-                    out currentLevel,
-                    crushAvoidance)) {
-                    return false;
-                }
-
-                if (!TryAppendAxisSlide(
-                    passability,
-                    workDie,
-                    currentLevel,
-                    footingWorldY,
-                    movementOwner,
-                    delta.y,
-                    false,
-                    currentState,
-                    directions,
-                    allowJump,
-                    out currentState,
-                    out currentLevel,
-                    crushAvoidance)) {
-                    return false;
-                }
-            } else {
-                if (!TryAppendAxisSlide(
-                    passability,
-                    workDie,
-                    currentLevel,
-                    footingWorldY,
-                    movementOwner,
-                    delta.y,
-                    false,
-                    currentState,
-                    directions,
-                    allowJump,
-                    out currentState,
-                    out currentLevel,
-                    crushAvoidance)) {
-                    return false;
-                }
-
-                if (!TryAppendAxisSlide(
-                    passability,
-                    workDie,
-                    currentLevel,
-                    footingWorldY,
-                    movementOwner,
-                    delta.x,
-                    true,
-                    currentState,
-                    directions,
-                    allowJump,
-                    out currentState,
-                    out currentLevel,
-                    crushAvoidance)) {
-                    return false;
-                }
-            }
-
-            return currentState.Orientation.Top == startState.Orientation.Top
-                && currentState.GridPos == targetCell
-                && currentState.Tier == targetTier;
-        }
-
-        static bool TryAppendAxisSlide(
-            MovementTransitionEvaluator passability,
-            DiceController workDie,
-            int fromLevel,
-            float footingWorldY,
-            PlayerSlot movementOwner,
-            int deltaComponent,
-            bool isXAxis,
-            DiceState startState,
-            List<Direction> directions,
-            bool allowJump,
-            out DiceState resultState,
-            out int resultLevel,
-            WorkDieRollCrushAvoidance crushAvoidance = default) {
-            resultState = startState;
-            resultLevel = fromLevel;
-            if (deltaComponent == 0) {
-                return true;
-            }
-
-            var axisDirection = ResolveAxisDirection(deltaComponent, isXAxis);
-            var steps = Mathf.Abs(deltaComponent);
-            return TryExpandAxisSlide(
-                passability,
-                workDie,
-                fromLevel,
-                footingWorldY,
-                movementOwner,
-                startState,
-                axisDirection,
-                steps,
-                directions,
-                allowJump,
-                out resultState,
-                out resultLevel,
-                crushAvoidance);
-        }
-
-        static Direction ResolveAxisDirection(int deltaComponent, bool isXAxis) {
-            if (isXAxis) {
-                return deltaComponent > 0 ? Direction.East : Direction.West;
-            }
-
-            return deltaComponent > 0 ? Direction.North : Direction.South;
-        }
-
-        static bool TryExpandAxisSlide(
-            MovementTransitionEvaluator passability,
-            DiceController workDie,
-            int fromLevel,
-            float footingWorldY,
-            PlayerSlot movementOwner,
-            DiceState startState,
-            Direction axisDirection,
-            int steps,
-            List<Direction> directions,
-            bool allowJump,
-            out DiceState resultState,
-            out int resultLevel,
-            WorkDieRollCrushAvoidance crushAvoidance = default) {
-            resultState = startState;
-            resultLevel = fromLevel;
-            if (steps <= 0) {
-                return true;
-            }
-
-            foreach (var perpendicular in GetPerpendicularDirections(axisDirection)) {
-                var segment = new List<Direction>();
-                var simulated = startState;
-
-                segment.Add(perpendicular);
-                if (!WorkDieRollPathPlanner.TrySimulateRollStep(
-                    passability,
-                    workDie,
-                    simulated,
-                    fromLevel,
-                    footingWorldY,
-                    movementOwner,
-                    perpendicular,
-                    allowJump,
-                    out simulated,
-                    out var segmentLevel,
-                    crushAvoidance)) {
-                    continue;
-                }
-
-                for (var i = 0; i < steps; i++) {
-                    segment.Add(axisDirection);
-                    if (!WorkDieRollPathPlanner.TrySimulateRollStep(
-                        passability,
-                        workDie,
-                        simulated,
-                        segmentLevel,
-                        footingWorldY,
-                        movementOwner,
-                        axisDirection,
-                        allowJump,
-                        out simulated,
-                        out segmentLevel,
-                        crushAvoidance)) {
-                        segment = null;
-                        break;
-                    }
-                }
-
-                if (segment == null) {
-                    continue;
-                }
-
-                var closing = GetOppositeDirection(perpendicular);
-                segment.Add(closing);
-                if (!WorkDieRollPathPlanner.TrySimulateRollStep(
-                    passability,
-                    workDie,
-                    simulated,
-                    segmentLevel,
-                    footingWorldY,
-                    movementOwner,
-                    closing,
-                    allowJump,
-                    out simulated,
-                    out segmentLevel,
-                    crushAvoidance)) {
-                    continue;
-                }
-
-                if (simulated.Orientation.Top != startState.Orientation.Top) {
-                    continue;
-                }
-
-                directions.AddRange(segment);
-                resultState = simulated;
-                resultLevel = segmentLevel;
-                return true;
-            }
-
-            return false;
-        }
-
-        static IEnumerable<Direction> GetPerpendicularDirections(Direction axisDirection) {
-            if (axisDirection == Direction.East || axisDirection == Direction.West) {
-                yield return Direction.North;
-                yield return Direction.South;
-                yield break;
-            }
-
-            yield return Direction.East;
-            yield return Direction.West;
-        }
-
-        static Direction GetOppositeDirection(Direction direction) {
-            return direction switch {
-                Direction.East => Direction.West,
-                Direction.West => Direction.East,
-                Direction.North => Direction.South,
-                Direction.South => Direction.North,
-                _ => direction
-            };
         }
     }
 }

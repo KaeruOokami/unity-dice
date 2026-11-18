@@ -37,6 +37,7 @@ namespace DiceGame.Gameplay.AI.Domain
         };
 
         const int MaxOrientSearchDepth = 16;
+        const int MaxJoinSearchDepth = 48;
 
         public static bool TryFindOrientPath(
             MovementTransitionEvaluator passability,
@@ -54,6 +55,93 @@ namespace DiceGame.Gameplay.AI.Domain
                 return false;
             }
 
+            return TrySearchRollPath(
+                passability,
+                workDie,
+                fromLevel,
+                footingWorldY,
+                movementOwner,
+                startState,
+                allowJump,
+                MaxOrientSearchDepth,
+                state => state.Orientation.Top == targetFace,
+                crushAvoidance,
+                out directions)
+                && directions != null
+                && directions.Count > 0;
+        }
+
+        /// <summary>
+        /// Configuration-space BFS: shortest roll sequence to a join-ready pose
+        /// (target top face and either the planned join slot or any match-adjacent join).
+        /// </summary>
+        public static bool TryFindJoinPath(
+            MovementTransitionEvaluator passability,
+            DiceController workDie,
+            int fromLevel,
+            float footingWorldY,
+            PlayerSlot movementOwner,
+            DiceState startState,
+            int targetFace,
+            Vector2Int targetCell,
+            DiceStackTier targetTier,
+            IReadOnlyList<DiceSnapshot> cluster,
+            bool allowJump,
+            out List<Direction> directions,
+            WorkDieRollCrushAvoidance crushAvoidance = default) {
+            directions = null;
+            if (passability == null || workDie == null || targetFace < 1) {
+                return false;
+            }
+
+            bool IsJoinGoal(DiceState state) {
+                if (state.Orientation.Top != targetFace) {
+                    return false;
+                }
+
+                if (state.GridPos == targetCell && state.Tier == targetTier) {
+                    return true;
+                }
+
+                return cluster != null && WorkDieSlidePlanner.IsJoinComplete(state, cluster, targetFace);
+            }
+
+            if (IsJoinGoal(startState)) {
+                directions = new List<Direction>();
+                return true;
+            }
+
+            return TrySearchRollPath(
+                passability,
+                workDie,
+                fromLevel,
+                footingWorldY,
+                movementOwner,
+                startState,
+                allowJump,
+                MaxJoinSearchDepth,
+                IsJoinGoal,
+                crushAvoidance,
+                out directions);
+        }
+
+        static bool TrySearchRollPath(
+            MovementTransitionEvaluator passability,
+            DiceController workDie,
+            int fromLevel,
+            float footingWorldY,
+            PlayerSlot movementOwner,
+            DiceState startState,
+            bool allowJump,
+            int maxDepth,
+            System.Func<DiceState, bool> isGoal,
+            WorkDieRollCrushAvoidance crushAvoidance,
+            out List<Direction> directions) {
+            directions = null;
+            if (passability == null || workDie == null || isGoal == null) {
+                return false;
+            }
+
             var startKey = BuildStateKey(startState);
             var visited = new HashSet<(int, int, int, int, int, int)> { startKey };
             var queue = new Queue<(DiceState state, int level, List<Direction> path)>();
@@ -61,12 +149,12 @@ namespace DiceGame.Gameplay.AI.Domain
 
             while (queue.Count > 0) {
                 var current = queue.Dequeue();
-                if (current.state.Orientation.Top == targetFace) {
+                if (current.path.Count > 0 && isGoal(current.state)) {
                     directions = current.path;
-                    return directions.Count > 0;
+                    return true;
                 }
 
-                if (current.path.Count >= MaxOrientSearchDepth) {
+                if (current.path.Count >= maxDepth) {
                     continue;
                 }
 
@@ -93,6 +181,11 @@ namespace DiceGame.Gameplay.AI.Domain
                     }
 
                     var nextPath = new List<Direction>(current.path) { direction };
+                    if (isGoal(landingState)) {
+                        directions = nextPath;
+                        return true;
+                    }
+
                     queue.Enqueue((landingState, landingLevel, nextPath));
                 }
             }

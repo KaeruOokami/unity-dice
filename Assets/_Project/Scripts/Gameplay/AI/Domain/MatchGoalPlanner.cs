@@ -519,10 +519,6 @@ namespace DiceGame.Gameplay.AI.Domain
                     return null;
                 }
 
-                if (!subGoal.HasJoinSlidePlan && state.Orientation.Top != subGoal.TargetFace) {
-                    return BuildOrientAction(goal, subGoal, snapshot, character, registry, settings);
-                }
-
                 if (!TryEnsureJoinSlidePlan(
                     goal,
                     subGoal,
@@ -673,10 +669,6 @@ namespace DiceGame.Gameplay.AI.Domain
                 subGoal.ClearJoinSlidePlan();
             }
 
-            if (state.Orientation.Top != subGoal.TargetFace) {
-                return false;
-            }
-
             if (WorkDieSlidePlanner.IsJoinComplete(
                 state,
                 goal.ClusterDice,
@@ -690,6 +682,7 @@ namespace DiceGame.Gameplay.AI.Domain
             var preferredAvoidance = ResolveChainCrushAvoidance(goal, registry);
             if (TryBuildJoinSlidePlanWithAvoidance(
                     passability,
+                    goal,
                     subGoal,
                     character,
                     footingWorldY,
@@ -700,6 +693,7 @@ namespace DiceGame.Gameplay.AI.Domain
                 || (preferredAvoidance.IsActive
                     && TryBuildJoinSlidePlanWithAvoidance(
                         passability,
+                        goal,
                         subGoal,
                         character,
                         footingWorldY,
@@ -716,6 +710,7 @@ namespace DiceGame.Gameplay.AI.Domain
 
         static bool TryBuildJoinSlidePlanWithAvoidance(
             MovementTransitionEvaluator passability,
+            MatchGoal goal,
             AiSubGoal subGoal,
             CharacterController character,
             float footingWorldY,
@@ -730,8 +725,10 @@ namespace DiceGame.Gameplay.AI.Domain
                 footingWorldY,
                 character.PlayerSlot,
                 state,
+                subGoal.TargetFace,
                 subGoal.TargetCell,
                 subGoal.TargetTier,
+                goal != null ? goal.ClusterDice : null,
                 allowJump,
                 out plan,
                 crushAvoidance)
