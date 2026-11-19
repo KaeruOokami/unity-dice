@@ -3,6 +3,7 @@ using System.Text;
 using DiceGame.Config;
 using DiceGame.Core;
 using DiceGame.Gameplay;
+using DiceGame.Grid;
 using DiceGame.Placement;
 using UnityEngine;
 
@@ -10,8 +11,7 @@ namespace DiceGame.Gameplay.AI.Domain
 {
     /// <summary>
     /// Multi-die configuration-space A* for Join.
-    /// State = poses of a pruned movable set; action = roll any one participant one step.
-    /// Search is time-sliced via <see cref="MultiDieJoinSearchSession"/>.
+    /// Actions: roll any participant; optionally Lift then Place (flat expansion).
     /// </summary>
     public static class MultiDieConfigSpacePlanner
     {
@@ -23,32 +23,40 @@ namespace DiceGame.Gameplay.AI.Domain
         const int DefaultMaxSearchDepth = 24;
         const int DefaultMaxNodesTotal = 20000;
         const int DefaultNodesPerFrame = 256;
+        const int DefaultLiftCost = 2;
+        const int DefaultPlaceCost = 2;
 
         public sealed class SearchNode
         {
             public DiceState[] States { get; }
-            public List<MultiDieRollStep> Path { get; }
+            public List<MultiDieJoinStep> Path { get; }
             public List<DiceState[]> Checkpoints { get; }
+            public List<int> CarriedCheckpoints { get; }
+            public int CarriedIndex { get; }
+            public Vector2Int LiftFromCell { get; }
             public int G { get; }
             public int F { get; }
 
             public SearchNode(
                 DiceState[] states,
-                List<MultiDieRollStep> path,
+                List<MultiDieJoinStep> path,
                 List<DiceState[]> checkpoints,
+                List<int> carriedCheckpoints,
+                int carriedIndex,
+                Vector2Int liftFromCell,
                 int g,
                 int f) {
                 States = states;
                 Path = path;
                 Checkpoints = checkpoints;
+                CarriedCheckpoints = carriedCheckpoints;
+                CarriedIndex = carriedIndex;
+                LiftFromCell = liftFromCell;
                 G = g;
                 F = f;
             }
         }
 
-        /// <summary>
-        /// Binary min-heap ordered by F then G for Join A*.
-        /// </summary>
         public sealed class JoinSearchOpenHeap
         {
             readonly List<SearchNode> items = new List<SearchNode>();
@@ -88,7 +96,7 @@ namespace DiceGame.Gameplay.AI.Domain
                         break;
                     }
 
-                    (items[index], items[parent]) = (items[parent], items[index]);
+                    Swap(index, parent);
                     index = parent;
                 }
             }
@@ -110,15 +118,18 @@ namespace DiceGame.Gameplay.AI.Domain
                         break;
                     }
 
-                    (items[index], items[best]) = (items[best], items[index]);
+                    Swap(index, best);
                     index = best;
                 }
             }
+
+            void Swap(int a, int b) {
+                var tmp = items[a];
+                items[a] = items[b];
+                items[b] = tmp;
+            }
         }
 
-        /// <summary>
-        /// Build a one-participant plan from an already-found direction list (face-one clear etc.).
-        /// </summary>
         public static bool TryBuildSingleDiePlan(
             MovementTransitionEvaluator passability,
             DiceController workDie,
@@ -131,17 +142,14 @@ namespace DiceGame.Gameplay.AI.Domain
             out MultiDieRollPlan plan,
             WorkDieRollCrushAvoidance crushAvoidance = default) {
             plan = default;
-            if (passability == null
-                || workDie == null
-                || directions == null) {
+            if (passability == null || workDie == null || directions == null) {
                 return false;
             }
 
             var participants = new[] { workDie };
-            var steps = new List<MultiDieRollStep>(directions.Count);
-            var checkpoints = new List<DiceState[]>(directions.Count + 1) {
-                new[] { startState }
-            };
+            var steps = new List<MultiDieJoinStep>(directions.Count);
+            var checkpoints = new List<DiceState[]>(directions.Count + 1) { new[] { startState } };
+            var carried = new List<int>(directions.Count + 1) { -1 };
 
             var state = startState;
             var level = fromLevel;
@@ -161,11 +169,12 @@ namespace DiceGame.Gameplay.AI.Domain
                     return false;
                 }
 
-                steps.Add(new MultiDieRollStep(workDie, directions[i]));
+                steps.Add(MultiDieJoinStep.Roll(workDie, directions[i]));
                 checkpoints.Add(new[] { state });
+                carried.Add(-1);
             }
 
-            plan = new MultiDieRollPlan(participants, steps, checkpoints, workDieIndex: 0);
+            plan = new MultiDieRollPlan(participants, steps, checkpoints, carried, workDieIndex: 0);
             return true;
         }
 
@@ -186,6 +195,11 @@ namespace DiceGame.Gameplay.AI.Domain
             int maxDepth,
             int initialParticipants,
             int maxParticipants,
+            bool enableLift,
+            bool liftAfterRollExhausted,
+            int liftActionCost,
+            int placeActionCost,
+            VersusArenaLayout versusLayout,
             ref MultiDieJoinSearchSession session,
             out MultiDieRollPlan plan) {
             plan = default;
@@ -223,6 +237,16 @@ namespace DiceGame.Gameplay.AI.Domain
                 initialParticipants = maxParticipants;
             }
 
+            if (liftActionCost <= 0) {
+                liftActionCost = DefaultLiftCost;
+            }
+
+            if (placeActionCost <= 0) {
+                placeActionCost = DefaultPlaceCost;
+            }
+
+            var startAllowLift = enableLift && !liftAfterRollExhausted;
+
             if (session != null && session.IsActive) {
                 if (!IsSessionCompatible(
                     session,
@@ -247,6 +271,9 @@ namespace DiceGame.Gameplay.AI.Domain
                     maxParticipants,
                     maxDepth,
                     maxNodesTotal,
+                    startAllowLift,
+                    liftActionCost,
+                    placeActionCost,
                     out session,
                     out plan,
                     out var startStatus)) {
@@ -267,6 +294,7 @@ namespace DiceGame.Gameplay.AI.Domain
                     movementOwner,
                     allowJump,
                     registry,
+                    versusLayout,
                     remainingBudget,
                     out plan,
                     out var expanded);
@@ -283,7 +311,6 @@ namespace DiceGame.Gameplay.AI.Domain
                     return MultiDieJoinSearchStatus.InProgress;
                 }
 
-                // Exhausted at this participant cap: widen the movable set and retry.
                 if (TryEscalateParticipantCap(
                     session,
                     workDie,
@@ -292,9 +319,30 @@ namespace DiceGame.Gameplay.AI.Domain
                     planningDice,
                     maxDepth,
                     maxNodesTotal,
-                    out var escalated)) {
+                    out var escalatedParticipants)) {
                     session.Deactivate();
-                    session = escalated;
+                    session = escalatedParticipants;
+                    if (remainingBudget <= 0) {
+                        return MultiDieJoinSearchStatus.InProgress;
+                    }
+
+                    continue;
+                }
+
+                if (enableLift
+                    && liftAfterRollExhausted
+                    && !session.AllowLift
+                    && TryEscalateAllowLift(
+                        session,
+                        workDie,
+                        workStartState,
+                        cluster,
+                        planningDice,
+                        maxDepth,
+                        maxNodesTotal,
+                        out var escalatedLift)) {
+                    session.Deactivate();
+                    session = escalatedLift;
                     if (remainingBudget <= 0) {
                         return MultiDieJoinSearchStatus.InProgress;
                     }
@@ -319,6 +367,9 @@ namespace DiceGame.Gameplay.AI.Domain
             int maxParticipants,
             int maxDepth,
             int maxNodesTotal,
+            bool allowLift,
+            int liftActionCost,
+            int placeActionCost,
             out MultiDieJoinSearchSession session,
             out MultiDieRollPlan plan,
             out MultiDieJoinSearchStatus status) {
@@ -338,7 +389,7 @@ namespace DiceGame.Gameplay.AI.Domain
                 return false;
             }
 
-            if (IsJoinGoal(workDieIndex, participants, startStates, cluster, targetFace)) {
+            if (IsJoinGoal(workDieIndex, participants, startStates, cluster, targetFace, carriedIndex: -1)) {
                 plan = MultiDieRollPlan.Empty(workDie, workStartState);
                 status = MultiDieJoinSearchStatus.Found;
                 return true;
@@ -354,7 +405,10 @@ namespace DiceGame.Gameplay.AI.Domain
                 crushAvoidance,
                 startStates,
                 maxDepth,
-                maxNodesTotal);
+                maxNodesTotal,
+                allowLift,
+                liftActionCost,
+                placeActionCost);
             status = MultiDieJoinSearchStatus.InProgress;
             return true;
         }
@@ -398,7 +452,10 @@ namespace DiceGame.Gameplay.AI.Domain
                         current.CrushAvoidance,
                         startStates,
                         maxDepth,
-                        maxNodesTotal);
+                        maxNodesTotal,
+                        current.AllowLift,
+                        current.LiftActionCost,
+                        current.PlaceActionCost);
                     return true;
                 }
 
@@ -406,6 +463,49 @@ namespace DiceGame.Gameplay.AI.Domain
             }
 
             return false;
+        }
+
+        static bool TryEscalateAllowLift(
+            MultiDieJoinSearchSession current,
+            DiceController workDie,
+            DiceState workStartState,
+            IReadOnlyList<DiceSnapshot> cluster,
+            IReadOnlyList<DiceSnapshot> planningDice,
+            int maxDepth,
+            int maxNodesTotal,
+            out MultiDieJoinSearchSession escalated) {
+            escalated = null;
+            if (current == null || current.AllowLift) {
+                return false;
+            }
+
+            if (!TrySelectParticipants(
+                workDie,
+                workStartState,
+                cluster,
+                planningDice,
+                current.ParticipantCap,
+                out var participants,
+                out var startStates,
+                out var workDieIndex)) {
+                return false;
+            }
+
+            escalated = CreateSession(
+                participants,
+                current.ParticipantCap,
+                current.MaxParticipants,
+                workDieIndex,
+                current.TargetFace,
+                cluster,
+                current.CrushAvoidance,
+                startStates,
+                maxDepth,
+                maxNodesTotal,
+                allowLift: true,
+                current.LiftActionCost,
+                current.PlaceActionCost);
+            return true;
         }
 
         static MultiDieJoinSearchSession CreateSession(
@@ -418,15 +518,30 @@ namespace DiceGame.Gameplay.AI.Domain
             WorkDieRollCrushAvoidance crushAvoidance,
             DiceState[] startStates,
             int maxDepth,
-            int maxNodesTotal) {
-            var startKey = BuildConfigKey(startStates);
+            int maxNodesTotal,
+            bool allowLift,
+            int liftActionCost,
+            int placeActionCost) {
+            var startKey = BuildConfigKey(startStates, carriedIndex: -1);
             var bestG = new Dictionary<string, int> { { startKey, 0 } };
             var open = new JoinSearchOpenHeap();
-            var h = EstimateJoinCost(workDieIndex, participants, startStates, cluster, targetFace);
+            var h = EstimateJoinCost(
+                workDieIndex,
+                participants,
+                startStates,
+                cluster,
+                targetFace,
+                carriedIndex: -1,
+                allowLift,
+                liftActionCost,
+                placeActionCost);
             open.Push(new SearchNode(
                 startStates,
-                path: new List<MultiDieRollStep>(),
+                path: new List<MultiDieJoinStep>(),
                 checkpoints: new List<DiceState[]> { CloneStates(startStates) },
+                carriedCheckpoints: new List<int> { -1 },
+                carriedIndex: -1,
+                liftFromCell: default,
                 g: 0,
                 f: h));
 
@@ -439,6 +554,9 @@ namespace DiceGame.Gameplay.AI.Domain
                 cluster,
                 crushAvoidance,
                 usedAvoidanceFallback: !crushAvoidance.IsActive,
+                allowLift,
+                liftActionCost,
+                placeActionCost,
                 startStates,
                 bestG,
                 open,
@@ -472,8 +590,7 @@ namespace DiceGame.Gameplay.AI.Domain
                 return false;
             }
 
-            // Board drifted from the pose that started this search: abandon.
-            return MultiDieRollPlanUtil.MatchesLive(session.Participants, session.StartStates);
+            return MultiDieRollPlanUtil.MatchesLive(session.Participants, session.StartStates, carriedIndex: -1);
         }
 
         static MultiDieJoinSearchStatus ExpandSession(
@@ -483,6 +600,7 @@ namespace DiceGame.Gameplay.AI.Domain
             PlayerSlot movementOwner,
             bool allowJump,
             DiceRegistry registry,
+            VersusArenaLayout versusLayout,
             int nodesPerFrame,
             out MultiDieRollPlan plan,
             out int expandedThisCall) {
@@ -504,24 +622,24 @@ namespace DiceGame.Gameplay.AI.Domain
                 }
 
                 var current = session.Open.Pop();
-                var currentKey = BuildConfigKey(current.States);
-                if (session.BestG.TryGetValue(currentKey, out var bestG)
-                    && current.G > bestG) {
+                var currentKey = BuildConfigKey(current.States, current.CarriedIndex);
+                if (session.BestG.TryGetValue(currentKey, out var bestG) && current.G > bestG) {
                     continue;
                 }
 
-                // A*: first time a goal is dequeued is optimal with admissible h.
                 if (current.G > 0
                     && IsJoinGoal(
                         session.WorkDieIndex,
                         participants,
                         current.States,
                         session.Cluster,
-                        session.TargetFace)) {
+                        session.TargetFace,
+                        current.CarriedIndex)) {
                     plan = new MultiDieRollPlan(
                         participants,
                         current.Path,
                         current.Checkpoints,
+                        current.CarriedCheckpoints,
                         session.WorkDieIndex);
                     return MultiDieJoinSearchStatus.Found;
                 }
@@ -533,59 +651,35 @@ namespace DiceGame.Gameplay.AI.Domain
                 expandedThisCall++;
                 session.ExpandedTotal++;
 
-                using (registry.BeginPlanningLayout(participants, current.States)) {
-                    for (var dieIndex = 0; dieIndex < participants.Length; dieIndex++) {
-                        var mover = participants[dieIndex];
-                        var fromState = current.States[dieIndex];
-                        var fromLevel = SurfaceHeightLevel.FromDiceStackTier(fromState.Tier);
+                BuildLayoutLists(
+                    participants,
+                    current.States,
+                    current.CarriedIndex,
+                    out var presentDice,
+                    out var presentStates,
+                    out var absentDice);
 
-                        for (var d = 0; d < Directions.Length; d++) {
-                            var direction = Directions[d];
-                            DiceState landingState;
-                            using (registry.BeginPlanningIgnore(mover)) {
-                                if (!WorkDieRollPathPlanner.TrySimulateRollStep(
-                                    passability,
-                                    mover,
-                                    fromState,
-                                    fromLevel,
-                                    footingWorldY,
-                                    movementOwner,
-                                    direction,
-                                    allowJump,
-                                    out landingState,
-                                    out _,
-                                    session.CrushAvoidance)) {
-                                    continue;
-                                }
-                            }
+                using (registry.BeginPlanningLayout(presentDice, presentStates, absentDice)) {
+                    if (current.CarriedIndex < 0) {
+                        ExpandRolls(
+                            session,
+                            current,
+                            passability,
+                            footingWorldY,
+                            movementOwner,
+                            allowJump,
+                            registry);
 
-                            var nextStates = CloneStates(current.States);
-                            nextStates[dieIndex] = landingState;
-                            var nextG = current.G + 1;
-                            var key = BuildConfigKey(nextStates);
-                            if (session.BestG.TryGetValue(key, out var knownG) && knownG <= nextG) {
-                                continue;
-                            }
-
-                            session.BestG[key] = nextG;
-
-                            var nextPath = new List<MultiDieRollStep>(current.Path.Count + 1);
-                            nextPath.AddRange(current.Path);
-                            nextPath.Add(new MultiDieRollStep(mover, direction));
-
-                            var nextCheckpoints = new List<DiceState[]>(current.Checkpoints.Count + 1);
-                            nextCheckpoints.AddRange(current.Checkpoints);
-                            nextCheckpoints.Add(CloneStates(nextStates));
-
-                            var h = EstimateJoinCost(
-                                session.WorkDieIndex,
-                                participants,
-                                nextStates,
-                                session.Cluster,
-                                session.TargetFace);
-                            session.Open.Push(
-                                new SearchNode(nextStates, nextPath, nextCheckpoints, nextG, nextG + h));
+                        if (session.AllowLift) {
+                            ExpandLifts(session, current, registry);
                         }
+                    } else if (session.AllowLift) {
+                        ExpandPlaces(
+                            session,
+                            current,
+                            registry,
+                            versusLayout,
+                            movementOwner);
                     }
                 }
             }
@@ -593,34 +687,305 @@ namespace DiceGame.Gameplay.AI.Domain
             return MultiDieJoinSearchStatus.Exhausted;
         }
 
-        /// <summary>
-        /// Admissible Join heuristic: work die must show target face (orient distance),
-        /// and against immovable cluster members also needs a horizontal approach lower bound.
-        /// Movable cluster members are ignored for approach (they may walk to the work die).
-        /// </summary>
+        static void ExpandRolls(
+            MultiDieJoinSearchSession session,
+            SearchNode current,
+            MovementTransitionEvaluator passability,
+            float footingWorldY,
+            PlayerSlot movementOwner,
+            bool allowJump,
+            DiceRegistry registry) {
+            var participants = session.Participants;
+            for (var dieIndex = 0; dieIndex < participants.Length; dieIndex++) {
+                if (dieIndex == current.CarriedIndex) {
+                    continue;
+                }
+
+                var mover = participants[dieIndex];
+                var fromState = current.States[dieIndex];
+                var fromLevel = SurfaceHeightLevel.FromDiceStackTier(fromState.Tier);
+
+                for (var d = 0; d < Directions.Length; d++) {
+                    var direction = Directions[d];
+                    DiceState landingState;
+                    using (registry.BeginPlanningIgnore(mover)) {
+                        if (!WorkDieRollPathPlanner.TrySimulateRollStep(
+                            passability,
+                            mover,
+                            fromState,
+                            fromLevel,
+                            footingWorldY,
+                            movementOwner,
+                            direction,
+                            allowJump,
+                            out landingState,
+                            out _,
+                            session.CrushAvoidance)) {
+                            continue;
+                        }
+                    }
+
+                    var nextStates = CloneStates(current.States);
+                    nextStates[dieIndex] = landingState;
+                    TryEnqueue(
+                        session,
+                        current,
+                        nextStates,
+                        carriedIndex: -1,
+                        liftFromCell: default,
+                        MultiDieJoinStep.Roll(mover, direction),
+                        edgeCost: 1);
+                }
+            }
+        }
+
+        static void ExpandLifts(
+            MultiDieJoinSearchSession session,
+            SearchNode current,
+            DiceRegistry registry) {
+            var participants = session.Participants;
+            for (var dieIndex = 0; dieIndex < participants.Length; dieIndex++) {
+                var die = participants[dieIndex];
+                if (die == null || !CanLiftInSearch(die)) {
+                    continue;
+                }
+
+                var from = current.States[dieIndex];
+                if (from.Tier == DiceStackTier.Bottom && registry.HasTopAt(from.GridPos)) {
+                    continue;
+                }
+
+                TryEnqueue(
+                    session,
+                    current,
+                    CloneStates(current.States),
+                    carriedIndex: dieIndex,
+                    liftFromCell: from.GridPos,
+                    MultiDieJoinStep.Lift(die),
+                    edgeCost: session.LiftActionCost);
+            }
+        }
+
+        static void ExpandPlaces(
+            MultiDieJoinSearchSession session,
+            SearchNode current,
+            DiceRegistry registry,
+            VersusArenaLayout versusLayout,
+            PlayerSlot movementOwner) {
+            var carriedIndex = current.CarriedIndex;
+            if (carriedIndex < 0 || carriedIndex >= session.Participants.Length) {
+                return;
+            }
+
+            var carried = session.Participants[carriedIndex];
+            var carriedState = current.States[carriedIndex];
+            CollectPlaceCells(
+                session,
+                current,
+                versusLayout,
+                movementOwner,
+                out var cells);
+
+            for (var i = 0; i < cells.Count; i++) {
+                var cell = cells[i];
+                if (!CarryPlacementPassability.TryResolveTarget(cell, registry, out var tier, out _)) {
+                    continue;
+                }
+
+                if (!CarryPlacementPassability.CanPlaceAt(cell, tier, registry, out _)) {
+                    continue;
+                }
+
+                var nextStates = CloneStates(current.States);
+                nextStates[carriedIndex] = new DiceState(
+                    cell,
+                    carriedState.Orientation,
+                    tier,
+                    carriedState.Kind);
+
+                TryEnqueue(
+                    session,
+                    current,
+                    nextStates,
+                    carriedIndex: -1,
+                    liftFromCell: default,
+                    MultiDieJoinStep.Place(carried, cell, tier),
+                    edgeCost: session.PlaceActionCost);
+            }
+        }
+
+        static void CollectPlaceCells(
+            MultiDieJoinSearchSession session,
+            SearchNode current,
+            VersusArenaLayout versusLayout,
+            PlayerSlot movementOwner,
+            out List<Vector2Int> cells) {
+            var set = new HashSet<Vector2Int>();
+            void Add(Vector2Int cell) {
+                if (!AiRegionFilter.IsInPlayerRegion(versusLayout, movementOwner, cell)) {
+                    return;
+                }
+
+                set.Add(cell);
+            }
+
+            AddNeighbors(current.LiftFromCell, Add);
+
+            for (var i = 0; i < session.Participants.Length; i++) {
+                if (i == current.CarriedIndex) {
+                    continue;
+                }
+
+                AddNeighbors(current.States[i].GridPos, Add);
+            }
+
+            if (session.Cluster != null) {
+                for (var i = 0; i < session.Cluster.Count; i++) {
+                    AddNeighbors(session.Cluster[i].GridPos, Add);
+                }
+            }
+
+            cells = new List<Vector2Int>(set.Count);
+            foreach (var cell in set) {
+                cells.Add(cell);
+            }
+        }
+
+        static void AddNeighbors(Vector2Int origin, System.Action<Vector2Int> add) {
+            for (var d = 0; d < Directions.Length; d++) {
+                add(origin + Directions[d].ToGridDelta());
+            }
+        }
+
+        static void TryEnqueue(
+            MultiDieJoinSearchSession session,
+            SearchNode current,
+            DiceState[] nextStates,
+            int carriedIndex,
+            Vector2Int liftFromCell,
+            MultiDieJoinStep step,
+            int edgeCost) {
+            var nextG = current.G + edgeCost;
+            if (nextG > session.MaxDepth) {
+                return;
+            }
+
+            var key = BuildConfigKey(nextStates, carriedIndex);
+            if (session.BestG.TryGetValue(key, out var knownG) && knownG <= nextG) {
+                return;
+            }
+
+            session.BestG[key] = nextG;
+
+            var nextPath = new List<MultiDieJoinStep>(current.Path.Count + 1);
+            nextPath.AddRange(current.Path);
+            nextPath.Add(step);
+
+            var nextCheckpoints = new List<DiceState[]>(current.Checkpoints.Count + 1);
+            nextCheckpoints.AddRange(current.Checkpoints);
+            nextCheckpoints.Add(CloneStates(nextStates));
+
+            var nextCarried = new List<int>(current.CarriedCheckpoints.Count + 1);
+            nextCarried.AddRange(current.CarriedCheckpoints);
+            nextCarried.Add(carriedIndex);
+
+            var h = EstimateJoinCost(
+                session.WorkDieIndex,
+                session.Participants,
+                nextStates,
+                session.Cluster,
+                session.TargetFace,
+                carriedIndex,
+                session.AllowLift,
+                session.LiftActionCost,
+                session.PlaceActionCost);
+
+            session.Open.Push(
+                new SearchNode(
+                    nextStates,
+                    nextPath,
+                    nextCheckpoints,
+                    nextCarried,
+                    carriedIndex,
+                    liftFromCell,
+                    nextG,
+                    nextG + h));
+        }
+
+        static void BuildLayoutLists(
+            DiceController[] participants,
+            DiceState[] states,
+            int carriedIndex,
+            out List<DiceController> presentDice,
+            out List<DiceState> presentStates,
+            out List<DiceController> absentDice) {
+            presentDice = new List<DiceController>(participants.Length);
+            presentStates = new List<DiceState>(participants.Length);
+            absentDice = null;
+            for (var i = 0; i < participants.Length; i++) {
+                if (i == carriedIndex) {
+                    absentDice ??= new List<DiceController>(1);
+                    absentDice.Add(participants[i]);
+                    continue;
+                }
+
+                presentDice.Add(participants[i]);
+                presentStates.Add(states[i]);
+            }
+        }
+
+        static bool CanLiftInSearch(DiceController die) {
+            if (die == null || die.IsErasing || die.IsVanishing || die.IsCarried) {
+                return false;
+            }
+
+            return die.Capabilities.CanBeLiftedByPlayer
+                && !die.Capabilities.HasExpandedFootprint;
+        }
+
         static int EstimateJoinCost(
             int workDieIndex,
             DiceController[] participants,
             IReadOnlyList<DiceState> states,
             IReadOnlyList<DiceSnapshot> cluster,
-            int targetFace) {
-            if (IsJoinGoal(workDieIndex, participants, states, cluster, targetFace)) {
+            int targetFace,
+            int carriedIndex,
+            bool allowLift,
+            int liftActionCost,
+            int placeActionCost) {
+            if (IsJoinGoal(workDieIndex, participants, states, cluster, targetFace, carriedIndex)) {
                 return 0;
             }
 
-            var work = states[workDieIndex];
-            var orientCost = MinRollsToFace(work.Orientation, targetFace);
+            if (carriedIndex == workDieIndex) {
+                var work = states[workDieIndex];
+                var orient = MinRollsToFace(work.Orientation, targetFace);
+                // Still carried: at least one Place.
+                return orient + placeActionCost;
+            }
+
+            if (carriedIndex >= 0) {
+                // Carrying a non-work die: place it, then finish join.
+                return placeActionCost
+                    + EstimateJoinCost(
+                        workDieIndex,
+                        participants,
+                        states,
+                        cluster,
+                        targetFace,
+                        carriedIndex: -1,
+                        allowLift,
+                        liftActionCost,
+                        placeActionCost);
+            }
+
+            var workState = states[workDieIndex];
+            var orientCost = MinRollsToFace(workState.Orientation, targetFace);
             var approachCost = int.MaxValue;
 
             for (var i = 0; i < cluster.Count; i++) {
                 var member = cluster[i].Controller;
-                if (member == null) {
-                    continue;
-                }
-
-                // Participant cluster dice can move toward the work die — do not use their
-                // current distance (may overestimate when cooperation is optimal).
-                if (IndexOf(participants, member) >= 0) {
+                if (member == null || IndexOf(participants, member) >= 0) {
                     continue;
                 }
 
@@ -629,16 +994,24 @@ namespace DiceGame.Gameplay.AI.Domain
                     continue;
                 }
 
-                var memberSlot = new DiceSlot(snap.GridPos, snap.Tier);
-                var workSlot = new DiceSlot(work.GridPos, work.Tier);
-                approachCost = Mathf.Min(approachCost, ApproachLowerBound(workSlot, memberSlot));
+                approachCost = Mathf.Min(
+                    approachCost,
+                    ApproachLowerBound(
+                        new DiceSlot(workState.GridPos, workState.Tier),
+                        new DiceSlot(snap.GridPos, snap.Tier)));
             }
 
-            if (approachCost == int.MaxValue) {
-                return orientCost;
+            var rollLower = approachCost == int.MaxValue
+                ? orientCost
+                : Mathf.Max(orientCost, approachCost);
+
+            if (!allowLift) {
+                return rollLower;
             }
 
-            return Mathf.Max(orientCost, approachCost);
+            // Lift+Place can finish join without rolling when face already matches.
+            var liftLower = orientCost + liftActionCost + placeActionCost;
+            return Mathf.Min(rollLower, liftLower);
         }
 
         static int MinRollsToFace(DiceOrientation orientation, int targetFace) {
@@ -668,7 +1041,6 @@ namespace DiceGame.Gameplay.AI.Domain
                 return 1;
             }
 
-            // Same-tier match needs grid distance 1; different tier still needs ≥1 action.
             var horizontal = Mathf.Max(0, manhattan - 1);
             if (work.Tier != member.Tier) {
                 return Mathf.Max(1, horizontal);
@@ -682,13 +1054,15 @@ namespace DiceGame.Gameplay.AI.Domain
             DiceController[] participants,
             IReadOnlyList<DiceState> states,
             IReadOnlyList<DiceSnapshot> cluster,
-            int targetFace) {
+            int targetFace,
+            int carriedIndex) {
             if (states == null
                 || participants == null
                 || workDieIndex < 0
                 || workDieIndex >= states.Count
                 || cluster == null
-                || cluster.Count == 0) {
+                || cluster.Count == 0
+                || carriedIndex == workDieIndex) {
                 return false;
             }
 
@@ -707,6 +1081,10 @@ namespace DiceGame.Gameplay.AI.Domain
                 DiceState memberState;
                 var participantIndex = IndexOf(participants, member);
                 if (participantIndex >= 0) {
+                    if (participantIndex == carriedIndex) {
+                        continue;
+                    }
+
                     memberState = states[participantIndex];
                 } else {
                     var snap = cluster[i];
@@ -792,7 +1170,7 @@ namespace DiceGame.Gameplay.AI.Domain
             }
 
             var caps = DiceBehaviorResolver.GetCapabilities(snap.Kind);
-            return caps.CanGridRoll && !caps.HasExpandedFootprint;
+            return (caps.CanGridRoll || caps.CanBeLiftedByPlayer) && !caps.HasExpandedFootprint;
         }
 
         static int MinAnchorDistance(Vector2Int cell, List<Vector2Int> anchors) {
@@ -826,12 +1204,17 @@ namespace DiceGame.Gameplay.AI.Domain
             return clone;
         }
 
-        static string BuildConfigKey(IReadOnlyList<DiceState> states) {
-            var sb = new StringBuilder(states.Count * 24);
+        static string BuildConfigKey(IReadOnlyList<DiceState> states, int carriedIndex) {
+            var sb = new StringBuilder(states.Count * 24 + 8);
             for (var i = 0; i < states.Count; i++) {
                 var s = states[i];
                 if (i > 0) {
                     sb.Append('|');
+                }
+
+                if (i == carriedIndex) {
+                    sb.Append("C");
+                    continue;
                 }
 
                 sb.Append(s.GridPos.x).Append(',')
@@ -842,6 +1225,7 @@ namespace DiceGame.Gameplay.AI.Domain
                     .Append(s.Orientation.East);
             }
 
+            sb.Append("#").Append(carriedIndex);
             return sb.ToString();
         }
     }

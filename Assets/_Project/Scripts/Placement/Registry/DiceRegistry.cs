@@ -218,10 +218,12 @@ namespace DiceGame.Placement
         /// <summary>
         /// AI multi-die planning: occupancy reads see participants at <paramref name="states"/>
         /// without mutating byGrid or CurrentState. Dispose clears the overlay.
+        /// <paramref name="absentDice"/> are treated as off-board (byGrid ignored, no slot claim).
         /// </summary>
         public IDisposable BeginPlanningLayout(
             IReadOnlyList<DiceController> dice,
-            IReadOnlyList<DiceState> states) {
+            IReadOnlyList<DiceState> states,
+            IReadOnlyList<DiceController> absentDice = null) {
             if (dice == null || states == null || dice.Count != states.Count) {
                 Debug.LogError("DiceRegistry.BeginPlanningLayout: dice/states length mismatch.");
                 return NoopDisposable.Instance;
@@ -232,7 +234,7 @@ namespace DiceGame.Placement
                 return NoopDisposable.Instance;
             }
 
-            if (dice.Count == 0) {
+            if (dice.Count == 0 && (absentDice == null || absentDice.Count == 0)) {
                 return NoopDisposable.Instance;
             }
 
@@ -259,6 +261,20 @@ namespace DiceGame.Placement
 
                 planningLayoutByDie[die] = state;
                 planningLayoutBySlot[slot] = die;
+            }
+
+            if (absentDice != null) {
+                for (var i = 0; i < absentDice.Count; i++) {
+                    var absent = absentDice[i];
+                    if (absent == null) {
+                        continue;
+                    }
+
+                    // Present in byDie so committed slots are suppressed; no slot claim.
+                    if (!planningLayoutByDie.ContainsKey(absent)) {
+                        planningLayoutByDie[absent] = absent.CurrentState;
+                    }
+                }
             }
 
             planningLayoutActive = true;

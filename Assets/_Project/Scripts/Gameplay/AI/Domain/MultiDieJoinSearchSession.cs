@@ -13,8 +13,7 @@ namespace DiceGame.Gameplay.AI.Domain
     }
 
     /// <summary>
-    /// Time-sliced multi-die Join A* state. Continues across planning ticks until
-    /// Found / Exhausted or invalidated by board drift.
+    /// Time-sliced multi-die Join A* state (Roll + optional Lift/Place).
     /// </summary>
     public sealed class MultiDieJoinSearchSession
     {
@@ -26,6 +25,9 @@ namespace DiceGame.Gameplay.AI.Domain
         public IReadOnlyList<DiceSnapshot> Cluster { get; }
         public WorkDieRollCrushAvoidance CrushAvoidance { get; }
         public bool UsedAvoidanceFallback { get; }
+        public bool AllowLift { get; }
+        public int LiftActionCost { get; }
+        public int PlaceActionCost { get; }
         public DiceState[] StartStates { get; }
         public Dictionary<string, int> BestG { get; }
         public MultiDieConfigSpacePlanner.JoinSearchOpenHeap Open { get; }
@@ -43,6 +45,9 @@ namespace DiceGame.Gameplay.AI.Domain
             IReadOnlyList<DiceSnapshot> cluster,
             WorkDieRollCrushAvoidance crushAvoidance,
             bool usedAvoidanceFallback,
+            bool allowLift,
+            int liftActionCost,
+            int placeActionCost,
             DiceState[] startStates,
             Dictionary<string, int> bestG,
             MultiDieConfigSpacePlanner.JoinSearchOpenHeap open,
@@ -56,6 +61,9 @@ namespace DiceGame.Gameplay.AI.Domain
             Cluster = cluster;
             CrushAvoidance = crushAvoidance;
             UsedAvoidanceFallback = usedAvoidanceFallback;
+            AllowLift = allowLift;
+            LiftActionCost = liftActionCost;
+            PlaceActionCost = placeActionCost;
             StartStates = startStates;
             BestG = bestG;
             Open = open;

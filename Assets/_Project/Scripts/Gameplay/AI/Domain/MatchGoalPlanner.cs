@@ -526,6 +526,21 @@ namespace DiceGame.Gameplay.AI.Domain
             }
 
             var step = plan.Steps[stepIndex];
+            if (step.Kind == MultiDieJoinStepKind.Lift) {
+                return BuildJoinLiftStepAction(
+                    plan,
+                    stepIndex,
+                    step,
+                    snapshot,
+                    character,
+                    registry,
+                    settings);
+            }
+
+            if (step.Kind == MultiDieJoinStepKind.Place) {
+                return BuildJoinPlaceStepAction(step, snapshot, character, registry, settings);
+            }
+
             var activeDie = step.Die;
             if (activeDie == null) {
                 Application.AiDebugLog.Log(
@@ -592,6 +607,145 @@ namespace DiceGame.Gameplay.AI.Domain
                 $"landingTier={slideStep.LandingTier}");
 
             return BuildWorkDieRollAction(slideStep, activeDie, settings, allowJump);
+        }
+
+        static Application.AiDiscreteAction BuildJoinLiftStepAction(
+            MultiDieRollPlan plan,
+            int stepIndex,
+            MultiDieJoinStep step,
+            GameStateSnapshot snapshot,
+            CharacterController character,
+            DiceRegistry registry,
+            AiPlayerSettings settings) {
+            var die = step.Die;
+            if (die == null) {
+                return null;
+            }
+
+            if (!TryGetFollowingPlaceCellFromPlan(plan, stepIndex, out var placeCell)) {
+                Application.AiDebugLog.Log(
+                    $"JoinLift FAILED die={die.name} reason=no-following-place");
+                return null;
+            }
+
+            if (!LiftJoinPlanner.TrySelectStanceCell(
+                snapshot,
+                registry,
+                die,
+                die.CurrentState.GridPos,
+                placeCell,
+                out var stanceCell)) {
+                Application.AiDebugLog.Log(
+                    $"JoinLift FAILED die={die.name} place={placeCell} reason=no-stance");
+                return null;
+            }
+
+            if (snapshot.StandingDice == die) {
+                if (TryBuildLeaveCellAction(
+                    snapshot,
+                    character,
+                    settings,
+                    snapshot.PlayerCell,
+                    out var leaveAction,
+                    preferredLeaveCell: stanceCell)) {
+                    return leaveAction;
+                }
+
+                return null;
+            }
+
+            if (snapshot.PlayerCell != stanceCell
+                || DiceBoardAnalyzer.ManhattanDistance(snapshot.PlayerCell, placeCell) != 1) {
+                return SelectMovementAction(
+                    stanceCell,
+                    snapshot,
+                    character,
+                    registry,
+                    settings,
+                    preferJump: false,
+                    standOnDie: null,
+                    AiNavigationConstraints.None);
+            }
+
+            if (!IsAdjacentToDice(snapshot, die)) {
+                return null;
+            }
+
+            var faceDirection = GetFacingDirectionTowardDie(snapshot, die);
+            if (!faceDirection.HasValue || !character.CanLiftTarget(die)) {
+                return null;
+            }
+
+            Application.AiDebugLog.Log(
+                $"JoinLift die={die.name} stance={stanceCell} place={placeCell}");
+            return new Application.Actions.PulseLiftAction(faceDirection.Value);
+        }
+
+        static Application.AiDiscreteAction BuildJoinPlaceStepAction(
+            MultiDieJoinStep step,
+            GameStateSnapshot snapshot,
+            CharacterController character,
+            DiceRegistry registry,
+            AiPlayerSettings settings) {
+            if (!snapshot.PlayerIsCarrying || step.Die == null) {
+                Application.AiDebugLog.Log("JoinPlace FAILED reason=not-carrying");
+                return null;
+            }
+
+            var placeCell = step.PlaceCell;
+            var origin = snapshot.PlayerCell;
+            var delta = placeCell - origin;
+            Direction? placeDirection = null;
+            if (delta.x == 1 && delta.y == 0) {
+                placeDirection = Direction.East;
+            } else if (delta.x == -1 && delta.y == 0) {
+                placeDirection = Direction.West;
+            } else if (delta.x == 0 && delta.y == 1) {
+                placeDirection = Direction.North;
+            } else if (delta.x == 0 && delta.y == -1) {
+                placeDirection = Direction.South;
+            }
+
+            if (!placeDirection.HasValue) {
+                return SelectMovementAction(
+                    placeCell,
+                    snapshot,
+                    character,
+                    registry,
+                    settings,
+                    preferJump: false,
+                    standOnDie: null,
+                    AiNavigationConstraints.None);
+            }
+
+            if (!character.CanPlaceCarriedAt(placeDirection.Value)) {
+                Application.AiDebugLog.Log(
+                    $"JoinPlace FAILED origin={origin} target={placeCell}");
+                return null;
+            }
+
+            Application.AiDebugLog.Log($"JoinPlace die={step.Die.name} cell={placeCell}");
+            return new Application.Actions.PlaceCarriedDiceAction(placeDirection.Value);
+        }
+
+        static bool TryGetFollowingPlaceCellFromPlan(
+            MultiDieRollPlan plan,
+            int liftStepIndex,
+            out Vector2Int placeCell) {
+            placeCell = default;
+            if (plan.Steps == null) {
+                return false;
+            }
+
+            for (var i = liftStepIndex + 1; i < plan.Steps.Count; i++) {
+                var step = plan.Steps[i];
+                if (step.Kind == MultiDieJoinStepKind.Place) {
+                    placeCell = step.PlaceCell;
+                    return true;
+                }
+            }
+
+            return false;
         }
 
         static bool TryEnsureJoinRollPlan(
@@ -732,9 +886,14 @@ namespace DiceGame.Gameplay.AI.Domain
             var maxDepth = settings != null ? settings.JoinSearchMaxDepth : 24;
             var initialParticipants = settings != null ? settings.JoinSearchInitialParticipants : 1;
             var maxParticipants = settings != null ? settings.JoinSearchMaxParticipants : 4;
+            var enableLift = settings == null || settings.JoinSearchEnableLift;
+            var liftAfterRoll = settings == null || settings.JoinSearchLiftAfterRollExhausted;
+            var liftCost = settings != null ? settings.JoinSearchLiftActionCost : 2;
+            var placeCost = settings != null ? settings.JoinSearchPlaceActionCost : 2;
             var stageBefore = session != null && session.IsActive
                 ? session.ParticipantCap
                 : initialParticipants;
+            var liftBefore = session != null && session.IsActive && session.AllowLift;
             searchStatus = MultiDieConfigSpacePlanner.TryFindJoinPathBudgeted(
                 passability,
                 workDie,
@@ -752,6 +911,11 @@ namespace DiceGame.Gameplay.AI.Domain
                 maxDepth,
                 initialParticipants,
                 maxParticipants,
+                enableLift,
+                liftAfterRoll,
+                liftCost,
+                placeCost,
+                snapshot != null ? snapshot.VersusLayout : null,
                 ref session,
                 out plan);
             subGoal.SetJoinSearchSession(session);
@@ -761,6 +925,11 @@ namespace DiceGame.Gameplay.AI.Domain
                 Application.AiDebugLog.Log(
                     $"JoinSearch Escalate participants {stageBefore}->{session.ParticipantCap} " +
                     $"(live={session.Participants.Length}) die={workDie.name}");
+            }
+
+            if (session != null && session.IsActive && session.AllowLift && !liftBefore) {
+                Application.AiDebugLog.Log(
+                    $"JoinSearch Escalate allowLift die={workDie.name} cap={session.ParticipantCap}");
             }
 
             if (searchStatus == MultiDieJoinSearchStatus.Found) {

@@ -1,47 +1,85 @@
 using System.Collections.Generic;
 using DiceGame.Core;
 using DiceGame.Gameplay;
+using UnityEngine;
 
 namespace DiceGame.Gameplay.AI.Domain
 {
-    public readonly struct MultiDieRollStep
+    public enum MultiDieJoinStepKind
     {
+        Roll,
+        Lift,
+        Place
+    }
+
+    public readonly struct MultiDieJoinStep
+    {
+        public MultiDieJoinStepKind Kind { get; }
         public DiceController Die { get; }
         public Direction Direction { get; }
+        public Vector2Int PlaceCell { get; }
+        public DiceStackTier PlaceTier { get; }
 
-        public MultiDieRollStep(DiceController die, Direction direction) {
+        public static MultiDieJoinStep Roll(DiceController die, Direction direction) {
+            return new MultiDieJoinStep(MultiDieJoinStepKind.Roll, die, direction, default, default);
+        }
+
+        public static MultiDieJoinStep Lift(DiceController die) {
+            return new MultiDieJoinStep(MultiDieJoinStepKind.Lift, die, default, default, default);
+        }
+
+        public static MultiDieJoinStep Place(
+            DiceController die,
+            Vector2Int placeCell,
+            DiceStackTier placeTier) {
+            return new MultiDieJoinStep(MultiDieJoinStepKind.Place, die, default, placeCell, placeTier);
+        }
+
+        MultiDieJoinStep(
+            MultiDieJoinStepKind kind,
+            DiceController die,
+            Direction direction,
+            Vector2Int placeCell,
+            DiceStackTier placeTier) {
+            Kind = kind;
             Die = die;
             Direction = direction;
+            PlaceCell = placeCell;
+            PlaceTier = placeTier;
         }
     }
 
     /// <summary>
-    /// Multi-die join plan: each step rolls exactly one participant one cardinal direction.
-    /// <see cref="Checkpoints"/>[k] is the participant layout after k steps (k=0 is start).
+    /// Multi-die join plan: Roll / Lift / Place steps with layout checkpoints.
+    /// <see cref="Checkpoints"/>[k] and <see cref="CarriedCheckpoints"/>[k] are after k steps.
     /// </summary>
     public readonly struct MultiDieRollPlan
     {
         public IReadOnlyList<DiceController> Participants { get; }
-        public IReadOnlyList<MultiDieRollStep> Steps { get; }
+        public IReadOnlyList<MultiDieJoinStep> Steps { get; }
         public IReadOnlyList<DiceState[]> Checkpoints { get; }
+        public IReadOnlyList<int> CarriedCheckpoints { get; }
         public int WorkDieIndex { get; }
 
         public MultiDieRollPlan(
             IReadOnlyList<DiceController> participants,
-            IReadOnlyList<MultiDieRollStep> steps,
+            IReadOnlyList<MultiDieJoinStep> steps,
             IReadOnlyList<DiceState[]> checkpoints,
+            IReadOnlyList<int> carriedCheckpoints,
             int workDieIndex) {
             Participants = participants;
             Steps = steps;
             Checkpoints = checkpoints;
+            CarriedCheckpoints = carriedCheckpoints;
             WorkDieIndex = workDieIndex;
         }
 
         public static MultiDieRollPlan Empty(DiceController workDie, DiceState startState) {
             return new MultiDieRollPlan(
                 new[] { workDie },
-                new List<MultiDieRollStep>(),
+                new List<MultiDieJoinStep>(),
                 new[] { new[] { startState } },
+                new[] { -1 },
                 workDieIndex: 0);
         }
 
@@ -59,25 +97,34 @@ namespace DiceGame.Gameplay.AI.Domain
         public static bool IsPlanStillValid(MultiDieRollPlan plan, int stepIndex) {
             if (plan.Participants == null
                 || plan.Checkpoints == null
+                || plan.CarriedCheckpoints == null
                 || plan.Steps == null
                 || stepIndex < 0
                 || stepIndex > plan.Steps.Count
-                || stepIndex >= plan.Checkpoints.Count) {
+                || stepIndex >= plan.Checkpoints.Count
+                || stepIndex >= plan.CarriedCheckpoints.Count) {
                 return false;
             }
 
-            return MatchesLive(plan.Participants, plan.Checkpoints[stepIndex]);
+            return MatchesLive(
+                plan.Participants,
+                plan.Checkpoints[stepIndex],
+                plan.CarriedCheckpoints[stepIndex]);
         }
 
         public static bool TryAdvanceCompletedSteps(MultiDieRollPlan plan, ref int stepIndex) {
-            if (plan.Steps == null || plan.Checkpoints == null) {
+            if (plan.Steps == null || plan.Checkpoints == null || plan.CarriedCheckpoints == null) {
                 return false;
             }
 
             var advanced = false;
             while (stepIndex < plan.Steps.Count
                 && stepIndex + 1 < plan.Checkpoints.Count
-                && MatchesLive(plan.Participants, plan.Checkpoints[stepIndex + 1])) {
+                && stepIndex + 1 < plan.CarriedCheckpoints.Count
+                && MatchesLive(
+                    plan.Participants,
+                    plan.Checkpoints[stepIndex + 1],
+                    plan.CarriedCheckpoints[stepIndex + 1])) {
                 stepIndex++;
                 advanced = true;
             }
@@ -105,6 +152,13 @@ namespace DiceGame.Gameplay.AI.Domain
         public static bool MatchesLive(
             IReadOnlyList<DiceController> participants,
             IReadOnlyList<DiceState> expected) {
+            return MatchesLive(participants, expected, carriedIndex: -1);
+        }
+
+        public static bool MatchesLive(
+            IReadOnlyList<DiceController> participants,
+            IReadOnlyList<DiceState> expected,
+            int carriedIndex) {
             if (participants == null || expected == null || participants.Count != expected.Count) {
                 return false;
             }
@@ -112,6 +166,18 @@ namespace DiceGame.Gameplay.AI.Domain
             for (var i = 0; i < participants.Count; i++) {
                 var die = participants[i];
                 if (die == null) {
+                    return false;
+                }
+
+                if (i == carriedIndex) {
+                    if (!die.IsCarried) {
+                        return false;
+                    }
+
+                    continue;
+                }
+
+                if (die.IsCarried) {
                     return false;
                 }
 

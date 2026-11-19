@@ -38,6 +38,14 @@ namespace DiceGame.Config
         [SerializeField] int joinSearchInitialParticipants = 1;
         [Tooltip("Max dice included in multi-die Join configuration space.")]
         [SerializeField] int joinSearchMaxParticipants = 4;
+        [Tooltip("Include Lift/Place as Join search actions (flat config-space expansion).")]
+        [SerializeField] bool joinSearchEnableLift = true;
+        [Tooltip("Search rolls-only first; enable Lift/Place only after that stage is exhausted.")]
+        [SerializeField] bool joinSearchLiftAfterRollExhausted = true;
+        [Tooltip("A* edge cost for one Lift action in Join search.")]
+        [SerializeField] int joinSearchLiftActionCost = 2;
+        [Tooltip("A* edge cost for one Place action in Join search.")]
+        [SerializeField] int joinSearchPlaceActionCost = 2;
 
         [Header("Goal Scoring")]
         [SerializeField] float faceValueWeight = 10f;
@@ -119,6 +127,10 @@ namespace DiceGame.Config
         public float JoinSearchContinueInterval => joinSearchContinueInterval;
         public int JoinSearchInitialParticipants => joinSearchInitialParticipants;
         public int JoinSearchMaxParticipants => joinSearchMaxParticipants;
+        public bool JoinSearchEnableLift => joinSearchEnableLift;
+        public bool JoinSearchLiftAfterRollExhausted => joinSearchLiftAfterRollExhausted;
+        public int JoinSearchLiftActionCost => joinSearchLiftActionCost;
+        public int JoinSearchPlaceActionCost => joinSearchPlaceActionCost;
         public int RollStepMaxFrames => rollStepMaxFrames;
         public int StuckAttemptsBeforeGoalReset => stuckAttemptsBeforeGoalReset;
         public float GoalFailureBlacklistSeconds => goalFailureBlacklistSeconds;

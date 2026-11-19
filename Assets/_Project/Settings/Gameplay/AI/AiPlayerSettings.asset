@@ -30,6 +30,10 @@ MonoBehaviour:
   joinSearchContinueInterval: 0
   joinSearchInitialParticipants: 1
   joinSearchMaxParticipants: 4
+  joinSearchEnableLift: 1
+  joinSearchLiftAfterRollExhausted: 1
+  joinSearchLiftActionCost: 2
+  joinSearchPlaceActionCost: 2
   faceValueWeight: 20
   clusterProgressWeight: 8
   sameFaceProximityWeight: 20
