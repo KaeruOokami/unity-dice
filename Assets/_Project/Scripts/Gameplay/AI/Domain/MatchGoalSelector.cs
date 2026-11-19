@@ -285,15 +285,15 @@ namespace DiceGame.Gameplay.AI.Domain
                     var clusters = DiceBoardAnalyzer.FindFaceClusters(snapshot.PlanningDice, face);
                     for (var i = 0; i < clusters.Count; i++) {
                         var cluster = clusters[i];
-                        if (cluster.Count >= face) {
+                        if (cluster.IsImmediate(face)) {
                             continue;
                         }
 
-                        if (!IsClusterAdjacentCell(cluster, cell)) {
+                        if (!IsClusterAdjacentCell(cluster.Members, cell)) {
                             continue;
                         }
 
-                        var clusterTier = cluster[0].Tier;
+                        var clusterTier = cluster.MatchTier;
                         if (placeTier != clusterTier
                             && !CarryPlacementPassability.CanPlaceAt(cell, clusterTier, registry, out _)) {
                             continue;
@@ -330,8 +330,9 @@ namespace DiceGame.Gameplay.AI.Domain
         }
 
         static bool IsClusterAdjacentCell(IReadOnlyList<DiceSnapshot> cluster, Vector2Int cell) {
-            for (var i = 0; i < cluster.Count; i++) {
-                if (DiceBoardAnalyzer.ManhattanDistance(cluster[i].GridPos, cell) == 1) {
+            var cells = ClusterSelectionEvaluator.GetClusterCells(cluster);
+            foreach (var memberCell in cells) {
+                if (DiceBoardAnalyzer.ManhattanDistance(memberCell, cell) == 1) {
                     return true;
                 }
             }
@@ -343,7 +344,7 @@ namespace DiceGame.Gameplay.AI.Domain
             GameStateSnapshot snapshot,
             CharacterController character,
             int face,
-            List<DiceSnapshot> cluster,
+            AiFaceCluster cluster,
             DiceRegistry registry,
             AiPlayerSettings settings,
             bool abandonStrandedIslands) {
@@ -351,8 +352,10 @@ namespace DiceGame.Gameplay.AI.Domain
                 return null;
             }
 
-            var isImmediate = cluster.Count >= face;
-            if (isImmediate) {
+            var members = cluster.Members as List<DiceSnapshot>
+                ?? new List<DiceSnapshot>(cluster.Members);
+
+            if (cluster.IsImmediate(face)) {
                 return BuildImmediateMatchGoal(snapshot, face, cluster, registry, settings);
             }
 
@@ -367,7 +370,10 @@ namespace DiceGame.Gameplay.AI.Domain
 
             // Incomplete isolated non-sinking island: prefer other clusters so CanRoll can leave.
             if (abandonStrandedIslands
-                && ClusterSelectionEvaluator.IsStrandedIsolatedNonSinkingCluster(snapshot, face, cluster)) {
+                && ClusterSelectionEvaluator.IsStrandedIsolatedNonSinkingCluster(
+                    snapshot,
+                    face,
+                    members)) {
                 return null;
             }
 
@@ -375,12 +381,13 @@ namespace DiceGame.Gameplay.AI.Domain
             if (LiftJoinPlanner.TrySelectSameFaceLiftJoin(
                 snapshot,
                 registry,
-                cluster,
+                members,
                 face,
                 snapshot.PlanningDice,
                 forChain: false,
                 out var sameFaceWorkDie,
-                out var sameFaceLiftPlan)) {
+                out var sameFaceLiftPlan,
+                cluster.MatchTier)) {
                 var liftDistance = DiceBoardAnalyzer.ManhattanDistance(
                     snapshot.PlayerCell,
                     sameFaceWorkDie.GridPos);
@@ -400,8 +407,9 @@ namespace DiceGame.Gameplay.AI.Domain
             }
 
             if (TrySelectExternalWorkDie(
-                cluster,
+                members,
                 face,
+                cluster.MatchTier,
                 snapshot,
                 character,
                 settings,
@@ -451,6 +459,34 @@ namespace DiceGame.Gameplay.AI.Domain
             out Vector2Int joinCell,
             out DiceStackTier joinTier,
             out int pathLength) {
+            return TrySelectExternalWorkDie(
+                cluster,
+                face,
+                clusterMatchTier: null,
+                snapshot,
+                character,
+                settings,
+                preferChain,
+                registry,
+                out workDie,
+                out joinCell,
+                out joinTier,
+                out pathLength);
+        }
+
+        static bool TrySelectExternalWorkDie(
+            List<DiceSnapshot> cluster,
+            int face,
+            DiceStackTier? clusterMatchTier,
+            GameStateSnapshot snapshot,
+            CharacterController character,
+            AiPlayerSettings settings,
+            bool preferChain,
+            DiceRegistry registry,
+            out DiceSnapshot workDie,
+            out Vector2Int joinCell,
+            out DiceStackTier joinTier,
+            out int pathLength) {
             workDie = default;
             joinCell = default;
             joinTier = default;
@@ -485,12 +521,14 @@ namespace DiceGame.Gameplay.AI.Domain
                     snapshot.VersusLayout,
                     snapshot.PlayerSlot,
                     out _,
-                    out _);
+                    out _,
+                    clusterMatchTier: clusterMatchTier);
 
             // Same-face first (Lift already failed): slide-join without Orient.
             if (TrySelectExternalWorkDiePass(
                 cluster,
                 face,
+                clusterMatchTier,
                 snapshot,
                 settings,
                 preferChain,
@@ -508,6 +546,7 @@ namespace DiceGame.Gameplay.AI.Domain
             return TrySelectExternalWorkDiePass(
                 cluster,
                 face,
+                clusterMatchTier,
                 snapshot,
                 settings,
                 preferChain,
@@ -524,6 +563,7 @@ namespace DiceGame.Gameplay.AI.Domain
         static bool TrySelectExternalWorkDiePass(
             List<DiceSnapshot> cluster,
             int face,
+            DiceStackTier? clusterMatchTier,
             GameStateSnapshot snapshot,
             AiPlayerSettings settings,
             bool preferChain,
@@ -574,7 +614,23 @@ namespace DiceGame.Gameplay.AI.Domain
                 snapshot.VersusLayout,
                 snapshot.PlayerSlot,
                 out joinCell,
-                out joinTier);
+                out joinTier,
+                clusterMatchTier: clusterMatchTier);
+        }
+
+        static MatchGoal BuildLiftJoinGoal(
+            int face,
+            AiFaceCluster cluster,
+            DiceController workDie,
+            LiftJoinPlan liftPlan,
+            float score,
+            bool isChainGoal = false) {
+            var subGoals = new List<AiSubGoal> {
+                AiSubGoal.LiftDie(liftPlan.WorkDie),
+                AiSubGoal.PlaceCarriedDie(liftPlan.PlaceCell)
+            };
+
+            return new MatchGoal(face, cluster, workDie, subGoals, score, false, isChainGoal);
         }
 
         static MatchGoal BuildLiftJoinGoal(
@@ -595,7 +651,7 @@ namespace DiceGame.Gameplay.AI.Domain
         static MatchGoal BuildImmediateMatchGoal(
             GameStateSnapshot snapshot,
             int face,
-            List<DiceSnapshot> cluster,
+            AiFaceCluster cluster,
             DiceRegistry registry,
             AiPlayerSettings settings) {
             if (registry != null
@@ -603,7 +659,9 @@ namespace DiceGame.Gameplay.AI.Domain
                 return null;
             }
 
-            var participant = SelectClusterParticipant(cluster, snapshot, registry);
+            var members = cluster.Members as List<DiceSnapshot>
+                ?? new List<DiceSnapshot>(cluster.Members);
+            var participant = SelectClusterParticipant(members, snapshot, registry);
             if (participant.Controller == null) {
                 return null;
             }

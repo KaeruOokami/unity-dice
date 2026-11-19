@@ -10,6 +10,67 @@ namespace DiceGame.Gameplay.AI.Domain
     public static class ClusterSelectionEvaluator
     {
         public static float ScoreCluster(
+            AiFaceCluster cluster,
+            Vector2Int playerCell,
+            int distanceToWorkDie,
+            AiPlayerSettings settings) {
+            return ScoreCluster(
+                cluster,
+                face: 0,
+                allDice: null,
+                playerCell,
+                distanceToWorkDie,
+                settings,
+                isImmediateMatch: false,
+                isChainGoal: false);
+        }
+
+        public static float ScoreCluster(
+            AiFaceCluster cluster,
+            int face,
+            IReadOnlyList<DiceSnapshot> allDice,
+            Vector2Int playerCell,
+            int distanceToWorkDie,
+            AiPlayerSettings settings) {
+            return ScoreCluster(
+                cluster,
+                face,
+                allDice,
+                playerCell,
+                distanceToWorkDie,
+                settings,
+                isImmediateMatch: false,
+                isChainGoal: false);
+        }
+
+        public static float ScoreCluster(
+            AiFaceCluster cluster,
+            int face,
+            IReadOnlyList<DiceSnapshot> allDice,
+            Vector2Int playerCell,
+            int distanceToWorkDie,
+            AiPlayerSettings settings,
+            bool isImmediateMatch,
+            bool isChainGoal) {
+            if (cluster.Count == 0 || settings == null) {
+                return float.MinValue;
+            }
+
+            return ScoreClusterCore(
+                cluster.Members,
+                cluster.Weight,
+                face,
+                allDice,
+                distanceToWorkDie,
+                settings,
+                isImmediateMatch,
+                isChainGoal);
+        }
+
+        /// <summary>
+        /// Chain / legacy paths that still pass raw member lists (weight = member count).
+        /// </summary>
+        public static float ScoreCluster(
             List<DiceSnapshot> cluster,
             Vector2Int playerCell,
             int distanceToWorkDie,
@@ -56,11 +117,31 @@ namespace DiceGame.Gameplay.AI.Domain
                 return float.MinValue;
             }
 
-            var compactness = ComputeCompactnessRatio(cluster);
-            var progress = face > 0 ? (float)cluster.Count / face : 0f;
+            return ScoreClusterCore(
+                cluster,
+                cluster.Count,
+                face,
+                allDice,
+                distanceToWorkDie,
+                settings,
+                isImmediateMatch,
+                isChainGoal);
+        }
+
+        static float ScoreClusterCore(
+            IReadOnlyList<DiceSnapshot> members,
+            int weight,
+            int face,
+            IReadOnlyList<DiceSnapshot> allDice,
+            int distanceToWorkDie,
+            AiPlayerSettings settings,
+            bool isImmediateMatch,
+            bool isChainGoal) {
+            var compactness = ComputeCompactnessRatio(members);
+            var progress = face > 0 ? (float)weight / face : 0f;
             var proximity = ComputeSameFaceProximityScore(face, allDice);
 
-            var score = cluster.Count * settings.ClusterSizeWeight
+            var score = weight * settings.ClusterSizeWeight
                 + compactness * settings.ClusterCompactnessWeight
                 + face * settings.FaceValueWeight
                 + progress * settings.ClusterProgressWeight
@@ -74,7 +155,7 @@ namespace DiceGame.Gameplay.AI.Domain
                 score += progress * progress * settings.NearCompleteBonus;
             }
 
-            if (HasImmovableDice(cluster)) {
+            if (HasImmovableDice(members)) {
                 score -= settings.ImmovableClusterPenalty;
             }
 
@@ -108,7 +189,7 @@ namespace DiceGame.Gameplay.AI.Domain
             var positions = new List<Vector2Int>();
             for (var i = 0; i < allDice.Count; i++) {
                 var snapshot = allDice[i];
-                if (snapshot.Controller == null || snapshot.TopFace != face) {
+                if (snapshot.Controller == null || snapshot.Controller.MatchFace != face) {
                     continue;
                 }
 
@@ -142,8 +223,9 @@ namespace DiceGame.Gameplay.AI.Domain
             return pairCount > 0 ? sumCloseness / pairCount : 0f;
         }
 
-        public static float ComputeCompactnessRatio(List<DiceSnapshot> cluster) {
-            if (cluster == null || cluster.Count == 0) {
+        public static float ComputeCompactnessRatio(IReadOnlyList<DiceSnapshot> cluster) {
+            var cells = GetClusterCells(cluster);
+            if (cells.Count == 0) {
                 return 0f;
             }
 
@@ -152,8 +234,7 @@ namespace DiceGame.Gameplay.AI.Domain
             var minY = int.MaxValue;
             var maxY = int.MinValue;
 
-            for (var i = 0; i < cluster.Count; i++) {
-                var pos = cluster[i].GridPos;
+            foreach (var pos in cells) {
                 if (pos.x < minX) {
                     minX = pos.x;
                 }
@@ -178,13 +259,14 @@ namespace DiceGame.Gameplay.AI.Domain
                 return 0f;
             }
 
-            return (float)cluster.Count / area;
+            return (float)cells.Count / area;
         }
 
-        public static int GetDistanceToCluster(Vector2Int cell, List<DiceSnapshot> cluster) {
+        public static int GetDistanceToCluster(Vector2Int cell, IReadOnlyList<DiceSnapshot> cluster) {
             var best = int.MaxValue;
-            for (var i = 0; i < cluster.Count; i++) {
-                var distance = DiceBoardAnalyzer.ManhattanDistance(cell, cluster[i].GridPos);
+            var cells = GetClusterCells(cluster);
+            foreach (var pos in cells) {
+                var distance = DiceBoardAnalyzer.ManhattanDistance(cell, pos);
                 if (distance < best) {
                     best = distance;
                 }
@@ -396,18 +478,19 @@ namespace DiceGame.Gameplay.AI.Domain
             var clusters = DiceBoardAnalyzer.FindFaceClusters(snapshot.PlanningDice, face);
             for (var i = 0; i < clusters.Count; i++) {
                 var candidate = clusters[i];
-                if (!ClusterContainsController(candidate, standing)) {
+                if (!ClusterContainsController(candidate.Members, standing)) {
                     continue;
                 }
 
                 if (AiFloorRecoveryPlanner.HasAdjacentClusterExternalDie(
-                    candidate,
+                    candidate.Members,
                     face,
                     snapshot.PlanningDice)) {
                     return false;
                 }
 
-                cluster = candidate;
+                cluster = candidate.Members as List<DiceSnapshot>
+                    ?? new List<DiceSnapshot>(candidate.Members);
                 return true;
             }
 
@@ -440,12 +523,12 @@ namespace DiceGame.Gameplay.AI.Domain
                 var clusters = DiceBoardAnalyzer.FindFaceClusters(snapshot.PlanningDice, face);
                 for (var i = 0; i < clusters.Count; i++) {
                     var cluster = clusters[i];
-                    if (face == excludeFace && IsSameCluster(cluster, excludeCluster)) {
+                    if (face == excludeFace && IsSameCluster(cluster.Members, excludeCluster)) {
                         continue;
                     }
 
                     if (placement != null) {
-                        if (cluster.Count >= face) {
+                        if (cluster.IsImmediate(face)) {
                             if (!ShouldDiscardImmediateCluster(cluster, placement)) {
                                 return true;
                             }
@@ -457,12 +540,14 @@ namespace DiceGame.Gameplay.AI.Domain
                             continue;
                         }
                     }
-                    else if (cluster.Count >= face) {
+                    else if (cluster.IsImmediate(face)) {
                         return true;
                     }
 
+                    var members = cluster.Members as List<DiceSnapshot>
+                        ?? new List<DiceSnapshot>(cluster.Members);
                     if (TrySelectNearestExternalDie(
-                        cluster,
+                        members,
                         face,
                         snapshot.PlanningDice,
                         snapshot.PlayerCell,
@@ -472,7 +557,7 @@ namespace DiceGame.Gameplay.AI.Domain
                         placement,
                         requireMatchingTopFace: true)
                         || TrySelectNearestExternalDie(
-                            cluster,
+                            members,
                             face,
                             snapshot.PlanningDice,
                             snapshot.PlayerCell,
@@ -522,32 +607,83 @@ namespace DiceGame.Gameplay.AI.Domain
                 return cells;
             }
 
+            var footprintBuffer = new List<Vector2Int>(JumboFootprint.CellCount);
             for (var i = 0; i < cluster.Count; i++) {
-                cells.Add(cluster[i].GridPos);
+                var snapshot = cluster[i];
+                var capabilities = DiceBehaviorResolver.GetCapabilities(snapshot.Kind);
+                if (capabilities.HasExpandedFootprint) {
+                    footprintBuffer.Clear();
+                    JumboFootprint.AppendCells(snapshot.GridPos, footprintBuffer);
+                    for (var c = 0; c < footprintBuffer.Count; c++) {
+                        cells.Add(footprintBuffer[c]);
+                    }
+                }
+                else {
+                    cells.Add(snapshot.GridPos);
+                }
             }
 
             return cells;
         }
 
         public static bool ShouldDiscardImmediateCluster(
+            AiFaceCluster cluster,
+            IDicePlacement placement) {
+            return ShouldDiscardImmediateCluster(cluster.Members, cluster.MatchTier, placement);
+        }
+
+        public static bool ShouldDiscardImmediateCluster(
             IReadOnlyList<DiceSnapshot> cluster,
+            IDicePlacement placement) {
+            if (cluster == null || cluster.Count == 0) {
+                return true;
+            }
+
+            return ShouldDiscardImmediateCluster(cluster, GetClusterTier(cluster), placement);
+        }
+
+        public static bool ShouldDiscardImmediateCluster(
+            IReadOnlyList<DiceSnapshot> cluster,
+            DiceStackTier matchTier,
             IDicePlacement placement) {
             if (cluster == null || cluster.Count == 0 || placement == null) {
                 return true;
             }
 
             // Top-tier members are standable; Bottom under full Tops is not.
-            if (GetClusterTier(cluster) == DiceStackTier.Top) {
+            if (matchTier == DiceStackTier.Top) {
                 return false;
             }
 
-            for (var i = 0; i < cluster.Count; i++) {
-                if (!placement.HasTopAt(cluster[i].GridPos)) {
+            var cells = GetClusterCells(cluster);
+            foreach (var cell in cells) {
+                if (!placement.HasTopAt(cell)) {
                     return false;
                 }
             }
 
             return true;
+        }
+
+        public static bool ShouldDiscardIncompleteCluster(
+            AiFaceCluster cluster,
+            int face,
+            GameStateSnapshot snapshot,
+            IDicePlacement placement) {
+            if (cluster.Count == 0 || placement == null || face < 2) {
+                return true;
+            }
+
+            var need = cluster.RemainingNeed(face);
+            if (need <= 0) {
+                return false;
+            }
+
+            return CountSameTierExpansionCapacity(
+                cluster.Members,
+                cluster.MatchTier,
+                snapshot,
+                placement) < need;
         }
 
         public static bool ShouldDiscardIncompleteCluster(
@@ -559,23 +695,62 @@ namespace DiceGame.Gameplay.AI.Domain
                 return true;
             }
 
+            // Legacy / chain path: member count stands in for match weight.
             var need = face - cluster.Count;
             if (need <= 0) {
                 return false;
             }
 
-            return CountSameTierExpansionCapacity(cluster, snapshot, placement) < need;
+            return CountSameTierExpansionCapacity(
+                cluster,
+                GetClusterTier(cluster),
+                snapshot,
+                placement) < need;
+        }
+
+        public static bool ShouldDiscardIncompleteCluster(
+            IReadOnlyList<DiceSnapshot> cluster,
+            int face,
+            int weight,
+            DiceStackTier matchTier,
+            GameStateSnapshot snapshot,
+            IDicePlacement placement) {
+            if (cluster == null || cluster.Count == 0 || placement == null || face < 2) {
+                return true;
+            }
+
+            var need = face - weight;
+            if (need <= 0) {
+                return false;
+            }
+
+            return CountSameTierExpansionCapacity(cluster, matchTier, snapshot, placement) < need;
         }
 
         public static int CountSameTierExpansionCapacity(
             IReadOnlyList<DiceSnapshot> cluster,
             GameStateSnapshot snapshot,
             IDicePlacement placement) {
+            if (cluster == null || cluster.Count == 0) {
+                return 0;
+            }
+
+            return CountSameTierExpansionCapacity(
+                cluster,
+                GetClusterTier(cluster),
+                snapshot,
+                placement);
+        }
+
+        public static int CountSameTierExpansionCapacity(
+            IReadOnlyList<DiceSnapshot> cluster,
+            DiceStackTier matchTier,
+            GameStateSnapshot snapshot,
+            IDicePlacement placement) {
             if (cluster == null || cluster.Count == 0 || placement == null) {
                 return 0;
             }
 
-            var tier = GetClusterTier(cluster);
             var clusterCells = GetClusterCells(cluster);
             var visited = new HashSet<Vector2Int>();
             var queue = new Queue<Vector2Int>();
@@ -586,7 +761,7 @@ namespace DiceGame.Gameplay.AI.Domain
                         continue;
                     }
 
-                    if (!IsSameTierPlaceable(adjacent, tier, snapshot, placement)) {
+                    if (!IsSameTierPlaceable(adjacent, matchTier, snapshot, placement)) {
                         continue;
                     }
 
@@ -602,7 +777,7 @@ namespace DiceGame.Gameplay.AI.Domain
                         continue;
                     }
 
-                    if (!IsSameTierPlaceable(adjacent, tier, snapshot, placement)) {
+                    if (!IsSameTierPlaceable(adjacent, matchTier, snapshot, placement)) {
                         continue;
                     }
 
@@ -664,7 +839,7 @@ namespace DiceGame.Gameplay.AI.Domain
             return false;
         }
 
-        static bool HasImmovableDice(List<DiceSnapshot> cluster) {
+        static bool HasImmovableDice(IReadOnlyList<DiceSnapshot> cluster) {
             for (var i = 0; i < cluster.Count; i++) {
                 if (!DiceBoardAnalyzer.IsMovable(cluster[i])) {
                     return true;

@@ -227,7 +227,8 @@ namespace DiceGame.Gameplay.AI.Application
                 snapshot.PlayerSlot,
                 out _,
                 out _,
-                joinSubGoal != null ? joinSubGoal.FailedJoinSlotKeys : null);
+                joinSubGoal != null ? joinSubGoal.FailedJoinSlotKeys : null,
+                activeGoal.ClusterMatchTier);
         }
 
         void AbandonActiveGoal(string reason) {

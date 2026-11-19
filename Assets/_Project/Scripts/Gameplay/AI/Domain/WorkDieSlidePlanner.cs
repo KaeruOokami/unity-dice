@@ -49,13 +49,31 @@ namespace DiceGame.Gameplay.AI.Domain
                     continue;
                 }
 
-                var memberState = controller.CurrentState;
-                if (memberState.Orientation.Top != targetFace) {
+                if (controller.MatchFace != targetFace) {
                     continue;
                 }
 
-                var memberSlot = new DiceSlot(memberState.GridPos, memberState.Tier);
-                if (DiceStackAdjacency.IsAdjacentForMatch(workSlot, memberSlot)) {
+                var memberState = controller.CurrentState;
+                if (controller.Capabilities.HasExpandedFootprint) {
+                    // Sinking jumbo can occupy the work tier without CurrentState.Tier matching.
+                    if (DiceMatchWeight.Get(controller, workSlot.Tier) <= 0) {
+                        continue;
+                    }
+
+                    if (DiceStackAdjacency.IsAdjacentForMatchToOccupant(
+                        workSlot,
+                        memberState.GridPos,
+                        workSlot.Tier,
+                        hasExpandedFootprint: true)) {
+                        return true;
+                    }
+
+                    continue;
+                }
+
+                if (DiceStackAdjacency.IsAdjacentForMatch(
+                    workSlot,
+                    new DiceSlot(memberState.GridPos, memberState.Tier))) {
                     return true;
                 }
             }
@@ -86,7 +104,8 @@ namespace DiceGame.Gameplay.AI.Domain
             IReadOnlyList<DiceSnapshot> allDice,
             DiceRegistry registry,
             VersusArenaLayout versusLayout,
-            PlayerSlot playerSlot) {
+            PlayerSlot playerSlot,
+            DiceStackTier? clusterMatchTier = null) {
             return TrySelectJoinTargetCell(
                 cluster,
                 workDie,
@@ -95,7 +114,8 @@ namespace DiceGame.Gameplay.AI.Domain
                 versusLayout,
                 playerSlot,
                 out _,
-                out _);
+                out _,
+                clusterMatchTier: clusterMatchTier);
         }
 
         public static bool TrySelectJoinTargetCell(
@@ -108,7 +128,8 @@ namespace DiceGame.Gameplay.AI.Domain
             out Vector2Int targetCell,
             out DiceStackTier targetTier,
             Vector2Int? excludeCell = null,
-            DiceStackTier? excludeTier = null) {
+            DiceStackTier? excludeTier = null,
+            DiceStackTier? clusterMatchTier = null) {
             HashSet<long> excludeKeys = null;
             if (excludeCell.HasValue && excludeTier.HasValue) {
                 excludeKeys = new HashSet<long> {
@@ -125,7 +146,8 @@ namespace DiceGame.Gameplay.AI.Domain
                 playerSlot,
                 out targetCell,
                 out targetTier,
-                excludeKeys);
+                excludeKeys,
+                clusterMatchTier);
         }
 
         public static bool TrySelectJoinTargetCell(
@@ -137,15 +159,16 @@ namespace DiceGame.Gameplay.AI.Domain
             PlayerSlot playerSlot,
             out Vector2Int targetCell,
             out DiceStackTier targetTier,
-            ISet<long> excludeSlotKeys) {
+            ISet<long> excludeSlotKeys,
+            DiceStackTier? clusterMatchTier = null) {
             targetCell = default;
             targetTier = default;
             if (cluster == null || cluster.Count == 0 || registry == null || workDie.Controller == null) {
                 return false;
             }
 
-            // Join landings must match the cluster tier (same-tier expansion only).
-            var clusterTier = cluster[0].Tier;
+            // Join landings must match the gather MatchTier (same-tier expansion only).
+            var clusterTier = clusterMatchTier ?? cluster[0].Tier;
             var clusterCells = ClusterSelectionEvaluator.GetClusterCells(cluster);
             var adjacent = CollectClusterAdjacentCells(clusterCells);
             var bestScore = float.MinValue;

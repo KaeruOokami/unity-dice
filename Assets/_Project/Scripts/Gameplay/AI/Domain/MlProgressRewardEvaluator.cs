@@ -25,13 +25,14 @@ namespace DiceGame.Gameplay.AI.Domain
                 var clusters = DiceBoardAnalyzer.FindFaceClusters(planningDice, face);
                 for (var i = 0; i < clusters.Count; i++) {
                     var cluster = clusters[i];
-                    if (cluster == null || cluster.Count == 0) {
+                    if (cluster.Count == 0) {
                         continue;
                     }
 
-                    var progress = Mathf.Clamp01(cluster.Count / (float)face);
+                    // Match model: progress = weight / face (no upper clamp; oversized still scores).
+                    var progress = cluster.Weight / (float)face;
                     var score = progress * settings.ClusterProgressWeight
-                        + cluster.Count * settings.ClusterSizeProgressWeight;
+                        + cluster.Weight * settings.ClusterSizeProgressWeight;
 
                     if (SinkingChainEvaluator.IsChainPossible(face, planningDice)) {
                         score += settings.ChainPotentialBonus;

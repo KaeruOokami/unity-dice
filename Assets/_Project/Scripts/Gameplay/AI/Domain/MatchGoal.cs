@@ -188,6 +188,10 @@ namespace DiceGame.Gameplay.AI.Domain
 
         public int Face { get; }
         public IReadOnlyList<DiceSnapshot> ClusterDice { get; }
+        /// <summary>Match gather weight (jumbo uses Bottom4/Top4 / pre-sink 1).</summary>
+        public int ClusterWeight { get; }
+        /// <summary>Match tier slot for this gather cluster (bridged pre-sink uses Bottom sentinel).</summary>
+        public DiceStackTier ClusterMatchTier { get; }
         public DiceController ParticipantTarget { get; }
         public IReadOnlyList<AiSubGoal> SubGoals => subGoals;
         public float PriorityScore { get; }
@@ -198,6 +202,10 @@ namespace DiceGame.Gameplay.AI.Domain
         public bool IsFaceOneClearGoal { get; }
         public bool IsMarkedUnplannable { get; private set; }
 
+        public AiFaceCluster AsFaceCluster() {
+            return new AiFaceCluster(ClusterDice, ClusterWeight, ClusterMatchTier);
+        }
+
         public MatchGoal(
             int face,
             IReadOnlyList<DiceSnapshot> clusterDice,
@@ -206,9 +214,59 @@ namespace DiceGame.Gameplay.AI.Domain
             float priorityScore,
             bool isImmediateMatch,
             bool isChainGoal = false,
+            bool isFaceOneClearGoal = false)
+            : this(
+                face,
+                clusterDice,
+                clusterWeight: clusterDice != null ? clusterDice.Count : 0,
+                clusterMatchTier: clusterDice != null && clusterDice.Count > 0
+                    ? clusterDice[0].Tier
+                    : DiceStackTier.Bottom,
+                participantTarget,
+                subGoals,
+                priorityScore,
+                isImmediateMatch,
+                isChainGoal,
+                isFaceOneClearGoal) {
+        }
+
+        public MatchGoal(
+            int face,
+            AiFaceCluster cluster,
+            DiceController participantTarget,
+            IReadOnlyList<AiSubGoal> subGoals,
+            float priorityScore,
+            bool isImmediateMatch,
+            bool isChainGoal = false,
+            bool isFaceOneClearGoal = false)
+            : this(
+                face,
+                cluster.Members,
+                cluster.Weight,
+                cluster.MatchTier,
+                participantTarget,
+                subGoals,
+                priorityScore,
+                isImmediateMatch,
+                isChainGoal,
+                isFaceOneClearGoal) {
+        }
+
+        public MatchGoal(
+            int face,
+            IReadOnlyList<DiceSnapshot> clusterDice,
+            int clusterWeight,
+            DiceStackTier clusterMatchTier,
+            DiceController participantTarget,
+            IReadOnlyList<AiSubGoal> subGoals,
+            float priorityScore,
+            bool isImmediateMatch,
+            bool isChainGoal = false,
             bool isFaceOneClearGoal = false) {
             Face = face;
             ClusterDice = clusterDice;
+            ClusterWeight = clusterWeight;
+            ClusterMatchTier = clusterMatchTier;
             ParticipantTarget = participantTarget;
             this.subGoals = subGoals != null
                 ? new List<AiSubGoal>(subGoals)
@@ -301,7 +359,10 @@ namespace DiceGame.Gameplay.AI.Domain
                 }
             } else if (registry != null && Face >= 2 && ClusterDice != null && ClusterDice.Count > 0) {
                 if (IsImmediateMatch
-                    && ClusterSelectionEvaluator.ShouldDiscardImmediateCluster(ClusterDice, registry)) {
+                    && ClusterSelectionEvaluator.ShouldDiscardImmediateCluster(
+                        ClusterDice,
+                        ClusterMatchTier,
+                        registry)) {
                     return true;
                 }
 
@@ -309,6 +370,8 @@ namespace DiceGame.Gameplay.AI.Domain
                     && ClusterSelectionEvaluator.ShouldDiscardIncompleteCluster(
                         ClusterDice,
                         Face,
+                        ClusterWeight,
+                        ClusterMatchTier,
                         snapshot,
                         registry)) {
                     return true;

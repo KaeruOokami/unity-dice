@@ -42,7 +42,8 @@ namespace DiceGame.Gameplay.AI.Domain
             IReadOnlyList<DiceSnapshot> allDice,
             bool forChain,
             out DiceSnapshot workDie,
-            out LiftJoinPlan plan) {
+            out LiftJoinPlan plan,
+            DiceStackTier? clusterMatchTier = null) {
             workDie = default;
             plan = default;
             if (snapshot == null || registry == null || cluster == null || cluster.Count == 0 || allDice == null) {
@@ -89,7 +90,8 @@ namespace DiceGame.Gameplay.AI.Domain
                         candidate,
                         face,
                         allDice,
-                        out candidatePlan);
+                        out candidatePlan,
+                        clusterMatchTier);
                 if (!planned) {
                     continue;
                 }
@@ -113,7 +115,8 @@ namespace DiceGame.Gameplay.AI.Domain
             DiceSnapshot workDie,
             int face,
             IReadOnlyList<DiceSnapshot> allDice,
-            out LiftJoinPlan plan) {
+            out LiftJoinPlan plan,
+            DiceStackTier? clusterMatchTier = null) {
             plan = default;
             if (snapshot == null
                 || registry == null
@@ -132,7 +135,8 @@ namespace DiceGame.Gameplay.AI.Domain
                 snapshot.VersusLayout,
                 snapshot.PlayerSlot,
                 out var joinCell,
-                out var joinTier)) {
+                out var joinTier,
+                clusterMatchTier: clusterMatchTier)) {
                 return false;
             }
 

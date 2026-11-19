@@ -11,22 +11,48 @@ namespace DiceGame.Gameplay.AI.Domain
             Direction.East, Direction.West, Direction.North, Direction.South
         };
 
-        public static List<List<DiceSnapshot>> FindFaceClusters(
+        /// <summary>
+        /// Face gather clusters using match occupancy/weight (jumbo footprint, tier slots).
+        /// Incomplete clusters are included; progress/immediate use <see cref="AiFaceCluster.Weight"/>.
+        /// </summary>
+        public static List<AiFaceCluster> FindFaceClusters(
             IReadOnlyList<DiceSnapshot> allDice,
             int face) {
-            var lookup = BuildLookup(allDice, face);
-            var visited = new HashSet<(Vector2Int, DiceStackTier)>();
-            var clusters = new List<List<DiceSnapshot>>();
+            var clusters = new List<AiFaceCluster>();
+            if (allDice == null || face < 2 || face > 6) {
+                return clusters;
+            }
 
-            foreach (var pair in lookup) {
-                if (visited.Contains(pair.Key)) {
+            var controllers = new List<DiceController>(allDice.Count);
+            for (var i = 0; i < allDice.Count; i++) {
+                var controller = allDice[i].Controller;
+                if (controller != null) {
+                    controllers.Add(controller);
+                }
+            }
+
+            var matchClusters = DiceMatchFinder.FindGatherClusters(controllers, face);
+            for (var i = 0; i < matchClusters.Count; i++) {
+                var match = matchClusters[i];
+                if (match.Members == null || match.Members.Count == 0) {
                     continue;
                 }
 
-                var cluster = FloodFill(lookup, pair.Key, visited);
-                if (cluster.Count > 0) {
-                    clusters.Add(cluster);
+                var members = new List<DiceSnapshot>(match.Members.Count);
+                for (var m = 0; m < match.Members.Count; m++) {
+                    var dice = match.Members[m];
+                    if (dice == null) {
+                        continue;
+                    }
+
+                    members.Add(new DiceSnapshot(dice));
                 }
+
+                if (members.Count == 0) {
+                    continue;
+                }
+
+                clusters.Add(new AiFaceCluster(members, match.Weight, match.MatchTier));
             }
 
             return clusters;
@@ -82,64 +108,6 @@ namespace DiceGame.Gameplay.AI.Domain
         public static IEnumerable<Vector2Int> GetAdjacentCells(Vector2Int cell) {
             for (var i = 0; i < Directions.Length; i++) {
                 yield return cell + Directions[i].ToGridDelta();
-            }
-        }
-
-        static Dictionary<(Vector2Int, DiceStackTier), DiceSnapshot> BuildLookup(
-            IReadOnlyList<DiceSnapshot> allDice,
-            int face) {
-            var lookup = new Dictionary<(Vector2Int, DiceStackTier), DiceSnapshot>();
-
-            for (var i = 0; i < allDice.Count; i++) {
-                var snapshot = allDice[i];
-                if (snapshot.IsErasing || snapshot.TopFace != face) {
-                    continue;
-                }
-
-                lookup[(snapshot.GridPos, snapshot.Tier)] = snapshot;
-            }
-
-            return lookup;
-        }
-
-        static List<DiceSnapshot> FloodFill(
-            Dictionary<(Vector2Int, DiceStackTier), DiceSnapshot> lookup,
-            (Vector2Int, DiceStackTier) start,
-            HashSet<(Vector2Int, DiceStackTier)> visited) {
-            var cluster = new List<DiceSnapshot>();
-            var queue = new Queue<(Vector2Int, DiceStackTier)>();
-            queue.Enqueue(start);
-
-            while (queue.Count > 0) {
-                var key = queue.Dequeue();
-                if (visited.Contains(key) || !lookup.TryGetValue(key, out var snapshot)) {
-                    continue;
-                }
-
-                visited.Add(key);
-                cluster.Add(snapshot);
-                EnqueueAdjacentKeys(lookup, key, queue);
-            }
-
-            return cluster;
-        }
-
-        static void EnqueueAdjacentKeys(
-            Dictionary<(Vector2Int, DiceStackTier), DiceSnapshot> lookup,
-            (Vector2Int cell, DiceStackTier tier) key,
-            Queue<(Vector2Int, DiceStackTier)> queue) {
-            var from = new DiceSlot(key.cell, key.tier);
-
-            foreach (var direction in Directions) {
-                var neighbor = new DiceSlot(key.cell + direction.ToGridDelta(), key.tier);
-                if (!DiceStackAdjacency.IsAdjacentForMatch(from, neighbor)) {
-                    continue;
-                }
-
-                var neighborKey = (neighbor.Cell, neighbor.Tier);
-                if (lookup.ContainsKey(neighborKey)) {
-                    queue.Enqueue(neighborKey);
-                }
             }
         }
     }

@@ -46,12 +46,16 @@ namespace DiceGame.Gameplay
             }
 
             for (var face = 2; face <= 6; face++) {
-                FindPreSinkBridgedClusters(
-                    allDice, actionDice, face, consumedDice, consumedSlots, results, diagnose);
-                FindSinkingTierClusters(
-                    allDice, actionDice, face, DiceStackTier.Bottom, consumedDice, consumedSlots, results);
-                FindSinkingTierClusters(
-                    allDice, actionDice, face, DiceStackTier.Top, consumedDice, consumedSlots, results);
+                CollectFaceClusters(
+                    allDice,
+                    actionDice,
+                    face,
+                    consumedDice,
+                    consumedSlots,
+                    results,
+                    requireActionParticipant: true,
+                    requireMinWeight: true,
+                    diagnose);
             }
 
             if (diagnose) {
@@ -59,6 +63,76 @@ namespace DiceGame.Gameplay
             }
 
             return results;
+        }
+
+        /// <summary>
+        /// Gather view of match connectivity/weight for one face (incomplete included).
+        /// Same occupancy rules as <see cref="FindMatchingClusters"/>, without action or
+        /// weight&gt;=face filters — used by AI cluster / progress scoring.
+        /// </summary>
+        public static List<DiceMatchCluster> FindGatherClusters(
+            IReadOnlyList<DiceController> allDice,
+            int face) {
+            var results = new List<DiceMatchCluster>();
+            if (allDice == null || face < 2 || face > 6) {
+                return results;
+            }
+
+            var consumedDice = new HashSet<DiceController>();
+            var consumedSlots = new HashSet<(DiceController, DiceStackTier)>();
+            CollectFaceClusters(
+                allDice,
+                actionDice: null,
+                face,
+                consumedDice,
+                consumedSlots,
+                results,
+                requireActionParticipant: false,
+                requireMinWeight: false,
+                diagnose: false);
+            return results;
+        }
+
+        static void CollectFaceClusters(
+            IReadOnlyList<DiceController> allDice,
+            IReadOnlyCollection<DiceController> actionDice,
+            int face,
+            HashSet<DiceController> consumedDice,
+            HashSet<(DiceController, DiceStackTier)> consumedSlots,
+            List<DiceMatchCluster> results,
+            bool requireActionParticipant,
+            bool requireMinWeight,
+            bool diagnose) {
+            FindPreSinkBridgedClusters(
+                allDice,
+                actionDice,
+                face,
+                consumedDice,
+                consumedSlots,
+                results,
+                requireActionParticipant,
+                requireMinWeight,
+                diagnose);
+            FindSinkingTierClusters(
+                allDice,
+                actionDice,
+                face,
+                DiceStackTier.Bottom,
+                consumedDice,
+                consumedSlots,
+                results,
+                requireActionParticipant,
+                requireMinWeight);
+            FindSinkingTierClusters(
+                allDice,
+                actionDice,
+                face,
+                DiceStackTier.Top,
+                consumedDice,
+                consumedSlots,
+                results,
+                requireActionParticipant,
+                requireMinWeight);
         }
 
         /// <summary>
@@ -72,6 +146,8 @@ namespace DiceGame.Gameplay
             HashSet<DiceController> consumedDice,
             HashSet<(DiceController, DiceStackTier)> consumedSlots,
             List<DiceMatchCluster> results,
+            bool requireActionParticipant,
+            bool requireMinWeight,
             bool diagnose) {
             var lookup = BuildPreSinkBridgedLookup(
                 allDice, face, consumedDice, consumedSlots, diagnose);
@@ -90,8 +166,19 @@ namespace DiceGame.Gameplay
                 var cluster = FloodFillBridged(lookup, pair.Key, visited);
                 var hasJumbo = ContainsPreSinkJumbo(cluster.Members);
 
-                if (cluster.Weight < face) {
-                    if (diagnose && hasJumbo) {
+                // Bridged pass is only meaningful when a pre-sink jumbo is involved.
+                if (!hasJumbo) {
+                    if (diagnose) {
+                        Debug.Log(
+                            $"{LogPrefix} bridged discard face={face}: no pre-sink jumbo in cluster " +
+                            $"members={FormatMembers(cluster.Members)}");
+                    }
+
+                    continue;
+                }
+
+                if (requireMinWeight && cluster.Weight < face) {
+                    if (diagnose) {
                         Debug.Log(
                             $"{LogPrefix} bridged discard face={face}: weight {cluster.Weight} < {face} " +
                             $"members={FormatMembers(cluster.Members)}");
@@ -100,23 +187,13 @@ namespace DiceGame.Gameplay
                     continue;
                 }
 
-                if (!HasActionParticipant(cluster.Members, actionDice)) {
-                    if (diagnose && hasJumbo) {
+                if (requireActionParticipant
+                    && !HasActionParticipant(cluster.Members, actionDice)) {
+                    if (diagnose) {
                         Debug.Log(
                             $"{LogPrefix} bridged discard face={face}: no action participant " +
                             $"members={FormatMembers(cluster.Members)} " +
                             $"action={FormatActionDice(actionDice)}");
-                    }
-
-                    continue;
-                }
-
-                // Bridged pass is only meaningful when a pre-sink jumbo is involved.
-                if (!hasJumbo) {
-                    if (diagnose) {
-                        Debug.Log(
-                            $"{LogPrefix} bridged discard face={face}: no pre-sink jumbo in cluster " +
-                            $"members={FormatMembers(cluster.Members)}");
                     }
 
                     continue;
@@ -148,7 +225,9 @@ namespace DiceGame.Gameplay
             DiceStackTier matchTier,
             HashSet<DiceController> consumedDice,
             HashSet<(DiceController, DiceStackTier)> consumedSlots,
-            List<DiceMatchCluster> results) {
+            List<DiceMatchCluster> results,
+            bool requireActionParticipant,
+            bool requireMinWeight) {
             var lookup = BuildSameTierLookup(allDice, face, matchTier, consumedDice, consumedSlots);
             var visited = new HashSet<Vector2Int>();
 
@@ -158,7 +237,12 @@ namespace DiceGame.Gameplay
                 }
 
                 var cluster = FloodFillSameTier(lookup, pair.Key, visited, matchTier);
-                if (cluster.Weight < face || !HasActionParticipant(cluster.Members, actionDice)) {
+                if (requireMinWeight && cluster.Weight < face) {
+                    continue;
+                }
+
+                if (requireActionParticipant
+                    && !HasActionParticipant(cluster.Members, actionDice)) {
                     continue;
                 }
 

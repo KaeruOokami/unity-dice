@@ -990,7 +990,14 @@ namespace DiceGame.Gameplay.AI.Domain
                 }
 
                 var snap = cluster[i];
-                if (snap.Orientation.Top != targetFace) {
+                var expanded = DiceBehaviorResolver.GetCapabilities(snap.Kind).HasExpandedFootprint;
+                if (expanded) {
+                    if (member.MatchFace != targetFace
+                        || DiceMatchWeight.Get(member, workState.Tier) <= 0) {
+                        continue;
+                    }
+                }
+                else if (snap.Orientation.Top != targetFace) {
                     continue;
                 }
 
@@ -998,7 +1005,9 @@ namespace DiceGame.Gameplay.AI.Domain
                     approachCost,
                     ApproachLowerBound(
                         new DiceSlot(workState.GridPos, workState.Tier),
-                        new DiceSlot(snap.GridPos, snap.Tier)));
+                        snap.GridPos,
+                        workState.Tier,
+                        expanded));
             }
 
             var rollLower = approachCost == int.MaxValue
@@ -1030,19 +1039,29 @@ namespace DiceGame.Gameplay.AI.Domain
             return 1;
         }
 
-        static int ApproachLowerBound(DiceSlot work, DiceSlot member) {
-            if (DiceStackAdjacency.IsAdjacentForMatch(work, member)) {
+        static int ApproachLowerBound(
+            DiceSlot work,
+            Vector2Int memberAnchor,
+            DiceStackTier memberTier,
+            bool hasExpandedFootprint) {
+            if (DiceStackAdjacency.IsAdjacentForMatchToOccupant(
+                work,
+                memberAnchor,
+                hasExpandedFootprint ? work.Tier : memberTier,
+                hasExpandedFootprint)) {
                 return 0;
             }
 
-            var manhattan = Mathf.Abs(work.Cell.x - member.Cell.x)
-                + Mathf.Abs(work.Cell.y - member.Cell.y);
+            var manhattan = DiceStackAdjacency.ManhattanToOccupant(
+                work.Cell,
+                memberAnchor,
+                hasExpandedFootprint);
             if (manhattan == 0) {
                 return 1;
             }
 
             var horizontal = Mathf.Max(0, manhattan - 1);
-            if (work.Tier != member.Tier) {
+            if (!hasExpandedFootprint && work.Tier != memberTier) {
                 return Mathf.Max(1, horizontal);
             }
 
@@ -1091,12 +1110,35 @@ namespace DiceGame.Gameplay.AI.Domain
                     memberState = new DiceState(snap.GridPos, snap.Orientation, snap.Tier, snap.Kind);
                 }
 
+                var memberCaps = DiceBehaviorResolver.GetCapabilities(memberState.Kind);
+                if (memberCaps.HasExpandedFootprint) {
+                    // Prefer live MatchFace / weight when the controller is still the authority.
+                    if (member.MatchFace != targetFace) {
+                        continue;
+                    }
+
+                    if (DiceMatchWeight.Get(member, workSlot.Tier) <= 0) {
+                        continue;
+                    }
+
+                    if (DiceStackAdjacency.IsAdjacentForMatchToOccupant(
+                        workSlot,
+                        memberState.GridPos,
+                        workSlot.Tier,
+                        hasExpandedFootprint: true)) {
+                        return true;
+                    }
+
+                    continue;
+                }
+
                 if (memberState.Orientation.Top != targetFace) {
                     continue;
                 }
 
-                var memberSlot = new DiceSlot(memberState.GridPos, memberState.Tier);
-                if (DiceStackAdjacency.IsAdjacentForMatch(workSlot, memberSlot)) {
+                if (DiceStackAdjacency.IsAdjacentForMatch(
+                    workSlot,
+                    new DiceSlot(memberState.GridPos, memberState.Tier))) {
                     return true;
                 }
             }
@@ -1124,8 +1166,9 @@ namespace DiceGame.Gameplay.AI.Domain
             var selected = new List<DiceController>(participantCap) { workDie };
             var anchors = new List<Vector2Int> { workStartState.GridPos };
             if (cluster != null) {
-                for (var i = 0; i < cluster.Count; i++) {
-                    anchors.Add(cluster[i].GridPos);
+                var clusterCells = ClusterSelectionEvaluator.GetClusterCells(cluster);
+                foreach (var cell in clusterCells) {
+                    anchors.Add(cell);
                 }
             }
 
