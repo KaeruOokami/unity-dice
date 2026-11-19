@@ -29,11 +29,20 @@ namespace DiceGame.Gameplay.AI.Domain
                         }
                         break;
                     case AiSubGoalKind.JoinCluster:
-                        if (subGoal.TargetDie != null
-                            && WorkDieSlidePlanner.IsJoinComplete(
-                                subGoal.TargetDie.CurrentState,
-                                goal.ClusterDice,
-                                subGoal.TargetFace)) {
+                        if (subGoal.TargetDie == null) {
+                            break;
+                        }
+
+                        if (goal.IsFaceOneClearGoal) {
+                            // Completion is driven by MatchGoalPlanner after an action roll;
+                            // do not mark complete here just for already being adjacent.
+                            break;
+                        }
+
+                        if (WorkDieSlidePlanner.IsJoinComplete(
+                            subGoal.TargetDie.CurrentState,
+                            goal.ClusterDice,
+                            subGoal.TargetFace)) {
                             subGoal.MarkComplete();
                         }
                         break;

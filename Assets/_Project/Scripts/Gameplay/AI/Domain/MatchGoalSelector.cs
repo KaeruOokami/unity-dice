@@ -32,6 +32,13 @@ namespace DiceGame.Gameplay.AI.Domain
                 bestGoal = chainGoal;
             }
 
+            if (FaceOneClearEvaluator.TryBuildGoal(snapshot, character, registry, settings, out var faceOneGoal)
+                && !IsExcluded(faceOneGoal, failureMemory, Time.time)
+                && faceOneGoal.PriorityScore > bestScore) {
+                bestScore = faceOneGoal.PriorityScore;
+                bestGoal = faceOneGoal;
+            }
+
             if (TrySelectBestGoal(snapshot, character, registry, settings, failureMemory, out var clusterGoal)
                 && clusterGoal.PriorityScore > bestScore) {
                 bestGoal = clusterGoal;

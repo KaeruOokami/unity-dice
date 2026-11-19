@@ -163,6 +163,8 @@ namespace DiceGame.Gameplay.AI.Domain
         public bool IsImmediateMatch { get; }
         /// <summary>True when this goal expands a sinking chain cluster (not a normal face cluster).</summary>
         public bool IsChainGoal { get; }
+        /// <summary>True when clearing face-1 via adjacency to erasing dice (OneVanish).</summary>
+        public bool IsFaceOneClearGoal { get; }
         public bool IsMarkedUnplannable { get; private set; }
 
         public MatchGoal(
@@ -172,7 +174,8 @@ namespace DiceGame.Gameplay.AI.Domain
             IReadOnlyList<AiSubGoal> subGoals,
             float priorityScore,
             bool isImmediateMatch,
-            bool isChainGoal = false) {
+            bool isChainGoal = false,
+            bool isFaceOneClearGoal = false) {
             Face = face;
             ClusterDice = clusterDice;
             ParticipantTarget = participantTarget;
@@ -182,6 +185,7 @@ namespace DiceGame.Gameplay.AI.Domain
             PriorityScore = priorityScore;
             IsImmediateMatch = isImmediateMatch;
             IsChainGoal = isChainGoal;
+            IsFaceOneClearGoal = isFaceOneClearGoal;
         }
 
         public void MarkUnplannable() {
@@ -260,7 +264,11 @@ namespace DiceGame.Gameplay.AI.Domain
                 return true;
             }
 
-            if (registry != null && Face >= 2 && ClusterDice != null && ClusterDice.Count > 0) {
+            if (IsFaceOneClearGoal) {
+                if (!FaceOneClearEvaluator.HasErasingDice(snapshot.PlanningDice)) {
+                    return true;
+                }
+            } else if (registry != null && Face >= 2 && ClusterDice != null && ClusterDice.Count > 0) {
                 if (IsImmediateMatch
                     && ClusterSelectionEvaluator.ShouldDiscardImmediateCluster(ClusterDice, registry)) {
                     return true;
@@ -355,6 +363,10 @@ namespace DiceGame.Gameplay.AI.Domain
             }
 
             var workDie = new DiceSnapshot(ParticipantTarget);
+            if (IsFaceOneClearGoal) {
+                return FaceOneClearEvaluator.HasErasingDice(snapshot.PlanningDice);
+            }
+
             if (IsChainGoal) {
                 return SinkingChainEvaluator.CanWorkDieExtendChain(
                     Face,
@@ -400,8 +412,14 @@ namespace DiceGame.Gameplay.AI.Domain
                 return chainFaceCount >= 2;
             }
 
-            // Pre-sink gather may look for a time-critical chain interrupt.
-            return chainFaceCount >= 1;
+            if (IsFaceOneClearGoal) {
+                // Stay on face-one clear unless extend fails (handled above).
+                return false;
+            }
+
+            // Pre-sink gather may look for chain or face-one clear interrupt.
+            return chainFaceCount >= 1
+                || FaceOneClearEvaluator.HasErasingDice(snapshot.PlanningDice);
         }
 
         /// <summary>

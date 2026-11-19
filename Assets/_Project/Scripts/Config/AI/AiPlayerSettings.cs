@@ -44,6 +44,16 @@ namespace DiceGame.Config
         [SerializeField] float sinkingChainImmediateBonus = 50f;
         [SerializeField] float sinkingChainWorkDieWeight = 8f;
 
+        [Header("Face-One Clear Scoring")]
+        [Tooltip("Base score when a face-one clear goal is available (needs erasing neighbors).")]
+        [SerializeField] float faceOneClearBaseBonus = 40f;
+        [Tooltip("Per planning-region die currently showing 1.")]
+        [SerializeField] float faceOneCountWeight = 35f;
+        [Tooltip("Board fill ratio (0..1) contribution. Higher fill raises clear priority.")]
+        [SerializeField] float boardFillWeight = 120f;
+        [Tooltip("ones * fill synergy so crowded boards with many 1s spike hard.")]
+        [SerializeField] float faceOneFillSynergyWeight = 80f;
+
         [Header("Goal Persistence")]
         [SerializeField] float goalSwitchMargin = 8f;
         [Tooltip("While a chain goal is still extendable, require this margin to switch to another chain face.")]
@@ -78,6 +88,10 @@ namespace DiceGame.Config
         public float SinkingChainBonus => sinkingChainBonus;
         public float SinkingChainImmediateBonus => sinkingChainImmediateBonus;
         public float SinkingChainWorkDieWeight => sinkingChainWorkDieWeight;
+        public float FaceOneClearBaseBonus => faceOneClearBaseBonus;
+        public float FaceOneCountWeight => faceOneCountWeight;
+        public float BoardFillWeight => boardFillWeight;
+        public float FaceOneFillSynergyWeight => faceOneFillSynergyWeight;
         public float PreSinkFacePriorityWeight => preSinkFacePriorityWeight;
         public float NearCompleteBonus => nearCompleteBonus;
         public float GoalSwitchMargin => goalSwitchMargin;

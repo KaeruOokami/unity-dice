@@ -455,14 +455,9 @@ namespace DiceGame.Gameplay.AI.Application
                 return;
             }
 
-            // Opportunistic look compares chain goals only; extend-impossible may retarget anything.
+            // Opportunistic: chain and/or face-one clear. Extend-impossible may retarget anything.
             var candidate = canExtend
-                ? MatchGoalSelector.SelectBestChain(
-                    snapshot,
-                    character,
-                    registry,
-                    settings,
-                    failureMemory)
+                ? SelectOpportunisticCandidate(snapshot)
                 : MatchGoalSelector.SelectBest(
                     snapshot,
                     character,
@@ -480,7 +475,9 @@ namespace DiceGame.Gameplay.AI.Application
                 return;
             }
 
-            if (candidate.Face != activeGoal.Face || candidate.IsChainGoal != activeGoal.IsChainGoal) {
+            if (candidate.Face != activeGoal.Face
+                || candidate.IsChainGoal != activeGoal.IsChainGoal
+                || candidate.IsFaceOneClearGoal != activeGoal.IsFaceOneClearGoal) {
                 AiDebugLog.Log(
                     $"SwitchGoal face={activeGoal.Face}->{candidate.Face} " +
                     $"reason={reason} " +
@@ -490,6 +487,29 @@ namespace DiceGame.Gameplay.AI.Application
 
             activeGoal = candidate;
             stuckActionCount = 0;
+        }
+
+        MatchGoal SelectOpportunisticCandidate(GameStateSnapshot snapshot) {
+            MatchGoal best = null;
+            var bestScore = float.MinValue;
+
+            var chain = MatchGoalSelector.SelectBestChain(
+                snapshot,
+                character,
+                registry,
+                settings,
+                failureMemory);
+            if (chain != null) {
+                best = chain;
+                bestScore = chain.PriorityScore;
+            }
+
+            if (FaceOneClearEvaluator.TryBuildGoal(snapshot, character, registry, settings, out var faceOne)
+                && faceOne.PriorityScore > bestScore) {
+                best = faceOne;
+            }
+
+            return best;
         }
 
         bool TryResolveSwitchMargin(
@@ -506,6 +526,7 @@ namespace DiceGame.Gameplay.AI.Application
             }
 
             var chainFaceCount = SinkingChainEvaluator.CountChainPossibleFaces(snapshot.PlanningDice);
+            var hasErasing = FaceOneClearEvaluator.HasErasingDice(snapshot.PlanningDice);
 
             // Multi-sink arbitration: only among chain goals when 2+ chain faces exist.
             if (current.IsChainGoal) {
@@ -518,13 +539,13 @@ namespace DiceGame.Gameplay.AI.Application
                 return true;
             }
 
-            // Pre-sink gather interrupted by a time-critical chain (checked against candidate later).
-            if (chainFaceCount < 1) {
+            // Pre-sink gather interrupted by chain or face-one clear.
+            if (chainFaceCount < 1 && !hasErasing) {
                 return false;
             }
 
             margin = settings.ChainInterruptMargin;
-            reason = "chain-interrupt";
+            reason = hasErasing && chainFaceCount < 1 ? "face-one-clear" : "chain-interrupt";
             return true;
         }
 
@@ -537,17 +558,13 @@ namespace DiceGame.Gameplay.AI.Application
                 return true;
             }
 
-            if (!candidate.IsChainGoal) {
-                return false;
-            }
-
             if (current.IsChainGoal) {
                 // Opportunistic multi-sink: only switch to a different chain face.
-                return candidate.Face != current.Face;
+                return candidate.IsChainGoal && candidate.Face != current.Face;
             }
 
-            // Opportunistic gather interrupt: only by a chain goal.
-            return true;
+            // Opportunistic gather interrupt: chain or face-one clear only.
+            return candidate.IsChainGoal || candidate.IsFaceOneClearGoal;
         }
 
         void OnDisable() {

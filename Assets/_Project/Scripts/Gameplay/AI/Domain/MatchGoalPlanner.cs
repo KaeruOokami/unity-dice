@@ -454,10 +454,12 @@ namespace DiceGame.Gameplay.AI.Domain
             }
 
             var state = die.CurrentState;
-            if (WorkDieSlidePlanner.IsJoinComplete(
-                state,
-                goal.ClusterDice,
-                subGoal.TargetFace)) {
+            // Face-one clear must perform at least one roll while adjacent; do not complete early.
+            if (!goal.IsFaceOneClearGoal
+                && WorkDieSlidePlanner.IsJoinComplete(
+                    state,
+                    goal.ClusterDice,
+                    subGoal.TargetFace)) {
                 subGoal.MarkComplete();
                 return null;
             }
@@ -501,10 +503,11 @@ namespace DiceGame.Gameplay.AI.Domain
                 state = die.CurrentState;
                 subGoal.TryAdvanceJoinSlideStep(state);
 
-                if (WorkDieSlidePlanner.IsJoinComplete(
-                    state,
-                    goal.ClusterDice,
-                    subGoal.TargetFace)) {
+                if (!goal.IsFaceOneClearGoal
+                    && WorkDieSlidePlanner.IsJoinComplete(
+                        state,
+                        goal.ClusterDice,
+                        subGoal.TargetFace)) {
                     subGoal.MarkComplete();
                     return null;
                 }
@@ -528,7 +531,11 @@ namespace DiceGame.Gameplay.AI.Domain
                 var stepIndex = subGoal.JoinSlideStepIndex;
                 if (stepIndex >= plan.Directions.Count) {
                     state = die.CurrentState;
-                    if (WorkDieSlidePlanner.IsJoinComplete(
+                    if (goal.IsFaceOneClearGoal) {
+                        if (FaceOneClearEvaluator.IsClearComplete(state, goal.ClusterDice)) {
+                            subGoal.MarkComplete();
+                        }
+                    } else if (WorkDieSlidePlanner.IsJoinComplete(
                         state,
                         goal.ClusterDice,
                         subGoal.TargetFace)) {
@@ -590,10 +597,12 @@ namespace DiceGame.Gameplay.AI.Domain
                 subGoal.ClearJoinSlidePlan();
             }
 
-            if (WorkDieSlidePlanner.IsJoinComplete(
-                state,
-                goal.ClusterDice,
-                subGoal.TargetFace)) {
+            // Face-one clear always needs a non-empty action path (OneVanish trigger).
+            if (!goal.IsFaceOneClearGoal
+                && WorkDieSlidePlanner.IsJoinComplete(
+                    state,
+                    goal.ClusterDice,
+                    subGoal.TargetFace)) {
                 subGoal.SetJoinSlidePlan(
                     new WorkDieSlidePlan(state.GridPos, state.Orientation, new List<Direction>()));
                 return true;
@@ -655,7 +664,8 @@ namespace DiceGame.Gameplay.AI.Domain
                 out plan,
                 out var endState,
                 crushAvoidance,
-                registry)
+                registry,
+                faceOneClear: goal != null && goal.IsFaceOneClearGoal)
                 || plan.Directions == null
                 || plan.Directions.Count == 0) {
                 return false;

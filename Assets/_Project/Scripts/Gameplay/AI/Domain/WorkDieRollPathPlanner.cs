@@ -76,6 +76,47 @@ namespace DiceGame.Gameplay.AI.Domain
         }
 
         /// <summary>
+        /// Face-one clear: shortest roll path (at least one roll) ending with top==1 and
+        /// match-adjacent to any erasing die. Empty path is never returned — OneVanish needs an action.
+        /// </summary>
+        public static bool TryFindFaceOneClearPath(
+            MovementTransitionEvaluator passability,
+            DiceController workDie,
+            int fromLevel,
+            float footingWorldY,
+            PlayerSlot movementOwner,
+            DiceState startState,
+            IReadOnlyList<DiceSnapshot> erasingCluster,
+            bool allowJump,
+            out List<Direction> directions,
+            out DiceState endState,
+            WorkDieRollCrushAvoidance crushAvoidance = default,
+            DiceRegistry registry = null) {
+            directions = null;
+            endState = startState;
+            if (passability == null || workDie == null || erasingCluster == null) {
+                return false;
+            }
+
+            return TrySearchRollPath(
+                passability,
+                workDie,
+                fromLevel,
+                footingWorldY,
+                movementOwner,
+                startState,
+                allowJump,
+                MaxJoinSearchDepth,
+                state => FaceOneClearEvaluator.IsClearComplete(state, erasingCluster),
+                crushAvoidance,
+                ResolvePlanningRegistry(registry, crushAvoidance),
+                out directions,
+                out endState)
+                && directions != null
+                && directions.Count > 0;
+        }
+
+        /// <summary>
         /// Multi-goal configuration-space BFS: shortest roll sequence to any pose where
         /// <see cref="WorkDieSlidePlanner.IsJoinComplete"/> holds (same-tier match adjacency).
         /// </summary>

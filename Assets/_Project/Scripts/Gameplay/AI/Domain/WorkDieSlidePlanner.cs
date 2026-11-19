@@ -218,10 +218,29 @@ namespace DiceGame.Gameplay.AI.Domain
             out WorkDieSlidePlan plan,
             out DiceState endState,
             WorkDieRollCrushAvoidance crushAvoidance = default,
-            DiceRegistry registry = null) {
+            DiceRegistry registry = null,
+            bool faceOneClear = false) {
             plan = default;
             endState = startState;
-            if (!WorkDieRollPathPlanner.TryFindJoinPath(
+            List<Direction> directions;
+            if (faceOneClear) {
+                if (!WorkDieRollPathPlanner.TryFindFaceOneClearPath(
+                    passability,
+                    workDie,
+                    fromLevel,
+                    footingWorldY,
+                    movementOwner,
+                    startState,
+                    cluster,
+                    allowJump,
+                    out directions,
+                    out endState,
+                    crushAvoidance,
+                    registry)
+                    || directions == null) {
+                    return false;
+                }
+            } else if (!WorkDieRollPathPlanner.TryFindJoinPath(
                 passability,
                 workDie,
                 fromLevel,
@@ -231,7 +250,7 @@ namespace DiceGame.Gameplay.AI.Domain
                 targetFace,
                 cluster,
                 allowJump,
-                out var directions,
+                out directions,
                 out endState,
                 crushAvoidance,
                 registry)
