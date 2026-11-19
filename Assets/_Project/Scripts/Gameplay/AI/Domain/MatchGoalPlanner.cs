@@ -448,48 +448,20 @@ namespace DiceGame.Gameplay.AI.Domain
             CharacterController character,
             DiceRegistry registry,
             AiPlayerSettings settings) {
-            var die = subGoal.TargetDie;
-            if (die == null) {
+            var workDie = subGoal.TargetDie;
+            if (workDie == null) {
                 return null;
             }
 
-            var state = die.CurrentState;
+            var workState = workDie.CurrentState;
             // Face-one clear must perform at least one roll while adjacent; do not complete early.
             if (!goal.IsFaceOneClearGoal
                 && WorkDieSlidePlanner.IsJoinComplete(
-                    state,
+                    workState,
                     goal.ClusterDice,
                     subGoal.TargetFace)) {
                 subGoal.MarkComplete();
                 return null;
-            }
-
-            if (!IsStandingOnTarget(snapshot, die)) {
-                if (snapshot.PlayerCell == die.CurrentState.GridPos
-                    && snapshot.StandingDice != null
-                    && snapshot.StandingDice != die) {
-                    Application.AiDebugLog.Log(
-                        $"JoinReachSameCellWrongTier player={snapshot.PlayerCell} " +
-                        $"standOn={snapshot.StandingDice.name} target={die.name}");
-                    if (TryBuildLeaveCellAction(
-                        snapshot,
-                        character,
-                        settings,
-                        die.CurrentState.GridPos,
-                        out var leaveAction)) {
-                        return leaveAction;
-                    }
-
-                    return null;
-                }
-
-                return BuildStandOnDieMovement(
-                    die,
-                    snapshot,
-                    character,
-                    registry,
-                    settings,
-                    AiNavigationConstraints.None);
             }
 
             if (!character.TryGetAiNavigationQuery(out var passability, out var footingWorldY)) {
@@ -497,183 +469,329 @@ namespace DiceGame.Gameplay.AI.Domain
                 return null;
             }
 
-            // Multi-goal BFS picks the join slot; replans from current pose when a step blocks.
-            const int maxJoinReplans = 8;
-            for (var replanAttempt = 0; replanAttempt < maxJoinReplans; replanAttempt++) {
-                state = die.CurrentState;
-                subGoal.TryAdvanceJoinSlideStep(state);
+            // One planning tick: at most one search slice. Step block defers replan to next tick.
+            workState = workDie.CurrentState;
+            subGoal.TryAdvanceJoinRollStep();
 
-                if (!goal.IsFaceOneClearGoal
-                    && WorkDieSlidePlanner.IsJoinComplete(
-                        state,
-                        goal.ClusterDice,
-                        subGoal.TargetFace)) {
-                    subGoal.MarkComplete();
-                    return null;
-                }
+            if (!goal.IsFaceOneClearGoal
+                && WorkDieSlidePlanner.IsJoinComplete(
+                    workState,
+                    goal.ClusterDice,
+                    subGoal.TargetFace)) {
+                subGoal.MarkComplete();
+                return null;
+            }
 
-                if (!TryEnsureJoinSlidePlan(
-                    goal,
-                    subGoal,
-                    state,
-                    passability,
-                    character,
-                    footingWorldY,
-                    settings,
-                    registry)) {
+            if (!TryEnsureJoinRollPlan(
+                goal,
+                subGoal,
+                snapshot,
+                workState,
+                passability,
+                character,
+                footingWorldY,
+                settings,
+                registry)) {
+                if (subGoal.HasPendingJoinSearch) {
+                    var pending = subGoal.JoinSearchSession;
                     Application.AiDebugLog.Log(
-                        $"JoinPlan FAILED die={die.name} cell={state.GridPos} " +
-                        $"top={state.Orientation.Top} reason=no-join-path");
-                    return null;
+                        $"JoinSearch InProgress die={workDie.name} cell={workState.GridPos} " +
+                        $"cap={(pending != null ? pending.ParticipantCap : 0)} " +
+                        $"live={(pending != null && pending.Participants != null ? pending.Participants.Length : 0)}");
+                } else {
+                    Application.AiDebugLog.Log(
+                        $"JoinPlan FAILED die={workDie.name} cell={workState.GridPos} " +
+                        $"top={workState.Orientation.Top} reason=no-join-path");
                 }
 
-                var plan = subGoal.JoinSlidePlan.Value;
-                var stepIndex = subGoal.JoinSlideStepIndex;
-                if (stepIndex >= plan.Directions.Count) {
-                    state = die.CurrentState;
-                    if (goal.IsFaceOneClearGoal) {
-                        if (FaceOneClearEvaluator.IsClearComplete(state, goal.ClusterDice)) {
-                            subGoal.MarkComplete();
-                        }
-                    } else if (WorkDieSlidePlanner.IsJoinComplete(
-                        state,
-                        goal.ClusterDice,
-                        subGoal.TargetFace)) {
+                return null;
+            }
+
+            var plan = subGoal.JoinRollPlan.Value;
+            var stepIndex = subGoal.JoinRollStepIndex;
+            if (plan.Steps == null || stepIndex >= plan.Steps.Count) {
+                workState = workDie.CurrentState;
+                if (goal.IsFaceOneClearGoal) {
+                    if (FaceOneClearEvaluator.IsClearComplete(workState, goal.ClusterDice)) {
                         subGoal.MarkComplete();
+                    }
+                } else if (WorkDieSlidePlanner.IsJoinComplete(
+                    workState,
+                    goal.ClusterDice,
+                    subGoal.TargetFace)) {
+                    subGoal.MarkComplete();
+                }
+
+                return null;
+            }
+
+            var step = plan.Steps[stepIndex];
+            var activeDie = step.Die;
+            if (activeDie == null) {
+                Application.AiDebugLog.Log(
+                    $"JoinStepInvalid die=null step={stepIndex}/{plan.Steps.Count} — defer replan");
+                subGoal.ClearJoinRollPlan();
+                return null;
+            }
+
+            if (!IsStandingOnTarget(snapshot, activeDie)) {
+                if (snapshot.PlayerCell == activeDie.CurrentState.GridPos
+                    && snapshot.StandingDice != null
+                    && snapshot.StandingDice != activeDie) {
+                    Application.AiDebugLog.Log(
+                        $"JoinReachSameCellWrongTier player={snapshot.PlayerCell} " +
+                        $"standOn={snapshot.StandingDice.name} target={activeDie.name}");
+                    if (TryBuildLeaveCellAction(
+                        snapshot,
+                        character,
+                        settings,
+                        activeDie.CurrentState.GridPos,
+                        out var leaveAction)) {
+                        return leaveAction;
                     }
 
                     return null;
                 }
 
-                var fromLevel = character.StandingPlacement.Level;
-                var allowJump = settings != null && settings.AllowJump;
-                if (!WorkDieSlidePlanner.TrySelectNextStep(
-                    passability,
-                    die,
-                    fromLevel,
-                    footingWorldY,
-                    character.PlayerSlot,
-                    plan,
-                    stepIndex,
-                    allowJump,
-                    out var slideStep)) {
-                    Application.AiDebugLog.Log(
-                        $"JoinStepBlocked die={die.name} cell={state.GridPos} " +
-                        $"step={stepIndex}/{plan.Directions.Count} — replanning");
-                    subGoal.ClearJoinSlidePlan();
-                    continue;
-                }
-
                 Application.AiDebugLog.Log(
-                    $"JoinPlan die={die.name} top={state.Orientation.Top} " +
-                    $"goalCell={subGoal.TargetCell}/{subGoal.TargetTier} " +
-                    $"stepIndex={stepIndex}/{plan.Directions.Count} planned={plan.Directions[stepIndex]} " +
-                    $"exec={slideStep.Direction} mode={slideStep.Mode} landing={slideStep.LandingCell} " +
-                    $"landingTier={slideStep.LandingTier}");
+                    $"JoinRemount from={(snapshot.StandingDice != null ? snapshot.StandingDice.name : "floor")} " +
+                    $"to={activeDie.name} step={stepIndex}/{plan.Steps.Count}");
+                return BuildStandOnDieMovement(
+                    activeDie,
+                    snapshot,
+                    character,
+                    registry,
+                    settings,
+                    AiNavigationConstraints.None);
+            }
 
-                return BuildWorkDieRollAction(slideStep, die, settings, allowJump);
+            var fromLevel = character.StandingPlacement.Level;
+            var allowJump = settings != null && settings.AllowJump;
+            if (!WorkDieRollPlanner.TrySelectRollStep(
+                passability,
+                activeDie,
+                fromLevel,
+                footingWorldY,
+                character.PlayerSlot,
+                step.Direction,
+                allowJump,
+                out var slideStep)) {
+                Application.AiDebugLog.Log(
+                    $"JoinStepBlocked die={activeDie.name} cell={activeDie.CurrentState.GridPos} " +
+                    $"step={stepIndex}/{plan.Steps.Count} — defer replan");
+                subGoal.ClearJoinRollPlan();
+                return null;
             }
 
             Application.AiDebugLog.Log(
-                $"JoinPlan FAILED die={die.name} reason=replan-budget-exhausted");
-            return null;
+                $"JoinPlan work={workDie.name} active={activeDie.name} " +
+                $"top={activeDie.CurrentState.Orientation.Top} " +
+                $"goalCell={subGoal.TargetCell}/{subGoal.TargetTier} " +
+                $"stepIndex={stepIndex}/{plan.Steps.Count} planned={step.Direction} " +
+                $"exec={slideStep.Direction} mode={slideStep.Mode} landing={slideStep.LandingCell} " +
+                $"landingTier={slideStep.LandingTier}");
+
+            return BuildWorkDieRollAction(slideStep, activeDie, settings, allowJump);
         }
 
-        static bool TryEnsureJoinSlidePlan(
+        static bool TryEnsureJoinRollPlan(
             MatchGoal goal,
             AiSubGoal subGoal,
-            DiceState state,
+            GameStateSnapshot snapshot,
+            DiceState workState,
             MovementTransitionEvaluator passability,
             CharacterController character,
             float footingWorldY,
             AiPlayerSettings settings,
             DiceRegistry registry) {
-            if (subGoal.HasJoinSlidePlan) {
-                var existing = subGoal.JoinSlidePlan.Value;
-                if (WorkDieSlidePlanner.IsPlanStillValid(existing, subGoal.JoinSlideStepIndex, state)) {
-                    return existing.Directions != null;
+            if (subGoal.HasJoinRollPlan) {
+                var existing = subGoal.JoinRollPlan.Value;
+                if (MultiDieRollPlanUtil.IsPlanStillValid(existing, subGoal.JoinRollStepIndex)) {
+                    return existing.Steps != null;
                 }
 
-                subGoal.ClearJoinSlidePlan();
+                subGoal.ClearJoinRollPlan();
             }
 
             // Face-one clear always needs a non-empty action path (OneVanish trigger).
             if (!goal.IsFaceOneClearGoal
                 && WorkDieSlidePlanner.IsJoinComplete(
-                    state,
+                    workState,
                     goal.ClusterDice,
                     subGoal.TargetFace)) {
-                subGoal.SetJoinSlidePlan(
-                    new WorkDieSlidePlan(state.GridPos, state.Orientation, new List<Direction>()));
+                subGoal.SetJoinRollPlan(MultiDieRollPlan.Empty(subGoal.TargetDie, workState));
                 return true;
             }
 
             var allowJump = settings != null && settings.AllowJump;
             var preferredAvoidance = ResolveChainCrushAvoidance(goal, registry);
-            if (TryBuildJoinSlidePlanWithAvoidance(
-                    passability,
-                    goal,
-                    subGoal,
-                    character,
-                    footingWorldY,
-                    state,
-                    allowJump,
-                    preferredAvoidance,
-                    registry,
-                    out var plan)
-                || (preferredAvoidance.IsActive
-                    && TryBuildJoinSlidePlanWithAvoidance(
-                        passability,
-                        goal,
-                        subGoal,
-                        character,
-                        footingWorldY,
-                        state,
-                        allowJump,
-                        WorkDieRollCrushAvoidance.None,
-                        registry,
-                        out plan))) {
-                subGoal.SetJoinSlidePlan(plan);
-                return true;
+            var crushAvoidance = preferredAvoidance;
+            if (subGoal.JoinSearchAwaitingAvoidanceFallback
+                || (subGoal.JoinSearchSession != null
+                    && subGoal.JoinSearchSession.IsActive
+                    && !subGoal.JoinSearchSession.CrushAvoidance.IsActive)) {
+                crushAvoidance = WorkDieRollCrushAvoidance.None;
+                subGoal.ClearJoinSearchAwaitingAvoidanceFallback();
             }
 
-            return false;
-        }
-
-        static bool TryBuildJoinSlidePlanWithAvoidance(
-            MovementTransitionEvaluator passability,
-            MatchGoal goal,
-            AiSubGoal subGoal,
-            CharacterController character,
-            float footingWorldY,
-            DiceState state,
-            bool allowJump,
-            WorkDieRollCrushAvoidance crushAvoidance,
-            DiceRegistry registry,
-            out WorkDieSlidePlan plan) {
-            if (!WorkDieSlidePlanner.TryBuildSlidePlan(
+            if (!TryBuildJoinRollPlanWithAvoidance(
                 passability,
-                subGoal.TargetDie,
-                character.StandingPlacement.Level,
+                goal,
+                subGoal,
+                snapshot,
+                character,
                 footingWorldY,
-                character.PlayerSlot,
-                state,
-                subGoal.TargetFace,
-                goal != null ? goal.ClusterDice : null,
+                workState,
                 allowJump,
-                out plan,
-                out var endState,
                 crushAvoidance,
                 registry,
-                faceOneClear: goal != null && goal.IsFaceOneClearGoal)
-                || plan.Directions == null
-                || plan.Directions.Count == 0) {
+                settings,
+                out var plan,
+                out var searchStatus)) {
+                if (searchStatus == MultiDieJoinSearchStatus.Exhausted
+                    && preferredAvoidance.IsActive
+                    && crushAvoidance.IsActive) {
+                    // Defer no-avoidance fallback to the next planning tick (same frame budget).
+                    subGoal.MarkJoinSearchAwaitingAvoidanceFallback();
+                    Application.AiDebugLog.Log(
+                        $"JoinSearch Exhausted with crush-avoidance — defer fallback die={subGoal.TargetDie.name}");
+                }
+
                 return false;
             }
 
-            // Record the BFS-chosen join pose for debug / lift fallback context.
-            subGoal.RetargetJoin(endState.GridPos, endState.Tier);
+            subGoal.SetJoinRollPlan(plan);
             return true;
+        }
+
+        static bool TryBuildJoinRollPlanWithAvoidance(
+            MovementTransitionEvaluator passability,
+            MatchGoal goal,
+            AiSubGoal subGoal,
+            GameStateSnapshot snapshot,
+            CharacterController character,
+            float footingWorldY,
+            DiceState workState,
+            bool allowJump,
+            WorkDieRollCrushAvoidance crushAvoidance,
+            DiceRegistry registry,
+            AiPlayerSettings settings,
+            out MultiDieRollPlan plan,
+            out MultiDieJoinSearchStatus searchStatus) {
+            plan = default;
+            searchStatus = MultiDieJoinSearchStatus.Invalid;
+            var workDie = subGoal.TargetDie;
+            if (workDie == null || goal == null) {
+                return false;
+            }
+
+            if (goal.IsFaceOneClearGoal) {
+                if (!WorkDieRollPathPlanner.TryFindFaceOneClearPath(
+                    passability,
+                    workDie,
+                    character.StandingPlacement.Level,
+                    footingWorldY,
+                    character.PlayerSlot,
+                    workState,
+                    goal.ClusterDice,
+                    allowJump,
+                    out var directions,
+                    out var endState,
+                    crushAvoidance,
+                    registry)
+                    || directions == null
+                    || directions.Count == 0) {
+                    searchStatus = MultiDieJoinSearchStatus.Exhausted;
+                    return false;
+                }
+
+                if (!MultiDieConfigSpacePlanner.TryBuildSingleDiePlan(
+                    passability,
+                    workDie,
+                    character.StandingPlacement.Level,
+                    footingWorldY,
+                    character.PlayerSlot,
+                    workState,
+                    directions,
+                    allowJump,
+                    out plan,
+                    crushAvoidance)) {
+                    searchStatus = MultiDieJoinSearchStatus.Exhausted;
+                    return false;
+                }
+
+                subGoal.ClearJoinSearchSession();
+                subGoal.RetargetJoin(endState.GridPos, endState.Tier);
+                searchStatus = MultiDieJoinSearchStatus.Found;
+                return true;
+            }
+
+            var session = subGoal.JoinSearchSession;
+            var nodesPerFrame = settings != null ? settings.JoinSearchNodesPerFrame : 256;
+            var maxNodesTotal = settings != null ? settings.JoinSearchMaxNodesTotal : 20000;
+            var maxDepth = settings != null ? settings.JoinSearchMaxDepth : 24;
+            var initialParticipants = settings != null ? settings.JoinSearchInitialParticipants : 1;
+            var maxParticipants = settings != null ? settings.JoinSearchMaxParticipants : 4;
+            var stageBefore = session != null && session.IsActive
+                ? session.ParticipantCap
+                : initialParticipants;
+            searchStatus = MultiDieConfigSpacePlanner.TryFindJoinPathBudgeted(
+                passability,
+                workDie,
+                footingWorldY,
+                character.PlayerSlot,
+                workState,
+                subGoal.TargetFace,
+                goal.ClusterDice,
+                snapshot != null ? snapshot.PlanningDice : null,
+                allowJump,
+                registry,
+                crushAvoidance,
+                nodesPerFrame,
+                maxNodesTotal,
+                maxDepth,
+                initialParticipants,
+                maxParticipants,
+                ref session,
+                out plan);
+            subGoal.SetJoinSearchSession(session);
+            if (session != null
+                && session.IsActive
+                && session.ParticipantCap > stageBefore) {
+                Application.AiDebugLog.Log(
+                    $"JoinSearch Escalate participants {stageBefore}->{session.ParticipantCap} " +
+                    $"(live={session.Participants.Length}) die={workDie.name}");
+            }
+
+            if (searchStatus == MultiDieJoinSearchStatus.Found) {
+                if (plan.Steps == null) {
+                    searchStatus = MultiDieJoinSearchStatus.Invalid;
+                    return false;
+                }
+
+                if (plan.Steps.Count == 0) {
+                    return WorkDieSlidePlanner.IsJoinComplete(
+                        workState,
+                        goal.ClusterDice,
+                        subGoal.TargetFace);
+                }
+
+                if (MultiDieRollPlanUtil.TryResolveWorkDieEndState(plan, out var workEnd)) {
+                    // RetargetJoin clears plans/sessions; stash end cell then restore plan via caller.
+                    var endCell = workEnd.GridPos;
+                    var endTier = workEnd.Tier;
+                    subGoal.RetargetJoin(endCell, endTier);
+                    // Caller SetJoinRollPlan after this returns; Retarget cleared session already.
+                }
+
+                return true;
+            }
+
+            if (searchStatus == MultiDieJoinSearchStatus.InProgress) {
+                return false;
+            }
+
+            return false;
         }
 
         static Application.AiDiscreteAction BuildWorkDieRollAction(

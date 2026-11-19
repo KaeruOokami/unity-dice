@@ -113,6 +113,15 @@ namespace DiceGame.Gameplay.AI.Application
             }
 
             if (action == null) {
+                if (subGoal.HasPendingJoinSearch) {
+                    AiDebugLog.Log(
+                        $"JoinSearch continue subGoal={subGoal.Kind} " +
+                        $"targetDie={(subGoal.TargetDie != null ? subGoal.TargetDie.name : "none")} " +
+                        $"playerCell={snapshot.PlayerCell}");
+                    replanCooldown = settings.JoinSearchContinueInterval;
+                    return;
+                }
+
                 AiDebugLog.Log(
                     $"BuildAction FAILED subGoal={subGoal.Kind} targetCell={subGoal.TargetCell} " +
                     $"targetDie={(subGoal.TargetDie != null ? subGoal.TargetDie.name : "none")} " +
@@ -737,22 +746,36 @@ namespace DiceGame.Gameplay.AI.Application
         }
 
         static void AppendSlidePlanPath(AiDebugOverlaySnapshot overlay, AiSubGoal subGoal) {
-            WorkDieSlidePlan? plan = null;
-            var stepIndex = 0;
-            if (subGoal.HasJoinSlidePlan) {
-                plan = subGoal.JoinSlidePlan;
-                stepIndex = subGoal.JoinSlideStepIndex;
-            } else if (subGoal.HasOrientRollPlan) {
-                plan = subGoal.OrientRollPlan;
-                stepIndex = subGoal.OrientRollStepIndex;
-            }
+            if (subGoal.HasJoinRollPlan) {
+                var join = subGoal.JoinRollPlan.Value;
+                if (join.Checkpoints == null) {
+                    return;
+                }
 
-            if (!plan.HasValue || plan.Value.Directions == null) {
+                for (var i = subGoal.JoinRollStepIndex; i < join.Checkpoints.Count; i++) {
+                    var checkpoint = join.Checkpoints[i];
+                    if (checkpoint == null) {
+                        continue;
+                    }
+
+                    for (var p = 0; p < checkpoint.Length; p++) {
+                        overlay.AddPlanPathCell(checkpoint[p].GridPos);
+                    }
+                }
+
                 return;
             }
 
-            var slide = plan.Value;
-            for (var i = stepIndex; i <= slide.Directions.Count; i++) {
+            if (!subGoal.HasOrientRollPlan || subGoal.OrientRollPlan == null) {
+                return;
+            }
+
+            var slide = subGoal.OrientRollPlan.Value;
+            if (slide.Directions == null) {
+                return;
+            }
+
+            for (var i = subGoal.OrientRollStepIndex; i <= slide.Directions.Count; i++) {
                 if (!WorkDieSlidePlanner.TrySimulateAfterSteps(slide, i, out var cell, out _)) {
                     break;
                 }

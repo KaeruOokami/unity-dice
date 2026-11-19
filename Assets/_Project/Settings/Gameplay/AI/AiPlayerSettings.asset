@@ -24,6 +24,12 @@ MonoBehaviour:
   allowJump: 1
   pathSearchMaxSteps: 64
   cellCenterTolerance: 0.08
+  joinSearchNodesPerFrame: 256
+  joinSearchMaxNodesTotal: 20000
+  joinSearchMaxDepth: 24
+  joinSearchContinueInterval: 0
+  joinSearchInitialParticipants: 1
+  joinSearchMaxParticipants: 4
   faceValueWeight: 20
   clusterProgressWeight: 8
   sameFaceProximityWeight: 20

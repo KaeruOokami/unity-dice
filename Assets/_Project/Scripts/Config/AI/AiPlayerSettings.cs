@@ -25,6 +25,20 @@ namespace DiceGame.Config
         [SerializeField] int pathSearchMaxSteps = 64;
         [SerializeField] float cellCenterTolerance = 0.08f;
 
+        [Header("Join Search Budget")]
+        [Tooltip("Max BFS node expansions for multi-die Join per planning tick (time-slice).")]
+        [SerializeField] int joinSearchNodesPerFrame = 256;
+        [Tooltip("Hard cap on total expansions for one Join search session.")]
+        [SerializeField] int joinSearchMaxNodesTotal = 20000;
+        [Tooltip("Max roll depth for multi-die Join BFS.")]
+        [SerializeField] int joinSearchMaxDepth = 24;
+        [Tooltip("Cooldown before continuing an in-progress Join search. 0 = next planning tick.")]
+        [SerializeField] float joinSearchContinueInterval = 0f;
+        [Tooltip("First Join search stage size (usually 1 = work die only).")]
+        [SerializeField] int joinSearchInitialParticipants = 1;
+        [Tooltip("Max dice included in multi-die Join configuration space.")]
+        [SerializeField] int joinSearchMaxParticipants = 4;
+
         [Header("Goal Scoring")]
         [SerializeField] float faceValueWeight = 10f;
         [SerializeField] float clusterProgressWeight = 8f;
@@ -99,6 +113,12 @@ namespace DiceGame.Config
         public float ChainInterruptMargin => chainInterruptMargin;
         public int PathSearchMaxSteps => pathSearchMaxSteps;
         public float CellCenterTolerance => cellCenterTolerance;
+        public int JoinSearchNodesPerFrame => joinSearchNodesPerFrame;
+        public int JoinSearchMaxNodesTotal => joinSearchMaxNodesTotal;
+        public int JoinSearchMaxDepth => joinSearchMaxDepth;
+        public float JoinSearchContinueInterval => joinSearchContinueInterval;
+        public int JoinSearchInitialParticipants => joinSearchInitialParticipants;
+        public int JoinSearchMaxParticipants => joinSearchMaxParticipants;
         public int RollStepMaxFrames => rollStepMaxFrames;
         public int StuckAttemptsBeforeGoalReset => stuckAttemptsBeforeGoalReset;
         public float GoalFailureBlacklistSeconds => goalFailureBlacklistSeconds;

@@ -20,6 +20,14 @@ namespace DiceGame.Placement
         /// </summary>
         DiceController planningIgnoredDice;
         int planningIgnoreDepth;
+        /// <summary>
+        /// True while <see cref="BeginPlanningLayout"/> holds a temporary multi-die occupancy overlay.
+        /// Nested layouts are refused. Does not mutate committed slots or CurrentState.
+        /// </summary>
+        bool planningLayoutActive;
+        readonly Dictionary<DiceController, DiceState> planningLayoutByDie = new();
+        readonly Dictionary<(Vector2Int cell, DiceStackTier tier), DiceController> planningLayoutBySlot =
+            new();
 
         readonly Dictionary<Vector2Int, GridStack> byGrid = new();
         /// <summary>
@@ -207,6 +215,91 @@ namespace DiceGame.Placement
             return dice != null && planningIgnoredDice == dice;
         }
 
+        /// <summary>
+        /// AI multi-die planning: occupancy reads see participants at <paramref name="states"/>
+        /// without mutating byGrid or CurrentState. Dispose clears the overlay.
+        /// </summary>
+        public IDisposable BeginPlanningLayout(
+            IReadOnlyList<DiceController> dice,
+            IReadOnlyList<DiceState> states) {
+            if (dice == null || states == null || dice.Count != states.Count) {
+                Debug.LogError("DiceRegistry.BeginPlanningLayout: dice/states length mismatch.");
+                return NoopDisposable.Instance;
+            }
+
+            if (planningLayoutActive) {
+                Debug.LogError("DiceRegistry.BeginPlanningLayout: nested layout is not supported.");
+                return NoopDisposable.Instance;
+            }
+
+            if (dice.Count == 0) {
+                return NoopDisposable.Instance;
+            }
+
+            planningLayoutByDie.Clear();
+            planningLayoutBySlot.Clear();
+            for (var i = 0; i < dice.Count; i++) {
+                var die = dice[i];
+                if (die == null) {
+                    planningLayoutByDie.Clear();
+                    planningLayoutBySlot.Clear();
+                    Debug.LogError("DiceRegistry.BeginPlanningLayout: null participant.");
+                    return NoopDisposable.Instance;
+                }
+
+                var state = states[i];
+                var slot = (state.GridPos, state.Tier);
+                if (planningLayoutBySlot.ContainsKey(slot)) {
+                    planningLayoutByDie.Clear();
+                    planningLayoutBySlot.Clear();
+                    Debug.LogError(
+                        $"DiceRegistry.BeginPlanningLayout: duplicate slot ({state.GridPos.x},{state.GridPos.y}) {state.Tier}.");
+                    return NoopDisposable.Instance;
+                }
+
+                planningLayoutByDie[die] = state;
+                planningLayoutBySlot[slot] = die;
+            }
+
+            planningLayoutActive = true;
+            return new PlanningLayoutScope(this);
+        }
+
+        void EndPlanningLayout() {
+            if (!planningLayoutActive) {
+                return;
+            }
+
+            planningLayoutByDie.Clear();
+            planningLayoutBySlot.Clear();
+            planningLayoutActive = false;
+        }
+
+        bool TryGetPlanningLayoutAt(Vector2Int gridPos, DiceStackTier tier, out DiceController dice) {
+            if (planningLayoutActive
+                && planningLayoutBySlot.TryGetValue((gridPos, tier), out dice)
+                && dice != null
+                && !IsPlanningIgnored(dice)) {
+                return true;
+            }
+
+            dice = null;
+            return false;
+        }
+
+        bool IsPlanningLayoutParticipant(DiceController dice) {
+            return planningLayoutActive && dice != null && planningLayoutByDie.ContainsKey(dice);
+        }
+
+        bool TryGetPlanningLayoutState(DiceController dice, out DiceState state) {
+            if (planningLayoutActive && dice != null && planningLayoutByDie.TryGetValue(dice, out state)) {
+                return true;
+            }
+
+            state = default;
+            return false;
+        }
+
         void BeginPlanningIgnoreInternal(DiceController dice) {
             if (dice == null) {
                 return;
@@ -251,6 +344,33 @@ namespace DiceGame.Placement
             }
         }
 
+        sealed class PlanningLayoutScope : IDisposable
+        {
+            readonly DiceRegistry registry;
+            bool disposed;
+
+            public PlanningLayoutScope(DiceRegistry registry) {
+                this.registry = registry;
+            }
+
+            public void Dispose() {
+                if (disposed) {
+                    return;
+                }
+
+                disposed = true;
+                registry?.EndPlanningLayout();
+            }
+        }
+
+        sealed class NoopDisposable : IDisposable
+        {
+            public static readonly NoopDisposable Instance = new NoopDisposable();
+
+            public void Dispose() {
+            }
+        }
+
         bool HasTopClaimAt(Vector2Int gridPos, bool solidOnly) {
             if (TryGetTopAt(gridPos, out var top)
                 && top != null
@@ -272,7 +392,9 @@ namespace DiceGame.Placement
                     continue;
                 }
 
-                var state = dice.CurrentState;
+                var state = TryGetPlanningLayoutState(dice, out var planned)
+                    ? planned
+                    : dice.CurrentState;
                 if (state.GridPos != gridPos || state.Tier != DiceStackTier.Top) {
                     continue;
                 }
@@ -1077,12 +1199,16 @@ namespace DiceGame.Placement
         }
 
         public bool TryGetBottomAt(Vector2Int gridPos, out DiceController dice) {
+            if (TryGetPlanningLayoutAt(gridPos, DiceStackTier.Bottom, out dice)) {
+                return true;
+            }
+
             dice = null;
             if (!byGrid.TryGetValue(gridPos, out var stack) || stack.Bottom == null) {
                 return false;
             }
 
-            if (IsPlanningIgnored(stack.Bottom)) {
+            if (IsPlanningIgnored(stack.Bottom) || IsPlanningLayoutParticipant(stack.Bottom)) {
                 return false;
             }
 
@@ -1115,12 +1241,16 @@ namespace DiceGame.Placement
         }
 
         public bool TryGetTopAt(Vector2Int gridPos, out DiceController dice) {
+            if (TryGetPlanningLayoutAt(gridPos, DiceStackTier.Top, out dice)) {
+                return true;
+            }
+
             dice = null;
             if (!byGrid.TryGetValue(gridPos, out var stack) || stack.Top == null) {
                 return false;
             }
 
-            if (IsPlanningIgnored(stack.Top)) {
+            if (IsPlanningIgnored(stack.Top) || IsPlanningLayoutParticipant(stack.Top)) {
                 return false;
             }
 

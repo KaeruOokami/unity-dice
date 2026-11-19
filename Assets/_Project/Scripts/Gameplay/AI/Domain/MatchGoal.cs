@@ -25,8 +25,10 @@ namespace DiceGame.Gameplay.AI.Domain
         public Vector2Int TargetCell { get; private set; }
         public DiceStackTier TargetTier { get; private set; }
         public bool IsComplete { get; private set; }
-        public WorkDieSlidePlan? JoinSlidePlan { get; private set; }
-        public int JoinSlideStepIndex { get; private set; }
+        public MultiDieRollPlan? JoinRollPlan { get; private set; }
+        public int JoinRollStepIndex { get; private set; }
+        public MultiDieJoinSearchSession JoinSearchSession { get; private set; }
+        public bool JoinSearchAwaitingAvoidanceFallback { get; private set; }
         public WorkDieSlidePlan? OrientRollPlan { get; private set; }
         public int OrientRollStepIndex { get; private set; }
         readonly HashSet<long> failedJoinSlotKeys = new HashSet<long>();
@@ -78,17 +80,44 @@ namespace DiceGame.Gameplay.AI.Domain
 
         public void MarkComplete() {
             IsComplete = true;
-            ClearJoinSlidePlan();
+            ClearJoinRollPlan();
             ClearOrientRollPlan();
         }
 
-        public bool HasJoinSlidePlan => JoinSlidePlan.HasValue;
+        public bool HasJoinRollPlan => JoinRollPlan.HasValue;
+
+        public bool HasPendingJoinSearch =>
+            JoinSearchAwaitingAvoidanceFallback
+            || (JoinSearchSession != null && JoinSearchSession.IsActive);
 
         public bool HasOrientRollPlan => OrientRollPlan.HasValue;
 
-        public void SetJoinSlidePlan(WorkDieSlidePlan plan) {
-            JoinSlidePlan = plan;
-            JoinSlideStepIndex = 0;
+        public void SetJoinRollPlan(MultiDieRollPlan plan) {
+            ClearJoinSearchSession();
+            JoinSearchAwaitingAvoidanceFallback = false;
+            JoinRollPlan = plan;
+            JoinRollStepIndex = 0;
+        }
+
+        public void SetJoinSearchSession(MultiDieJoinSearchSession session) {
+            if (JoinSearchSession != null && JoinSearchSession != session) {
+                JoinSearchSession.Deactivate();
+            }
+
+            JoinSearchSession = session;
+        }
+
+        public void MarkJoinSearchAwaitingAvoidanceFallback() {
+            JoinSearchAwaitingAvoidanceFallback = true;
+        }
+
+        public void ClearJoinSearchAwaitingAvoidanceFallback() {
+            JoinSearchAwaitingAvoidanceFallback = false;
+        }
+
+        public void ClearJoinSearchSession() {
+            JoinSearchSession?.Deactivate();
+            JoinSearchSession = null;
         }
 
         public void SetOrientRollPlan(WorkDieSlidePlan plan) {
@@ -96,9 +125,11 @@ namespace DiceGame.Gameplay.AI.Domain
             OrientRollStepIndex = 0;
         }
 
-        public void ClearJoinSlidePlan() {
-            JoinSlidePlan = null;
-            JoinSlideStepIndex = 0;
+        public void ClearJoinRollPlan() {
+            ClearJoinSearchSession();
+            JoinSearchAwaitingAvoidanceFallback = false;
+            JoinRollPlan = null;
+            JoinRollStepIndex = 0;
         }
 
         public void ClearOrientRollPlan() {
@@ -113,25 +144,25 @@ namespace DiceGame.Gameplay.AI.Domain
 
             TargetCell = targetCell;
             TargetTier = targetTier;
-            ClearJoinSlidePlan();
+            ClearJoinRollPlan();
         }
 
         public void ClearFailedJoinTargets() {
             failedJoinSlotKeys.Clear();
         }
 
-        public bool TryAdvanceJoinSlideStep(DiceState state) {
-            if (!JoinSlidePlan.HasValue) {
+        public bool TryAdvanceJoinRollStep() {
+            if (!JoinRollPlan.HasValue) {
                 return false;
             }
 
-            var plan = JoinSlidePlan.Value;
-            var stepIndex = JoinSlideStepIndex;
-            if (!WorkDieSlidePlanner.TryAdvanceCompletedSteps(plan, ref stepIndex, state)) {
+            var plan = JoinRollPlan.Value;
+            var stepIndex = JoinRollStepIndex;
+            if (!MultiDieRollPlanUtil.TryAdvanceCompletedSteps(plan, ref stepIndex)) {
                 return false;
             }
 
-            JoinSlideStepIndex = stepIndex;
+            JoinRollStepIndex = stepIndex;
             return true;
         }
 
