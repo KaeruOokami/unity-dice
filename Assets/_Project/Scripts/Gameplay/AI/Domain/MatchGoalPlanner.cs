@@ -387,6 +387,7 @@ namespace DiceGame.Gameplay.AI.Domain
                     state,
                     allowJump,
                     preferredAvoidance,
+                    registry,
                     out var plan)
                 || (preferredAvoidance.IsActive
                     && TryBuildOrientPlanWithAvoidance(
@@ -397,6 +398,7 @@ namespace DiceGame.Gameplay.AI.Domain
                         state,
                         allowJump,
                         WorkDieRollCrushAvoidance.None,
+                        registry,
                         out plan))) {
                 subGoal.SetOrientRollPlan(plan);
                 return true;
@@ -413,6 +415,7 @@ namespace DiceGame.Gameplay.AI.Domain
             DiceState state,
             bool allowJump,
             WorkDieRollCrushAvoidance crushAvoidance,
+            DiceRegistry registry,
             out WorkDieSlidePlan plan) {
             return WorkDieOrientPlanner.TryBuildOrientPlan(
                 passability,
@@ -424,7 +427,8 @@ namespace DiceGame.Gameplay.AI.Domain
                 subGoal.TargetFace,
                 allowJump,
                 out plan,
-                crushAvoidance)
+                crushAvoidance,
+                registry)
                 && plan.Directions != null
                 && plan.Directions.Count > 0;
         }
@@ -450,21 +454,6 @@ namespace DiceGame.Gameplay.AI.Domain
             }
 
             var state = die.CurrentState;
-            if (WorkDieSlidePlanner.IsJoinComplete(
-                state,
-                goal.ClusterDice,
-                subGoal.TargetFace)) {
-                subGoal.MarkComplete();
-                return null;
-            }
-
-            if (!EnsureJoinTargetAvailable(goal, subGoal, snapshot, registry)) {
-                Application.AiDebugLog.Log(
-                    $"JoinTarget UNAVAILABLE die={die.name} cell={state.GridPos} " +
-                    $"target={subGoal.TargetCell}/{subGoal.TargetTier}");
-                return null;
-            }
-
             if (WorkDieSlidePlanner.IsJoinComplete(
                 state,
                 goal.ClusterDice,
@@ -506,8 +495,9 @@ namespace DiceGame.Gameplay.AI.Domain
                 return null;
             }
 
-            const int maxJoinRetargets = 12;
-            for (var retargetAttempt = 0; retargetAttempt < maxJoinRetargets; retargetAttempt++) {
+            // Multi-goal BFS picks the join slot; replans from current pose when a step blocks.
+            const int maxJoinReplans = 8;
+            for (var replanAttempt = 0; replanAttempt < maxJoinReplans; replanAttempt++) {
                 state = die.CurrentState;
                 subGoal.TryAdvanceJoinSlideStep(state);
 
@@ -528,17 +518,10 @@ namespace DiceGame.Gameplay.AI.Domain
                     footingWorldY,
                     settings,
                     registry)) {
-                    if (!TryRetargetJoin(goal, subGoal, snapshot, registry)) {
-                        Application.AiDebugLog.Log(
-                            $"JoinPlan FAILED die={die.name} cell={state.GridPos} " +
-                            $"target={subGoal.TargetCell}/{subGoal.TargetTier} top={state.Orientation.Top} " +
-                            $"reason=no-extend-slot");
-                        return null;
-                    }
-
                     Application.AiDebugLog.Log(
-                        $"JoinRetargetOk die={die.name} target={subGoal.TargetCell}/{subGoal.TargetTier}");
-                    continue;
+                        $"JoinPlan FAILED die={die.name} cell={state.GridPos} " +
+                        $"top={state.Orientation.Top} reason=no-join-path");
+                    return null;
                 }
 
                 var plan = subGoal.JoinSlidePlan.Value;
@@ -567,23 +550,16 @@ namespace DiceGame.Gameplay.AI.Domain
                     stepIndex,
                     allowJump,
                     out var slideStep)) {
-                    subGoal.ClearJoinSlidePlan();
-                    if (!TryRetargetJoin(goal, subGoal, snapshot, registry)) {
-                        Application.AiDebugLog.Log(
-                            $"JoinPlan FAILED die={die.name} cell={state.GridPos} " +
-                            $"target={subGoal.TargetCell}/{subGoal.TargetTier} top={state.Orientation.Top} " +
-                            $"step={stepIndex}/{plan.Directions.Count} reason=no-extend-slot");
-                        return null;
-                    }
-
                     Application.AiDebugLog.Log(
-                        $"JoinStepRetarget die={die.name} target={subGoal.TargetCell}/{subGoal.TargetTier}");
+                        $"JoinStepBlocked die={die.name} cell={state.GridPos} " +
+                        $"step={stepIndex}/{plan.Directions.Count} — replanning");
+                    subGoal.ClearJoinSlidePlan();
                     continue;
                 }
 
                 Application.AiDebugLog.Log(
                     $"JoinPlan die={die.name} top={state.Orientation.Top} " +
-                    $"target={subGoal.TargetCell}/{subGoal.TargetTier} " +
+                    $"goalCell={subGoal.TargetCell}/{subGoal.TargetTier} " +
                     $"stepIndex={stepIndex}/{plan.Directions.Count} planned={plan.Directions[stepIndex]} " +
                     $"exec={slideStep.Direction} mode={slideStep.Mode} landing={slideStep.LandingCell} " +
                     $"landingTier={slideStep.LandingTier}");
@@ -592,63 +568,8 @@ namespace DiceGame.Gameplay.AI.Domain
             }
 
             Application.AiDebugLog.Log(
-                $"JoinPlan FAILED die={die.name} reason=retarget-budget-exhausted");
+                $"JoinPlan FAILED die={die.name} reason=replan-budget-exhausted");
             return null;
-        }
-
-        static bool EnsureJoinTargetAvailable(
-            MatchGoal goal,
-            AiSubGoal subGoal,
-            GameStateSnapshot snapshot,
-            DiceRegistry registry) {
-            if (WorkDieSlidePlanner.IsJoinLandingAvailable(
-                registry,
-                subGoal.TargetDie,
-                subGoal.TargetCell,
-                subGoal.TargetTier)) {
-                return true;
-            }
-
-            return TryRetargetJoin(goal, subGoal, snapshot, registry);
-        }
-
-        static bool TryRetargetJoin(
-            MatchGoal goal,
-            AiSubGoal subGoal,
-            GameStateSnapshot snapshot,
-            DiceRegistry registry) {
-            if (goal?.ClusterDice == null || subGoal.TargetDie == null || snapshot == null) {
-                return false;
-            }
-
-            subGoal.RememberFailedJoinTarget(subGoal.TargetCell, subGoal.TargetTier);
-
-            var workDieSnapshot = new DiceSnapshot(subGoal.TargetDie);
-            if (!WorkDieSlidePlanner.TrySelectJoinTargetCell(
-                goal.ClusterDice,
-                workDieSnapshot,
-                snapshot.PlanningDice,
-                registry,
-                snapshot.VersusLayout,
-                snapshot.PlayerSlot,
-                out var cell,
-                out var tier,
-                subGoal.FailedJoinSlotKeys)) {
-                return false;
-            }
-
-            if (cell == subGoal.TargetCell && tier == subGoal.TargetTier) {
-                return WorkDieSlidePlanner.IsJoinLandingAvailable(
-                    registry,
-                    subGoal.TargetDie,
-                    cell,
-                    tier);
-            }
-
-            Application.AiDebugLog.Log(
-                $"JoinRetarget from={subGoal.TargetCell}/{subGoal.TargetTier} to={cell}/{tier}");
-            subGoal.RetargetJoin(cell, tier);
-            return true;
         }
 
         static bool TryEnsureJoinSlidePlan(
@@ -689,6 +610,7 @@ namespace DiceGame.Gameplay.AI.Domain
                     state,
                     allowJump,
                     preferredAvoidance,
+                    registry,
                     out var plan)
                 || (preferredAvoidance.IsActive
                     && TryBuildJoinSlidePlanWithAvoidance(
@@ -700,6 +622,7 @@ namespace DiceGame.Gameplay.AI.Domain
                         state,
                         allowJump,
                         WorkDieRollCrushAvoidance.None,
+                        registry,
                         out plan))) {
                 subGoal.SetJoinSlidePlan(plan);
                 return true;
@@ -717,8 +640,9 @@ namespace DiceGame.Gameplay.AI.Domain
             DiceState state,
             bool allowJump,
             WorkDieRollCrushAvoidance crushAvoidance,
+            DiceRegistry registry,
             out WorkDieSlidePlan plan) {
-            return WorkDieSlidePlanner.TryBuildSlidePlan(
+            if (!WorkDieSlidePlanner.TryBuildSlidePlan(
                 passability,
                 subGoal.TargetDie,
                 character.StandingPlacement.Level,
@@ -726,14 +650,20 @@ namespace DiceGame.Gameplay.AI.Domain
                 character.PlayerSlot,
                 state,
                 subGoal.TargetFace,
-                subGoal.TargetCell,
-                subGoal.TargetTier,
                 goal != null ? goal.ClusterDice : null,
                 allowJump,
                 out plan,
-                crushAvoidance)
-                && plan.Directions != null
-                && plan.Directions.Count > 0;
+                out var endState,
+                crushAvoidance,
+                registry)
+                || plan.Directions == null
+                || plan.Directions.Count == 0) {
+                return false;
+            }
+
+            // Record the BFS-chosen join pose for debug / lift fallback context.
+            subGoal.RetargetJoin(endState.GridPos, endState.Tier);
+            return true;
         }
 
         static Application.AiDiscreteAction BuildWorkDieRollAction(

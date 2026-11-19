@@ -14,6 +14,13 @@ namespace DiceGame.Placement
             public DiceController Top;
         }
 
+        /// <summary>
+        /// While set, occupancy reads treat this die as absent (AI roll-path planning).
+        /// Does not mutate grid slots; nested begins for the same die are ref-counted.
+        /// </summary>
+        DiceController planningIgnoredDice;
+        int planningIgnoreDepth;
+
         readonly Dictionary<Vector2Int, GridStack> byGrid = new();
         /// <summary>
         /// Pending fall/appear intent (not yet committed). Counts as cell occupancy for spawn
@@ -189,6 +196,61 @@ namespace DiceGame.Placement
             return HasTopClaimAt(gridPos, solidOnly: true);
         }
 
+        /// <summary>
+        /// AI planning: treat <paramref name="dice"/> as absent in occupancy reads until disposed.
+        /// </summary>
+        public IDisposable BeginPlanningIgnore(DiceController dice) {
+            return new PlanningIgnoreScope(this, dice);
+        }
+
+        public bool IsPlanningIgnored(DiceController dice) {
+            return dice != null && planningIgnoredDice == dice;
+        }
+
+        void BeginPlanningIgnoreInternal(DiceController dice) {
+            if (dice == null) {
+                return;
+            }
+
+            if (planningIgnoredDice != null && planningIgnoredDice != dice) {
+                Debug.LogError(
+                    $"DiceRegistry.BeginPlanningIgnore: already ignoring {planningIgnoredDice.name}, " +
+                    $"cannot ignore {dice.name}");
+                return;
+            }
+
+            planningIgnoredDice = dice;
+            planningIgnoreDepth++;
+        }
+
+        void EndPlanningIgnoreInternal(DiceController dice) {
+            if (dice == null || planningIgnoredDice != dice) {
+                return;
+            }
+
+            planningIgnoreDepth--;
+            if (planningIgnoreDepth <= 0) {
+                planningIgnoredDice = null;
+                planningIgnoreDepth = 0;
+            }
+        }
+
+        readonly struct PlanningIgnoreScope : IDisposable
+        {
+            readonly DiceRegistry registry;
+            readonly DiceController dice;
+
+            public PlanningIgnoreScope(DiceRegistry registry, DiceController dice) {
+                this.registry = registry;
+                this.dice = dice;
+                registry?.BeginPlanningIgnoreInternal(dice);
+            }
+
+            public void Dispose() {
+                registry?.EndPlanningIgnoreInternal(dice);
+            }
+        }
+
         bool HasTopClaimAt(Vector2Int gridPos, bool solidOnly) {
             if (TryGetTopAt(gridPos, out var top)
                 && top != null
@@ -198,6 +260,7 @@ namespace DiceGame.Placement
 
             if (TryGetPendingTopAt(gridPos, out var pendingTop)
                 && pendingTop != null
+                && !IsPlanningIgnored(pendingTop)
                 && (!solidOnly || GhostPlacementRules.CountsAsSolidTopClaim(pendingTop))) {
                 return true;
             }
@@ -205,7 +268,7 @@ namespace DiceGame.Placement
             for (var i = 0; i < allDice.Count; i++) {
                 var dice = allDice[i];
                 // Carried occupancy is only committed Top (floor lift) or carryOccupancy.
-                if (dice == null || dice.IsCarried) {
+                if (dice == null || dice.IsCarried || IsPlanningIgnored(dice)) {
                     continue;
                 }
 
@@ -1019,6 +1082,10 @@ namespace DiceGame.Placement
                 return false;
             }
 
+            if (IsPlanningIgnored(stack.Bottom)) {
+                return false;
+            }
+
             dice = stack.Bottom;
             return true;
         }
@@ -1053,6 +1120,10 @@ namespace DiceGame.Placement
                 return false;
             }
 
+            if (IsPlanningIgnored(stack.Top)) {
+                return false;
+            }
+
             dice = stack.Top;
             return true;
         }
@@ -1066,11 +1137,11 @@ namespace DiceGame.Placement
         }
 
         public bool HasTopAt(Vector2Int gridPos) {
-            return byGrid.TryGetValue(gridPos, out var stack) && stack.Top != null;
+            return TryGetTopAt(gridPos, out _);
         }
 
         public bool HasBottomAt(Vector2Int gridPos) {
-            return byGrid.TryGetValue(gridPos, out var stack) && stack.Bottom != null;
+            return TryGetBottomAt(gridPos, out _);
         }
 
         public bool HasPendingBottomAt(Vector2Int gridPos) {

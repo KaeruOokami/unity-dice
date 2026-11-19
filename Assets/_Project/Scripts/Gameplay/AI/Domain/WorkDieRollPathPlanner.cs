@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using DiceGame.Config;
 using DiceGame.Core;
@@ -49,7 +50,8 @@ namespace DiceGame.Gameplay.AI.Domain
             int targetFace,
             bool allowJump,
             out List<Direction> directions,
-            WorkDieRollCrushAvoidance crushAvoidance = default) {
+            WorkDieRollCrushAvoidance crushAvoidance = default,
+            DiceRegistry registry = null) {
             directions = null;
             if (passability == null || workDie == null || startState.Orientation.Top == targetFace) {
                 return false;
@@ -66,14 +68,16 @@ namespace DiceGame.Gameplay.AI.Domain
                 MaxOrientSearchDepth,
                 state => state.Orientation.Top == targetFace,
                 crushAvoidance,
-                out directions)
+                ResolvePlanningRegistry(registry, crushAvoidance),
+                out directions,
+                out _)
                 && directions != null
                 && directions.Count > 0;
         }
 
         /// <summary>
-        /// Configuration-space BFS: shortest roll sequence to a join-ready pose
-        /// (target top face and either the planned join slot or any match-adjacent join).
+        /// Multi-goal configuration-space BFS: shortest roll sequence to any pose where
+        /// <see cref="WorkDieSlidePlanner.IsJoinComplete"/> holds (same-tier match adjacency).
         /// </summary>
         public static bool TryFindJoinPath(
             MovementTransitionEvaluator passability,
@@ -83,31 +87,25 @@ namespace DiceGame.Gameplay.AI.Domain
             PlayerSlot movementOwner,
             DiceState startState,
             int targetFace,
-            Vector2Int targetCell,
-            DiceStackTier targetTier,
             IReadOnlyList<DiceSnapshot> cluster,
             bool allowJump,
             out List<Direction> directions,
-            WorkDieRollCrushAvoidance crushAvoidance = default) {
+            out DiceState endState,
+            WorkDieRollCrushAvoidance crushAvoidance = default,
+            DiceRegistry registry = null) {
             directions = null;
-            if (passability == null || workDie == null || targetFace < 1) {
+            endState = startState;
+            if (passability == null || workDie == null || targetFace < 1 || cluster == null) {
                 return false;
             }
 
             bool IsJoinGoal(DiceState state) {
-                if (state.Orientation.Top != targetFace) {
-                    return false;
-                }
-
-                if (state.GridPos == targetCell && state.Tier == targetTier) {
-                    return true;
-                }
-
-                return cluster != null && WorkDieSlidePlanner.IsJoinComplete(state, cluster, targetFace);
+                return WorkDieSlidePlanner.IsJoinComplete(state, cluster, targetFace);
             }
 
             if (IsJoinGoal(startState)) {
                 directions = new List<Direction>();
+                endState = startState;
                 return true;
             }
 
@@ -122,7 +120,15 @@ namespace DiceGame.Gameplay.AI.Domain
                 MaxJoinSearchDepth,
                 IsJoinGoal,
                 crushAvoidance,
-                out directions);
+                ResolvePlanningRegistry(registry, crushAvoidance),
+                out directions,
+                out endState);
+        }
+
+        static DiceRegistry ResolvePlanningRegistry(
+            DiceRegistry registry,
+            WorkDieRollCrushAvoidance crushAvoidance) {
+            return registry != null ? registry : crushAvoidance.Registry;
         }
 
         static bool TrySearchRollPath(
@@ -136,57 +142,66 @@ namespace DiceGame.Gameplay.AI.Domain
             int maxDepth,
             System.Func<DiceState, bool> isGoal,
             WorkDieRollCrushAvoidance crushAvoidance,
-            out List<Direction> directions) {
+            DiceRegistry planningRegistry,
+            out List<Direction> directions,
+            out DiceState endState) {
             directions = null;
+            endState = startState;
             if (passability == null || workDie == null || isGoal == null) {
                 return false;
             }
 
-            var startKey = BuildStateKey(startState);
-            var visited = new HashSet<(int, int, int, int, int, int)> { startKey };
-            var queue = new Queue<(DiceState state, int level, List<Direction> path)>();
-            queue.Enqueue((startState, fromLevel, new List<Direction>()));
+            using (IDisposable ignoreScope = planningRegistry != null
+                ? planningRegistry.BeginPlanningIgnore(workDie)
+                : null) {
+                var startKey = BuildStateKey(startState);
+                var visited = new HashSet<(int, int, int, int, int, int)> { startKey };
+                var queue = new Queue<(DiceState state, int level, List<Direction> path)>();
+                queue.Enqueue((startState, fromLevel, new List<Direction>()));
 
-            while (queue.Count > 0) {
-                var current = queue.Dequeue();
-                if (current.path.Count > 0 && isGoal(current.state)) {
-                    directions = current.path;
-                    return true;
-                }
-
-                if (current.path.Count >= maxDepth) {
-                    continue;
-                }
-
-                for (var i = 0; i < Directions.Length; i++) {
-                    var direction = Directions[i];
-                    if (!TrySimulateRollStep(
-                        passability,
-                        workDie,
-                        current.state,
-                        current.level,
-                        footingWorldY,
-                        movementOwner,
-                        direction,
-                        allowJump,
-                        out var landingState,
-                        out var landingLevel,
-                        crushAvoidance)) {
-                        continue;
-                    }
-
-                    var key = BuildStateKey(landingState);
-                    if (!visited.Add(key)) {
-                        continue;
-                    }
-
-                    var nextPath = new List<Direction>(current.path) { direction };
-                    if (isGoal(landingState)) {
-                        directions = nextPath;
+                while (queue.Count > 0) {
+                    var current = queue.Dequeue();
+                    if (current.path.Count > 0 && isGoal(current.state)) {
+                        directions = current.path;
+                        endState = current.state;
                         return true;
                     }
 
-                    queue.Enqueue((landingState, landingLevel, nextPath));
+                    if (current.path.Count >= maxDepth) {
+                        continue;
+                    }
+
+                    for (var i = 0; i < Directions.Length; i++) {
+                        var direction = Directions[i];
+                        if (!TrySimulateRollStep(
+                            passability,
+                            workDie,
+                            current.state,
+                            current.level,
+                            footingWorldY,
+                            movementOwner,
+                            direction,
+                            allowJump,
+                            out var landingState,
+                            out var landingLevel,
+                            crushAvoidance)) {
+                            continue;
+                        }
+
+                        var key = BuildStateKey(landingState);
+                        if (!visited.Add(key)) {
+                            continue;
+                        }
+
+                        var nextPath = new List<Direction>(current.path) { direction };
+                        if (isGoal(landingState)) {
+                            directions = nextPath;
+                            endState = landingState;
+                            return true;
+                        }
+
+                        queue.Enqueue((landingState, landingLevel, nextPath));
+                    }
                 }
             }
 

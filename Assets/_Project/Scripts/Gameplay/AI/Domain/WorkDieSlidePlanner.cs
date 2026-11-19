@@ -213,13 +213,14 @@ namespace DiceGame.Gameplay.AI.Domain
             PlayerSlot movementOwner,
             DiceState startState,
             int targetFace,
-            Vector2Int targetCell,
-            DiceStackTier targetTier,
             IReadOnlyList<DiceSnapshot> cluster,
             bool allowJump,
             out WorkDieSlidePlan plan,
-            WorkDieRollCrushAvoidance crushAvoidance = default) {
+            out DiceState endState,
+            WorkDieRollCrushAvoidance crushAvoidance = default,
+            DiceRegistry registry = null) {
             plan = default;
+            endState = startState;
             if (!WorkDieRollPathPlanner.TryFindJoinPath(
                 passability,
                 workDie,
@@ -228,12 +229,12 @@ namespace DiceGame.Gameplay.AI.Domain
                 movementOwner,
                 startState,
                 targetFace,
-                targetCell,
-                targetTier,
                 cluster,
                 allowJump,
                 out var directions,
-                crushAvoidance)
+                out endState,
+                crushAvoidance,
+                registry)
                 || directions == null) {
                 return false;
             }
